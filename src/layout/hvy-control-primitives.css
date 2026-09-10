@@ -1,0 +1,89 @@
+@layer hvy-control-defaults {
+  .hvy-document .hvy-button,
+.hvy-document .secondary,
+.hvy-document .ghost,
+.hvy-document .danger,
+.hvy-document .tiny {
+    border: 1px solid var(--hvy-border-alt);
+    border-radius: 8px;
+    padding: 0.38rem 0.58rem;
+    background: var(--hvy-surface);
+    cursor: pointer;
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      box-shadow 140ms ease,
+      color 140ms ease,
+      transform 140ms ease;
+  }
+
+  .hvy-document .hvy-button,
+.hvy-document .ghost,
+.hvy-document .tiny {
+    color: var(--hvy-text);
+  }
+
+  .hvy-document .hvy-button:not(:disabled):hover,
+.hvy-document .secondary:not(:disabled):hover,
+.hvy-document .ghost:not(:disabled):hover,
+.hvy-document .danger:not(:disabled):hover,
+.hvy-document .tiny:not(:disabled):hover {
+    color: var(--hvy-button-hover-text, var(--hvy-button-text));
+    border-color: var(--hvy-focus);
+    background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
+    box-shadow: 0 6px 16px var(--hvy-shadow);
+    transform: translateY(-1px);
+  }
+
+  .hvy-document .secondary {
+    background: var(--hvy-button-bg);
+    border-color: var(--hvy-button-bg);
+    color: var(--hvy-button-text);
+  }
+
+  .hvy-document .secondary:not(:disabled):hover {
+    color: var(--hvy-button-hover-text, var(--hvy-button-text));
+    border-color: var(--hvy-focus);
+    background: var(--hvy-button-hover-bg, var(--hvy-button-bg));
+    box-shadow: 0 8px 18px var(--hvy-shadow-md);
+    transform: translateY(-1px);
+  }
+
+  .hvy-document .ghost {
+    background: transparent;
+  }
+
+  .hvy-document .hvy-button:not(:disabled):hover,
+.hvy-document .ghost:not(:disabled):hover,
+.hvy-document .tiny:not(:disabled):hover {
+    color: var(--hvy-text);
+    background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
+  }
+
+  .hvy-document .danger {
+    background: var(--hvy-danger);
+    border-color: var(--hvy-danger);
+  }
+
+  .hvy-document .danger:not(:disabled):hover {
+    background: color-mix(in srgb, var(--hvy-danger) 86%, var(--hvy-surface) 14%);
+    border-color: var(--hvy-danger);
+  }
+
+  .hvy-document .tiny {
+    font-size: 0.78rem;
+    padding: 0.2rem 0.42rem;
+  }
+}
+
+.hvy-document .hvy-ui-icon {
+  width: 1em;
+  height: 1em;
+  display: block;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}

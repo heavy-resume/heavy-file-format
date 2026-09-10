@@ -1,10 +1,13 @@
 import './theme.css';
-import { state } from './state';
+import { getActiveStateRuntime, state } from './state';
 import type { ThemeConfig } from './types';
+import type { HvyThemeOverrides } from './types';
 import type { JsonObject } from './hvy/types';
 import { cssFragmentTriggersNetwork } from './css-sanitizer';
 import { isExternalCssAllowed } from './reference-config';
 import { getPaletteById } from './palettes/palette-registry';
+import { DEFAULT_SIDEBAR_MAX_WIDTH } from './document-factory';
+import { getDocumentParagraphSpacing } from './document-typography';
 
 export type { ThemeConfig };
 export type ColorMode = 'light' | 'dark';
@@ -187,18 +190,18 @@ export function applyTheme(): void {
   }
   stale.forEach((prop) => root.style.removeProperty(prop));
 
+  const sidebarMaxWidth = typeof state.document.meta.sidebar_max_width === 'string'
+    ? state.document.meta.sidebar_max_width.trim()
+    : '';
+  root.style.setProperty('--hvy-sidebar-max-width', sidebarMaxWidth || DEFAULT_SIDEBAR_MAX_WIDTH);
+  root.style.setProperty('--hvy-document-paragraph-spacing', getDocumentParagraphSpacing(state.document.meta));
+
   root.classList.add('no-transitions');
   const allowExternal = isExternalCssAllowed();
 
   // Layer 1: local user palette override. This is intentionally not serialized
   // into the document, so it survives file switches and refreshes separately.
   const palette = state.paletteOverrideId ? getPaletteById(state.paletteOverrideId) : null;
-  if (palette && hasFullConventionalThemeOverride(theme.colors)) {
-    for (const name of THEME_COLOR_NAMES) {
-      delete theme.colors[name];
-    }
-    writeThemeConfig(theme);
-  }
   if (palette) {
     for (const [key, value] of Object.entries(palette.colors)) {
       if (!allowExternal && cssFragmentTriggersNetwork(value)) {
@@ -219,27 +222,42 @@ export function applyTheme(): void {
       root.style.setProperty(key, value);
     }
   }
+
+  // Layer 3: embedding-host overrides. These are runtime-owned, always win,
+  // and are never written into document metadata or serialized HVY bytes.
+  for (const [key, value] of Object.entries(getThemeOverrides())) {
+    if (!allowExternal && cssFragmentTriggersNetwork(value)) {
+      continue;
+    }
+    root.style.setProperty(key, value);
+  }
   // Force a reflow so changes take effect before re-enabling transitions.
   void root.offsetHeight;
   root.classList.remove('no-transitions');
 }
 
-function hasFullConventionalThemeOverride(colors: Record<string, string>): boolean {
-  let conventionalCount = 0;
-  for (const name of THEME_COLOR_NAMES) {
-    if (colors[name]) {
-      conventionalCount += 1;
-    }
+export function setThemeOverrides(overrides: HvyThemeOverrides | null | undefined): void {
+  getActiveStateRuntime().themeOverrides = normalizeThemeOverrides(overrides);
+}
+
+export function getThemeOverrides(): HvyThemeOverrides {
+  return getActiveStateRuntime().themeOverrides;
+}
+
+function normalizeThemeOverrides(overrides: HvyThemeOverrides | null | undefined): HvyThemeOverrides {
+  if (!overrides) return {};
+  const normalized: Record<string, string> = {};
+  for (const [name, value] of Object.entries(overrides)) {
+    if (!name.startsWith('--hvy-') || typeof value !== 'string' || !value.trim()) continue;
+    normalized[name] = value.trim();
   }
-  return conventionalCount >= Math.floor(THEME_COLOR_NAMES.length * 0.8);
+  return normalized;
 }
 
 export function getThemeConfig(): ThemeConfig {
   const themeRaw = state.document.meta.theme;
   if (!themeRaw || typeof themeRaw !== 'object') {
-    const fresh: ThemeConfig = { colors: {} };
-    state.document.meta.theme = fresh;
-    return fresh;
+    return { colors: {} };
   }
   const theme = themeRaw as JsonObject;
   const colorsRaw = theme.colors;

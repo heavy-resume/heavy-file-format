@@ -5,11 +5,42 @@ import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } 
 import { createTextFillInMarker } from './text-fill-in';
 import { renderWorkspaceLinksInHtml } from './workspace-links';
 import { formatSortValueAnnotation, replaceSortValueAnnotations } from './sort-values';
+import { normalizeRenderedMarkdownSoftBreaks } from './rendered-markdown-text';
+import {
+  answerGroupInputName,
+  normalizeRadioGroupName,
+  radioGroupDirective,
+  resolveBlockAnswerGroups,
+  scanInlineAnswers,
+} from './inline-answer-groups';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
   renderer: {
     image: () => '',
+  },
+  tokenizer: {
+    del: (source) => {
+      // Returning false delegates intentional double-tilde markup to Marked's
+      // tokenizer; returning nothing lets a single tilde remain ordinary text.
+      return source.startsWith('~~') ? false : undefined;
+    },
+    emStrong: function (source, _maskedSource, previousCharacter = '') {
+      if (!/[\p{L}\p{N}]$/u.test(previousCharacter)) {
+        return false;
+      }
+      const match = source.match(/^_(?!_)(?=\S)([^_\n]*?\S)_(?!_)(?=$|[\s\p{P}\p{S}])/u);
+      if (!match) {
+        return false;
+      }
+      const text = match[1]!;
+      return {
+        type: 'em',
+        raw: match[0],
+        text,
+        tokens: this.lexer.inlineTokens(text),
+      };
+    },
   },
 });
 
@@ -20,17 +51,67 @@ export const turndown = new TurndownService({
   emDelimiter: '_',
 });
 
+turndown.addRule('hvy-emphasis', {
+  filter: ['em', 'i'],
+  replacement: (content, node) => {
+    if (!content.trim()) {
+      return '';
+    }
+    const sourceText = node.textContent ?? '';
+    const touchesUnformattedWord = (!/^\s/u.test(sourceText)
+      && /[\p{L}\p{N}]$/u.test(findAdjacentTextCharacter(node, 'previous')))
+      || (!/\s$/u.test(sourceText)
+        && /^[\p{L}\p{N}]/u.test(findAdjacentTextCharacter(node, 'next')));
+    const delimiter = touchesUnformattedWord ? '*' : '_';
+    return `${delimiter}${content}${delimiter}`;
+  },
+});
+
+function findAdjacentTextCharacter(node: Node, direction: 'previous' | 'next'): string {
+  let current: Node | null = node;
+  while (current.parentNode) {
+    let sibling = direction === 'previous' ? current.previousSibling : current.nextSibling;
+    while (sibling) {
+      const text = sibling.textContent ?? '';
+      if (text.length > 0) {
+        return direction === 'previous' ? Array.from(text).at(-1) ?? '' : Array.from(text)[0] ?? '';
+      }
+      sibling = direction === 'previous' ? sibling.previousSibling : sibling.nextSibling;
+    }
+    current = current.parentNode;
+    if (isMarkdownBlockBoundary(current)) {
+      return '';
+    }
+  }
+  return '';
+}
+
+function isMarkdownBlockBoundary(node: Node): boolean {
+  return node.nodeType === 1 && /^(BLOCKQUOTE|DIV|H[1-6]|LI|P|PRE|TD|TH)$/.test(node.nodeName);
+}
+
 turndown.addRule('task-list-checkbox', {
-  filter: (node) => node.nodeName === 'INPUT' && (node as HTMLInputElement).getAttribute('type') === 'checkbox',
+  filter: (node) => node.nodeName === 'INPUT' && ['checkbox', 'radio'].includes((node as HTMLInputElement).getAttribute('type') ?? ''),
   replacement: (_content, node) => {
     const input = node as HTMLInputElement;
-    return input.checked ? '[x] ' : '[ ] ';
+    const marker = input.getAttribute('type') === 'radio' ? ['( )', '(x)'] : ['[ ]', '[x]'];
+    return marker[input.checked ? 1 : 0] ?? marker[0]!;
   },
+});
+
+turndown.addRule('inline-answer-line-break', {
+  filter: (node) => node.nodeName === 'BR' && Boolean(node.parentElement?.closest('.hvy-inline-checkbox-line')),
+  replacement: () => '\n',
 });
 
 turndown.addRule('underline', {
   filter: (node) => node.nodeName === 'U',
   replacement: (content) => (content.trim().length > 0 ? `___${content}___` : ''),
+});
+
+turndown.addRule('strikethrough', {
+  filter: (node) => ['DEL', 'S', 'STRIKE'].includes(node.nodeName),
+  replacement: (content) => (content.trim().length > 0 ? `~~${content}~~` : ''),
 });
 
 turndown.addRule('inline-code-literal-text', {
@@ -45,9 +126,15 @@ turndown.addRule('hvy-link', {
   filter: (node) => node.nodeName === 'A',
   replacement: (content, node) => {
     const href = (node as HTMLAnchorElement).getAttribute('href')?.trim() ?? '';
-    return href.length > 0 ? `[${content}](${href})` : content;
+    return href.length > 0 ? `[${content}](${serializeMarkdownLinkDestination(href)})` : content;
   },
 });
+
+function serializeMarkdownLinkDestination(href: string): string {
+  return href
+    .replace(/\s/g, (whitespace) => encodeURIComponent(whitespace))
+    .replace(/([<>()])/g, '\\$1');
+}
 
 turndown.addRule('non-text-media', {
   filter: (node) => isNonTextMediaElement(node),
@@ -76,6 +163,12 @@ turndown.addRule('hvy-nowrap-annotation', {
     const text = (node.textContent ?? content).trim();
     return text.length > 0 ? `<!--hvy:nowrap-->${text}<!--/hvy:nowrap-->` : '';
   },
+});
+
+turndown.addRule('hvy-radio-group-marker', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-radio-group') !== null,
+  replacement: (_content, node) =>
+    radioGroupDirective(normalizeRadioGroupName((node as Element).getAttribute('data-hvy-radio-group') ?? '')),
 });
 
 turndown.addRule('hvy-text-line-style-marker', {
@@ -109,7 +202,7 @@ turndown.addRule('hvy-sort-value', {
       return content;
     }
     const label = element.nodeName.toUpperCase() === 'SELECT'
-      ? Array.from(element.querySelectorAll('option')).find((option) => option.selected || option.hasAttribute('selected'))?.textContent?.trim()
+      ? Array.from(element.querySelectorAll('option')).find((option) => option.selected)?.textContent?.trim()
         ?? element.getAttribute('value')?.trim()
         ?? content
       : (element.textContent ?? content).replaceAll('\u200b', '').trim();
@@ -122,11 +215,19 @@ export interface MarkdownRenderOptions {
   textLineStyleMode?: 'viewer' | 'editor';
   codeLanguageInputAttrs?: Record<string, string>;
   crossDocumentLinksEnabled?: boolean;
+  preserveSortValueAnnotations?: boolean;
+  /**
+   * Resolved radio group key per answer marker index, from
+   * `buildInlineAnswerGroupIndex`. Groups can span components, so this is
+   * supplied by the caller that knows the whole document. Without it, radio
+   * options fall back to grouping within this text alone.
+   */
+  answerGroups?: Map<number, string>;
 }
 
 export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
   const normalized = normalizeMarkdownIndentation(markdown || '');
-  const annotations = extractResponsiveAnnotations(normalized, { editable: true });
+  const annotations = extractResponsiveAnnotations(normalized, { editable: true, answerGroups: options.answerGroups });
   const html = renderMarkdownHtml(annotations.markdown, {
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'editor',
@@ -145,13 +246,27 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
     }
   });
   renderInlineCheckboxes(template.content);
-  markInlineCheckboxLines(template.content);
+  normalizeInlineAnswerControls(template.content, true);
   preserveTrailingEditableSpaces(template.content);
-  template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox) => {
+  template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"], input[type="radio"]').forEach((checkbox) => {
     checkbox.removeAttribute('disabled');
     checkbox.setAttribute('contenteditable', 'false');
   });
+  removeDirectWhitespaceTextNodes(template.content);
+  if (!template.content.hasChildNodes()) {
+    const paragraph = document.createElement('p');
+    paragraph.appendChild(document.createElement('br'));
+    template.content.appendChild(paragraph);
+  }
   return template.innerHTML;
+}
+
+function removeDirectWhitespaceTextNodes(root: ParentNode): void {
+  [...root.childNodes].forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim().length === 0) {
+      node.remove();
+    }
+  });
 }
 
 export function getRichEditorSerializableHtml(root: HTMLElement): string {
@@ -199,7 +314,11 @@ export function markdownToMobileAdjustmentEditorHtml(markdown: string): string {
 }
 
 export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
-  const annotations = extractResponsiveAnnotations(markdown || '', { editable: false });
+  const annotations = extractResponsiveAnnotations(markdown || '', {
+    editable: false,
+    preserveSortValues: options.preserveSortValueAnnotations === true,
+    answerGroups: options.answerGroups,
+  });
   const html = renderMarkdownHtml(annotations.markdown, {
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'viewer',
@@ -213,14 +332,14 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
 function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRenderOptions, 'textLineStyles' | 'textLineStyleMode'>>): string {
   const segments = splitTextLineStyleSegments(markdown);
   if (segments.length === 1 && segments[0]?.kind === 'markdown') {
-    return sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string);
+    return renderSanitizedMarkdownHtml(markdown);
   }
   return segments
     .map((segment) => {
       if (segment.kind === 'markdown') {
-        return sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(segment.markdown))) as string);
+        return renderSanitizedMarkdownHtml(segment.markdown);
       }
-      const lineHtml = sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(segment.markdown))) as string);
+      const lineHtml = renderSanitizedMarkdownHtml(segment.markdown);
       const style = options.textLineStyles[segment.name];
       if (!style && options.textLineStyleMode !== 'editor') {
         return lineHtml;
@@ -234,6 +353,12 @@ function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRen
       return `<div class="hvy-text-line-style${unknown}" data-hvy-text-line-style="${escapeHtml(segment.name)}" data-hvy-text-line-style-label="${escapeHtml(label)}" style="${escapeHtml(css)}">${marker}${lineHtml}</div>`;
     })
     .join('');
+}
+
+function renderSanitizedMarkdownHtml(markdown: string): string {
+  return normalizeRenderedMarkdownSoftBreaks(
+    sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string)
+  );
 }
 
 type TextLineStyleSegment =
@@ -350,7 +475,10 @@ interface ResponsiveAnnotationToken {
   html: string;
 }
 
-function extractResponsiveAnnotations(markdown: string, options: { editable: boolean }): { markdown: string; tokens: ResponsiveAnnotationToken[] } {
+function extractResponsiveAnnotations(
+  markdown: string,
+  options: { editable: boolean; preserveSortValues?: boolean; answerGroups?: Map<number, string> }
+): { markdown: string; tokens: ResponsiveAnnotationToken[] } {
   const tokens: ResponsiveAnnotationToken[] = [];
   const makeToken = (html: string): string => {
     const token = `HVY_RESPONSIVE_ANNOTATION_${tokens.length}_TOKEN`;
@@ -368,72 +496,103 @@ function extractResponsiveAnnotations(markdown: string, options: { editable: boo
     makeToken(renderNowrapAnnotationHtml(text))
   );
   const withSortValues = replaceSortValueAnnotations(withNowrap, (annotation) =>
-    makeToken(options.editable ? renderSortValueAnnotationHtml(annotation.key, annotation.text) : escapeHtml(annotation.text))
+    makeToken(options.editable || options.preserveSortValues
+      ? renderSortValueAnnotationHtml(annotation.key, annotation.text)
+      : escapeHtml(annotation.text))
   );
-  return { markdown: options.editable ? withSortValues : replaceInlineCheckboxMarkers(withSortValues, makeToken), tokens };
+  return {
+    markdown: replaceInlineCheckboxMarkers(withSortValues, makeToken, {
+      editable: options.editable,
+      answerGroups: options.answerGroups,
+    }),
+    tokens,
+  };
 }
 
 function renderSortValueAnnotationHtml(key: string, text: string): string {
-  return `<span data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
+  return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
-function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string) => string): string {
-  const lines = markdown.split(/(\r?\n)/);
-  let fence: { marker: '`' | '~'; length: number } | null = null;
-  return lines
-    .map((line) => {
-      if (/^\r?\n$/.test(line)) {
-        return line;
+let fallbackGroupSeed = 0;
+
+function replaceInlineCheckboxMarkers(
+  markdown: string,
+  makeToken: (html: string) => string,
+  options: { editable: boolean; answerGroups?: Map<number, string> }
+): string {
+  const scanned = scanInlineAnswers(markdown);
+  // Callers that know the document supply resolved groups. Without them, grouping is
+  // local to this text, and the key must still be unique per render so two separately
+  // rendered blocks never share a DOM radio name.
+  fallbackGroupSeed += 1;
+  const fallbackGroups = options.answerGroups
+    ? null
+    : resolveBlockAnswerGroups(markdown, `local-${fallbackGroupSeed}`, null).groups;
+  const groupOf = (answerIndex: number): string | undefined =>
+    (options.answerGroups ?? fallbackGroups ?? undefined)?.get(answerIndex);
+
+  // Splice replacements into each line back-to-front so earlier offsets stay valid.
+  const replacementsByLine = new Map<number, { start: number; length: number; html: string }[]>();
+  const addReplacement = (lineIndex: number, start: number, length: number, html: string): void => {
+    const list = replacementsByLine.get(lineIndex) ?? [];
+    list.push({ start, length, html });
+    replacementsByLine.set(lineIndex, list);
+  };
+  scanned.markers.forEach((marker) => {
+    const groupKey = marker.radio ? groupOf(marker.answerIndex) : undefined;
+    addReplacement(
+      marker.lineIndex,
+      marker.start,
+      marker.length,
+      makeToken(renderInlineCheckboxHtml(marker.checked, marker.radio, marker.answerIndex, groupKey))
+    );
+  });
+  scanned.directives.forEach((directive) => {
+    addReplacement(
+      directive.lineIndex,
+      directive.start,
+      directive.length,
+      makeToken(options.editable ? renderRadioGroupDirectiveHtml(directive.name) : '')
+    );
+  });
+
+  const segments = markdown.split(/(\r?\n)/);
+  return segments
+    .map((segment, segmentIndex) => {
+      if (segmentIndex % 2 === 1) {
+        return segment;
       }
-      const fenceLine = parseTextLineStyleFence(line);
-      if (fence) {
-        if (fenceLine && fenceLine.marker === fence.marker && fenceLine.length >= fence.length) {
-          fence = null;
-        }
-        return line;
+      const lineIndex = segmentIndex / 2;
+      const replacements = replacementsByLine.get(lineIndex);
+      let rendered = segment;
+      if (replacements) {
+        replacements
+          .sort((left, right) => right.start - left.start)
+          .forEach((replacement) => {
+            rendered = `${rendered.slice(0, replacement.start)}${replacement.html}${rendered.slice(replacement.start + replacement.length)}`;
+          });
       }
-      if (fenceLine) {
-        fence = fenceLine;
-        return line;
+      if (isBareAnswerMarkerLine(segment) && isBareAnswerMarkerLine(segments[segmentIndex + 2] ?? '')) {
+        rendered = `${rendered.replace(/[ \t]+$/, '')}  `;
       }
-      return replaceInlineCheckboxMarkersInLine(line, makeToken);
+      return rendered;
     })
     .join('');
 }
 
-function replaceInlineCheckboxMarkersInLine(line: string, makeToken: (html: string) => string): string {
-  const taskListPrefix = line.match(/^(\s*(?:[-+*]|\d+[.)])\s+)\[(?: |x|X)\](?=\s|$)/)?.[1]?.length ?? -1;
-  let result = '';
-  let index = 0;
-  let inlineCodeMarker: string | null = null;
-
-  while (index < line.length) {
-    const codeMatch = line.slice(index).match(/^`+/);
-    if (codeMatch?.[0]) {
-      const marker = codeMatch[0];
-      if (inlineCodeMarker === marker) {
-        inlineCodeMarker = null;
-      } else if (!inlineCodeMarker) {
-        inlineCodeMarker = marker;
-      }
-      result += marker;
-      index += marker.length;
-      continue;
-    }
-
-    const checkboxMatch = line.slice(index).match(/^\[( |x|X)\]/);
-    if (checkboxMatch?.[0] && !inlineCodeMarker && index !== taskListPrefix) {
-      result += makeToken(renderInlineCheckboxHtml((checkboxMatch[1] ?? ' ').toLowerCase() === 'x'));
-      index += checkboxMatch[0].length;
-      continue;
-    }
-
-    result += line[index] ?? '';
-    index += 1;
-  }
-
-  return result;
+function renderRadioGroupDirectiveHtml(name: string | null): string {
+  const label = name ?? 'end group';
+  return `<span
+    class="hvy-radio-group-marker${name ? '' : ' is-group-end'}"
+    data-hvy-radio-group="${escapeHtml(name ?? '')}"
+    contenteditable="false"
+  >${escapeHtml(label)}</span>`;
 }
+
+function isBareAnswerMarkerLine(line: string): boolean {
+  return /^\s*(?:\[(?: |x|X)\]|\((?: |x|X)\))(?=\s|$)/.test(line);
+}
+
 
 export function renderAltAnnotationsAsFullText(markdown: string): string {
   return replaceAltAnnotations(markdown, (_rawJson, fullText) => fullText);
@@ -565,22 +724,159 @@ function renderNowrapAnnotationHtml(text: string): string {
   return `<span class="hvy-nowrap" data-hvy-nowrap="true">${escapeHtml(text)}</span>`;
 }
 
-function renderInlineCheckboxHtml(checked: boolean): string {
-  return `<input class="hvy-inline-checkbox" type="checkbox"${checked ? ' checked' : ''} contenteditable="false" disabled>`;
+function renderInlineCheckboxHtml(checked: boolean, radio = false, answerIndex?: number, groupKey?: string): string {
+  const answerAttrs = typeof answerIndex === 'number' ? ` data-field="inline-persisted-answer" data-answer-index="${answerIndex}"` : '';
+  const groupAttrs = radio && groupKey
+    ? ` name="${escapeHtml(answerGroupInputName(groupKey))}" data-answer-group="${escapeHtml(groupKey)}"`
+    : '';
+  return `<input class="hvy-inline-checkbox${radio ? ' hvy-inline-radio' : ''}" type="${radio ? 'radio' : 'checkbox'}"${groupAttrs}${answerAttrs}${checked ? ' checked' : ''} contenteditable="false">`;
 }
 
 function wrapInlineCheckboxLines(html: string): string {
-  return html.replace(/<p>((?=[\s\S]*?\bhvy-inline-checkbox\b)[\s\S]*?)<\/p>/g, '<div class="hvy-inline-checkbox-line">$1</div>');
+  return html.replace(/<p>((?=[\s\S]*?\bhvy-inline-checkbox\b)[\s\S]*?)<\/p>/g, (_match, content: string) =>
+    content
+      .split(/<br\s*\/?>/i)
+      .map((row) => `<div class="hvy-inline-checkbox-line">${row}</div>`)
+      .join('')
+  );
 }
 
 function markInlineCheckboxLines(root: ParentNode): void {
   root.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox').forEach((checkbox) => {
     const parent = checkbox.parentElement;
-    if (!parent || !isLeadingInlineCheckbox(checkbox)) {
+    if (!parent) {
+      return;
+    }
+    if (root instanceof HTMLElement && parent === root && root.matches('.rich-editor')) {
+      removeEmptyRichEditorPrefix(checkbox);
+      wrapDirectInlineAnswerLine(root, checkbox);
+      return;
+    }
+    if (!isLeadingInlineCheckbox(checkbox)) {
       return;
     }
     parent.classList.add('hvy-inline-checkbox-line');
   });
+}
+
+function removeEmptyRichEditorPrefix(checkbox: HTMLInputElement): void {
+  const precedingNodes: ChildNode[] = [];
+  let current = checkbox.previousSibling;
+  while (current) {
+    precedingNodes.unshift(current);
+    current = current.previousSibling;
+  }
+  if (precedingNodes.length === 0 || !precedingNodes.every(isEmptyRichEditorPlaceholderNode)) {
+    return;
+  }
+  precedingNodes.forEach((node) => node.remove());
+}
+
+function isEmptyRichEditorPlaceholderNode(node: ChildNode): boolean {
+  if (node instanceof Text) {
+    return node.data.replace(/\u200b/g, '').trim().length === 0;
+  }
+  return node instanceof HTMLElement
+    && node.matches('p, div')
+    && [...node.childNodes].every((child) => (
+      child instanceof HTMLBRElement
+      || (child instanceof Text && child.data.replace(/\u200b/g, '').trim().length === 0)
+    ));
+}
+
+function wrapDirectInlineAnswerLine(root: HTMLElement, checkbox: HTMLInputElement): void {
+  const row = document.createElement('div');
+  row.className = 'hvy-inline-checkbox-line';
+  root.insertBefore(row, checkbox);
+  let current: ChildNode | null = checkbox;
+  while (current) {
+    const next: ChildNode | null = current.nextSibling;
+    if (current !== checkbox && isDirectInlineAnswerLineBoundary(current)) {
+      break;
+    }
+    row.appendChild(current);
+    current = next;
+  }
+}
+
+function isDirectInlineAnswerLineBoundary(node: ChildNode): boolean {
+  return node instanceof HTMLBRElement
+    || (node instanceof HTMLElement && /^(?:ADDRESS|BLOCKQUOTE|DIV|H[1-6]|HR|OL|P|PRE|TABLE|UL)$/.test(node.tagName));
+}
+
+function splitInlineAnswerLineContainers(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('.hvy-inline-checkbox-line').forEach((container) => {
+    if (!container.querySelector('input.hvy-inline-checkbox')) return;
+    const hasStructuralAnswerBoundary = Boolean(container.querySelector(
+      '.hvy-radio-group-marker.is-group-end ~ input.hvy-inline-checkbox, input.hvy-inline-checkbox ~ .hvy-radio-group-marker:not(.is-group-end)'
+    ));
+    if (!container.querySelector('br') && !hasStructuralAnswerBoundary) return;
+    const rows: HTMLDivElement[] = [document.createElement('div')];
+    rows[0]!.className = 'hvy-inline-checkbox-line';
+    [...container.childNodes].forEach((node) => {
+      const currentRow = rows[rows.length - 1]!;
+      const startsAfterGroupEnd = node instanceof HTMLInputElement
+        && node.classList.contains('hvy-inline-checkbox')
+        && Boolean(currentRow.querySelector('.hvy-radio-group-marker.is-group-end'));
+      const startsRadioGroup = node instanceof HTMLElement
+        && node.classList.contains('hvy-radio-group-marker')
+        && !node.classList.contains('is-group-end')
+        && Boolean(currentRow.querySelector('input.hvy-inline-checkbox'));
+      if (node instanceof HTMLBRElement || startsAfterGroupEnd || startsRadioGroup) {
+        const row = document.createElement('div');
+        row.className = 'hvy-inline-checkbox-line';
+        rows.push(row);
+        if (node instanceof HTMLBRElement) return;
+      }
+      rows[rows.length - 1]!.appendChild(node);
+    });
+    container.replaceWith(...rows.filter((row) => row.childNodes.length > 0));
+  });
+}
+
+/**
+ * Group membership is resolved from the document source (see `inline-answer-groups`)
+ * and carried on `data-answer-group`. Inputs recovered from literal marker text by
+ * `renderInlineCheckboxes` carry no group, so they inherit the run they sit in.
+ */
+function configureInlineAnswerControls(root: ParentNode, editable: boolean): void {
+  const inputs = [...root.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox')];
+  inputs.forEach((input, index) => {
+    input.dataset.answerIndex = String(index);
+    if (!editable) input.dataset.field = 'inline-persisted-answer';
+  });
+  let recoveredRun = 0;
+  let previousContainer: Element | null = null;
+  let previousGroupKey: string | null = null;
+  for (const input of inputs) {
+    if (input.type !== 'radio') {
+      previousContainer = null;
+      previousGroupKey = null;
+      continue;
+    }
+    const container = input.closest('li, .hvy-inline-checkbox-line') ?? input.parentElement;
+    const consecutive = previousContainer !== null && previousContainer.nextElementSibling === container;
+    let groupKey = input.dataset.answerGroup ?? '';
+    if (!groupKey) {
+      if (consecutive && previousGroupKey) {
+        groupKey = previousGroupKey;
+      } else {
+        recoveredRun += 1;
+        groupKey = `recovered:${recoveredRun}`;
+      }
+      input.dataset.answerGroup = groupKey;
+    }
+    input.name = answerGroupInputName(groupKey);
+    previousContainer = container;
+    previousGroupKey = groupKey;
+  }
+}
+
+/** Establishes the editor DOM invariants shared by rendered and newly inserted answers. */
+export function normalizeInlineAnswerControls(root: ParentNode, editable: boolean): void {
+  markInlineCheckboxLines(root);
+  splitInlineAnswerLineContainers(root);
+  configureInlineAnswerControls(root, editable);
 }
 
 function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
@@ -590,13 +886,32 @@ function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
       previous = previous.previousSibling;
       continue;
     }
+    // Structural markers carry no visible content, so a marker sitting in front of an
+    // answer must not stop it counting as the start of its line.
+    if (previous instanceof Element && isStructuralInlineMarker(previous)) {
+      previous = previous.previousSibling;
+      continue;
+    }
     return false;
   }
   return true;
 }
 
+function isStructuralInlineMarker(element: Element): boolean {
+  return element.hasAttribute('data-hvy-radio-group');
+}
+
 export function normalizeEditorMarkdownWhitespace(markdown: string): string {
-  return markdown.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
+  const normalized = markdown.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
+  const withCollapsedMarkerSpacing = normalized.replace(
+    /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\)))[ \t]+/gm,
+    '$1 '
+  );
+  const withSingleMarkerSpacing = withCollapsedMarkerSpacing.replace(
+    /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\)))(?=\S)/gm,
+    '$1 '
+  );
+  return withSingleMarkerSpacing;
 }
 
 export function normalizeMarkdownIndentation(markdown: string): string {
@@ -670,6 +985,8 @@ export function escapeRawHtml(markdown: string): string {
   return output;
 }
 
+const markdownEscapablePunctuation = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/;
+
 function escapeRawHtmlOutsideInlineCode(markdown: string): string {
   let output = '';
   let index = 0;
@@ -684,6 +1001,11 @@ function escapeRawHtmlOutsideInlineCode(markdown: string): string {
         index = close + ticks.length;
         continue;
       }
+    }
+    if (char === '\\' && index + 1 < markdown.length && markdownEscapablePunctuation.test(markdown[index + 1]!)) {
+      output += markdown.slice(index, index + 2);
+      index += 2;
+      continue;
     }
     if (char === '<') {
       output += '&lt;';
@@ -790,7 +1112,7 @@ function renderInlineCheckboxes(root: ParentNode): void {
       if (parent.closest('code, pre, script, style, textarea')) {
         return NodeFilter.FILTER_REJECT;
       }
-      return /\[( |x|X)\]/.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      return /(\[( |x|X)\]|\(( |x|X)\))/.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
   });
 
@@ -805,7 +1127,7 @@ function renderInlineCheckboxes(root: ParentNode): void {
 
   textNodes.forEach((textNode) => {
     const text = textNode.textContent ?? '';
-    const regex = /\[( |x|X)\]/g;
+    const regex = /(\[( |x|X)\]|\(( |x|X)\))/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null = regex.exec(text);
     if (!match) {
@@ -819,9 +1141,11 @@ function renderInlineCheckboxes(root: ParentNode): void {
       }
 
       const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
+      const radio = match[0].startsWith('(');
+      checkbox.type = radio ? 'radio' : 'checkbox';
       checkbox.classList.add('hvy-inline-checkbox');
-      const isChecked = (match[1] ?? ' ').toLowerCase() === 'x';
+      if (radio) checkbox.classList.add('hvy-inline-radio');
+      const isChecked = (radio ? match[3] : match[2] ?? ' ').toLowerCase() === 'x';
       checkbox.checked = isChecked;
       if (isChecked) {
         checkbox.setAttribute('checked', '');

@@ -10,11 +10,14 @@ import { resolveBaseComponentFromMeta } from '../../component-defs';
 import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
 import { serializeBlockFragment, serializeDocument } from '../../serialization';
-import { syncSortValuesForDocument } from '../../sort-values';
+import { setSortValueAnnotationText, syncSortValuesForDocument } from '../../sort-values';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
+import { expandBlockPathByBlockId } from '../../navigation';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
 import type { VisualBlock } from '../../editor/types';
+import type { ScriptingPluginsApi } from './plugin-apis';
+import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -40,19 +43,21 @@ export interface ScriptingRuntime {
   setLineBudget(maxLines: number): void;
 }
 
-interface ScriptingDocApi {
+export interface ScriptingDocApi {
   log_json: (valuesJson: string) => void;
+  callback_error: (error: string) => void;
   tool: (name: string, args?: unknown) => unknown;
   tool_json: (name: string, argsJson: string) => unknown;
   component: ScriptingComponentApi;
   header: ScriptingHeaderApi;
   attachments: ScriptingAttachmentsApi;
   form: ScriptingFormApi;
-  db: ScriptingDbApi;
+  db: ScriptingBrythonDbApi;
   json: ScriptingJsonApi;
   time: ScriptingTimeApi;
   export: ScriptingExportApi;
   cli: ScriptingCliApi;
+  plugins: ScriptingPluginsApi;
   rerender: () => void;
 }
 
@@ -94,6 +99,18 @@ export interface ScriptingFormApi {
 export interface ScriptingDbApi {
   query(sql: string, params?: unknown): Record<string, unknown>[];
   execute(sql: string, params?: unknown): string;
+  get_tables(): ScriptingDatabaseTableHandle[];
+  get_updated_tables(table_name?: string): ScriptingDatabaseTableHandle[];
+}
+
+export interface ScriptingBrythonDbApi extends ScriptingDbApi {
+  query_json(sql: string, paramsJson: string): Record<string, unknown>[];
+  execute_json(sql: string, paramsJson: string): string;
+}
+
+export interface ScriptingDatabaseTableHandle {
+  name: string;
+  removed: boolean;
 }
 
 export interface ScriptingJsonApi {
@@ -128,11 +145,16 @@ export interface ScriptingRuntimeOptions {
   document: VisualDocument;
   previousDocument?: VisualDocument | null;
   changeReason?: HvyPluginHookChangeReason;
+  renderOnMutation?: boolean;
   form?: ScriptingFormApi;
   db?: ScriptingDbApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
+  plugins?: ScriptingPluginsApi;
   now?: () => Date;
   onMutationFlushed?: () => void;
+  beforeMutationRender?: () => void;
+  databaseChanges?: DatabaseChangeSnapshot;
+  onCallbackError?: (error: string) => void;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -157,6 +179,8 @@ function createUnavailableDbApi(): ScriptingDbApi {
   return {
     query: fail,
     execute: fail,
+    get_tables: fail,
+    get_updated_tables: fail,
   };
 }
 
@@ -266,9 +290,13 @@ function formatLocalDate(date: Date): string {
 export function createScriptingRuntime(options: ScriptingRuntimeOptions): ScriptingRuntime {
   const stats: ScriptingRuntimeStats = { toolCalls: 0, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, logs: [] };
   let mutated = false;
+  const pendingExpansions = new Map<string, { sectionKey: string; blockId: string }>();
 
   const onMutation = () => {
     mutated = true;
+  };
+  const requestExpansion = (sectionKey: string, blockId: string) => {
+    pendingExpansions.set(`${sectionKey}:${blockId}`, { sectionKey, blockId });
   };
   const recordLog = (...values: unknown[]) => {
     if (stats.logs.length >= 200) {
@@ -281,32 +309,58 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   };
 
   const flushIfMutated = () => {
-    if (!mutated) return;
+    if (!mutated && pendingExpansions.size === 0) return;
+    const documentMutated = mutated;
     mutated = false;
-    syncSortValuesForDocument(options.document);
-    if (state?.document === options.document) {
+    if (documentMutated) {
+      syncSortValuesForDocument(options.document);
+    }
+    if (documentMutated && state?.document === options.document) {
       state.rawEditorText = serializeDocument(options.document);
       state.rawEditorError = null;
       state.rawEditorDiagnostics = [];
     }
-    try {
-      getRefreshReaderPanels()();
-    } catch {
-      // Reader panel may not be initialized yet (during pre-first-render execution).
+    if (state?.document === options.document) {
+      for (const { sectionKey, blockId } of pendingExpansions.values()) {
+        expandBlockPathByBlockId(options.document.sections, blockId, sectionKey);
+      }
     }
-    try {
-      getRenderApp()();
-    } catch {
-      // renderApp may not be ready yet during the very first load.
+    pendingExpansions.clear();
+    let renderGuardError: unknown = null;
+    if (options.renderOnMutation !== false) {
+      try {
+        options.beforeMutationRender?.();
+      } catch (error) {
+        renderGuardError = error;
+      }
+      if (!renderGuardError) {
+        try {
+          getRefreshReaderPanels()();
+        } catch {
+          // Reader panel may not be initialized yet (during pre-first-render execution).
+        }
+        try {
+          getRenderApp()();
+        } catch {
+          // renderApp may not be ready yet during the very first load.
+        }
+      }
     }
-    options.onMutationFlushed?.();
+    if (documentMutated) {
+      options.onMutationFlushed?.();
+    }
+    if (renderGuardError) {
+      throw renderGuardError;
+    }
   };
 
+  const database = options.db ?? createUnavailableDbApi();
   const doc: ScriptingDocApi = {
     log_json: (valuesJson) => {
       const parsed = JSON.parse(String(valuesJson || '[]')) as unknown;
       recordLog(...(Array.isArray(parsed) ? parsed : [parsed]));
     },
+    callback_error: (error) => options.onCallbackError?.(String(error)),
     tool: (name, args) => {
       stats.toolCalls += 1;
       if (name === 'get_updated_components') {
@@ -317,11 +371,12 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
           options.document,
           options.previousDocument ?? null,
           String(readScriptValue(args, 'component') ?? ''),
-          onMutation
+          onMutation,
+          requestExpansion
         );
       }
       if (name === 'get_components') {
-        return getScriptingComponentHandles(options.document, String(readScriptValue(args, 'component') ?? ''), onMutation);
+        return getScriptingComponentHandles(options.document, String(readScriptValue(args, 'component') ?? ''), onMutation, false, requestExpansion);
       }
       const result = executeDocumentEditToolByName(name, normalizeScriptObject(args), options.document, onMutation);
       return result;
@@ -329,6 +384,17 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     tool_json: (name, argsJson) => {
       const parsed = JSON.parse(String(argsJson || '{}')) as Record<string, unknown>;
       return doc.tool(name, parsed);
+    },
+    plugins: options.plugins ?? {
+      call: (pluginId) => {
+        throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
+      },
+      call_json: (pluginId) => {
+        throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
+      },
+      call_marshaled: (pluginId) => {
+        throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
+      },
     },
     component: {
       get_text: (id) => findComponentBySchemaId(options.document, String(id ?? ''))?.block.text ?? '',
@@ -392,7 +458,11 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       },
     },
     form: options.form ?? createUnavailableFormApi(),
-    db: options.db ?? createUnavailableDbApi(),
+    db: {
+      ...database,
+      query_json: (sql, paramsJson) => database.query(sql, JSON.parse(String(paramsJson))),
+      execute_json: (sql, paramsJson) => database.execute(sql, JSON.parse(String(paramsJson))),
+    },
     json: createJsonApi(),
     time: createTimeApi(options.now ?? (() => new Date())),
     export: options.exportRuleRecorder ? createExportApi(options.exportRuleRecorder) : createUnavailableExportApi(),
@@ -535,7 +605,8 @@ class ScriptingComponentHandle {
     private document: VisualDocument,
     private location: ScriptingBlockLocation,
     private markMutated: () => void,
-    removed = false
+    removed = false,
+    private requestExpansion: (sectionKey: string, blockId: string) => void = () => {}
   ) {
     this.id = location.block.schema.id;
     this.component = location.block.schema.component;
@@ -569,10 +640,16 @@ class ScriptingComponentHandle {
     return hasTag(this.location.block.schema.tags, tag);
   }
 
+  expand(): void {
+    if (!this.removed) {
+      this.requestExpansion(this.location.section.key, this.location.block.id);
+    }
+  }
+
   get_parent_by_tag(tag: string): ScriptingComponentHandle | ScriptingSectionHandle | null {
     for (const ancestor of [...this.location.ancestors].reverse()) {
       if (hasTag(ancestor.schema.tags, tag)) {
-        return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed);
+        return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed, this.requestExpansion);
       }
     }
     return hasTag(this.location.section.tags, tag)
@@ -589,13 +666,25 @@ class ScriptingComponentHandle {
       if (excluded.some((tag) => hasTag(ancestor.schema.tags, tag))) {
         continue;
       }
-      return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed);
+      return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed, this.requestExpansion);
     }
     return null;
   }
 
   first_table_cell(index = 0): string {
     return findFirstTableCell(this.location.block, Math.max(0, Math.floor(Number(index) || 0)));
+  }
+
+  set_sort_value(key: string, value: unknown): number {
+    const replacements = setSortValueAnnotationText(
+      this.location.block,
+      String(key ?? ''),
+      String(value ?? '')
+    );
+    if (replacements > 0) {
+      this.markMutated();
+    }
+    return replacements;
   }
 
   fingerprint(): string {
@@ -630,7 +719,7 @@ class ScriptingComponentHandle {
       block: child,
       section: this.location.section,
       ancestors: [...this.location.ancestors, this.location.block],
-    }, this.markMutated);
+    }, this.markMutated, false, this.requestExpansion);
   }
 }
 
@@ -664,7 +753,8 @@ function getScriptingComponentHandles(
   document: VisualDocument,
   component: string,
   markMutated: () => void,
-  removed = false
+  removed = false,
+  requestExpansion: (sectionKey: string, blockId: string) => void = () => {}
 ): ScriptingComponentHandle[] {
   const query = component.trim();
   const matches: ScriptingComponentHandle[] = [];
@@ -672,7 +762,7 @@ function getScriptingComponentHandles(
     for (const block of blocks) {
       const base = resolveBaseComponentFromMeta(block.schema.component, document.meta);
       if (!query || block.schema.component === query || base === query || (query === 'xref' && base === 'xref-card')) {
-        matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated, removed));
+        matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated, removed, requestExpansion));
       }
       const nextAncestors = [...ancestors, block];
       visit(block.schema.containerBlocks ?? [], section, nextAncestors);
@@ -694,9 +784,10 @@ function getUpdatedScriptingComponentHandles(
   document: VisualDocument,
   previousDocument: VisualDocument | null,
   component: string,
-  markMutated: () => void
+  markMutated: () => void,
+  requestExpansion: (sectionKey: string, blockId: string) => void
 ): ScriptingComponentHandle[] {
-  const current = getScriptingComponentHandles(document, component, markMutated);
+  const current = getScriptingComponentHandles(document, component, markMutated, false, requestExpansion);
   if (!previousDocument) {
     return current;
   }

@@ -5,7 +5,7 @@ import type {
   HvyPluginFactory,
   HvyPluginInstance,
 } from '../types';
-import { SCRIPTING_PLUGIN_ID } from '../registry';
+import { createBuiltInPluginMetadata, SCRIPTING_PLUGIN_ID } from '../registry';
 import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
 import { deserializeDocument, serializeDocument } from '../../serialization';
@@ -14,7 +14,8 @@ import hljs from 'highlight.js/lib/core';
 import python from 'highlight.js/lib/languages/python';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript, SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './wrapper';
-import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
+import { getScriptingPluginMaxLines, getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
+import { getDatabaseChangesSince, getDatabaseChangeRevision } from '../../database-change-tracker';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
 import './scripting.css';
@@ -56,6 +57,31 @@ function refreshHighlightedSource(textarea: HTMLTextAreaElement, highlightedCode
     highlightedCode.parentElement?.style.setProperty('width', `max(100%, ${editorWidth}px)`);
   }
   highlightedCode.style.transform = `translateY(${-textarea.scrollTop}px)`;
+}
+
+function scrollScriptingSourceHorizontally(
+  event: WheelEvent,
+  sourceEditor: HTMLDivElement,
+  textarea: HTMLTextAreaElement
+): void {
+  const rawHorizontalDelta = event.deltaX || (event.shiftKey ? event.deltaY : 0);
+  if (rawHorizontalDelta === 0) {
+    return;
+  }
+  const deltaScale = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+    ? Number.parseFloat(getComputedStyle(textarea).lineHeight) || 16
+    : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+      ? sourceEditor.clientWidth
+      : 1;
+  const previousScrollLeft = sourceEditor.scrollLeft;
+  sourceEditor.scrollLeft += rawHorizontalDelta * deltaScale;
+  if (sourceEditor.scrollLeft === previousScrollLeft) {
+    return;
+  }
+  if (!event.shiftKey && event.deltaY !== 0) {
+    textarea.scrollTop += event.deltaY * deltaScale;
+  }
+  event.preventDefault();
 }
 
 interface ReaderHandles {
@@ -121,6 +147,11 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   textarea.addEventListener('scroll', () => {
     highlightedCode.style.transform = `translateY(${-textarea.scrollTop}px)`;
   });
+  // The textarea owns vertical scrolling, but its transparent overlay must hand
+  // horizontal gestures to the shared source scroller beneath it.
+  textarea.addEventListener('wheel', (event) => {
+    scrollScriptingSourceHorizontally(event, sourceEditor, textarea);
+  }, { passive: false });
 
   sourceEditor.appendChild(highlightedSource);
   sourceEditor.appendChild(textarea);
@@ -172,6 +203,49 @@ const scriptingResultCache = new Map<string, ScriptingState>();
 
 function getScriptingResultCacheKey(sectionKey: string, blockId: string): string {
   return `${sectionKey}|${blockId}`;
+}
+
+function getScriptingVisualDescription(
+  document: HvyPluginContext['rawDocument'],
+  block: HvyPluginContext['block']
+): string {
+  const sectionKey = findSectionKeyForScriptingBlock(document.sections, block);
+  if (!sectionKey) {
+    return '';
+  }
+  const cached = scriptingResultCache.get(getScriptingResultCacheKey(sectionKey, block.id));
+  const result = cached?.sourceSignature === block.text ? cached.lastResult : null;
+  if (!result || result.ok) {
+    return '';
+  }
+  const logs = result.logs ?? [];
+  return [
+    `Script error: ${result.error ?? 'unknown error'}`,
+    ...(logs.length > 0 ? ['Logs:', ...logs.map((entry, index) => `${index + 1}: ${entry}`)] : []),
+    ...(result.errorDetail && result.errorDetail !== result.error ? [`Details: ${result.errorDetail}`] : []),
+  ].join('\n');
+}
+
+function findSectionKeyForScriptingBlock(
+  sections: HvyPluginContext['rawDocument']['sections'],
+  target: HvyPluginContext['block']
+): string {
+  for (const section of sections) {
+    let found = false;
+    visitBlocksInList(section.blocks, (candidate) => {
+      if (candidate === target) {
+        found = true;
+      }
+    });
+    if (found) {
+      return section.key;
+    }
+    const nested = findSectionKeyForScriptingBlock(section.children, target);
+    if (nested) {
+      return nested;
+    }
+  }
+  return '';
 }
 
 export function storeScriptingResult(
@@ -281,9 +355,22 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   sync();
 
+  // Plugin factories run before their element replaces the mount placeholder,
+  // so repeat the font-dependent width measurement once styles are available.
+  const mountWindow = root.ownerDocument.defaultView;
+  let postMountFrame = mountWindow?.requestAnimationFrame(() => {
+    postMountFrame = undefined;
+    sync();
+  });
+
   return {
     element: root,
     refresh: sync,
+    unmount: () => {
+      if (postMountFrame !== undefined) {
+        mountWindow?.cancelAnimationFrame(postMountFrame);
+      }
+    },
   };
 }
 
@@ -303,6 +390,7 @@ interface ScriptingTarget {
 let lastScriptedDocument: HvyDocumentHookContext['document'] | null = null;
 let lastScriptedSignature = '';
 let lastScriptedDocumentSnapshot = '';
+const lastDatabaseRevisionByDocument = new WeakMap<HvyDocumentHookContext['document'], number>();
 
 function getScriptingPluginLibraries(pluginConfig: JsonObject | null | undefined): ScriptingLibraryName[] {
   const raw = Array.isArray(pluginConfig?.libraries) ? pluginConfig.libraries : [];
@@ -345,6 +433,10 @@ export function getRunnableScriptingTargetsForView(
 }
 
 async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Promise<void> {
+  const previousDatabaseRevision = ctx.changeReason === 'load'
+    ? getDatabaseChangeRevision(ctx.document)
+    : lastDatabaseRevisionByDocument.get(ctx.document) ?? 0;
+  const databaseChanges = getDatabaseChangesSince(ctx.document, previousDatabaseRevision);
   if (ctx.changeReason === 'load') {
     clearScriptingResults();
     lastScriptedDocumentSnapshot = '';
@@ -358,7 +450,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   const scriptSignature = targets
     .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.editorOnly ? 'editor' : 'document'}\u0000${target.pluginVersion}\u0000${target.libraries.join(',')}\u0000${target.source}`)
     .join('\u0001');
-  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${serializeDocument(ctx.document)}`;
+  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${serializeDocument(ctx.document)}\u0002database:${getDatabaseChangeRevision(ctx.document)}`;
   if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
     return;
   }
@@ -379,7 +471,19 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       pluginVersion: target.pluginVersion,
       maxLines: target.maxLines,
       changeReason: ctx.changeReason,
+      renderOnMutation: ctx.changeReason !== 'edit',
       libraries: target.libraries,
+      databaseChanges,
+      onCallbackError: (callbackResult) => {
+        if (!ctx.isCurrentDocument()) return;
+        storeScriptingResult(
+          target.sectionKey,
+          target.blockId,
+          callbackResult,
+          target.source
+        );
+        ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
+      },
     });
     console.debug('[hvy:scripting] script run', {
       changeReason: ctx.changeReason,
@@ -400,6 +504,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   }
   if (ctx.isCurrentDocument()) {
     lastScriptedDocumentSnapshot = serializeDocument(ctx.document);
+    lastDatabaseRevisionByDocument.set(ctx.document, databaseChanges.revision);
   }
   ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
 }
@@ -410,7 +515,7 @@ const scriptingDocumentHook = {
 };
 
 export const scriptingPlugin: HvyPlugin = {
-  id: SCRIPTING_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(SCRIPTING_PLUGIN_ID),
   displayName: 'Scripting',
   documentation: {
     filename: 'about-scripting.txt',
@@ -418,14 +523,18 @@ export const scriptingPlugin: HvyPlugin = {
   },
   aiHint: 'Script-backed component. Executable source is exposed as script.py.',
   aiHelp: [
-    `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
+    `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"${SCRIPTING_PLUGIN_VERSION}"}}-->\`.`,
     'Put executable script source in the component body.',
     'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
     'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random`, `re`, and `datetime` before the script runs.',
+    'The checked `random` subset provides `random`, `shuffle`, `choice`, `randrange`, `randint`, `uniform`, `sample`, and `choices`.',
     'Use `pluginConfig.maxSteps` to configure the runtime step budget.',
     'Use the `doc` API for host capabilities: document tools through `doc.tool.TOOL_NAME(**args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',
   ].join(' '),
+  visualDescription: {
+    describe: ({ block, rawDocument }) => getScriptingVisualDescription(rawDocument, block),
+  },
   create: scriptingPluginFactory,
   hooks: {
     documentLoad: scriptingDocumentHook,

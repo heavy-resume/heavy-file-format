@@ -1,0 +1,338 @@
+.hvy-document .document-attachment-manager {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.9rem;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .document-attachment-manager-head,
+.hvy-document .document-attachment-tools,
+.hvy-document .document-attachment-row,
+.hvy-document .document-attachment-actions,
+.hvy-document .document-attachment-file-meta {
+  display: flex;
+  align-items: center;
+}
+
+.hvy-document .document-attachment-manager-head {
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hvy-document .document-attachment-manager-head > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.hvy-document .document-attachment-manager-head > div > span,
+.hvy-document .document-attachment-manager-help,
+.hvy-document .document-attachment-file-meta,
+.hvy-document .document-attachment-empty > span {
+  color: var(--hvy-text-muted);
+  font-size: 0.82rem;
+}
+
+.hvy-document .document-attachment-manager-help {
+  margin: 0;
+}
+
+.hvy-document .document-attachment-add,
+.hvy-document .document-attachment-replace {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.hvy-document .document-attachment-add {
+  display: inline-flex;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.hvy-document .document-attachment-add input,
+.hvy-document .document-attachment-replace input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hvy-document .document-attachment-add .hvy-ui-icon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.hvy-document .document-attachment-dropzone {
+  display: flex;
+  min-block-size: 5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border: 1.5px dashed var(--hvy-border-input);
+  border-radius: 0.75rem;
+  color: var(--hvy-text-muted);
+  background: var(--hvy-surface);
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.hvy-document .document-attachment-dropzone.is-dragging,
+.hvy-document .document-attachment-dropzone:focus-visible {
+  border-color: var(--hvy-focus);
+  color: var(--hvy-text);
+  background: var(--hvy-surface-tint);
+  transform: translateY(-1px);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--hvy-focus-glow);
+}
+
+.hvy-document .document-attachment-tray-icon {
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+}
+
+.hvy-document .document-attachment-tools {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.hvy-document .document-attachment-tools[hidden] {
+  display: none;
+}
+
+.hvy-document .document-attachment-tools > input {
+  min-inline-size: min(100%, 15rem);
+  flex: 1 1 15rem;
+}
+
+.hvy-document .document-attachment-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.hvy-document .document-attachment-filter {
+  padding: 0.34rem 0.6rem;
+}
+
+.hvy-document .document-attachment-filter.is-active {
+  color: var(--hvy-button-text);
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+}
+
+.hvy-document .document-attachment-status:empty {
+  display: none;
+}
+
+.hvy-document .document-attachment-status {
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.55rem;
+  color: var(--hvy-text);
+  background: var(--hvy-surface-tint);
+  font-size: 0.84rem;
+}
+
+.hvy-document .document-attachment-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hvy-document .document-attachment-row {
+  gap: 0.75rem;
+  padding: 0.7rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.7rem;
+  background: var(--hvy-surface);
+  box-shadow: var(--hvy-shadow);
+}
+
+.hvy-document .document-attachment-row.is-new {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, var(--hvy-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: document-attachment-arrival 520ms ease-out both;
+}
+
+@keyframes document-attachment-arrival {
+  from {
+    opacity: 0.35;
+    transform: translateY(0.35rem);
+  }
+}
+
+.hvy-document .document-attachment-row[hidden] {
+  display: none;
+}
+
+.hvy-document .document-attachment-kind {
+  display: grid;
+  inline-size: 3rem;
+  block-size: 3rem;
+  flex: 0 0 3rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.05rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 0.65rem;
+  color: var(--hvy-text-alt);
+  background: var(--hvy-surface-tint);
+}
+
+.hvy-document .document-attachment-kind .hvy-ui-icon {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.hvy-document .document-attachment-kind > span {
+  max-inline-size: 2.5rem;
+  overflow: hidden;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.hvy-document .document-attachment-details {
+  display: grid;
+  min-inline-size: 10rem;
+  flex: 1 1 16rem;
+  gap: 0.35rem;
+}
+
+.hvy-document .document-attachment-name {
+  inline-size: 100%;
+  min-inline-size: 0;
+  font-weight: 650;
+}
+
+.hvy-document .document-attachment-file-meta {
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+}
+
+.hvy-document .document-attachment-file-meta > span:first-child {
+  max-inline-size: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvy-document .document-attachment-usage {
+  color: var(--hvy-text-alt);
+}
+
+.hvy-document .document-attachment-usage.is-unused {
+  color: var(--hvy-text-muted);
+  font-style: italic;
+}
+
+.hvy-document .document-attachment-actions {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.hvy-document .document-attachment-actions > button:not(.hvy-delete-control),
+.hvy-document .document-attachment-actions > label {
+  padding: 0.4rem 0.58rem;
+  font-size: 0.76rem;
+}
+
+.hvy-document .document-attachment-empty {
+  display: grid;
+  min-block-size: 7rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.hvy-document .document-attachment-empty-icon {
+  inline-size: 2rem;
+  block-size: 2rem;
+  color: var(--hvy-text-muted);
+}
+
+@container hvy-surface (max-width: 42rem) {
+  .hvy-document .document-attachment-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .hvy-document .document-attachment-details {
+    min-inline-size: calc(100% - 4rem);
+  }
+
+  .hvy-document .document-attachment-actions {
+    inline-size: 100%;
+    justify-content: flex-start;
+    padding-inline-start: 3.75rem;
+  }
+}
+
+.hvy-document .editor-tree.document-attachment-surface-dragging {
+  outline: 2px dashed var(--hvy-focus);
+  outline-offset: -0.45rem;
+  background: color-mix(in srgb, var(--hvy-surface-tint) 65%, transparent);
+}
+
+.hvy-document .document-attachment-drop-confirm {
+  display: grid;
+  inline-size: min(34rem, calc(100% - 2rem));
+  max-block-size: calc(100% - 2rem);
+  gap: 1rem;
+  overflow: auto;
+}
+
+.hvy-document .document-attachment-drop-confirm .modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hvy-document .document-attachment-drop-confirm .modal-head h3,
+.hvy-document .document-attachment-drop-confirm > p {
+  margin: 0;
+}
+
+.hvy-document .document-attachment-drop-confirm > p {
+  color: var(--hvy-text-muted);
+}
+
+.hvy-document .document-attachment-drop-close {
+  display: inline-grid;
+  inline-size: 2rem;
+  block-size: 2rem;
+  flex: 0 0 2rem;
+  place-items: center;
+  padding: 0;
+}
+
+.hvy-document .document-attachment-drop-close .hvy-ui-icon {
+  inline-size: 0.9rem;
+  block-size: 0.9rem;
+}
+
+.hvy-document .document-attachment-drop-name-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hvy-document .document-attachment-drop-name-list label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.hvy-document .document-attachment-drop-name-list label > span {
+  color: var(--hvy-text-muted);
+  font-size: 0.8rem;
+}

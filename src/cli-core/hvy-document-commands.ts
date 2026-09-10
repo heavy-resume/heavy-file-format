@@ -70,6 +70,15 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'search') {
     return { output: formatHvySearch(ctx.document, ctx.fs, decodeCliText(action ?? ''), parseSearchArgs(rest)), mutated: false };
   }
+  if (resource === 'embeddings') {
+    if (action !== 'build' || rest.length > 0) {
+      return { output: hvyDocumentCommandHelp('embeddings'), mutated: false };
+    }
+    return {
+      output: 'Embedding build is unavailable because no embedding provider is configured for this CLI session.',
+      mutated: false,
+    };
+  }
   if (resource === 'cheatsheet') {
     return { output: formatCheatsheet(action ?? ''), mutated: false };
   }
@@ -85,7 +94,7 @@ export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: 
   if (resource === 'plugin' && action && rest.length === 0 && getHvyCliPluginCommandRegistration(action)) {
     return { output: hvyDocumentCommandHelp(`plugin ${action}`), mutated: false };
   }
-  throw new Error('hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help');
+  throw new Error('hvy: expected request_structure, search, embeddings, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help');
 }
 
 export function hvyDocumentCommandHelp(topic = ''): string {
@@ -109,12 +118,13 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a blank section.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs, such as blip-section. Section templates with variables require exact JSON values with --using-template.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Create a blank text component. Edit text.txt after creation.'),
-      formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json and tableRows.json after creation.'),
+      formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json after creation.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
       formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components pointing to TARGET_ID.'),
       formatCommandHelp('hvy preview PATH', 'Show the raw HVY preview for a component, capped at 100 lines.'),
       formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map for the current document.'),
       formatCommandHelp('hvy search QUERY [--max N] [--json]', 'Search semantic section/component metadata, paths, roles, and previews for likely edit locations.'),
+      formatCommandHelp('hvy embeddings build', 'Build or refresh the current document embedding index when an embedding provider is configured.'),
       formatCommandHelp('hvy cheatsheet [NAME]', 'List or show concise command examples from file-backed cheatsheets.'),
       formatCommandHelp('hvy recipe [NAME]', 'List or show file-backed HVY recipes for composed document patterns.'),
       formatCommandHelp('hvy lint [--fix]', 'Check the document for likely component issues. --fix repairs safe structural issues such as plugin id aliases.'),
@@ -151,9 +161,10 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs. Lookup prefers exact key, then exact name. Templates with variables require exact JSON values. Non-repeatable templates can be inserted once.'),
     ].join('\n'),
     text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
-    table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+    table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
     'search': formatCommandHelp('hvy search QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
+    embeddings: formatCommandHelp('hvy embeddings build', 'Build or refresh the current document embedding index when an embedding provider is configured.'),
     cheatsheet: [
       formatCommandHelp('hvy cheatsheet [NAME]', 'List available cheatsheets or show one by name. Cheatsheets are discovered from src/cli-core/cheatsheets/*.md.'),
       formatHvyCheatsheetList(),
@@ -619,7 +630,7 @@ function formatCreatedComponentDirectory(
     ? componentPath
     : `/body${componentPath.startsWith('/') ? componentPath : `/${componentPath}`}`;
   const fs = createdBlock && !options.returnStructureOnCreation
-    ? buildHvyVirtualBlockSubtreeFileSystem(document.meta, createdBlock, normalizedComponentPath, pathNaming)
+    ? buildHvyVirtualBlockSubtreeFileSystem(document, createdBlock, normalizedComponentPath, pathNaming)
     : buildHvyVirtualFileSystem(document, pathNaming);
   const entry = fs.entries.get(normalizedComponentPath);
   if (!entry || entry.kind !== 'dir') {

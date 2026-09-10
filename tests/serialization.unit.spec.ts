@@ -12,6 +12,36 @@ import {
 
 registerSerializationTestState();
 
+test('preserves responsive grid slot CSS through deserialize and serialize', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+responsive_breakpoints:
+  md: 46rem
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+ <!--hvy:grid {"id":"profile-layout","gridColumns":2}-->
+
+  <!--hvy:grid:0 {"id":"details","css":"max-md:order: 2;"}-->
+
+   <!--hvy:text {}-->
+    Details
+
+  <!--hvy:grid:1 {"id":"photo","css":"max-md:order: 1;"}-->
+
+   <!--hvy:text {}-->
+    Photo
+`, '.hvy');
+
+  expect(document.meta.responsive_breakpoints).toEqual({ md: '46rem' });
+  expect(document.sections[0]?.blocks[0]?.schema.gridItems[0]?.css).toBe('max-md:order: 2;');
+  expect(serializeDocument(document)).toContain(
+    '<!--hvy:grid:1 {"id":"photo","css":"max-md:order: 1;"}-->'
+  );
+});
+
 test('does not serialize generated section ids into directives', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -37,6 +67,27 @@ hvy_version: 0.1
 `, '.hvy');
 
   expect(serializeDocument(document)).toContain('<!--hvy: {"id":"ai-features","lock":false,"expanded":true,"highlight":false}-->');
+});
+
+test('round-trips subsection nesting through serialization', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"overview"}-->
+#! Overview
+
+<!--hvy:subsection {"id":"application-pipeline"}-->
+#! Application Pipeline
+`, '.hvy');
+
+  const serialized = serializeDocument(document);
+  const expectedResult = deserializeDocument(serialized, '.hvy');
+
+  expect(serialized).toContain('<!--hvy:subsection {"id":"application-pipeline","lock":false,"expanded":true,"highlight":false}-->');
+  expect(expectedResult.sections).toHaveLength(1);
+  expect(expectedResult.sections[0]?.children).toHaveLength(1);
+  expect(expectedResult.sections[0]?.children[0]?.customId).toBe('application-pipeline');
 });
 
 test('round-trips sort value annotations in text content', () => {
@@ -510,6 +561,19 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('preserves sidebar_max_width in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+sidebar_max_width: 28rem
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+`, '.hvy');
+
+  expect(serializeWithState(document)).toContain('sidebar_max_width: 28rem');
+});
+
 test('preserves PHVY PDF page settings in document front matter on round-trip', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -602,8 +666,7 @@ test('serializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -616,6 +679,54 @@ plugins:
 
   expect(output).toContain('<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).not.toContain('"pluginUrl"');
+});
+
+test('adds declarations for used built-in plugins when serializing', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: example.preserved
+    uuid: example-preserved-primary
+---
+
+<!--hvy: {"id":"plugins"}-->
+#! Plugins
+
+<!--hvy:grid {"gridColumns":1}-->
+
+ <!--hvy:grid:0 {}-->
+
+  <!--hvy:plugin {"plugin":"hvy.qr-code"}-->
+  https://example.invalid/qr-code
+
+<!--hvy:plugin {"plugin":"example.undeclared"}-->
+`, '.phvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('  - id: example.preserved');
+  expect(expectedResult).toContain('  - id: hvy.qr-code');
+  expect(expectedResult.match(/id: hvy\.qr-code/g)).toHaveLength(1);
+  expect(expectedResult).not.toContain('  - id: example.undeclared');
+});
+
+test('does not duplicate an existing built-in plugin declaration when serializing', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.qr-code
+---
+
+<!--hvy: {"id":"plugins"}-->
+#! Plugins
+
+<!--hvy:plugin {"plugin":"hvy.qr-code"}-->
+https://example.invalid/qr-code
+`, '.phvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult.match(/id: hvy\.qr-code/g)).toHaveLength(1);
 });
 
 test('serializes only fields owned by the block component', () => {
@@ -635,7 +746,8 @@ Plain text
   const output = serializeWithState(document);
 
   expect(output).toContain('<!--hvy:text {"id":"plain"}-->');
-  expect(output).toContain('<!--hvy:table {"id":"facts","tableColumns":["Name"],"tableRows":[{"cells":["Ada"]}]}-->');
+  expect(output).toContain('<!--hvy:table {"id":"facts","tableColumns":["Name"]}-->');
+  expect(output).toContain('| Ada |');
   expect(output).not.toContain('"plugin":"hvy.db-table"');
   expect(output).not.toContain('"pluginConfig"');
   expect(output).not.toContain('"imageFile":"wrong.png"');
@@ -679,7 +791,8 @@ Custom text
   expect(output).toContain('name: fake-table-card');
   expect(output).toContain('tableColumns:');
   expect(output).toContain('<!--hvy:fake-text-card {"id":"plain"}-->');
-  expect(output).toContain('<!--hvy:fake-table-card {"id":"facts","tableRows":[{"cells":["Grace"]}]}-->');
+  expect(output).toContain('<!--hvy:fake-table-card {"id":"facts"}-->');
+  expect(output).toContain('| Grace |');
   expect(output).not.toContain('pluginConfig:');
   expect(output).not.toContain('imageFile: wrong.png');
   expect(output).not.toContain('"pluginConfig"');
@@ -712,6 +825,25 @@ hvy_version: 0.1
   expect(expectedResult).toContain('<!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true');
   expect(expectedResult).toContain('"buttonVisibleScript":"return True"');
   expect(expectedResult).toContain('"buttonTargetScript":"doc.component.set_text');
+});
+
+test('round-trips named location markers', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+<!--hvy:location-marker {"locationMarkerName":"primary-actions"}-->
+`, '.hvy');
+
+  const marker = document.sections[0]?.blocks[0];
+  expect(marker?.schema.kind).toBe('location-marker');
+  expect(marker?.schema.locationMarkerName).toBe('primary-actions');
+  expect(serializeDocument(document)).toContain(
+    '<!--hvy:location-marker {"locationMarkerName":"primary-actions"}-->'
+  );
 });
 
 test('round-trips block visibility scripts', () => {
@@ -773,8 +905,7 @@ test('serializes db-table query text in the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -797,8 +928,7 @@ test('serializes db-table query window settings in plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -866,6 +996,24 @@ section_defaults:
 
   expect(output).toContain('section_defaults:');
   expect(output).toContain('css: "margin: 0.5rem 0;"');
+});
+
+test('preserves document paragraph spacing in front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+typography:
+  paragraphSpacing: 0.7rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.typography).toEqual({ paragraphSpacing: '0.7rem' });
+  expect(serializeWithState(document)).toContain('paragraphSpacing: 0.7rem');
 });
 
 test('preserves application metadata in document front matter on round-trip', () => {
@@ -1420,7 +1568,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"cover"}-->
 #! Cover
 
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Hero caption","schema":{"kind":"text","component":"text","align":"center"}},"css":"margin: 0.5rem auto; display: block;"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Hero caption","schema":{"kind":"text","component":"text","align":"center"}},"allowDocumentImageReuse":false,"css":"margin: 0.5rem auto; display: block;"}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
@@ -1429,12 +1577,14 @@ hvy_version: 0.1
   expect(block?.schema.imageAlt).toBe('Cover photo');
   expect(block?.schema.caption?.text).toBe('Hero caption');
   expect(block?.schema.caption?.schema.align).toBe('center');
+  expect(block?.schema.allowDocumentImageReuse).toBe(false);
 
   const output = serializeWithState(document);
   expect(output).toContain('<!--hvy:image {');
   expect(output).toContain('"imageFile":"hero.png"');
   expect(output).toContain('"imageAlt":"Cover photo"');
   expect(output).toContain('"caption":{"text":"Hero caption"');
+  expect(output).toContain('"allowDocumentImageReuse":false');
 });
 
 test('image component migrates string captions to styled caption payloads', () => {
@@ -1539,7 +1689,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"gallery"}-->
 #! Gallery
 
-<!--hvy:carousel {"carouselDurationMs":2500,"carouselShowFrame":false,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
+<!--hvy:carousel {"carouselDurationMs":2500,"carouselShowFrame":false,"allowDocumentImageReuse":false,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
 `, '.hvy');
   document.attachments = [
     { id: 'image:a.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1, 2]) },
@@ -1553,6 +1703,7 @@ hvy_version: 0.1
   expect(block?.schema.component).toBe('carousel');
   expect(block?.schema.carouselDurationMs).toBe(2500);
   expect(block?.schema.carouselShowFrame).toBe(false);
+  expect(block?.schema.allowDocumentImageReuse).toBe(false);
   expect(block?.schema.carouselImages).toMatchObject([
       { imageFile: 'a.png', caption: 'A' },
       { imageFile: 'b.png', imageAlt: 'B alt' },

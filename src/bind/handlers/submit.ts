@@ -7,6 +7,8 @@ import type { VisualBlock, VisualSection } from '../../editor/types';
 import type { HvyChatContextPreparationProgress } from '../../types';
 import { recordMeasurement } from '../../perf-trace';
 import { isLikelyInformationalAnswerRequest } from '../../ai-document-tool-parsing';
+import { getPendingChatAttachments } from '../../chat/chat-attachments';
+import { applyInlineAnswerTypeChoice } from '../../block-ops';
 
 interface PendingDocumentEditMutation {
   requiresFullRefresh: boolean;
@@ -32,10 +34,19 @@ function formatContextPreparationStatus(progress?: HvyChatContextPreparationProg
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
     const form = event.target as HTMLElement | null;
+    if (form?.matches('.choice-mode-name-form')) {
+      event.preventDefault();
+      const control = form.closest<HTMLElement>('.hvy-choice-mode-switch');
+      const name = form.querySelector<HTMLInputElement>('.choice-mode-name-input')?.value ?? '';
+      if (control && name.trim().length > 0) {
+        applyInlineAnswerTypeChoice(control, { radio: true, groupName: name });
+      }
+      return;
+    }
     if (form?.id === 'searchComposer') {
       event.preventDefault();
       if (state.search.activeTab === 'filter') {
-        await applySearchFilter({ enabled: true });
+        await applySearchFilter({ enabled: true, root: app });
         return;
       }
       await submitSearch(app);
@@ -92,6 +103,8 @@ export function bindSubmit(app: HTMLElement): void {
             document: state.document,
             messages: state.chat.messages,
             request: question,
+            chatContext: state.chatContext,
+            embeddingProvider: state.embeddingProvider,
           });
           state.chat.cliSim = {
             requestPayload: result.requestPayload,
@@ -124,10 +137,13 @@ export function bindSubmit(app: HTMLElement): void {
       }
 
       const previousMessages = state.chat.messages;
-      const nextMessages = appendUserChatMessage(previousMessages, question);
+      const pendingAttachments = getPendingChatAttachments(state.chat);
+      const attachmentReferences = pendingAttachments.map(({ text: _text, ...attachment }) => attachment);
+      const nextMessages = appendUserChatMessage(previousMessages, question, attachmentReferences);
 
       state.chat.messages = nextMessages;
       state.chat.draft = '';
+      state.chat.pendingAttachmentIds = [];
       state.chat.error = null;
       state.chat.isSending = true;
       state.chat.requestNonce += 1;
@@ -135,7 +151,9 @@ export function bindSubmit(app: HTMLElement): void {
       const abortController = new AbortController();
       state.chat.abortController = abortController;
       const isDocumentEditChat = state.currentView !== 'viewer';
-      const answerDocumentEditChatAsQuestion = isDocumentEditChat && isLikelyInformationalAnswerRequest(question);
+      const answerDocumentEditChatAsQuestion = isDocumentEditChat
+        && pendingAttachments.length === 0
+        && isLikelyInformationalAnswerRequest(question);
       const useDocumentEditTurn = isDocumentEditChat && !answerDocumentEditChatAsQuestion;
       state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Waiting for answer...';
       const saveChatOrSessionState = (): void => {
@@ -189,15 +207,15 @@ export function bindSubmit(app: HTMLElement): void {
           requestNonce,
           mode: useDocumentEditTurn ? 'document-edit' : 'qa',
         });
+        const documentBeforeEditTurn = useDocumentEditTurn
+          ? serializeDocument(state.document)
+          : null;
+        let documentEditMutationReported = false;
         let recordedDocumentEditMutation = false;
         const recordDocumentEditMutation = (_group?: string, mutation?: ChatCliMutationSummary): void => {
           documentEditMutationNeedsRender = true;
           mergePendingDocumentEditMutation(pendingDocumentEditMutation, mutation);
-          if (recordedDocumentEditMutation) {
-            return;
-          }
-          recordedDocumentEditMutation = true;
-          recordHistory(`ai-document-edit:${requestNonce}`);
+          documentEditMutationReported = true;
         };
         const result =
           useDocumentEditTurn
@@ -206,6 +224,10 @@ export function bindSubmit(app: HTMLElement): void {
                 document: state.document,
                 messages: previousMessages,
                 request: question,
+                attachments: state.chat.attachments,
+                messageAttachments: pendingAttachments,
+                chatContext: state.chatContext,
+                embeddingProvider: state.embeddingProvider,
                 onMutation: recordDocumentEditMutation,
                 onProgress: (message) => {
                   if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
@@ -255,6 +277,14 @@ export function bindSubmit(app: HTMLElement): void {
                 },
                 signal: abortController.signal,
               });
+        if (
+          documentEditMutationReported
+          && documentBeforeEditTurn !== null
+          && serializeDocument(state.document) !== documentBeforeEditTurn
+        ) {
+          recordedDocumentEditMutation = true;
+          recordHistory(`ai-document-edit:${requestNonce}`);
+        }
         console.debug('[hvy:chat-submit] chat turn resolved', {
           requestNonce,
           currentNonce: state.chat.requestNonce,

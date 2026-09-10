@@ -135,7 +135,8 @@ function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtu
       && entry.path.startsWith('/body/')
       && entry.path.endsWith('.json')
       && !entry.path.endsWith('/section.json')
-      && !entry.path.endsWith('/children-order.json'))
+      && !entry.path.endsWith('/children-order.json')
+      && !entry.path.endsWith('/tableColumnProperties.json'))
     .map((entry) => componentEntryFromJsonFile(document, fs, entry.path, directBodyFilesByDirectory))
     .filter((entry): entry is ComponentStructureEntry => !!entry);
 }

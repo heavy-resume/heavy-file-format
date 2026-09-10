@@ -4,6 +4,8 @@ import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
 import type { ProxyChatMode } from './chat/chat-provider-payload';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
+import type { HvyAttachmentActionHandler } from './document-attachment-actions';
+import type { UserFileAttachmentLimits } from './document-attachments';
 import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';
 import type { HvyPdfStylePreset } from './pdf-style-presets';
@@ -34,10 +36,22 @@ export interface ImageAttachmentMaxDimensions {
 
 export type ChatProvider = 'openai' | 'anthropic' | 'qwen';
 
+export interface ChatAttachmentReference {
+  id: string;
+  name: string;
+  characterCount: number;
+  lineCount: number;
+}
+
+export interface ChatAttachment extends ChatAttachmentReference {
+  text: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ChatAttachmentReference[];
   reasoning?: string;
   tokenUsage?: ChatTokenUsage;
   error?: boolean;
@@ -68,6 +82,11 @@ export interface ToolLoopCompactionOptions {
   toolResultChatChars?: number;
 }
 
+export interface ChatScratchpadOptions {
+  warningChars?: number;
+  maxChars?: number;
+}
+
 export interface ChatCliSimState {
   requestPayload: unknown | null;
   requestJson: string;
@@ -89,11 +108,14 @@ export interface ChatSettings {
   compactionModel?: string;
   maxContextChars?: number;
   toolLoopCompaction?: ToolLoopCompactionOptions;
+  scratchpad?: ChatScratchpadOptions;
 }
 
 export interface ChatState {
   settings: ChatSettings;
   draft: string;
+  attachments: ChatAttachment[];
+  pendingAttachmentIds: string[];
   messages: ChatMessage[];
   isSending: boolean;
   status: string | null;
@@ -325,12 +347,23 @@ export interface SectionTemplateFlavorModalState {
 export interface ReusableDefinitionEditModalState {
   kind: 'component' | 'section';
   index: number;
-  mode: 'edit' | 'raw';
-  rawDraft: string;
   error: string | null;
+  activeFlavorIndex?: number | null;
+  originalRaw?: string;
+  isNew?: boolean;
+  draftName?: string;
+  flavorManager?: {
+    mode: 'browse' | 'create';
+    selectedIndex: number;
+    sourceIndex: number | null;
+    draftName: string;
+    draftDescription: string;
+    error: string | null;
+  } | null;
+  historyBeforeDraft?: { history: string[]; future: string[] };
 }
 
-export interface SqliteRowComponentModalState {
+export interface DbTableRowComponentModalState {
   sectionKey: string;
   blockId: string;
   tableName: string;
@@ -408,6 +441,8 @@ export interface ThemeConfig {
   colors: Record<string, string>;
 }
 
+export type HvyThemeOverrides = Readonly<Record<string, string>>;
+
 export type ReaderViewModifier = 'highlight' | 'priority' | 'collapse' | 'dimmed' | 'hidden';
 export type ReaderViewFilter = Record<string, ReaderViewModifier[]>;
 export type SelectedExample =
@@ -416,9 +451,12 @@ export type SelectedExample =
   | 'guide'
   | 'crm'
   | 'study-tools'
+  | 'survey'
   | 'video-demo'
+  | 'asteroids'
   | 'plugin-sort-values'
   | 'pdf-template'
+  | 'sepa-recreation'
   | 'meeting-minutes-template'
   | 'resume-template'
   | 'resume-example'
@@ -488,6 +526,8 @@ export interface AppState {
   persistDocumentState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentHost?: HvyAttachmentHostAdapter | null;
+  attachmentAction?: HvyAttachmentActionHandler | null;
+  attachmentLimits?: UserFileAttachmentLimits | null;
   encryption?: HvyEncryptionOptions | null;
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
@@ -509,6 +549,7 @@ export interface AppState {
   };
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
+  showComponentEncryptionControls?: boolean;
   rawEditorText: string;
   rawEditorError: string | null;
   rawEditorDiagnostics: RawEditorDiagnostic[];
@@ -529,8 +570,9 @@ export interface AppState {
   pendingEditorDeactivation: {
     sectionKey: string;
     blockId: string;
-    anchorKind: 'block' | 'text';
+    anchorKind: 'block' | 'element' | 'text';
     anchorTop: number;
+    elementAnchor?: string;
     scrollAdjustment: number;
     scrollSurface: 'editor' | 'editor-sidebar' | 'reader' | 'viewer-sidebar';
     scrollTopBeforeClose: number;
@@ -547,7 +589,26 @@ export interface AppState {
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
     passiveHeight?: number;
+    preferredEditorTarget?: {
+      field: string;
+      fieldIndex?: number;
+      rowIndex?: number;
+      cellIndex?: number;
+      columnIndex?: number;
+      controlSelection?: {
+        start: number;
+        end: number;
+        direction: 'forward' | 'backward' | 'none';
+      };
+      editableSelection?: {
+        anchorPath: number[];
+        anchorOffset: number;
+        focusPath: number[];
+        focusOffset: number;
+      };
+    };
   } | null;
+  pendingHistoryFocus?: NonNullable<AppState['pendingEditorActivation']>['preferredEditorTarget'] | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
@@ -578,7 +639,8 @@ export interface AppState {
   future: string[];
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
-  sqliteRowComponentModal: SqliteRowComponentModalState | null;
+  encryptionModal?: { sectionKey: string; blockId: string } | null;
+  dbTableRowComponentModal: DbTableRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfExportPlanModal: PdfExportPlanModalState | null;
   pdfTemplateImportModal: PdfTemplateImportModalState | null;
@@ -591,6 +653,12 @@ export interface AppState {
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  /**
+   * Ancestors force-opened to reveal a search result. Unlike the reader*State maps this is
+   * not viewer browsing state: a search runs on whichever surface you are on, so editing
+   * surfaces honour it too.
+   */
+  searchRevealedAncestors: Record<string, boolean>;
   readerDeferredSectionBodies: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;

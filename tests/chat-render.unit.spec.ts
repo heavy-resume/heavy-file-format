@@ -79,6 +79,40 @@ hvy_version: 0.1
   expect(html).toContain('Last tokens: input 120 / output 30');
 });
 
+test('expected result: chat renders pending controls and sent attachment references without raw text', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.attachments = [{
+    id: 'facts',
+    name: 'Pasted text 1.txt',
+    text: 'raw private source',
+    characterCount: 18,
+    lineCount: 1,
+  }];
+  chat.pendingAttachmentIds = ['facts'];
+  chat.messages = [{
+    id: 'user-1',
+    role: 'user',
+    content: 'Use the facts.',
+    attachments: [{
+      id: 'sent-facts',
+      name: 'Pasted text 2.txt',
+      characterCount: 4_000,
+      lineCount: 20,
+    }],
+  }];
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit');
+
+  expect(html).toContain('Pasted text 1.txt');
+  expect(html).toContain('data-action="restore-chat-attachment"');
+  expect(html).toContain('data-action="remove-chat-attachment"');
+  expect(html).toContain('Pasted text 2.txt');
+  expect(html).toContain('4,000 characters');
+  expect(html).not.toContain('raw private source');
+});
+
 test('renderChatPanel gives HVY response expandables a visible disclosure cue', () => {
   const chat = createDefaultChatState();
   chat.panelOpen = true;

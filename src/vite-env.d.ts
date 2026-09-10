@@ -5,6 +5,11 @@ declare module 'virtual:hvy-brython-minimal-vfs' {
   export default source;
 }
 
+declare module 'virtual:hvy-brython-plugin-vfs' {
+  const pythonLibraryVfsByName: Record<string, Record<string, unknown>>;
+  export default pythonLibraryVfsByName;
+}
+
 declare module 'virtual:hvy-built-in-plugins' {
   import type { HvyPlugin } from './plugins/types';
 
@@ -19,6 +24,9 @@ declare module 'virtual:hvy-built-in-plugins' {
     diagram?: HvyPlugin;
     qrCode?: HvyPlugin;
     video?: HvyPlugin;
+    editableText?: HvyPlugin;
+    canvas?: HvyPlugin;
+    powerScripting?: HvyPlugin;
   }>;
   export const builtInPluginById: Readonly<Record<string, HvyPlugin | undefined>>;
 }
@@ -26,16 +34,18 @@ declare module 'virtual:hvy-built-in-plugins' {
 interface ImportMetaEnv {
   readonly VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
   readonly VITE_HVY_CHAT_MODEL?: string;
+  readonly VITE_HVY_CHAT_COMPACTION_PROVIDER?: 'openai' | 'anthropic';
+  readonly VITE_HVY_CHAT_COMPACTION_MODEL?: string;
+  readonly VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES?: string;
+  readonly VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES?: string;
+  readonly VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS?: string;
+  readonly VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS?: string;
   readonly VITE_HVY_ENABLE_CHAT_MODEL_PICKER?: string;
   readonly VITE_HVY_ENABLE_CHAT_PROXY_DEBUG_LOGS?: string;
   readonly VITE_HVY_ENABLE_PDF_IMPORT_STEPPER?: string;
   readonly VITE_OPENAI_MODEL?: string;
   readonly VITE_ANTHROPIC_MODEL?: string;
   readonly VITE_QWEN_MODEL?: string;
-  readonly VITE_OPENAI_API_KEY?: string;
-  readonly VITE_ANTHROPIC_API_KEY?: string;
-  readonly VITE_QWEN_API_KEY?: string;
-  readonly VITE_DASHSCOPE_API_KEY?: string;
 }
 
 interface ImportMeta {

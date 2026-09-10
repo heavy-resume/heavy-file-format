@@ -7,9 +7,9 @@ import { refreshSearchFilterButton, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
-import { clearNextUndoTargetsDocument } from '../../edit-command-routing';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { clearSortValueValidation } from '../../sort-value-validation';
+import { REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT } from '../../reusable-template-values';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -27,6 +27,7 @@ export function bindInputMisc(app: HTMLElement): void {
     if (!isSearchQueryControl(target)) {
       return;
     }
+    const searchTabLostFocus = state.search.activeTab === 'search';
     window.setTimeout(() => {
       if (!state.search.open || state.search.resultsCollapsed) {
         return;
@@ -34,7 +35,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (state.search.queryDraft.trim() === state.search.submittedQuery.trim()) {
         return;
       }
-      if (state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
+      if (!searchTabLostFocus || state.search.activeTab !== 'search') {
         return;
       }
       void submitSearch(app);
@@ -43,6 +44,11 @@ export function bindInputMisc(app: HTMLElement): void {
 
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
+    if (state.reusableDefinitionEditModal) {
+      queueMicrotask(() => {
+        app.querySelector('#modalRoot')?.dispatchEvent(new Event(REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT));
+      });
+    }
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     const validationBlock = rawTarget.closest<HTMLElement>('.editor-block');
     if (validationBlock && rawTarget.closest('[data-hvy-sort-value="true"]')) {
@@ -127,7 +133,12 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     const blockIdForHistory = target.dataset.blockId ?? '';
-    if (field && field !== 'new-component-type' && field !== 'table-cell' && field !== 'table-column') {
+    if (field === 'table-cell' || field === 'table-column') {
+      const rowIndex = target.dataset.rowIndex ?? '';
+      const cellIndex = target.dataset.cellIndex ?? '';
+      const columnIndex = target.dataset.columnIndex ?? '';
+      recordHistory(`table-edit:${sectionKey}:${blockIdForHistory}:${rowIndex}:${cellIndex}:${columnIndex}`);
+    } else if (field && field !== 'new-component-type') {
       recordHistory(`input:${sectionKey}:${blockIdForHistory}:${field}`);
       clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
     }
@@ -407,6 +418,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-location-marker-name' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.locationMarkerName = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      refreshReaderPanelsOutsideActiveEditor(target);
+      return;
+    }
+
     if (field === 'block-container-border' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -670,7 +692,6 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     if (handleBlockFieldInput(target)) {
-      clearNextUndoTargetsDocument();
       saveSessionState(state);
       if (field === 'block-rich' || field === 'text-fill-in-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'caption-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);

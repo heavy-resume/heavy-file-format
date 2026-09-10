@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { getMatchingImagePresetCss, mergeImagePresetCss } from '../src/editor/components/image/image-preset-css';
+import { getMatchingImagePresetCss, hasExplicitImageSizeCss, mergeImagePresetCss } from '../src/editor/components/image/image-preset-css';
 
 describe('mergeImagePresetCss', () => {
   test('position preset preserves size declarations', () => {
@@ -69,5 +69,13 @@ describe('getMatchingImagePresetCss', () => {
 
   test('returns null when the css does not match a requested preset', () => {
     expect(getMatchingImagePresetCss('width: 24rem; height: auto; display: block;', ['small', 'medium'])).toBeNull();
+  });
+});
+
+describe('hasExplicitImageSizeCss', () => {
+  test('distinguishes absent image sizing from explicit custom sizing', () => {
+    expect(hasExplicitImageSizeCss('margin: 0.5rem auto; display: block;')).toBe(false);
+    expect(hasExplicitImageSizeCss('width: 72%; display: block;')).toBe(true);
+    expect(hasExplicitImageSizeCss('height: 18rem;')).toBe(true);
   });
 });

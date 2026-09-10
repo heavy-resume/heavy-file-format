@@ -262,8 +262,8 @@ function scoreSearchMatch(queryTokens: string[], searchable: string): number {
 
 async function renderComponentText(document: VisualDocument, block: VisualBlock, options: { maxDepth: number }): Promise<string> {
   if (block.schema.component === 'plugin' && block.schema.plugin === DB_TABLE_PLUGIN_ID) {
-    const { getDbTableRenderedText } = await import('./plugins/db-table');
-    return getDbTableRenderedText(document, block);
+    const { getDbTableComponentRenderedText } = await import('./plugins/db-table/db-table-component');
+    return getDbTableComponentRenderedText(document, block);
   }
 
   const localLines = getLocalRenderedComponentLines(block);

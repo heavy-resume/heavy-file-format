@@ -5,12 +5,22 @@ import {
   applyUnderlineSyntax,
   escapeRawHtml,
   markdownToReaderHtml,
+  normalizeEditorMarkdownWhitespace,
   normalizeMarkdownIndentation,
   normalizeMarkdownLists,
   removeNonTextContentFromRichEditor,
   turndown,
 } from '../src/markdown';
+import { renderedMarkdownHtmlToSearchText } from '../src/rendered-markdown-text';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
+
+test('expected result: single tildes remain literal text in text components', () => {
+  expect(markdownToReaderHtml('Keep ~this~ literal')).toContain('<p>Keep ~this~ literal</p>');
+});
+
+test('expected result: double tildes render intentional strikethrough in text components', () => {
+  expect(markdownToReaderHtml('Strike ~~this~~ text')).toContain('<p>Strike <del>this</del> text</p>');
+});
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
   expect(normalizeMarkdownIndentation('    Seattle, WA')).toBe('Seattle, WA');
@@ -43,7 +53,7 @@ test('folds orphan wrapped bullet paragraphs back into the previous list item', 
   );
 
   expect(html).toContain('<ul>');
-  expect(html).toContain('<li>First bullet starts here\nand this is the wrapped remainder</li>');
+  expect(html).toContain('<li>First bullet starts here and this is the wrapped remainder</li>');
   expect(html).toContain('<li>Second bullet</li>');
   expect(html).not.toContain('</ul>\n<p>and this is the wrapped remainder</p>');
 });
@@ -54,17 +64,149 @@ test('keeps a paragraph after a completed list as its own paragraph', () => {
   );
 });
 
+test('expected result: rendered prose soft wraps use spaces in DOM text', () => {
+  expect(markdownToReaderHtml('_Players\nchasing_')).toContain('<em>Players chasing</em>');
+  expect(markdownToReaderHtml('_Players_\n_chasing_')).toContain('<em>Players</em> <em>chasing</em>');
+});
+
+for (const { format, editorHtml, expectedMarkdown, expectedRenderedHtml } of [
+  {
+    format: 'bold',
+    editorHtml: '<p>Someth<strong>ing there</strong></p>',
+    expectedMarkdown: 'Someth**ing there**',
+    expectedRenderedHtml: '<strong>ing there</strong>',
+  },
+  {
+    format: 'italics',
+    editorHtml: '<p>Someth<em>ing there</em></p>',
+    expectedMarkdown: 'Someth*ing there*',
+    expectedRenderedHtml: '<em>ing there</em>',
+  },
+  {
+    format: 'underline',
+    editorHtml: '<p>Someth<u>ing there</u></p>',
+    expectedMarkdown: 'Someth___ing there___',
+    expectedRenderedHtml: '<u>ing there</u>',
+  },
+  {
+    format: 'strikethrough',
+    editorHtml: '<p>Someth<s>ing there</s></p>',
+    expectedMarkdown: 'Someth~~ing there~~',
+    expectedRenderedHtml: '<del>ing there</del>',
+  },
+  {
+    format: 'link',
+    editorHtml: '<p>Someth<a href="https://example.test/path">ing there</a></p>',
+    expectedMarkdown: 'Someth[ing there](https://example.test/path)',
+    expectedRenderedHtml: '<a href="https://example.test/path"',
+  },
+  {
+    format: 'inline code',
+    editorHtml: '<p>Someth<code>ing there</code></p>',
+    expectedMarkdown: 'Someth`ing there`',
+    expectedRenderedHtml: '<code>ing there</code>',
+  },
+]) {
+  test(`expected result: ${format} can begin within a word in text components`, () => {
+    const markdown = turndown.turndown(editorHtml);
+
+    expect(markdown).toBe(expectedMarkdown);
+    expect(markdownToReaderHtml(markdown)).toContain(expectedRenderedHtml);
+  });
+}
+
+test('expected result: intraword italics do not reinterpret ordinary underscores or code', () => {
+  expect(markdownToReaderHtml('snake_case_value')).toContain('<p>snake_case_value</p>');
+  expect(markdownToReaderHtml('Someth\\_ing there_')).not.toContain('<em>');
+  expect(markdownToReaderHtml('`Someth_ing there_`')).toContain('<code>Someth_ing there_</code>');
+});
+
+test('expected result: split intraword italics serialize without ambiguous delimiter runs', () => {
+  const markdown = turndown.turndown('<p><em>Somet</em>hi<em>ng</em> Th<em>ere</em></p>');
+
+  expect(markdown).toBe('*Somet*hi*ng* Th*ere*');
+  expect(markdownToReaderHtml(markdown)).toBe(
+    '<p><em>Somet</em>hi<em>ng</em> Th<em>ere</em></p>\n'
+  );
+});
+
+test('expected result: rendered prose keeps explicit hard breaks', () => {
+  expect(markdownToReaderHtml('Players  \nchasing')).toContain('Players<br>chasing');
+});
+
+test('expected result: searchable Markdown joins soft wraps but preserves structural boundaries', () => {
+  const searchText = (markdown: string): string => renderedMarkdownHtmlToSearchText(markdownToReaderHtml(markdown));
+  expect(searchText('Players\nchasing')).toBe('Players chasing');
+  expect(searchText('Players\n\nchasing')).toBe('Players\n\nchasing');
+  expect(searchText('- Players\n- chasing')).toBe('Players\n\nchasing');
+  expect(searchText('```text\nPlayers\nchasing\n```')).toBe('Players\nchasing');
+});
+
 test('renders bare inline checkbox markers as checkbox controls in reader html', () => {
   const html = markdownToReaderHtml('[ ] Draft task\n\n[x] Done task');
 
   expect(html).toContain('<div class="hvy-inline-checkbox-line">');
-  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" contenteditable="false" disabled>');
-  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" checked contenteditable="false" disabled>');
+  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" data-field="inline-persisted-answer" data-answer-index="0" contenteditable="false">');
+  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" data-field="inline-persisted-answer" data-answer-index="1" checked contenteditable="false">');
   expect(html).toContain('Draft task');
   expect(html).toContain('Done task');
   expect(html).not.toContain('<p><input class="hvy-inline-checkbox"');
   expect(html).not.toContain('[ ] Draft task');
   expect(html).not.toContain('[x] Done task');
+});
+
+test('renders consecutive radio markers as one persisted radio group', () => {
+  const html = markdownToReaderHtml('- ( ) Email\n- (x) Phone\n\n[ ] Send a copy');
+
+  expect(html).toContain('type="radio"');
+  const groupNames = html.match(/name="hvy-inline-radio-[^"]+"/g);
+  expect(groupNames).toHaveLength(2);
+  expect(groupNames?.[0]).toBe(groupNames?.[1]);
+  expect(html).toContain('type="checkbox"');
+  expect(html).toContain('data-answer-index="2"');
+});
+
+test('separately rendered blocks never share a radio group name', () => {
+  const firstBlock = markdownToReaderHtml('( ) Email\n( ) Phone');
+  const secondBlock = markdownToReaderHtml('( ) Fax\n( ) Pigeon');
+
+  expect(firstBlock.match(/name="[^"]+"/)?.[0]).not.toBe(secondBlock.match(/name="[^"]+"/)?.[0]);
+});
+
+test('radio markers use the caller-supplied group so a group can span components', () => {
+  const html = markdownToReaderHtml('( ) Email\n( ) Phone', {
+    answerGroups: new Map([
+      [0, 'name:contact'],
+      [1, 'name:contact'],
+    ]),
+  });
+
+  expect(html.match(/name="hvy-inline-radio-[^"]+"/g)).toEqual([
+    'name="hvy-inline-radio-name_contact"',
+    'name="hvy-inline-radio-name_contact"',
+  ]);
+  expect(html).toContain('data-answer-group="name:contact"');
+});
+
+test('a radio-group directive never renders as reader text', () => {
+  const html = markdownToReaderHtml('<!--hvy:radio-group contact-->\n( ) Email');
+
+  expect(html).not.toContain('<!--');
+  expect(html.replace(/<[^>]*>/g, '').trim()).toBe('Email');
+  expect(html).toContain('name="hvy-inline-radio-name_contact"');
+});
+
+test('renders source-line answer markers vertically and same-line markers inline', () => {
+  expect(markdownToReaderHtml('( ) One\n( ) Two')).toContain(' One</div><div class="hvy-inline-checkbox-line"><input');
+  expect(markdownToReaderHtml('( ) One ( ) Two')).not.toContain('<br>');
+});
+
+test('expected result: normalizing answer spacing preserves paragraph gaps', () => {
+  expect(normalizeEditorMarkdownWhitespace('( )  One\n\n( ) Two')).toBe('( ) One\n\n( ) Two');
+});
+
+test('restores the separator after an answer marker when the caret anchor is removed', () => {
+  expect(normalizeEditorMarkdownWhitespace('[ ]\u200bMoo\n( )Cow')).toBe('[ ] Moo\n( ) Cow');
 });
 
 test('keeps checkbox marker text literal inside code', () => {
@@ -75,13 +217,14 @@ test('keeps checkbox marker text literal inside code', () => {
   expect(html).not.toContain('hvy-inline-checkbox');
 });
 
-test('keeps markdown task list markers as task lists', () => {
+test('renders markdown task list markers as persisted checkboxes', () => {
   const html = markdownToReaderHtml('- [ ] Draft task\n- [x] Done task');
 
   expect(html).toContain('<ul>');
   expect(html).toContain('<li><input');
   expect(html).toContain('type="checkbox"');
-  expect(html).not.toContain('hvy-inline-checkbox');
+  expect(html).toContain('hvy-inline-checkbox');
+  expect(html).not.toContain('disabled');
 });
 
 test('renders sort value annotations as visible text without leaking markers', () => {
@@ -131,6 +274,26 @@ test('keeps raw html escaped outside code while preserving fenced code literals'
   expect(escaped).toContain('<div>literal</div>');
 });
 
+test('keeps backslash escaped angle brackets as markdown escapes', () => {
+  expect(escapeRawHtml('There is <foo@example.com\\>\nthere')).toBe('There is &lt;foo@example.com\\>\nthere');
+  expect(escapeRawHtml('\\<not a tag\\>')).toBe('\\<not a tag\\>');
+});
+
+test('renders a trailing escaped angle bracket as a literal character', () => {
+  expect(markdownToReaderHtml('There is <foo@example.com\\>\nthere')).toContain('</a>&gt;');
+  expect(markdownToReaderHtml('There is <foo@example.com\\>\nthere')).not.toContain('&amp;gt;');
+});
+
+test('round trips an email in angle brackets through the editor without escaping the closing bracket', () => {
+  const editorHtml = markdownToReaderHtml('There is <foo@example.com>\nthere');
+  const editedMarkdown = turndown.turndown(editorHtml);
+
+  expect(editedMarkdown).toBe('There is <[foo@example.com](mailto:foo@example.com)\\> there');
+  expect(markdownToReaderHtml(editedMarkdown)).toBe(
+    '<p>There is &lt;<a href="mailto:foo@example.com">foo@example.com</a>&gt; there</p>\n'
+  );
+});
+
 test('serializes editor underline with hvy underline syntax', () => {
   expect(turndown.turndown('<p><u>Important</u></p>')).toBe('___Important___');
 });
@@ -153,6 +316,19 @@ test('serializes mailto links and drops empty editor links to plain text', () =>
   );
   expect(turndown.turndown('<p><a href="">person@example.com</a></p>')).toBe('person@example.com');
   expect(turndown.turndown('<p><a>person@example.com</a></p>')).toBe('person@example.com');
+});
+
+test('round trips a mailto link whose subject contains spaces', () => {
+  const markdown = turndown.turndown(
+    '<p><a href="mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky Park Disc Golf Course">KCParks.SEPA@kingcounty.gov</a></p>'
+  );
+
+  expect(markdown).toBe(
+    '[KCParks.SEPA@kingcounty.gov](mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course)'
+  );
+  expect(markdownToReaderHtml(markdown)).toContain(
+    '<a href="mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course">KCParks.SEPA@kingcounty.gov</a>'
+  );
 });
 
 test('renders mailto links from text markdown', () => {

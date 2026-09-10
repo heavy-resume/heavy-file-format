@@ -14,6 +14,12 @@ export interface ProviderProxyChatRequest {
   }>;
   context: string;
   traceRunId?: string;
+  // Provider-tuning fields carry a provider prefix and are consumed only by that
+  // provider's builder; every other builder ignores them and keeps its own default.
+  // Reasoning control diverges too much to share one field: OpenAI (and
+  // OpenAI-compatible endpoints) take an effort enum, Anthropic takes a thinking
+  // token budget, Qwen takes a boolean. Give each its own field rather than
+  // inventing a lowest-common-denominator mapping.
   openAiReasoningEffort?: OpenAiReasoningEffort;
 }
 
@@ -63,6 +69,9 @@ export function buildOpenAiProxyRequest(body: ProviderProxyChatRequest): Record<
   };
 }
 
+// Sends no `thinking` block, so Anthropic applies its own default and there is
+// nothing for openAiReasoningEffort to map onto. Wiring a caller-visible control
+// here means adding an explicit anthropicThinkingBudgetTokens field.
 export function buildAnthropicProxyRequest(body: ProviderProxyChatRequest): Record<string, unknown> {
   const { systemMessages, conversationMessages } = splitProxyMessages(body.messages);
   return {
@@ -79,6 +88,8 @@ export function buildAnthropicProxyRequest(body: ProviderProxyChatRequest): Reco
   };
 }
 
+// Chat-completions shape without a reasoning control; Qwen gates thinking with its
+// own enable_thinking flag, so that would be an explicit qwenEnableThinking field.
 export function buildQwenProxyRequest(body: ProviderProxyChatRequest): Record<string, unknown> {
   const { systemMessages, conversationMessages } = splitProxyMessages(body.messages);
   return {

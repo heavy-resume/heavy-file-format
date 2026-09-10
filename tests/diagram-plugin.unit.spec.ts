@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 
 import type { VisualBlock } from '../src/editor/types';
 import { defaultBlockSchema } from '../src/document-factory';
-import { readDiagramConfig, createDiagramRenderId } from '../src/plugins/diagram';
+import { createDiagramRenderId, MERMAID_RENDER_CONFIG, readDiagramConfig } from '../src/plugins/diagram';
 import { configurePluginBlock } from '../src/plugins/plugin-block';
 import { DIAGRAM_PLUGIN_ID } from '../src/plugins/registry';
 
@@ -19,6 +19,10 @@ test('createDiagramRenderId returns stable unique Mermaid render ids', () => {
   expect(firstId).toMatch(/^hvy-diagram-\d+$/);
   expect(secondId).toMatch(/^hvy-diagram-\d+$/);
   expect(secondId).not.toBe(firstId);
+});
+
+test('Mermaid labels render as sanitizer-safe SVG text', () => {
+  expect(MERMAID_RENDER_CONFIG).toEqual({ htmlLabels: false });
 });
 
 test('configurePluginBlock seeds diagram plugin config and Mermaid body text', () => {

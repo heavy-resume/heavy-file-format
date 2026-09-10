@@ -5,6 +5,8 @@ const TOOL_DESCRIPTION_GENERATOR_KEY = 'hvy.resume.tool-description';
 
 export const resumeOutputGeneratorsPlugin: HvyPlugin = {
   id: 'hvy.resume-generators',
+  version: '0.1.0',
+  hvyApiVersion: '0.1',
   displayName: 'Resume Generators',
   outputGenerators: [
     {

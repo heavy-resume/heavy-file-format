@@ -1,0 +1,61 @@
+.hvy-document .hvy-form-photo-control {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hvy-document .hvy-form-photo-preview {
+  display: grid;
+  place-items: center;
+  min-height: 8rem;
+  overflow: hidden;
+  border: 1px dashed var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-muted);
+}
+
+.hvy-document .hvy-form-photo-preview img {
+  display: block;
+  width: 100%;
+  max-height: 18rem;
+  object-fit: contain;
+}
+
+.hvy-document .hvy-form-photo-picker {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-photo-input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hvy-document .hvy-form-photo-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font-weight: 600;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.hvy-document .hvy-form-photo-picker:hover .hvy-form-photo-button {
+  border-color: var(--hvy-focus-ring);
+  background: var(--hvy-surface-alt);
+  transform: translateY(-1px);
+}
+
+.hvy-document .hvy-form-photo-input:focus-visible + .hvy-form-photo-button {
+  outline: 2px solid var(--hvy-focus-ring);
+  outline-offset: 2px;
+}

@@ -1,24 +1,32 @@
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
-import { renderSearchModal } from '../src/search/render';
+import { renderCollapsedSearchBar, renderSearchModal } from '../src/search/render';
 import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows, buildSemanticRetrievalChunks } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
+import { chatSemanticFilterProvider } from '../src/search/semantic-provider';
+import { requestSemanticFilterMatches } from '../src/search/semantic-response';
+import { runSemanticFilterWindows } from '../src/search/semantic-filter';
 import { searchDocuments } from '../src/search/documents';
 import { createDocumentFilterSnapshot } from '../src/search/document-filter';
 import { createDocumentSearchSnapshot, searchSnapshotToState } from '../src/search/snapshot';
 import { applySearchFilter, clearFilteringForTarget, stopSearchRequest } from '../src/search/actions';
-import { renderSearchFloatingSurface } from '../src/search/surface-refresh';
+import { refreshSearchSurface, renderSearchFloatingSurface } from '../src/search/surface-refresh';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
 import { highlightEditorSearchMatches } from '../src/block-ops';
+import { expandSearchMatchResults } from '../src/search/match-navigation';
+import { createDefaultSearchState } from '../src/search/state';
+import { setHostChatClient } from '../src/chat/chat';
+import type { HvySemanticFilterRequest } from '../src/search/types';
 
 afterEach(() => {
   setReferenceAppConfig(null);
+  setHostChatClient(null);
   vi.restoreAllMocks();
 });
 
@@ -100,6 +108,34 @@ hvy_version: 0.1
   expect(expectedResult).toHaveLength(0);
 });
 
+test('built-in search finds a phrase across a serialized prose soft wrap', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"impact"}-->
+#! Impact
+
+<!--hvy:text {"id":"body-copy"}-->
+ _Ferns, moss, young trees, and extensive vegetation will be cleared to make fairways, greens, and tees. Players chasing their discs will create new trails. This will turn Petrovitsky Park's undeveloped patch of forest into a trail sprawl that will grow over time._
+`, '.hvy');
+
+  const serialized = serializeDocument(document);
+  expect(serialized).toMatch(/Players\n\s+chasing/);
+
+  const expectedResult = await builtInSearchProvider({
+    document: deserializeDocument(serialized, '.hvy'),
+    query: 'Players chasing',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]?.targetId).toBe('body-copy');
+  expect(expectedResult[0]?.preview).toContain('Players chasing');
+  expect(expectedResult[0]?.matchedText).toBe('Players chasing');
+});
+
 test('built-in search finds nested container content', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -123,7 +159,7 @@ hvy_version: 0.1
   expect(expectedResult.some((result) => result.targetId === 'inner-text')).toBe(true);
 });
 
-test('built-in search groups multiple field matches within one component', async () => {
+test('built-in search groups every field match within one component result', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -144,6 +180,51 @@ hvy_version: 0.1
   expect(expectedResult).toHaveLength(1);
   expect(expectedResult[0]!.sourceField).toBe('2 matches in Title + Detail');
   expect(expectedResult[0]!.matches?.map((match) => match.label)).toEqual(['Title', 'Detail']);
+  expect(expectedResult[0]!.matches?.map((match) => match.matchOrdinal)).toEqual([0, 1]);
+});
+
+test('built-in search groups repeated matches for per-occurrence navigation', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"repeated"}-->
+ needle between needle
+`, '.hvy');
+
+  const expectedResult = await builtInSearchProvider({
+    document,
+    query: 'needle',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]!.matches).toHaveLength(2);
+  expect(expectedResult[0]!.matches?.map((match) => match.matchOrdinal)).toEqual([0, 1]);
+
+  const expectedNavigationResults = expandSearchMatchResults(expectedResult);
+  expect(expectedNavigationResults).toHaveLength(2);
+  expect(expectedNavigationResults.map((result) => result.matchOrdinal)).toEqual([0, 1]);
+
+  const search = createDefaultSearchState();
+  search.open = true;
+  search.queryDraft = 'needle';
+  search.submittedQuery = 'needle';
+  search.results = expectedResult;
+  search.navigationResultIds = expectedNavigationResults.map((result) => result.id);
+  expect(renderSearchModal(search, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  })).toContain('>1 result</div>');
+
+  search.resultsCollapsed = true;
+  search.activeResultId = expectedNavigationResults[1]!.id;
+  expect(renderCollapsedSearchBar(search, { escapeHtml })).toContain('>2 of 2</span>');
 });
 
 test('built-in search preserves document order within each category', async () => {
@@ -1185,7 +1266,7 @@ title: Semantic Test
     targetPath: '/body/skills/typescript',
     targetRef: 'typescript',
   });
-  expect(expectedResult.instructionPrompt).toContain('--- filter prompt ---\nFind frontend language work\n--- end filter prompt ---');
+  expect(expectedResult.instructionPrompt).toContain('--- begin filter prompt ---\nFind frontend language work\n--- end filter prompt ---');
   expect(expectedResult.instructionPrompt.indexOf('Candidate list as XML-like structured text:')).toBeLessThan(
     expectedResult.instructionPrompt.indexOf('Selection contract:')
   );
@@ -1290,6 +1371,54 @@ hvy_version: 0.1
   expect(expectedResult.windows).toHaveLength(1);
   expect(expectedResult.windows[0]!.candidates.map((candidate) => candidate.targetId)).toEqual(['typescript', 'react', 'notes']);
   expect(expectedResult.windows[0]!.candidates.every((candidate) => candidate.targetKind === 'block')).toBe(true);
+});
+
+test('semantic filter window concurrency defaults to three and accepts an override', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  const packet = buildSemanticFilterWindows({ document, prompt: 'Find skills' });
+  const windows = Array.from({ length: 4 }, (_, windowIndex) => ({
+    ...packet.windows[0]!,
+    windowIndex,
+    windowCount: 4,
+  }));
+
+  const runWithConcurrency = async (concurrency?: number): Promise<number[]> => {
+    const releases: Array<() => void> = [];
+    let activeCalls = 0;
+    const observedActiveCalls: number[] = [];
+    const run = runSemanticFilterWindows({
+      prompt: 'Find skills',
+      windows,
+      ...(concurrency !== undefined ? { concurrency } : {}),
+      provider: () => new Promise((resolve) => {
+        activeCalls += 1;
+        observedActiveCalls.push(activeCalls);
+        releases.push(() => {
+          activeCalls -= 1;
+          resolve([]);
+        });
+      }),
+    });
+    while (releases.length > 0) {
+      releases.splice(0).forEach((release) => release());
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    await run;
+    return observedActiveCalls;
+  };
+
+  expect(Math.max(...await runWithConcurrency())).toBe(3);
+  expect(Math.max(...await runWithConcurrency(1))).toBe(1);
 });
 
 test('semantic filter windows include late section candidates past the single request budget', () => {
@@ -1497,6 +1626,79 @@ hvy_version: 0.1
   }
 });
 
+test('expected result: semantic retrieval chunks can preserve editable component targets', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"delivery"}-->
+Known for moving software from idea to production quickly.
+
+<!--hvy:text {"id":"mentoring"}-->
+Mentors engineers and supports their long-term growth.
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, {
+    targetChunkChars: 2_000,
+    preserveLeafTargets: true,
+  });
+
+  expect(expectedResult).toEqual([
+    expect.objectContaining({
+      targetPath: '/body/summary/delivery',
+      targetKind: 'block',
+      componentType: 'text',
+      sourceCandidateIds: ['component:delivery'],
+    }),
+    expect.objectContaining({
+      targetPath: '/body/summary/mentoring',
+      targetKind: 'block',
+      componentType: 'text',
+      sourceCandidateIds: ['component:mentoring'],
+    }),
+  ]);
+});
+
+test('expected result: semantic retrieval includes plugin identity, text, parameters, and sort values', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"equipment"}-->
+#! Equipment
+
+<!--hvy:plugin {"id":"grill-rating","plugin":"example.skill-info","pluginConfig":{"scope":"current-record","targetId":"tool-grillbox"},"pluginSortValues":{"Strength":3.5}}-->
+Self-assessed equipment proficiency.
+
+Useful for testing paragraph boundaries.
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, {
+    targetChunkChars: 2_000,
+    preserveLeafTargets: true,
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]!.summary).toContain('Component: plugin');
+  expect(expectedResult[0]!.summary).toContain('Plugin: example.skill-info');
+  expect(expectedResult[0]!.summary).toContain([
+    '--- begin plugin text ---',
+    'Self-assessed equipment proficiency.',
+    '',
+    'Useful for testing paragraph boundaries.',
+    '--- end plugin text ---',
+  ].join('\n'));
+  expect(expectedResult[0]!.summary).toContain('Plugin parameters: {"scope":"current-record","targetId":"tool-grillbox"}');
+  expect(expectedResult[0]!.summary).toContain('Plugin sort values: {"Strength":3.5}');
+  expect(expectedResult[0]!.summary.indexOf('Plugin sort values:')).toBeLessThan(
+    expectedResult[0]!.summary.indexOf('--- begin plugin text ---')
+  );
+  expect(expectedResult[0]!.summary.endsWith('--- end plugin text ---')).toBe(true);
+});
+
 test('semantic filter provider matches become normal filter results', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1566,6 +1768,73 @@ hvy_version: 0.1
   const expectedContext = createSearchFilterContext(document.sections, state.search);
   expect(expectedContext.visibleSections.has(document.sections[0]!.key)).toBe(true);
   expect(expectedContext.visibleSections.has(document.sections[1]!.key)).toBe(false);
+});
+
+test('semantic filter progress refreshes locally without rebuilding the page per window', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"one"}-->
+#! One
+
+<!--hvy: {"id":"two"}-->
+#! Two
+
+<!--hvy: {"id":"three"}-->
+#! Three
+`, '.hvy');
+  initState(createTestState(document));
+  state.search.open = true;
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.queryDraft = 'Find sections';
+  const renderApp = vi.fn();
+  const refreshSearchSurface = vi.fn(() => true);
+  initCallbacks({
+    renderApp,
+    refreshSearchSurface,
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  setReferenceAppConfig({ semanticFilterProvider: () => [] });
+
+  await applySearchFilter({ enabled: true, root: {} as ParentNode });
+
+  expect(refreshSearchSurface.mock.calls.filter((call) => call[1]?.progressOnly)).toHaveLength(4);
+  expect(renderApp).toHaveBeenCalledOnce();
+});
+
+test('semantic progress-only refresh mutates the existing progress elements', () => {
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy')));
+  state.search.semanticProgress = {
+    completedWindows: 2,
+    totalWindows: 4,
+    matchedCandidates: 7,
+    includedCandidates: 4,
+    totalCandidates: 4,
+  };
+  const track = { style: { width: '0%' } };
+  const labels = [{ textContent: '' }, { textContent: '' }];
+  const current = {
+    querySelector: (selector: string) => selector === '.search-semantic-progress-track span' ? track : null,
+    querySelectorAll: () => labels,
+  };
+  const panel = {
+    querySelector: (selector: string) => selector === '.search-semantic-progress' ? current : null,
+  };
+  const root = {
+    querySelector: (selector: string) => selector === '.search-filter-panel' ? panel : null,
+  } as unknown as ParentNode;
+
+  expect(refreshSearchSurface(root, { progressOnly: true })).toBe(true);
+  expect(track.style.width).toBe('50%');
+  expect(labels.map((label) => label.textContent)).toEqual(['2/4 windows', '7 matches']);
 });
 
 test('public document filter snapshot matches in-document semantic filter results', async () => {
@@ -1796,6 +2065,7 @@ hvy_version: 0.1
 
   expect(state.search.filterEnabled).toBe(false);
   expect(state.search.error).toBe('Server error');
+  expect(state.search.semanticProgress).toBe(null);
   const expectedMarkup = renderSearchModal(state.search, document, {
     escapeAttr: escapeHtml,
     escapeHtml,
@@ -1861,6 +2131,18 @@ test('semantic provider parser keeps only valid candidate ids', () => {
   expect(expectedResult).toEqual([{
     candidateId: 'section:skills',
   }]);
+});
+
+test('semantic provider parser restores an omitted component candidate prefix', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    '["C84","C86"]',
+    new Set(['component:C84', 'component:C86']),
+  );
+
+  expect(expectedResult).toEqual([
+    { candidateId: 'component:C84' },
+    { candidateId: 'component:C86' },
+  ]);
 });
 
 test('semantic provider parser reads the final JSON array after short selection notes', () => {
@@ -1937,6 +2219,260 @@ test('semantic provider parser errors when returned matches have no valid ids', 
     '["invented"]',
     new Set(['section:skills']),
   )).toThrow('Semantic filtering response did not include any valid candidate IDs.');
+});
+
+test('semantic filter provider can return raw model output', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+
+  const expectedResult = await createDocumentFilterSnapshot({
+    document,
+    query: 'Find TypeScript experience',
+    mode: 'semantic',
+    semanticFilterProvider: (request) => [
+      'First pass: the TypeScript component is relevant.',
+      JSON.stringify([
+        request.candidates.find((candidate) => candidate.targetId === 'typescript')!.candidateId,
+        'invented-candidate',
+      ]),
+    ].join('\n'),
+  });
+
+  expect(expectedResult.results).toHaveLength(1);
+  expect(expectedResult.results[0]).toMatchObject({
+    category: 'semantic',
+    targetId: 'typescript',
+  });
+});
+
+test('semantic filter retries malformed raw model output with repair context', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  const provider = vi.fn((request) => {
+    const candidateId = request.candidates.find((candidate) => candidate.targetId === 'typescript')!.candidateId;
+    if (!request.repair) {
+      return 'The TypeScript component is relevant.';
+    }
+    expect(request.repair.previousResponse).toBe('The TypeScript component is relevant.');
+    expect(request.repair.instruction).toContain('JSON array');
+    return JSON.stringify([candidateId]);
+  });
+
+  const expectedResult = await createDocumentFilterSnapshot({
+    document,
+    query: 'Find TypeScript experience',
+    mode: 'semantic',
+    semanticFilterProvider: provider,
+  });
+
+  expect(provider).toHaveBeenCalledTimes(2);
+  expect(provider.mock.calls[1]![0]).toMatchObject({
+    prompt: provider.mock.calls[0]![0].prompt,
+    instructionPrompt: provider.mock.calls[0]![0].instructionPrompt,
+    candidates: provider.mock.calls[0]![0].candidates,
+  });
+  expect(expectedResult.results.map((result) => result.targetId)).toEqual(['typescript']);
+});
+
+test('semantic filter supports an ordered variable-length provider attempt ladder', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  const provider = vi.fn((providerRequest: HvySemanticFilterRequest) => {
+    if (providerRequest.attempt?.number === 1 && !providerRequest.repair) {
+      return 'Fast model returned prose only.';
+    }
+    if (providerRequest.attempt?.number === 1) {
+      expect(providerRequest.repair?.previousResponse).toBe('Fast model returned prose only.');
+      return 'Fast model repair was still invalid.';
+    }
+    if (!providerRequest.repair) {
+      return 'Mid-range model fresh response was invalid.';
+    }
+    expect(providerRequest.repair.previousResponse).toBe('Mid-range model fresh response was invalid.');
+    return JSON.stringify([
+      providerRequest.candidates.find((candidate) => candidate.targetId === 'typescript')!.candidateId,
+    ]);
+  });
+
+  const expectedResult = await createDocumentFilterSnapshot({
+    document,
+    query: 'Find TypeScript experience',
+    mode: 'semantic',
+    semanticFilterProvider: provider,
+    semanticFilterMaxAttempts: 2,
+  });
+
+  expect(expectedResult.results.map((result) => result.targetId)).toEqual(['typescript']);
+  expect(provider.mock.calls.map(([providerRequest]) => ({
+    attempt: providerRequest.attempt,
+    repair: Boolean(providerRequest.repair),
+  }))).toEqual([
+    { attempt: { number: 1, total: 2 }, repair: false },
+    { attempt: { number: 1, total: 2 }, repair: true },
+    { attempt: { number: 2, total: 2 }, repair: false },
+    { attempt: { number: 2, total: 2 }, repair: true },
+  ]);
+});
+
+test('semantic filter preserves the parser error after one failed repair attempt', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+`, '.hvy');
+  const provider = vi.fn(() => 'Still not JSON.');
+
+  await expect(createDocumentFilterSnapshot({
+    document,
+    query: 'Find skills',
+    mode: 'semantic',
+    semanticFilterProvider: provider,
+  })).rejects.toThrow('Semantic filtering returned invalid JSON list. Response did not include a parseable JSON array.');
+  expect(provider).toHaveBeenCalledTimes(2);
+  expect(provider.mock.calls[1]![0].repair).toMatchObject({
+    previousResponse: 'Still not JSON.',
+  });
+});
+
+test('semantic filter explains when the repair request fails', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+`, '.hvy');
+  const request = buildSemanticFilterRequest({ document, prompt: 'Find skills' });
+  const repairFailure = new Error('Server returned 500.');
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const provider = vi.fn()
+    .mockResolvedValueOnce('Skills are relevant.')
+    .mockRejectedValueOnce(repairFailure);
+
+  await expect(requestSemanticFilterMatches(provider, request)).rejects.toMatchObject({
+    message: 'Semantic filtering returned an invalid response, and the repair request could not be completed. Try again.',
+    cause: repairFailure,
+  });
+  expect(provider).toHaveBeenCalledTimes(2);
+  expect(consoleError).toHaveBeenCalledOnce();
+  expect(consoleError).toHaveBeenCalledWith(
+    '[HVY] Semantic filter repair request failed.',
+    repairFailure,
+  );
+});
+
+test('semantic window failure aborts sibling requests and suppresses later progress', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"one"}-->
+#! One
+
+<!--hvy: {"id":"two"}-->
+#! Two
+
+<!--hvy: {"id":"three"}-->
+#! Three
+`, '.hvy');
+  const packet = buildSemanticFilterWindows({
+    document,
+    prompt: 'Find sections',
+    maxWindowCandidateChars: 1,
+  });
+  const windows = packet.windows.slice(0, 3).map((window, windowIndex) => ({
+    ...window,
+    windowIndex,
+    windowCount: 3,
+  }));
+  expect(windows).toHaveLength(3);
+  const requests: HvySemanticFilterRequest[] = [];
+  const siblingResolvers: Array<() => void> = [];
+  const progress = vi.fn();
+  const terminalFailure = new Error('Terminal window failure.');
+  const provider = vi.fn((request) => {
+    requests.push(request);
+    if (request.windowIndex === 0) {
+      return Promise.reject(terminalFailure);
+    }
+    return new Promise<Array<{ candidateId: string }>>((resolve) => {
+      siblingResolvers.push(() => resolve([{ candidateId: request.candidates[0]!.candidateId }]));
+    });
+  });
+
+  await expect(runSemanticFilterWindows({
+    prompt: 'Find sections',
+    provider,
+    windows,
+    onWindowComplete: progress,
+  })).rejects.toBe(terminalFailure);
+
+  expect(requests).toHaveLength(3);
+  expect(requests.every((request) => request.signal?.aborted === true)).toBe(true);
+  siblingResolvers.forEach((resolve) => resolve());
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(progress).not.toHaveBeenCalled();
+});
+
+test('chat semantic provider sends malformed output back as a repair conversation', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  initState(createTestState(document));
+  const request = buildSemanticFilterRequest({
+    document,
+    prompt: 'Find TypeScript experience',
+  });
+  const candidateId = request.candidates.find((candidate) => candidate.targetId === 'typescript')!.candidateId;
+  const complete = vi.fn()
+    .mockResolvedValueOnce({ output: 'The TypeScript component is relevant.' })
+    .mockResolvedValueOnce({ output: JSON.stringify([candidateId]) });
+  setHostChatClient({ complete });
+
+  const expectedResult = await requestSemanticFilterMatches(chatSemanticFilterProvider, request);
+
+  expect(expectedResult).toEqual([{ candidateId }]);
+  expect(complete).toHaveBeenCalledTimes(2);
+  expect(complete.mock.calls[1]![0].context).toBe(complete.mock.calls[0]![0].context);
+  expect(complete.mock.calls[1]![0].messages.slice(-3)).toEqual([
+    expect.objectContaining({ role: 'user', content: 'Select the relevant candidates now.' }),
+    expect.objectContaining({ role: 'assistant', content: 'The TypeScript component is relevant.' }),
+    expect.objectContaining({ role: 'user', content: expect.stringContaining('JSON array') }),
+  ]);
 });
 
 test('document search returns keyword matches across many documents', async () => {
@@ -2109,6 +2645,44 @@ title: Template Search
   });
 
   expect(expectedResult.results.map((result) => result.targetId)).toEqual(['visible-note']);
+});
+
+test('document semantic search accepts raw model output from embed providers', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Searchable
+---
+
+<!--hvy: {"id":"projects"}-->
+#! Projects
+
+<!--hvy:text {"id":"database-project"}-->
+ Database migration tooling.
+`, '.hvy');
+
+  const provider = vi.fn((request) => {
+    if (!request.repair) {
+      return 'The database project is relevant.';
+    }
+    return JSON.stringify([
+      request.candidates.find((candidate) => candidate.targetId === 'database-project')!.candidateId,
+    ]);
+  });
+  const expectedResult = await searchDocuments({
+    query: 'Find database work',
+    mode: 'semantic',
+    documents: [{ documentId: 'searchable', document }],
+    semanticFilterProvider: provider,
+  });
+
+  expect(provider).toHaveBeenCalledTimes(2);
+  expect(provider.mock.calls[1]![0].repair?.previousResponse).toBe('The database project is relevant.');
+  expect(expectedResult.results).toHaveLength(1);
+  expect(expectedResult.results[0]).toMatchObject({
+    documentId: 'searchable',
+    category: 'semantic',
+    targetId: 'database-project',
+  });
 });
 
 test('document search snapshot can be reduced to one selected document', async () => {

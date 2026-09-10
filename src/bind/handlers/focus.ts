@@ -1,21 +1,28 @@
-import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
 import { commitTextFillInElement } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 import { refreshSearchFilterButton } from '../../search/actions';
 
 export function bindFocus(app: HTMLElement): void {
+  let pointerInteractionTarget: HTMLElement | null = null;
+  const rememberPointerInteractionTarget = (event: Event): void => {
+    pointerInteractionTarget = event.target instanceof HTMLElement ? event.target : null;
+  };
+  const clearPointerInteractionTarget = (): void => {
+    pointerInteractionTarget = null;
+  };
+  app.addEventListener('pointerdown', rememberPointerInteractionTarget, true);
+  app.addEventListener('mousedown', rememberPointerInteractionTarget, true);
+  app.addEventListener('pointerup', clearPointerInteractionTarget, true);
+  app.addEventListener('mouseup', clearPointerInteractionTarget, true);
+  app.addEventListener('pointercancel', clearPointerInteractionTarget, true);
+
   app.addEventListener('focusin', (event) => {
     const target = event.target as HTMLElement;
     if (target.dataset.field !== 'table-cell' && target.dataset.field !== 'table-column') {
       return;
     }
     target.classList.add('is-inline-editing');
-    const sectionKey = target.dataset.sectionKey ?? '';
-    const blockId = target.dataset.blockId ?? '';
-    const rowIndex = target.dataset.rowIndex ?? '';
-    const cellIndex = target.dataset.cellIndex ?? '';
-    const columnIndex = target.dataset.columnIndex ?? '';
-    recordHistory(`table-edit:${sectionKey}:${blockId}:${rowIndex}:${cellIndex}:${columnIndex}`);
     requestAnimationFrame(() => refreshRichToolbarState(target));
   });
 
@@ -66,7 +73,7 @@ export function bindFocus(app: HTMLElement): void {
         }
         state.activeEditorSectionTitleKey = null;
         state.clearSectionTitleOnFocusKey = null;
-        const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+        const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : pointerInteractionTarget;
         if (nextTarget?.closest('.component-picker, [data-action="add-block"]')) {
           return;
         }

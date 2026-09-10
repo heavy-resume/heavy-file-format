@@ -1,7 +1,7 @@
 import type { ChatMessage, ToolLoopCompactionOptions, VisualDocument } from './types';
 import { summarizeDocumentStructure, summarizeHeaderStructure, truncatePreview } from './ai-document-structure';
 import { visitBlocks } from './section-ops';
-import { getDocumentDbTableNames } from './plugins/db-table-model';
+import { getDocumentDatabaseTableNames } from './plugins/database-table-targets';
 import {
   HvyRepairToolError,
   MAX_TOOL_FAILURES_IN_WINDOW,
@@ -569,7 +569,7 @@ export function summarizeDocumentTaskState(document: VisualDocument, path: EditP
   visitBlocks(document.sections, () => {
     componentCount += 1;
   });
-  const configuredDbTables = getDocumentDbTableNames(document);
+  const configuredDbTables = getDocumentDatabaseTableNames(document);
   return path === 'header'
     ? `${Object.keys(document.meta).length} header keys; ${sectionCount} visible sections`
     : `${sectionCount} visible sections; ${componentCount} components; db-table component targets: ${configuredDbTables.join(', ') || '(none)'}`;

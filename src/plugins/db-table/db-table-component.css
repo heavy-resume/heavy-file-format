@@ -1,0 +1,606 @@
+.hvy-document .hvy-database-table {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  color: var(--hvy-text, var(--reader-fg));
+}
+
+.hvy-document .db-table-column-editor-popover {
+  position: absolute;
+  z-index: 12;
+  display: grid;
+  gap: 0.38rem;
+  width: max-content;
+  max-width: min(22rem, 100%);
+  padding: 0.55rem;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.65rem;
+  color: var(--hvy-text, var(--reader-fg));
+  background: var(--hvy-surface, var(--reader-panel));
+  box-shadow: 0 0.65rem 1.5rem var(--hvy-shadow, rgba(0, 0, 0, 0.24));
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.hvy-document .db-table-column-editor-popover > span {
+  color: var(--hvy-text-muted, var(--reader-muted));
+}
+
+.hvy-document .db-table-column-editor-modes {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.hvy-document .db-table-column-editor-modes button {
+  white-space: nowrap;
+}
+
+.hvy-document .db-table-column-editor-modes button.is-active {
+  color: var(--hvy-button-text, var(--reader-bg));
+  border-color: var(--hvy-button-bg, var(--hvy-accent, var(--reader-accent)));
+  background: var(--hvy-button-bg, var(--hvy-accent, var(--reader-accent)));
+}
+
+.hvy-document .db-table-queue-status {
+  align-items: center;
+  background: color-mix(in srgb, var(--hvy-focus-ring) 10%, var(--hvy-surface, var(--reader-bg)));
+  border: 1px solid color-mix(in srgb, var(--hvy-focus-ring) 32%, transparent);
+  border-radius: 0.55rem;
+  color: var(--hvy-text, var(--reader-fg));
+  display: flex;
+  font-size: 0.78rem;
+  gap: 0.5rem;
+  margin: 0.55rem 0;
+  padding: 0.48rem 0.65rem;
+}
+
+.hvy-document .db-table-queue-pulse {
+  animation: db-table-queue-pulse 1.1s ease-in-out infinite;
+  background: var(--hvy-focus-ring);
+  border-radius: 999px;
+  height: 0.5rem;
+  width: 0.5rem;
+}
+
+@keyframes db-table-queue-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.hvy-document .hvy-database-table.db-table-loading {
+  opacity: 0.78;
+}
+
+.hvy-document .db-table-screen-reader {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hvy-document .db-table-toolbar,
+.hvy-document .db-table-table-heading,
+.hvy-document .db-table-settings-heading,
+.hvy-document .db-table-table-actions,
+.hvy-document .db-table-pager,
+.hvy-document .db-table-draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.hvy-document .db-table-toolbar {
+  align-items: end;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.85rem;
+  background: var(--hvy-surface-alt, var(--reader-panel));
+}
+
+.hvy-document .db-table-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-size: 0.8rem;
+}
+
+.hvy-document .db-table-field > input,
+.hvy-document .db-table-field > textarea,
+.hvy-document .db-table-select-shell > select,
+.hvy-document .db-table-cell-input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--hvy-border-input, var(--reader-border));
+  border-radius: 0.55rem;
+  padding: 0.52rem 0.62rem;
+  color: var(--hvy-text, var(--reader-fg));
+  background: var(--hvy-surface, var(--reader-panel));
+  font: inherit;
+}
+
+.hvy-document .db-table-field > input:focus,
+.hvy-document .db-table-field > textarea:focus,
+.hvy-document .db-table-select-shell > select:focus,
+.hvy-document .db-table-cell-input:focus {
+  outline: 2px solid var(--hvy-focus-ring, var(--reader-accent));
+  outline-offset: 1px;
+}
+
+.hvy-document .db-table-table-field {
+  flex: 1 1 13rem;
+}
+
+.hvy-document .db-table-columns-button.is-active {
+  border-color: var(--hvy-accent, var(--reader-accent));
+  background: color-mix(in srgb, var(--hvy-accent, var(--reader-accent)) 12%, var(--hvy-surface, var(--reader-panel)));
+}
+
+.hvy-document .db-table-query {
+  flex: 1 1 100%;
+  border-top: 1px solid var(--hvy-border-translucent, var(--reader-border));
+  padding-top: 0.55rem;
+}
+
+.hvy-document .db-table-query summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-size: 0.85rem;
+}
+
+.hvy-document .db-table-query .db-table-field {
+  margin-top: 0.5rem;
+}
+
+.hvy-document .db-table-query-options {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.hvy-document .db-table-query-options .db-table-field {
+  margin-top: 0;
+}
+
+.hvy-document .db-table-query-limit {
+  width: 8rem;
+}
+
+.hvy-document .db-table-placeholder,
+.hvy-document .db-table-inline-error {
+  padding: 0.75rem;
+  border: 1px dashed var(--hvy-border-input, var(--reader-border));
+  border-radius: 0.75rem;
+  background: var(--hvy-surface-alt, var(--reader-panel));
+}
+
+.hvy-document .db-table-error,
+.hvy-document .db-table-inline-error {
+  color: var(--hvy-danger, var(--reader-fg));
+}
+
+.hvy-document .db-table-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.hvy-document .db-table-column-settings {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--hvy-surface-alt, var(--reader-panel)) 94%, var(--hvy-accent, var(--reader-accent)) 6%);
+}
+
+.hvy-document .db-table-settings-heading,
+.hvy-document .db-table-table-heading {
+  justify-content: space-between;
+}
+
+.hvy-document .db-table-settings-heading > div,
+.hvy-document .db-table-table-heading > div,
+.hvy-document .db-table-column-identity {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.hvy-document .db-table-settings-heading span,
+.hvy-document .db-table-table-heading span,
+.hvy-document .db-table-column-identity span,
+.hvy-document .db-table-action-note {
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-size: 0.8rem;
+}
+
+.hvy-document .db-table-settings-close {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.35rem;
+}
+
+.hvy-document .db-table-settings-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.hvy-document .db-table-column-card {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1.1fr) minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(6rem, 0.7fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+  padding: 0.55rem;
+  border: 1px solid var(--hvy-border-translucent, var(--reader-border));
+  border-radius: 0.7rem;
+  background: var(--hvy-surface, var(--reader-panel));
+}
+
+.hvy-document .db-table-relationship-setting {
+  grid-column: 2 / -1;
+}
+
+.hvy-document .db-table-delete-column {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: var(--hvy-danger, var(--reader-fg));
+}
+
+.hvy-document .db-table-delete-column .hvy-ui-icon,
+.hvy-document .db-table-add-column .hvy-ui-icon,
+.hvy-document .db-table-delete-row .hvy-ui-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.hvy-document .db-table-add-column {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.hvy-document .db-table-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  font-size: 0.82rem;
+}
+
+.hvy-document .db-table-check input {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1px solid var(--hvy-border-input, var(--reader-border));
+  border-radius: 0.3rem;
+  background: var(--hvy-surface, var(--reader-panel));
+  cursor: pointer;
+}
+
+.hvy-document .db-table-check input::after {
+  content: '';
+  width: 0.25rem;
+  height: 0.5rem;
+  border: solid var(--hvy-surface, var(--reader-panel));
+  border-width: 0 0.14rem 0.14rem 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 120ms ease;
+}
+
+.hvy-document .db-table-check input:checked {
+  border-color: var(--hvy-accent, var(--reader-accent));
+  background: var(--hvy-accent, var(--reader-accent));
+}
+
+.hvy-document .db-table-check input:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.hvy-document .db-table-check input:focus-visible {
+  outline: 2px solid var(--hvy-focus-ring, var(--reader-accent));
+  outline-offset: 2px;
+}
+
+.hvy-document .db-table-select-shell {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.hvy-document .db-table-select-shell > select {
+  appearance: none;
+  padding-right: 2rem;
+  cursor: pointer;
+}
+
+.hvy-document .db-table-select-shell > .hvy-ui-icon {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  width: 0.9rem;
+  height: 0.9rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--hvy-text-muted, var(--reader-muted));
+}
+
+.hvy-document .db-table-table-shell {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.hvy-document .db-table-page-button,
+.hvy-document .db-table-sort {
+  display: inline-grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0.3rem;
+}
+
+.hvy-document .db-table-pager .hvy-ui-icon,
+.hvy-document .db-table-sort .hvy-ui-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.hvy-document .db-table-table-frame {
+  max-width: 100%;
+  max-height: 28rem;
+  overflow: auto;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.85rem;
+  background: var(--hvy-surface, var(--reader-panel));
+}
+
+.hvy-document .db-table-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.hvy-document .db-table-table th,
+.hvy-document .db-table-table td {
+  border: 1px solid var(--hvy-border-input, var(--reader-border));
+  padding: 0.45rem 0.55rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--hvy-table-row-bg-1, var(--reader-panel));
+}
+
+.hvy-document .db-table-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--hvy-table-header, var(--reader-panel));
+  font-weight: 600;
+}
+
+.hvy-document .db-table-table th:has(.db-table-resize-handle) {
+  position: sticky;
+}
+
+.hvy-document .db-table-header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.hvy-document .db-table-header-content > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hvy-document .db-table-column-name-input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  padding: 0.18rem 0.3rem;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  text-overflow: ellipsis;
+}
+
+.hvy-document .db-table-column-name-input:hover {
+  border-color: var(--hvy-border-input, var(--reader-border));
+  background: color-mix(in srgb, var(--hvy-surface, var(--reader-panel)) 75%, transparent);
+}
+
+.hvy-document .db-table-column-name-input:focus {
+  border-color: var(--hvy-accent, var(--reader-accent));
+  outline: 2px solid var(--hvy-focus-ring, var(--reader-accent));
+  outline-offset: 1px;
+  background: var(--hvy-surface, var(--reader-panel));
+}
+
+.hvy-document .db-table-header-content .db-table-sort {
+  flex: 0 0 auto;
+  margin: -0.25rem -0.3rem -0.25rem auto;
+}
+
+.hvy-document .db-table-resize-handle {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: -0.3rem;
+  bottom: 0;
+  width: 0.65rem;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.hvy-document .db-table-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  right: 0.3rem;
+  bottom: 20%;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.hvy-document .db-table-resize-handle:hover::after {
+  background: var(--hvy-accent, var(--reader-accent));
+}
+
+.hvy-document .db-table-width-probe,
+.hvy-document .db-table-content-measurer {
+  position: absolute;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hvy-document .db-table-table th.is-wrapped .db-table-header-content > span {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.hvy-document .db-table-table tbody tr:nth-child(even) td {
+  background: var(--hvy-table-row-bg-2, var(--reader-panel));
+}
+
+.hvy-document .db-table-table .is-wrapped {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+.hvy-document .db-table-table td:has(.db-table-cell-input),
+.hvy-document .db-table-table td:has(.db-table-select-shell) {
+  padding: 0;
+}
+
+.hvy-document .db-table-cell-input,
+.hvy-document .db-table-table td > .db-table-select-shell > select {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.hvy-document .db-table-actions-column,
+.hvy-document .db-table-actions-heading,
+.hvy-document .db-table-row-actions {
+  width: 10.5rem;
+}
+
+.hvy-document .db-table-row-actions {
+  padding: 0.25rem !important;
+  text-align: right;
+}
+
+.hvy-document .db-table-row-action-group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.hvy-document .db-table-row-component,
+.hvy-document .db-table-delete-row {
+  flex: 0 0 auto;
+  min-height: 1.9rem;
+  white-space: nowrap;
+}
+
+.hvy-document .db-table-row-component.is-attached {
+  color: var(--hvy-accent, var(--reader-accent));
+  background: color-mix(in srgb, var(--hvy-accent, var(--reader-accent)) 10%, transparent);
+}
+
+.hvy-document .db-table-delete-row {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  padding: 0.35rem;
+  color: var(--hvy-danger, var(--reader-fg));
+}
+
+.hvy-document .db-table-table tr.has-attached-component > td:first-child {
+  box-shadow: inset 0.18rem 0 var(--hvy-accent, var(--reader-accent));
+}
+
+.hvy-document .db-table-draft-row td {
+  background: color-mix(in srgb, var(--hvy-accent, var(--reader-accent)) 8%, var(--hvy-surface, var(--reader-panel))) !important;
+}
+
+.hvy-document .db-table-generated-value,
+.hvy-document .db-table-empty {
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-style: italic;
+}
+
+.hvy-document .db-table-empty {
+  text-align: center;
+  padding: 1rem !important;
+}
+
+.hvy-document .db-table-draft-actions {
+  padding: 0.3rem !important;
+}
+
+.hvy-document .db-table-table-actions {
+  flex-wrap: wrap;
+}
+
+.hvy-document .db-table-table-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@container hvy-surface (inline-size < 42rem) {
+  .hvy-document .db-table-column-card {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hvy-document .db-table-column-identity,
+.hvy-document .db-table-relationship-setting {
+    grid-column: 1 / -1;
+  }
+}
+
+@container hvy-surface (inline-size < 28rem) {
+  .hvy-document .db-table-column-card {
+    grid-template-columns: 1fr;
+  }
+
+  .hvy-document .db-table-column-card > * {
+    grid-column: 1;
+  }
+}

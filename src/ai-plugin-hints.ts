@@ -3,7 +3,7 @@ import type { VisualBlock } from './editor/types';
 import { getHostPlugin, getHostPlugins } from './plugins/registry';
 
 export interface AiPluginHint {
-  id: string;
+  name: string;
   displayName: string;
   hint: string;
 }
@@ -34,7 +34,7 @@ export function getRegisteredPluginAiHints(): AiPluginHint[] {
     block.schema.plugin = registration.id;
     const hint = readPluginHint(registration, block);
     return {
-      id: registration.id,
+      name: registration.id,
       displayName: registration.displayName,
       hint,
     };

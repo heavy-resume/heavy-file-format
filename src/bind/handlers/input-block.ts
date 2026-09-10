@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { prepareKeywordChatContext } from '../../chat/chat-context';
@@ -31,7 +31,10 @@ import {
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { visitBlocks, visitBlocksInList } from '../../section-ops';
 import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
+import type { SortValueDateFormat, SortValueType } from '../../types';
+import { componentSortValueDetailsKey } from '../../editor/render';
 import type { JsonObject } from '../../hvy/types';
+import { writeDocumentParagraphSpacing } from '../../document-typography';
 import {
   formatPdfMarginUnitValue,
   formatPdfPointsAsUnit,
@@ -44,6 +47,22 @@ import {
 const CHAT_CONTEXT_PREWARM_DELAY_MS = 250;
 let chatContextPrewarmTimer: number | null = null;
 let chatContextPrewarmIdleCallback: number | null = null;
+
+function isSortValueType(value: string): value is SortValueType {
+  return value === 'text' || value === 'number' || value === 'date' || value === 'datetime' || value === 'enum';
+}
+
+function isSortValueDateFormat(value: string): value is SortValueDateFormat {
+  return value === 'YYYY-MM-DD' || value === 'MM/DD/YYYY' || value === 'DD/MM/YYYY';
+}
+
+function parseSortValueOption(value: string): string | number {
+  const trimmed = value.trim();
+  if (trimmed !== '' && Number.isFinite(Number(trimmed))) {
+    return Number(trimmed);
+  }
+  return value;
+}
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -159,6 +178,37 @@ export function bindInputBlock(app: HTMLElement): void {
       const editorTreeBody = target.ownerDocument.querySelector<HTMLElement>('.editor-tree-body');
       if (editorTreeBody) {
         editorTreeBody.style.maxWidth = target.value.trim();
+      }
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-sidebar-max-width' && target instanceof HTMLInputElement) {
+      recordHistory('meta:sidebar-max-width');
+      if (target.value.trim().length > 0) {
+        state.document.meta.sidebar_max_width = target.value;
+      } else {
+        delete state.document.meta.sidebar_max_width;
+      }
+      applyTheme();
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-paragraph-spacing' && target instanceof HTMLInputElement) {
+      recordHistory('meta:paragraph-spacing');
+      writeDocumentParagraphSpacing(state.document.meta, target.value);
+      applyTheme();
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-database-table-max-column-width' && target instanceof HTMLInputElement) {
+      recordHistory('meta:database-table-max-column-width');
+      if (target.value.trim().length > 0) {
+        state.document.meta.database_table_max_column_width = target.value;
+      } else {
+        delete state.document.meta.database_table_max_column_width;
       }
       getRefreshReaderPanels()();
       return;
@@ -492,6 +542,102 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'def-sort-value-name' && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
+      const oldName = target.dataset.sortValueName ?? '';
+      const newName = target.value.trim();
+      const defs = getComponentDefs();
+      const def = Number.isNaN(idx) ? null : defs[idx];
+      if (!def?.sortValueDefs?.[oldName] || !newName || (newName !== oldName && def.sortValueDefs[newName])) {
+        return;
+      }
+      if (newName !== oldName) {
+        recordHistory(`def:${idx}:sort-value:${oldName}:name`);
+        const entries = Object.entries(def.sortValueDefs).map(([name, definition]) =>
+          name === oldName ? [newName, definition] : [name, definition]
+        );
+        def.sortValueDefs = Object.fromEntries(entries);
+        target.dataset.sortValueName = newName;
+        target.closest<HTMLElement>('.component-sort-value-card')
+          ?.querySelectorAll<HTMLElement>('[data-sort-value-name]')
+          .forEach((element) => {
+            element.dataset.sortValueName = newName;
+          });
+        const oldOpenKey = componentSortValueDetailsKey(idx, oldName);
+        if (state.openTemplateDefinitionKeys.includes(oldOpenKey)) {
+          state.openTemplateDefinitionKeys = state.openTemplateDefinitionKeys
+            .map((key) => key === oldOpenKey ? componentSortValueDetailsKey(idx, newName) : key);
+        }
+        state.document.meta.component_defs = defs;
+      }
+      return;
+    }
+
+    if (field === 'def-sort-value-type' && target instanceof HTMLSelectElement) {
+      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
+      const name = target.dataset.sortValueName ?? '';
+      const defs = getComponentDefs();
+      const definition = Number.isNaN(idx) ? null : defs[idx]?.sortValueDefs?.[name];
+      const type = isSortValueType(target.value) ? target.value : null;
+      if (!definition || !type || definition.type === type) {
+        return;
+      }
+      recordHistory(`def:${idx}:sort-value:${name}:type`);
+      definition.type = type;
+      if (type === 'enum') {
+        definition.options = definition.options ?? [];
+      } else {
+        delete definition.options;
+      }
+      if (type === 'date') {
+        definition.format = definition.format ?? 'YYYY-MM-DD';
+      } else {
+        delete definition.format;
+      }
+      const openKey = componentSortValueDetailsKey(idx, name);
+      if (!state.openTemplateDefinitionKeys.includes(openKey)) {
+        state.openTemplateDefinitionKeys = [...state.openTemplateDefinitionKeys, openKey];
+      }
+      state.document.meta.component_defs = defs;
+      getRenderApp()();
+      return;
+    }
+
+    if (field === 'def-sort-value-format' && target instanceof HTMLSelectElement) {
+      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
+      const name = target.dataset.sortValueName ?? '';
+      const defs = getComponentDefs();
+      const definition = Number.isNaN(idx) ? null : defs[idx]?.sortValueDefs?.[name];
+      if (definition?.type === 'date' && isSortValueDateFormat(target.value)) {
+        recordHistory(`def:${idx}:sort-value:${name}:format`);
+        definition.format = target.value;
+        state.document.meta.component_defs = defs;
+      }
+      return;
+    }
+
+    if ((field === 'def-enum-option-label' || field === 'def-enum-option-value') && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
+      const optionIndex = Number.parseInt(target.dataset.optionIndex ?? '', 10);
+      const name = target.dataset.sortValueName ?? '';
+      const defs = getComponentDefs();
+      const definition = Number.isNaN(idx) ? null : defs[idx]?.sortValueDefs?.[name];
+      const option = definition?.type === 'enum' && !Number.isNaN(optionIndex)
+        ? definition.options?.[optionIndex]
+        : null;
+      if (!option) {
+        return;
+      }
+      recordHistory(`def:${idx}:sort-value:${name}:option:${optionIndex}`);
+      if (field === 'def-enum-option-label') {
+        option.label = target.value;
+      } else {
+        option.value = parseSortValueOption(target.value);
+      }
+      state.document.meta.component_defs = defs;
+      return;
+    }
+
     if (field === 'def-xref-target-tag-filter' && target instanceof HTMLInputElement) {
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
@@ -658,15 +804,6 @@ export function bindInputBlock(app: HTMLElement): void {
 
     if (target.id === 'cliInput' && target instanceof HTMLInputElement) {
       state.cliDraft = target.value;
-      return;
-    }
-
-    if (field === 'image-alt' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-      const block = resolveBlockContext(target)?.block ?? null;
-      if (!block) return;
-      recordHistory(`image-alt:${block.id}`);
-      block.schema.imageAlt = target.value;
-      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 

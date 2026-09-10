@@ -26,11 +26,13 @@ import { parseAiBlockEditResponse } from '../ai-component-edit-common';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { removeTextFillInMarkers } from '../text-fill-in';
 import { measureAsyncPhase, measurePhase, recordMeasurement, isMeasurementEnabled } from '../perf-trace';
+import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
 
 const loadDbTableRuntime = () => import('../plugins/db-table');
 
-const SCRATCHPAD_SOFT_MAX_CHARS = 600;
-const SCRATCHPAD_HARD_MAX_CHARS = 800;
+const DEFAULT_SCRATCHPAD_WARNING_CHARS = 600;
+const DEFAULT_SCRATCHPAD_MAX_CHARS = 800;
+const MAX_CONFIGURABLE_SCRATCHPAD_CHARS = 32_000;
 const FIND_MAX_RESULTS = 100;
 const CLI_OUTPUT_MAX_LINES = 200;
 const COMPONENT_PREVIEW_MAX_LINES = 100;
@@ -51,6 +53,21 @@ export interface HvyCliSession {
   modifiedContentByPath?: Record<string, string>;
   virtualPathNaming?: HvyVirtualPathNamingState;
   now?: Date;
+  searchHvyDocument?: (args: string[]) => Promise<string>;
+  buildHvyEmbeddings?: () => Promise<string>;
+  scratchpadLimits?: HvyCliScratchpadLimits;
+  readOnlyFiles?: Record<string, string>;
+}
+
+export interface HvyCliScratchpadLimits {
+  warningChars: number;
+  maxChars: number;
+}
+
+export interface HvyCliSessionOptions {
+  scratchpadWarningChars?: number;
+  scratchpadMaxChars?: number;
+  readOnlyFiles?: Record<string, string>;
 }
 
 export interface HvyCliExecution {
@@ -72,7 +89,7 @@ type HvyCliCommandContext = {
 };
 
 type HvyMiniShellPipeline = {
-  operator: 'first' | '&&' | '||';
+  operator: 'first' | '&&' | '||' | ';';
   commands: string[][];
   tokens: string[];
 };
@@ -92,8 +109,14 @@ type HvyMiniShellProcess = {
 const sessionVirtualFileSystems = new WeakMap<HvyCliSession, ReturnType<typeof buildHvyVirtualFileSystem>>();
 const virtualFileSystemsWithRawSessionFiles = new WeakSet<ReturnType<typeof buildHvyVirtualFileSystem>>();
 
-export function createHvyCliSession(): HvyCliSession {
-  return { cwd: '/', scratchpadContent: defaultScratchpadContent(), virtualPathNaming: { anonymousBlockNamesById: {} } };
+export function createHvyCliSession(options: HvyCliSessionOptions = {}): HvyCliSession {
+  return {
+    cwd: '/',
+    scratchpadContent: defaultScratchpadContent(),
+    scratchpadLimits: normalizeScratchpadLimits(options),
+    virtualPathNaming: { anonymousBlockNamesById: {} },
+    ...(options.readOnlyFiles ? { readOnlyFiles: { ...options.readOnlyFiles } } : {}),
+  };
 }
 
 export function invalidateHvyCliSessionVirtualFileSystem(session: HvyCliSession): void {
@@ -134,6 +157,29 @@ function buildSessionVirtualFileSystem(document: VisualDocument, session: HvyCli
 
 export function getHvyCliSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): ReturnType<typeof buildHvyVirtualFileSystem> {
   return buildSessionVirtualFileSystem(document, session);
+}
+
+export function writeHvyCliSessionVirtualFile(
+  document: VisualDocument,
+  session: HvyCliSession,
+  path: string,
+  content: string
+): HvyCliExecution {
+  const fs = buildSessionVirtualFileSystem(document, session);
+  addSessionFiles(fs, document, session);
+  const result = writeVirtualFile({ fs, cwd: session.cwd, session }, path, content, false, 'apply_hvy_patch');
+  if (shouldInvalidateVirtualFileSystem(result)) {
+    invalidateHvyCliSessionVirtualFileSystem(session);
+  }
+  return {
+    cwd: session.cwd,
+    output: result.output,
+    mutated: result.mutated,
+    invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem,
+    mutatedPaths: result.mutatedPaths,
+    refreshSectionPaths: result.refreshSectionPaths,
+    requiresFullRefresh: result.requiresFullRefresh,
+  };
 }
 
 export function getHvyCliCommandSummary(): string {
@@ -185,13 +231,30 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     const output = truncateCliOutput(outputs.join('\n'));
     const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
     if (scratchpadTouched && isScratchpadTooLong(session)) {
-      return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+      return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '', getScratchpadLimits(session).warningChars)}` };
     }
     return result;
   }
   const args = tokenizeCommand(expandedInput);
   if (args.length === 0) {
     return { cwd: session.cwd, output: '', mutated: false };
+  }
+  if (args[0] === 'hvy' && args[1] === 'search' && session.searchHvyDocument) {
+    return {
+      cwd: session.cwd,
+      output: truncateCliOutput(await session.searchHvyDocument(args.slice(2))),
+      mutated: false,
+    };
+  }
+  if (args[0] === 'hvy' && args[1] === 'embeddings' && args[2] === 'build' && session.buildHvyEmbeddings) {
+    if (args.length > 3) {
+      throw new Error(`hvy embeddings build: unsupported argument ${args[3]}`);
+    }
+    return {
+      cwd: session.cwd,
+      output: truncateCliOutput(await session.buildHvyEmbeddings()),
+      mutated: false,
+    };
   }
 
   const pipelines = parseMiniShell(args);
@@ -234,7 +297,11 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
       outputParts.push(lastProcess.stdout);
     }
 
-    if (lastProcess.status !== 0 && pipelines[index + 1]?.operator !== '||') {
+    if (
+      lastProcess.status !== 0
+      && pipelines[index + 1]?.operator !== '||'
+      && pipelines[index + 1]?.operator !== ';'
+    ) {
       throw new Error(lastProcess.stderr || lastProcess.stdout || 'Command failed.');
     }
   }
@@ -246,7 +313,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
   const output = truncateCliOutput(rawOutput, { preserveFindWarning: true });
   const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
-    return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+    return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '', getScratchpadLimits(session).warningChars)}` };
   }
   return result;
 }
@@ -330,8 +397,8 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     if (rest[0] === 'lint') {
       throw new Error('doc.cli.run cannot run hvy lint because plugin lint checks may be async.');
     }
-    if (rest[0] === 'plugin' && rest[1] === 'db-table' && isDbTableSqlAction(rest[2] ?? '')) {
-      throw new Error('doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.');
+    if (rest[0] === 'plugin' && rest[1] === 'db-table' && isDbTableAsyncAction(rest[2] ?? '')) {
+      throw new Error('doc.cli.run cannot run asynchronous db-table runtime commands. Use the interactive CLI, doc.db.query, or doc.db.execute instead.');
     }
     if (rest[0] === 'prune-xref') {
       return { cwd, output: commandPruneXref(document, rest.slice(1)), mutated: true };
@@ -504,8 +571,8 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     if (args[0] === 'plugin' && args[1] && !args[2] && getHvyCliPluginCommandRegistration(args[1])) {
       return { cwd: ctx.cwd, output: helpFor(`hvy plugin ${args[1]}`), mutated: false };
     }
-    if (args[0] === 'plugin' && args[1] === 'db-table' && isDbTableSqlAction(args[2] ?? '')) {
-      const result = await commandDbTable(ctx.document, args.slice(2));
+    if (args[0] === 'plugin' && args[1] === 'db-table' && isDbTableAsyncAction(args[2] ?? '')) {
+      const result = await commandDbTable(ctx, args.slice(2));
       return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
     }
     const result = executeHvyDocumentCommand(ctx, args);
@@ -618,11 +685,12 @@ function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: str
   throw new Error(`doc.cli.run does not support command "hvy ${command}".`);
 }
 
-function isDbTableSqlAction(action: string): boolean {
-  return action === 'query' || action === 'exec' || action === 'tables' || action === 'schema';
+function isDbTableAsyncAction(action: string): boolean {
+  return action === 'query' || action === 'exec' || action === 'tables' || action === 'schema' || action === 'presentation';
 }
 
-async function commandDbTable(document: VisualDocument, args: string[]): Promise<{ output: string; mutated: boolean }> {
+async function commandDbTable(ctx: HvyCliCommandContext, args: string[]): Promise<{ output: string; mutated: boolean }> {
+  const document = ctx.document;
   const [action = '', ...rest] = args;
   if (action === 'tables') {
     const names = await loadDbTableRuntime()
@@ -685,7 +753,36 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
       runtime.dispose();
     }
   }
-  throw new Error('db-table: expected show, query, exec, tables, or schema');
+  if (action === 'presentation') {
+    const [rawPath = '', rawJson] = rest;
+    if (!rawPath || rest.length > 2) {
+      throw new Error('db-table presentation: expected COMPONENT_PATH and optional JSON object');
+    }
+    const path = resolveVirtualPath(ctx.fs, ctx.cwd, rawPath);
+    const block = findBlockForVirtualDirectory(document, path, ctx.pathNaming);
+    if (!block || block.schema.plugin !== 'hvy.db-table') {
+      throw new Error(`db-table presentation: no hvy.db-table component found at ${rawPath}`);
+    }
+    const runtime = await loadDbTableRuntime();
+    if (typeof rawJson === 'undefined') {
+      return {
+        output: `${JSON.stringify(await runtime.getEffectiveDbTableColumnPresentation(document, block), null, 2)}\n`,
+        mutated: false,
+      };
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(rawJson);
+    } catch {
+      throw new Error('db-table presentation: JSON must be a valid object');
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('db-table presentation: JSON must be an object keyed by exact database column name');
+    }
+    await runtime.setEffectiveDbTableColumnPresentation(document, block, value as Record<string, unknown>);
+    return { output: `Updated db-table column presentation: ${path}`, mutated: true };
+  }
+  throw new Error('db-table: expected query, exec, tables, schema, or presentation');
 }
 
 function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
@@ -825,9 +922,28 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
 function addSessionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
   measurePhase('cli.sessionFiles.add', { entriesBefore: fs.entries.size }, () => {
     addSessionScratchpadFile(fs, session);
+    addSessionReadOnlyFiles(fs, session);
     addSessionRawHvyFiles(fs, document, session);
     addSessionModifiedFiles(fs, session);
   });
+}
+
+function addSessionReadOnlyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+  for (const [path, content] of Object.entries(session.readOnlyFiles ?? {})) {
+    if (!path.startsWith('/') || path === '/') {
+      continue;
+    }
+    const parts = path.split('/').filter(Boolean);
+    for (let index = 1; index < parts.length; index += 1) {
+      const directoryPath = `/${parts.slice(0, index).join('/')}`;
+      if (!fs.entries.has(directoryPath)) {
+        fs.entries.set(directoryPath, { kind: 'dir', path: directoryPath });
+      }
+    }
+    if (!fs.entries.has(path)) {
+      fs.entries.set(path, { kind: 'file', path, read: () => content });
+    }
+  }
 }
 
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
@@ -1384,23 +1500,44 @@ function defaultScratchpadContent(): string {
 }
 
 function enforceScratchpadHardCap(session: HvyCliSession): void {
-  if ((session.scratchpadContent ?? '').length > SCRATCHPAD_HARD_MAX_CHARS) {
-    session.scratchpadContent = (session.scratchpadContent ?? '').slice(0, SCRATCHPAD_HARD_MAX_CHARS);
+  const limits = getScratchpadLimits(session);
+  if ((session.scratchpadContent ?? '').length > limits.maxChars) {
+    session.scratchpadContent = (session.scratchpadContent ?? '').slice(0, limits.maxChars);
   }
 }
 
 function isScratchpadTooLong(session: HvyCliSession): boolean {
-  return (session.scratchpadContent ?? '').length > SCRATCHPAD_SOFT_MAX_CHARS;
+  return (session.scratchpadContent ?? '').length > getScratchpadLimits(session).warningChars;
 }
 
-function buildScratchpadTooLongMessage(scratchpad: string): string {
+function buildScratchpadTooLongMessage(scratchpad: string, warningChars: number): string {
   return [
-    `scratchpad.txt is ${scratchpad.length} characters, which is over the ${SCRATCHPAD_SOFT_MAX_CHARS} character working limit.`,
+    `scratchpad.txt is ${scratchpad.length} characters, which is over the ${warningChars} character working limit.`,
     'Rewrite scratchpad.txt shorter before adding more notes.',
     '',
     'scratchpad.txt:',
     scratchpad,
   ].join('\n');
+}
+
+function getScratchpadLimits(session: HvyCliSession): HvyCliScratchpadLimits {
+  session.scratchpadLimits ??= normalizeScratchpadLimits({});
+  return session.scratchpadLimits;
+}
+
+function normalizeScratchpadLimits(options: HvyCliSessionOptions): HvyCliScratchpadLimits {
+  const maxChars = normalizeScratchpadLimit(options.scratchpadMaxChars, DEFAULT_SCRATCHPAD_MAX_CHARS);
+  const warningChars = Math.min(
+    normalizeScratchpadLimit(options.scratchpadWarningChars, DEFAULT_SCRATCHPAD_WARNING_CHARS),
+    maxChars
+  );
+  return { warningChars, maxChars };
+}
+
+function normalizeScratchpadLimit(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.min(MAX_CONFIGURABLE_SCRATCHPAD_CHARS, Math.floor(value))
+    : fallback;
 }
 
 function commandCat(ctx: HvyCliCommandContext, args: string[]): string {
@@ -1456,6 +1593,9 @@ function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: str
   }
   const fragment = serializeBlockFragment(block, ctx.document.meta);
   const lines = fragment.split('\n');
+  const visualDescription = formatPluginVisualDescriptionForAgent(
+    getPluginVisualDescription(ctx.document, block)
+  );
   if (lines.length > COMPONENT_PREVIEW_MAX_LINES) {
     const componentId = block.schema.id.trim();
     const command = componentId
@@ -1467,12 +1607,14 @@ function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: str
       `Component preview switched to request_structure because raw HVY is ${lines.length} lines.`,
       ...structureLines.slice(0, COMPONENT_PREVIEW_MAX_LINES),
       ...(structureLines.length > COMPONENT_PREVIEW_MAX_LINES ? [`... ${structureLines.length - COMPONENT_PREVIEW_MAX_LINES} more lines`] : []),
+      ...(visualDescription ? ['', visualDescription] : []),
     ].join('\n');
   }
   return [
     `Preview command: hvy preview ${directoryPath}`,
     `Component preview (raw HVY, first ${COMPONENT_PREVIEW_MAX_LINES} lines):`,
     ...lines,
+    ...(visualDescription ? ['', visualDescription] : []),
   ].join('\n');
 }
 
@@ -2184,7 +2326,7 @@ function virtualFileWriteInvalidatesFileSystem(path: string): boolean {
     return true;
   }
   if (/\.(?:ya?ml|json)$/i.test(filename)) {
-    return filename !== 'tableRows.json' && filename !== 'tableColumns.json';
+    return filename !== 'tableRows.json' && filename !== 'tableColumns.json' && filename !== 'tableColumnProperties.json';
   }
   return false;
 }
@@ -3100,7 +3242,7 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
   const normalizedArgs = normalizeMiniShellArgs(args);
   const pipelines: HvyMiniShellPipeline[] = [];
   let current: string[] = [];
-  let operator: 'first' | '&&' | '||' = 'first';
+  let operator: 'first' | '&&' | '||' | ';' = 'first';
   for (let index = 0; index < normalizedArgs.length; index += 1) {
     const arg = normalizedArgs[index] ?? '';
     if (
@@ -3120,7 +3262,7 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
       }
       continue;
     }
-    if (arg === '&&' || arg === '||') {
+    if (arg === '&&' || arg === '||' || arg === ';') {
       if (current.length > 0) {
         pipelines.push({ operator, commands: splitPipeline(current), tokens: current });
         current = [];
@@ -3707,6 +3849,9 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   if (filename === 'section-info.txt') {
     return 'summary of this section and its metadata';
   }
+  if (filename === 'plugin.visual-description.txt') {
+    return 'derived plugin-rendered output for search and AI inspection; not serialized into the HVY document';
+  }
   if (filename === 'about-section.txt') {
     return 'section documentation';
   }
@@ -3715,6 +3860,9 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   }
   if (filename === 'tableColumns.json') {
     return 'static table column names as a JSON string array';
+  }
+  if (filename === 'tableColumnProperties.json') {
+    return 'sparse static table presentation properties keyed by exact column name';
   }
   if (filename === 'tableRows.json') {
     return 'static table rows as a JSON array of row objects with cells arrays';
@@ -3845,7 +3993,7 @@ export function tokenizeCommand(input: string): string[] {
       index += 1;
       continue;
     }
-    if (!quote && (char === '|' || char === '>')) {
+    if (!quote && (char === '|' || char === '>' || char === ';')) {
       if (current) {
         tokens.push(current);
         current = '';
@@ -3855,6 +4003,11 @@ export function tokenizeCommand(input: string): string[] {
     }
     if (char === '\\' && index + 1 < input.length) {
       const next = input[index + 1] ?? '';
+      if (!quote && next === ';') {
+        current += '\\;';
+        index += 1;
+        continue;
+      }
       if (next === '\\' || next === quote || (!quote && /\s/.test(next))) {
         current += next;
         index += 1;

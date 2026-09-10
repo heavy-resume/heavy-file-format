@@ -11,7 +11,11 @@ test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.diagram');
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.qr-code');
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.video');
-  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.viewer-note');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.editable-text');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.canvas');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.power-scripting');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.db-table');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).not.toContain('hvy.db-table-v2');
 });
 
 test('default build config includes every built-in plugin', () => {
@@ -56,15 +60,15 @@ test('resolveBuiltInPluginIds rejects unknown plugin ids', () => {
 });
 
 test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
-  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting', 'hvy.graph', 'hvy.diagram', 'hvy.qr-code', 'hvy.video', 'hvy.viewer-note']);
+  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting', 'hvy.graph', 'hvy.diagram', 'hvy.qr-code', 'hvy.video', 'hvy.editable-text']);
 
-  expect(expectedResult).toContain('from "/src/plugins/db-table-plugin.ts"');
+  expect(expectedResult).toContain('from "/src/plugins/db-table/db-table-component.ts"');
   expect(expectedResult).toContain('from "/src/plugins/scripting/scripting.ts"');
   expect(expectedResult).toContain('from "/src/plugins/graph.ts"');
   expect(expectedResult).toContain('from "/src/plugins/diagram.ts"');
   expect(expectedResult).toContain('from "/src/plugins/qr-code/qr-code.ts"');
   expect(expectedResult).toContain('from "/src/plugins/video/video.ts"');
-  expect(expectedResult).toContain('from "/src/plugins/viewer-note.ts"');
+  expect(expectedResult).toContain('from "/src/plugins/editable-text/editable-text.ts"');
   expect(expectedResult).not.toContain('/Users/');
   expect(expectedResult).not.toContain(process.cwd());
 });
@@ -72,11 +76,11 @@ test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
 test('createLazyHvyBuiltInPluginsModuleSource defers built-in plugin implementations', () => {
   const expectedResult = createLazyHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting']);
 
-  expect(expectedResult).toContain('() => import("/src/plugins/db-table-plugin.ts")');
+  expect(expectedResult).toContain('() => import("/src/plugins/db-table/db-table-component.ts")');
   expect(expectedResult).toContain('() => import("/src/plugins/scripting/scripting.ts")');
-  expect(expectedResult).not.toContain('"importPath":"/src/plugins/db-table-plugin.ts"');
+  expect(expectedResult).not.toContain('"importPath":"/src/plugins/db-table/db-table-component.ts"');
   expect(expectedResult).not.toContain('"importPath":"/src/plugins/scripting/scripting.ts"');
-  expect(expectedResult).not.toContain('from "/src/plugins/db-table-plugin.ts"');
+  expect(expectedResult).not.toContain('from "/src/plugins/db-table/db-table-component.ts"');
   expect(expectedResult).not.toContain('from "/src/plugins/scripting/scripting.ts"');
 });
 

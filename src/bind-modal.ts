@@ -1,15 +1,15 @@
 import './modal.css';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml } from 'yaml';
 import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } from './state';
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
-import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
+import { clearActiveEditorBlock, findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { parseAttachedComponentBlocks } from './plugins/db-table-fragment';
 import { serializeBlockFragment } from './serialization';
-import { ensureComponentListBlocks, ensureContainerBlocks, ensureExpandableBlocks } from './document-factory';
+import { cloneReusableBlock, cloneReusableSection, createEmptyBlock, ensureComponentListBlocks, ensureContainerBlocks, ensureExpandableBlocks, getReusableTemplate } from './document-factory';
 import { createGridItem } from './grid-ops';
 import { syncReusableTemplateForBlock } from './reusable';
 import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
@@ -17,11 +17,13 @@ import { insertTopLevelSection } from './bind/actions/section';
 import { assignAutoBlockId } from './auto-block-id';
 import { applyXrefTargetDefaults } from './xref-ops';
 import { getOutputGenerator } from './plugins/registry';
-import { getComponentDefsFromMeta } from './component-defs';
-import { extractReusableTemplateVariablesFromDefinition } from './reusable-template-values';
+import { configurePluginBlock } from './plugins/plugin-block';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta } from './component-defs';
+import { createReusableTemplateVariableName, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, renameReusableTemplateVariable, REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT, setReusableTemplateVariableType } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
-import type { JsonObject } from './hvy/types';
+import { changeEncryptedComponentKeyInDocument, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
+import { showTransientNotice } from './transient-notice';
 
 const loadDbTableRuntime = () => import('./plugins/db-table');
 
@@ -43,6 +45,24 @@ export function bindModal(app: HTMLElement): void {
     if (closeBtn) {
       closeModal();
       getRenderApp()();
+      return;
+    }
+
+    const changeEncryptionKeyBtn = target.closest<HTMLButtonElement>('[data-modal-action="change-encryption-key"]');
+    if (changeEncryptionKeyBtn && state.encryptionModal && !changeEncryptionKeyBtn.disabled) {
+      void changeEncryptionKeyFromModal(modalRoot, changeEncryptionKeyBtn);
+      return;
+    }
+
+    const generateEncryptionBtn = target.closest<HTMLButtonElement>('[data-modal-action="generate-component-encryption"]');
+    if (generateEncryptionBtn && state.encryptionModal && !generateEncryptionBtn.disabled) {
+      void generateEncryptionFromModal(modalRoot, generateEncryptionBtn);
+      return;
+    }
+
+    const removeEncryptionBtn = target.closest<HTMLButtonElement>('[data-modal-action="remove-component-encryption"]');
+    if (removeEncryptionBtn && state.encryptionModal && !removeEncryptionBtn.disabled) {
+      void removeEncryptionFromModal(modalRoot, removeEncryptionBtn);
       return;
     }
 
@@ -90,18 +110,60 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
-    const reusableDefinitionModeBtn = target.closest<HTMLElement>('[data-modal-action="reusable-definition-mode"]');
-    if (reusableDefinitionModeBtn && state.reusableDefinitionEditModal) {
-      switchReusableDefinitionMode();
-      return;
-    }
-
     const reusableDefinitionCloseBtn = target.closest<HTMLElement>('[data-modal-action="save-reusable-definition-close"]');
     if (reusableDefinitionCloseBtn && state.reusableDefinitionEditModal) {
       saveReusableDefinitionModalAndClose();
       return;
     }
 
+    const reusableDefinitionCancelBtn = target.closest<HTMLElement>('[data-modal-action="reusable-definition-cancel"]');
+    if (reusableDefinitionCancelBtn && state.reusableDefinitionEditModal) {
+      cancelReusableDefinitionModal();
+      return;
+    }
+
+    const addReusableDefinitionComponentButton = target.closest<HTMLElement>('[data-action="reusable-definition-add-component"]');
+    if (addReusableDefinitionComponentButton) {
+      event.stopPropagation();
+      addReusableDefinitionComponent(addReusableDefinitionComponentButton);
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-open-flavors"]')) {
+      openReusableFlavorManager('browse');
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-add-flavor"]')) {
+      openReusableFlavorManager('create');
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-close"]')) {
+      closeReusableFlavorManager();
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-create"]')) {
+      createReusableDefinitionFlavorFromManager();
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-edit"]')) {
+      editReusableDefinitionFlavorFromManager();
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-main"]')) {
+      editMainReusableDefinitionFromManager();
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-remove"]')) {
+      mutateActiveFlavor('remove');
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-left"]')) {
+      mutateActiveFlavor('left');
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-right"]')) {
+      mutateActiveFlavor('right');
+      return;
+    }
     const templateGeneratorBtn = target.closest<HTMLButtonElement>('[data-modal-action="run-template-generator"]');
     if (templateGeneratorBtn && state.reusableTemplateModal) {
       void runReusableTemplateGenerator(modalRoot, templateGeneratorBtn);
@@ -212,27 +274,27 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
-    const saveSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-save"]');
-    if (saveSqliteRowComponentBtn && state.sqliteRowComponentModal) {
-      const modal = state.sqliteRowComponentModal;
+    const saveDbTableRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="db-table-row-component-save"]');
+    if (saveDbTableRowComponentBtn && state.dbTableRowComponentModal) {
+      const modal = state.dbTableRowComponentModal;
       const nextSerialized = modal.mode === 'raw' ? modal.rawDraft.trim() : modal.blocks.map((block) => serializeBlockFragment(block)).join('\n\n');
       if (nextSerialized.length === 0) {
-        state.sqliteRowComponentModal = {
+        state.dbTableRowComponentModal = {
           ...modal,
           error: 'Add at least one component before saving this row attachment.',
         };
         getRenderApp()();
         return;
       }
-      recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
+      recordHistory(`db-table-row-component:${modal.tableName}:${modal.rowId}`);
       void loadDbTableRuntime()
-        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, nextSerialized))
+        .then(({ setDbTableRowComponent }) => setDbTableRowComponent(modal.tableName, modal.rowId, nextSerialized))
         .then(() => {
           closeModal();
           getRenderApp()();
         })
         .catch((error) => {
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             error: error instanceof Error ? error.message : 'Failed to save attached component.',
           };
@@ -241,10 +303,10 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
-    const sqliteRowComponentModeBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-mode"]');
-    if (sqliteRowComponentModeBtn && state.sqliteRowComponentModal) {
-      const modal = state.sqliteRowComponentModal;
-      const nextMode = sqliteRowComponentModeBtn.dataset.modalMode;
+    const dbTableRowComponentModeBtn = target.closest<HTMLElement>('[data-modal-action="db-table-row-component-mode"]');
+    if (dbTableRowComponentModeBtn && state.dbTableRowComponentModal) {
+      const modal = state.dbTableRowComponentModal;
+      const nextMode = dbTableRowComponentModeBtn.dataset.modalMode;
       if (nextMode !== 'basic' && nextMode !== 'advanced' && nextMode !== 'raw') {
         return;
       }
@@ -255,7 +317,7 @@ export function bindModal(app: HTMLElement): void {
       if (modal.mode === 'raw' && nextMode !== 'raw') {
         try {
           const parsedBlocks = parseAttachedComponentBlocks(modal.rawDraft);
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             mode: nextMode,
             blocks: parsedBlocks,
@@ -268,7 +330,7 @@ export function bindModal(app: HTMLElement): void {
             };
           }
         } catch (error) {
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             error: error instanceof Error ? error.message : 'Attached HVY is invalid.',
           };
@@ -277,7 +339,7 @@ export function bindModal(app: HTMLElement): void {
         return;
       }
 
-      state.sqliteRowComponentModal = {
+      state.dbTableRowComponentModal = {
         ...modal,
         mode: nextMode,
         rawDraft: nextMode === 'raw' ? modal.blocks.map((block) => serializeBlockFragment(block)).join('\n\n') : modal.rawDraft,
@@ -287,18 +349,18 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
-    const clearSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-clear"]');
-    if (clearSqliteRowComponentBtn && state.sqliteRowComponentModal) {
-      const modal = state.sqliteRowComponentModal;
-      recordHistory(`sqlite-row-component-clear:${modal.tableName}:${modal.rowId}`);
+    const clearDbTableRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="db-table-row-component-clear"]');
+    if (clearDbTableRowComponentBtn && state.dbTableRowComponentModal) {
+      const modal = state.dbTableRowComponentModal;
+      recordHistory(`db-table-row-component-clear:${modal.tableName}:${modal.rowId}`);
       void loadDbTableRuntime()
-        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, ''))
+        .then(({ setDbTableRowComponent }) => setDbTableRowComponent(modal.tableName, modal.rowId, ''))
         .then(() => {
           closeModal();
           getRenderApp()();
         })
         .catch((error) => {
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             error: error instanceof Error ? error.message : 'Failed to remove attached component.',
           };
@@ -360,35 +422,23 @@ export function bindModal(app: HTMLElement): void {
   }
 
   setupReusableTemplateGeneratorControls(modalRoot);
+  setupReusableDefinitionBuilderControls(modalRoot);
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
-  const reusableDefinitionRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#reusableDefinitionRawInput');
-  const sqliteRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentRawInput');
+  const dbTableRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableRowComponentRawInput');
   const dbTableQueryInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableQueryInput');
   const dbTableQueryDynamicWindowInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryDynamicWindowInput');
   const dbTableQueryLimitInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryLimitInput');
 
-  if (reusableDefinitionRawInput && state.reusableDefinitionEditModal) {
-    reusableDefinitionRawInput.addEventListener('input', () => {
-      if (!state.reusableDefinitionEditModal) {
-        return;
-      }
-      state.reusableDefinitionEditModal = {
-        ...state.reusableDefinitionEditModal,
-        rawDraft: reusableDefinitionRawInput.value,
-        error: null,
-      };
-    });
-  }
 
-  if (sqliteRowComponentRawInput && state.sqliteRowComponentModal) {
-    sqliteRowComponentRawInput.addEventListener('input', () => {
-      if (!state.sqliteRowComponentModal) {
+  if (dbTableRowComponentRawInput && state.dbTableRowComponentModal) {
+    dbTableRowComponentRawInput.addEventListener('input', () => {
+      if (!state.dbTableRowComponentModal) {
         return;
       }
-      state.sqliteRowComponentModal = {
-        ...state.sqliteRowComponentModal,
-        rawDraft: sqliteRowComponentRawInput.value,
+      state.dbTableRowComponentModal = {
+        ...state.dbTableRowComponentModal,
+        rawDraft: dbTableRowComponentRawInput.value,
         error: null,
       };
     });
@@ -450,6 +500,64 @@ export function bindModal(app: HTMLElement): void {
   });
 }
 
+async function changeEncryptionKeyFromModal(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): Promise<void> {
+  const modal = state.encryptionModal;
+  if (!modal) return;
+  setEncryptionModalBusy(modalRoot, actionButton);
+  try {
+    recordHistory(`component:${modal.blockId}:change-encryption-key`);
+    const result = await changeEncryptedComponentKeyInDocument(state.document, modal.sectionKey, modal.blockId, state.encryption ?? null);
+    closeModal();
+    showTransientNotice(`Changed encryption key to ${result.keyId}.`);
+    getRenderApp()();
+  } catch (error) {
+    showTransientNotice(error instanceof Error ? error.message : 'Encryption key could not be changed.');
+    getRenderApp()();
+  }
+}
+
+async function generateEncryptionFromModal(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): Promise<void> {
+  const modal = state.encryptionModal;
+  if (!modal) return;
+  setEncryptionModalBusy(modalRoot, actionButton);
+  try {
+    recordHistory(`component:${modal.blockId}:encrypt`);
+    if (!state.encryption) state.encryption = { keyring: {} };
+    const result = await encryptComponentInDocument(state.document, modal.sectionKey, modal.blockId, state.encryption);
+    closeModal();
+    setActiveEditorBlock(modal.sectionKey, result.encryptedBlockId);
+    showTransientNotice(`Encrypted component with key ${result.keyId}.`);
+    getRenderApp()();
+  } catch (error) {
+    showTransientNotice(error instanceof Error ? error.message : 'Component could not be encrypted.');
+    getRenderApp()();
+  }
+}
+
+async function removeEncryptionFromModal(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): Promise<void> {
+  const modal = state.encryptionModal;
+  if (!modal) return;
+  const encrypted = findBlockByIds(modal.sectionKey, modal.blockId);
+  const decryptedBlockId = encrypted?.schema.kind === 'encrypted' ? encrypted.schema.encryptedBlock?.id ?? '' : '';
+  setEncryptionModalBusy(modalRoot, actionButton);
+  try {
+    recordHistory(`component:${modal.blockId}:remove-encryption`);
+    await decryptComponentInDocument(state.document, modal.sectionKey, modal.blockId, state.encryption ?? null);
+    closeModal();
+    if (decryptedBlockId) setActiveEditorBlock(modal.sectionKey, decryptedBlockId);
+    showTransientNotice('Removed component encryption.');
+    getRenderApp()();
+  } catch (error) {
+    showTransientNotice(error instanceof Error ? error.message : 'Encryption could not be removed.');
+    getRenderApp()();
+  }
+}
+
+function setEncryptionModalBusy(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): void {
+  modalRoot.querySelectorAll<HTMLButtonElement>('button').forEach((button) => { button.disabled = true; });
+  actionButton.textContent = 'Working…';
+}
+
 function setupReusableTemplateGeneratorControls(modalRoot: HTMLDivElement): void {
   if (!state.reusableTemplateModal) {
     return;
@@ -464,39 +572,364 @@ function setupReusableTemplateGeneratorControls(modalRoot: HTMLDivElement): void
   });
 }
 
-function switchReusableDefinitionMode(): void {
+function getActiveReusableDefinition(): { definition: any; flavor: any | null; template: any } | null {
   const modal = state.reusableDefinitionEditModal;
-  if (!modal) {
-    return;
-  }
+  if (!modal) return null;
   const definition = modal.kind === 'component'
     ? getComponentDefsFromMeta(state.document.meta)[modal.index]
-    : (Array.isArray(state.document.meta.section_defs) ? state.document.meta.section_defs[modal.index] : null);
-  if (!definition || typeof definition !== 'object') {
-    closeModal();
+    : getSectionDefsFromMeta(state.document.meta)[modal.index];
+  if (!definition) return null;
+  const flavor = modal.activeFlavorIndex == null ? null : definition.flavors?.[modal.activeFlavorIndex] ?? null;
+  return {
+    definition,
+    flavor,
+    template: flavor?.template ?? definition.template,
+  };
+}
+
+function setupReusableDefinitionBuilderControls(modalRoot: HTMLDivElement): void {
+  if (!state.reusableDefinitionEditModal) return;
+  modalRoot.addEventListener(REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT, () => {
+    syncReusableDefinitionVariableReferenceState(modalRoot);
+  });
+  const nameInput = modalRoot.querySelector<HTMLInputElement>('[data-field="builder-definition-name"]');
+  nameInput?.addEventListener('input', () => {
+    if (state.reusableDefinitionEditModal) state.reusableDefinitionEditModal.draftName = nameInput.value;
+  });
+
+  const flavorManagerPicker = modalRoot.querySelector<HTMLSelectElement>('[data-field="builder-flavor-manager-picker"]');
+  flavorManagerPicker?.addEventListener('change', () => {
+    const modal = state.reusableDefinitionEditModal;
+    if (!modal?.flavorManager) return;
+    if (flavorManagerPicker.value === 'new') {
+      openReusableFlavorManager('create');
+      return;
+    }
+    modal.flavorManager.selectedIndex = Number.parseInt(flavorManagerPicker.value, 10);
     getRenderApp()();
+  });
+  const flavorCreatorName = modalRoot.querySelector<HTMLInputElement>('[data-field="builder-flavor-creator-name"]');
+  flavorCreatorName?.addEventListener('input', () => {
+    const manager = state.reusableDefinitionEditModal?.flavorManager;
+    if (!manager) return;
+    manager.draftName = flavorCreatorName.value;
+    manager.error = null;
+  });
+  const flavorCreatorDescription = modalRoot.querySelector<HTMLTextAreaElement>('[data-field="builder-flavor-creator-description"]');
+  flavorCreatorDescription?.addEventListener('input', () => {
+    const manager = state.reusableDefinitionEditModal?.flavorManager;
+    if (!manager) return;
+    manager.draftDescription = flavorCreatorDescription.value;
+  });
+
+  const flavorName = modalRoot.querySelector<HTMLInputElement>('[data-field="builder-flavor-name"]');
+  flavorName?.addEventListener('input', () => {
+    const active = getActiveReusableDefinition();
+    if (active?.flavor) active.flavor.name = flavorName.value;
+  });
+  const flavorDescription = modalRoot.querySelector<HTMLInputElement>('[data-field="builder-flavor-description"]');
+  flavorDescription?.addEventListener('input', () => {
+    const active = getActiveReusableDefinition();
+    if (active?.flavor) active.flavor.description = flavorDescription.value;
+  });
+
+  modalRoot.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-variable-name]').forEach((control) => {
+    const field = control.dataset.field;
+    if (field === 'builder-template-variable-name') {
+      control.addEventListener('change', () => renameBuilderTemplateVariable(control as HTMLInputElement));
+      return;
+    }
+    if (field === 'builder-template-variable-type') {
+      control.addEventListener('change', () => {
+        const active = getActiveReusableDefinition();
+        const name = control.dataset.variableName ?? '';
+        if (!active || !name || (control.value !== 'text' && control.value !== 'block')) return;
+        setReusableTemplateVariableType(active.template, name, control.value);
+        getRenderApp()();
+      });
+      return;
+    }
+    if (field === 'builder-template-variable-generator') {
+      control.addEventListener('change', () => {
+        const active = getActiveReusableDefinition();
+        const name = control.dataset.variableName ?? '';
+        if (!active || !name) return;
+        const owner = active.flavor ?? active.definition;
+        owner.templateVariables = owner.templateVariables ?? {};
+        const config = owner.templateVariables[name] ?? {};
+        if (control.value) config.generator = control.value;
+        else delete config.generator;
+        owner.templateVariables[name] = config;
+        getRenderApp()();
+      });
+      return;
+    }
+    control.addEventListener('input', () => {
+      const active = getActiveReusableDefinition();
+      const name = control.dataset.variableName ?? '';
+      if (!active || !name) return;
+      const owner = active.flavor ?? active.definition;
+      owner.templateVariables = owner.templateVariables ?? {};
+      const config = owner.templateVariables[name] ?? {};
+      if (field === 'builder-template-variable-label') config.label = control.value;
+      if (field === 'builder-template-variable-generator-label') {
+        if (control.value) config.generatorLabel = control.value;
+        else delete config.generatorLabel;
+      }
+      owner.templateVariables[name] = config;
+    });
+  });
+  modalRoot.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((control) => {
+    if (control.closest('.reusable-template-variable-panel') || control.dataset.field === 'builder-definition-name') return;
+    control.addEventListener('select', () => showBuilderInputUseAs(control));
+    control.addEventListener('mouseup', () => showBuilderInputUseAs(control));
+    control.addEventListener('keyup', () => showBuilderInputUseAs(control));
+  });
+}
+
+function syncReusableDefinitionVariableReferenceState(modalRoot: HTMLDivElement): void {
+  const modal = state.reusableDefinitionEditModal;
+  const active = getActiveReusableDefinition();
+  if (!modal || !active) return;
+  const referencedNames = new Set((modal.kind === 'component'
+    ? active.flavor
+      ? extractReusableTemplateVariablesFromFlavor(active.flavor, active.definition.templateVariables)
+      : [
+          ...extractReusableTemplateVariablesFromDefinition(active.definition),
+          ...(active.definition.flavors ?? []).flatMap((flavor: any) => (
+            extractReusableTemplateVariablesFromFlavor(flavor, active.definition.templateVariables)
+          )),
+        ]
+    : active.flavor
+      ? extractReusableTemplateVariablesFromSectionFlavor(active.flavor, active.definition.templateVariables)
+      : [
+          ...extractReusableTemplateVariablesFromSectionDefinition(active.definition),
+          ...(active.definition.flavors ?? []).flatMap((flavor: any) => (
+            extractReusableTemplateVariablesFromSectionFlavor(flavor, active.definition.templateVariables)
+          )),
+        ]).map((variable) => variable.name));
+  modalRoot.querySelectorAll<HTMLElement>('[data-template-variable-card]').forEach((card) => {
+    const isReferenced = referencedNames.has(card.dataset.templateVariableCard ?? '');
+    card.classList.toggle('is-unreferenced', !isReferenced);
+    card.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach((control) => {
+      control.disabled = !isReferenced;
+    });
+  });
+}
+
+function showBuilderInputUseAs(control: HTMLInputElement | HTMLTextAreaElement): void {
+  const start = control.selectionStart ?? 0;
+  const end = control.selectionEnd ?? start;
+  const selected = control.value.slice(start, end).trim();
+  control.parentElement?.querySelector(':scope > .builder-input-use-as')?.remove();
+  if (!selected) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ghost builder-input-use-as';
+  button.textContent = 'Use as template value';
+  button.addEventListener('mousedown', (event) => event.preventDefault());
+  button.addEventListener('click', () => {
+    const active = getActiveReusableDefinition();
+    const modal = state.reusableDefinitionEditModal;
+    if (!active || !modal) return;
+    const variables = modal.kind === 'component'
+      ? active.flavor ? extractReusableTemplateVariablesFromFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromDefinition(active.definition)
+      : active.flavor ? extractReusableTemplateVariablesFromSectionFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromSectionDefinition(active.definition);
+    const name = createReusableTemplateVariableName(selected, variables.map((variable) => variable.name));
+    const type = /\r|\n/.test(control.value.slice(start, end)) ? 'block' : 'text';
+    const token = `{% ${name} | ${type} %}`;
+    control.value = `${control.value.slice(0, start)}${token}${control.value.slice(end)}`;
+    const owner = active.flavor ?? active.definition;
+    owner.templateVariables = owner.templateVariables ?? {};
+    owner.templateVariables[name] = { label: selected.replace(/\s+/g, ' ') };
+    control.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    getRenderApp()();
+  });
+  control.insertAdjacentElement('afterend', button);
+}
+
+function renameBuilderTemplateVariable(input: HTMLInputElement): void {
+  const active = getActiveReusableDefinition();
+  const oldName = input.dataset.variableName ?? '';
+  const newName = input.value.trim();
+  if (!active || !oldName || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(newName)) {
+    input.value = oldName;
     return;
   }
-  if (modal.mode === 'edit') {
-    state.reusableDefinitionEditModal = {
-      ...modal,
-      mode: 'raw',
-      rawDraft: stringifyYaml(definition).trimEnd(),
-      error: null,
-    };
-    getRenderApp()();
+  const variables = state.reusableDefinitionEditModal?.kind === 'component'
+    ? active.flavor ? extractReusableTemplateVariablesFromFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromDefinition(active.definition)
+    : active.flavor ? extractReusableTemplateVariablesFromSectionFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromSectionDefinition(active.definition);
+  if (variables.some((variable) => variable.name === newName && variable.name !== oldName)) {
+    input.value = oldName;
     return;
   }
-  if (!applyReusableDefinitionRawDraft()) {
-    getRenderApp()();
-    return;
+  renameReusableTemplateVariable(active.template, oldName, newName);
+  const owner = active.flavor ?? active.definition;
+  const config = owner.templateVariables?.[oldName];
+  owner.templateVariables = owner.templateVariables ?? {};
+  if (config) owner.templateVariables[newName] = config;
+  delete owner.templateVariables[oldName];
+  getRenderApp()();
+}
+
+function openReusableFlavorManager(mode: 'browse' | 'create'): void {
+  const modal = state.reusableDefinitionEditModal;
+  const active = getActiveReusableDefinition();
+  if (!modal || !active) return;
+  if (modal.draftName?.trim()) {
+    applyReusableDefinitionName(active.definition, modal.draftName.trim());
+    delete modal.draftName;
   }
-  state.reusableDefinitionEditModal = {
-    ...state.reusableDefinitionEditModal!,
-    mode: 'edit',
+  const flavors = active.definition.flavors ?? [];
+  const selectedIndex = modal.flavorManager?.selectedIndex ?? modal.activeFlavorIndex ?? 0;
+  const sourceIndex = mode === 'create'
+    ? modal.flavorManager?.mode === 'browse' ? modal.flavorManager.selectedIndex : modal.activeFlavorIndex ?? null
+    : selectedIndex;
+  modal.flavorManager = {
+    mode,
+    selectedIndex: Math.max(0, Math.min(selectedIndex, flavors.length - 1)),
+    sourceIndex,
+    draftName: getUniqueReusableFlavorName(active.definition.name, flavors.map((flavor: { name: string }) => flavor.name)),
+    draftDescription: '',
     error: null,
   };
   getRenderApp()();
+}
+
+function closeReusableFlavorManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) return;
+  modal.flavorManager = null;
+  getRenderApp()();
+}
+
+function editReusableDefinitionFlavorFromManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal?.flavorManager) return;
+  modal.activeFlavorIndex = modal.flavorManager.selectedIndex;
+  modal.flavorManager = null;
+  getRenderApp()();
+}
+
+function editMainReusableDefinitionFromManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) return;
+  modal.activeFlavorIndex = null;
+  modal.flavorManager = null;
+  getRenderApp()();
+}
+
+function createReusableDefinitionFlavorFromManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  const active = getActiveReusableDefinition();
+  const manager = modal?.flavorManager;
+  if (!modal || !active || !manager || manager.mode !== 'create') return;
+  const flavors = active.definition.flavors ?? [];
+  const name = manager.draftName.trim();
+  if (!name) {
+    manager.error = 'Flavor name is required.';
+    getRenderApp()();
+    return;
+  }
+  if (name === active.definition.name || flavors.some((flavor: { name: string }) => flavor.name === name)) {
+    manager.error = `A flavor named "${name}" already exists.`;
+    getRenderApp()();
+    return;
+  }
+  const sourceFlavor = manager.sourceIndex == null ? null : flavors[manager.sourceIndex] ?? null;
+  const description = manager.draftDescription.trim();
+  if (modal.kind === 'component') {
+    const source = sourceFlavor?.template ?? active.definition.template ?? getReusableTemplate(active.definition);
+    if (!source) return;
+    const template = cloneReusableBlock(source);
+    template.schema.component = active.definition.name;
+    flavors.push({ name, ...(description ? { description } : {}), template, templateVariables: { ...(sourceFlavor?.templateVariables ?? active.definition.templateVariables ?? {}) } });
+  } else {
+    const source = sourceFlavor?.template ?? active.definition.template;
+    if (!source) return;
+    flavors.push({ name, ...(description ? { description } : {}), template: cloneReusableSection(source), templateVariables: { ...(sourceFlavor?.templateVariables ?? active.definition.templateVariables ?? {}) } });
+  }
+  active.definition.flavors = flavors;
+  modal.activeFlavorIndex = flavors.length - 1;
+  modal.flavorManager = null;
+  getRenderApp()();
+}
+
+function getUniqueReusableFlavorName(templateName: string, flavorNames: string[]): string {
+  const used = new Set([templateName, ...flavorNames]);
+  let suffix = 2;
+  let name = `${templateName} ${suffix}`;
+  while (used.has(name)) {
+    suffix += 1;
+    name = `${templateName} ${suffix}`;
+  }
+  return name;
+}
+
+function addReusableDefinitionComponent(actionButton: HTMLElement): void {
+  const modal = state.reusableDefinitionEditModal;
+  const active = getActiveReusableDefinition();
+  const component = actionButton.dataset.component?.trim() ?? '';
+  if (!modal || modal.kind !== 'component' || !active || !component) return;
+  if (modal.draftName?.trim()) {
+    applyReusableDefinitionName(active.definition, modal.draftName.trim());
+    delete modal.draftName;
+  }
+  const template = createEmptyBlock(component);
+  if (component === 'plugin' && actionButton.dataset.pluginId) {
+    configurePluginBlock(template, actionButton.dataset.pluginId);
+  }
+  template.schema.component = active.definition.name;
+  active.definition.baseType = template.schema.kind;
+  if (active.flavor) {
+    active.flavor.template = template;
+    active.flavor.schema = undefined;
+  } else {
+    active.definition.template = template;
+    active.definition.schema = undefined;
+  }
+  const sectionKey = `__reusable__:${active.definition.name}${modal.activeFlavorIndex == null ? '' : `:flavor:${modal.activeFlavorIndex}`}`;
+  setActiveEditorBlock(sectionKey, template.id);
+  markActiveEditorBlockAsNew(template.id);
+  getRenderApp()();
+}
+
+function mutateActiveFlavor(action: 'remove' | 'left' | 'right'): void {
+  const modal = state.reusableDefinitionEditModal;
+  const active = getActiveReusableDefinition();
+  const index = modal?.activeFlavorIndex;
+  const flavors = active?.definition.flavors;
+  if (!modal || index == null || !flavors?.[index]) return;
+  if (action === 'remove') {
+    flavors.splice(index, 1);
+    modal.activeFlavorIndex = flavors[index] ? index : flavors[index - 1] ? index - 1 : null;
+  } else {
+    const nextIndex = action === 'left' ? index - 1 : index + 1;
+    if (!flavors[nextIndex]) return;
+    [flavors[index], flavors[nextIndex]] = [flavors[nextIndex], flavors[index]];
+    modal.activeFlavorIndex = nextIndex;
+  }
+  getRenderApp()();
+}
+
+function cancelReusableDefinitionModal(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) return;
+  const defs = modal.kind === 'component'
+    ? getComponentDefsFromMeta(state.document.meta)
+    : getSectionDefsFromMeta(state.document.meta);
+  if (modal.isNew) {
+    defs.splice(modal.index, 1);
+  } else if (modal.originalRaw) {
+    defs[modal.index] = parseYaml(modal.originalRaw) as never;
+  }
+  if (modal.kind === 'component') state.document.meta.component_defs = defs;
+  else state.document.meta.section_defs = defs;
+  restoreReusableDefinitionHistory(modal);
+  clearActiveEditorBlock();
+  closeReusableDefinitionBuilder();
+  getRenderApp()();
+  getRefreshReaderPanels()();
 }
 
 function saveReusableDefinitionModalAndClose(): void {
@@ -504,68 +937,111 @@ function saveReusableDefinitionModalAndClose(): void {
   if (!modal) {
     return;
   }
-  if (modal.mode === 'raw' && !applyReusableDefinitionRawDraft()) {
+  const active = getActiveReusableDefinition();
+  if (active && modal.draftName?.trim()) {
+    applyReusableDefinitionName(active.definition, modal.draftName.trim());
+    delete modal.draftName;
+  }
+  if (!active || !active.definition.name?.trim()) {
+    state.reusableDefinitionEditModal = { ...modal, error: 'Template definition needs a name.' };
     getRenderApp()();
     return;
   }
-  closeModal();
-  getRenderApp()();
-  getRefreshReaderPanels()();
-}
-
-function applyReusableDefinitionRawDraft(): boolean {
-  const modal = state.reusableDefinitionEditModal;
-  if (!modal) {
-    return true;
+  const definitions = modal.kind === 'component'
+    ? getComponentDefsFromMeta(state.document.meta)
+    : getSectionDefsFromMeta(state.document.meta);
+  if (definitions.some((definition, index) => index !== modal.index && definition.name === active.definition.name)) {
+    state.reusableDefinitionEditModal = { ...modal, error: `A template named "${active.definition.name}" already exists.` };
+    getRenderApp()();
+    return;
   }
-  let parsed: unknown;
+  const flavorNames = (active.definition.flavors ?? []).map((flavor: { name: string }) => flavor.name.trim());
+  if (flavorNames.some((name: string) => !name)) {
+    state.reusableDefinitionEditModal = { ...modal, error: 'Every flavor needs a name.' };
+    getRenderApp()();
+    return;
+  }
+  const allNames = [active.definition.name, ...flavorNames];
+  if (new Set(allNames).size !== allNames.length) {
+    state.reusableDefinitionEditModal = { ...modal, error: 'Template and flavor names must be unique.' };
+    getRenderApp()();
+    return;
+  }
   try {
-    parsed = parseYaml(modal.rawDraft);
+    if (modal.kind === 'component') {
+      if (!active.definition.template) {
+        throw new Error('Add a component before saving the template.');
+      }
+      if (active.definition.flavors?.some((flavor: any) => !flavor.template)) {
+        throw new Error('Every flavor needs a component before saving.');
+      }
+      active.definition.baseType = active.definition.template.schema.kind;
+      const definitionVariables = extractReusableTemplateVariablesFromDefinition(active.definition);
+      const flavorVariables = (active.definition.flavors ?? []).map((flavor: any) => ({
+        flavor,
+        variables: extractReusableTemplateVariablesFromFlavor(flavor, active.definition.templateVariables),
+      }));
+      pruneReusableTemplateVariableConfig(active.definition, [
+        ...definitionVariables,
+        ...flavorVariables.flatMap(({ variables }: any) => variables),
+      ]);
+      flavorVariables.forEach(({ flavor, variables }: any) => pruneReusableTemplateVariableConfig(flavor, variables));
+    } else {
+      const definitionVariables = extractReusableTemplateVariablesFromSectionDefinition(active.definition);
+      const flavorVariables = (active.definition.flavors ?? []).map((flavor: any) => ({
+        flavor,
+        variables: extractReusableTemplateVariablesFromSectionFlavor(flavor, active.definition.templateVariables),
+      }));
+      pruneReusableTemplateVariableConfig(active.definition, [
+        ...definitionVariables,
+        ...flavorVariables.flatMap(({ variables }: any) => variables),
+      ]);
+      flavorVariables.forEach(({ flavor, variables }: any) => pruneReusableTemplateVariableConfig(flavor, variables));
+    }
   } catch (error) {
     state.reusableDefinitionEditModal = {
       ...modal,
-      error: error instanceof Error ? error.message : 'Header definition YAML is invalid.',
+      error: error instanceof Error ? error.message : 'Template values are invalid.',
     };
-    return false;
+    getRenderApp()();
+    return;
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    state.reusableDefinitionEditModal = {
-      ...modal,
-      error: 'Header definition YAML must be an object.',
-    };
-    return false;
-  }
-  const parsedObject = parsed as JsonObject;
-  if (typeof parsedObject.name !== 'string' || !parsedObject.name.trim()) {
-    state.reusableDefinitionEditModal = {
-      ...modal,
-      error: 'Template definition needs a name.',
-    };
-    return false;
-  }
-  recordHistory(`reusable-definition:${modal.kind}:${modal.index}:raw`);
-  if (modal.kind === 'component') {
-    const defs = getComponentDefsFromMeta(state.document.meta);
-    defs[modal.index] = parsedObject as never;
-    state.document.meta.component_defs = defs;
-  } else {
-    const defs = Array.isArray(state.document.meta.section_defs) ? state.document.meta.section_defs : [];
-    if (!parsedObject.template || typeof parsedObject.template !== 'object') {
-      state.reusableDefinitionEditModal = {
-        ...modal,
-        error: 'Section template definition needs a template object.',
-      };
-      return false;
-    }
-    defs[modal.index] = parsedObject as never;
-    state.document.meta.section_defs = defs;
-  }
-  state.reusableDefinitionEditModal = {
-    ...modal,
-    rawDraft: stringifyYaml(parsed).trimEnd(),
-    error: null,
-  };
-  return true;
+  clearActiveEditorBlock();
+  closeReusableDefinitionBuilder();
+  getRenderApp()();
+  restoreReusableDefinitionHistory(modal);
+  recordHistory();
+  getRefreshReaderPanels()();
+}
+
+function pruneReusableTemplateVariableConfig(owner: any, variables: Array<{ name: string }>): void {
+  if (!owner.templateVariables) return;
+  const referencedNames = new Set(variables.map((variable) => variable.name));
+  Object.keys(owner.templateVariables).forEach((name) => {
+    if (!referencedNames.has(name)) delete owner.templateVariables[name];
+  });
+  if (Object.keys(owner.templateVariables).length === 0) delete owner.templateVariables;
+}
+
+function applyReusableDefinitionName(definition: any, name: string): void {
+  definition.name = name;
+  if (state.reusableDefinitionEditModal?.kind !== 'component') return;
+  if (definition.template) definition.template.schema.component = name;
+  definition.flavors?.forEach((flavor: any) => {
+    if (flavor.template) flavor.template.schema.component = name;
+  });
+}
+
+function closeReusableDefinitionBuilder(): void {
+  state.reusableDefinitionEditModal = null;
+  state.modalSectionKey = null;
+  state.componentMetaModal = null;
+}
+
+function restoreReusableDefinitionHistory(modal: NonNullable<typeof state.reusableDefinitionEditModal>): void {
+  if (!modal.historyBeforeDraft) return;
+  state.history = [...modal.historyBeforeDraft.history];
+  state.future = [...modal.historyBeforeDraft.future];
 }
 
 function updateReusableTemplateGeneratorButtons(modalRoot: HTMLDivElement): void {

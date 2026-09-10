@@ -1,8 +1,9 @@
-import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
+import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, handleRichEditorPointerDown, refreshRichToolbarState } from './_imports';
+import { applyInlineAnswerTypeChoice } from '../../block-ops';
 import { dismissSidebarHelpBalloon } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
 import { logClickTrace } from '../click-trace';
-import { templateDefinitionDetailsKey } from '../../editor/render';
+import { componentSortValueDetailsKey, templateDefinitionDetailsKey } from '../../editor/render';
 
 const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
@@ -12,6 +13,17 @@ export function bindClickMisc(app: HTMLElement): void {
   });
 
   app.addEventListener('toggle', (event) => {
+    const sortValueDetails = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLDetailsElement>('details.component-sort-value-details[data-def-index][data-sort-value-name]')
+      : null;
+    if (sortValueDetails && app.contains(sortValueDetails)) {
+      const defIndex = Number.parseInt(sortValueDetails.dataset.defIndex ?? '', 10);
+      const name = sortValueDetails.dataset.sortValueName ?? '';
+      if (!Number.isNaN(defIndex) && name) {
+        updateOpenTemplateDefinitionKey(componentSortValueDetailsKey(defIndex, name), sortValueDetails.open);
+      }
+      return;
+    }
     const details = event.target instanceof HTMLElement
       ? event.target.closest<HTMLDetailsElement>('details.template-def-details[data-template-kind]')
       : null;
@@ -24,17 +36,13 @@ export function bindClickMisc(app: HTMLElement): void {
       return;
     }
     const key = templateDefinitionDetailsKey(kind, index);
-    const openKeys = new Set(state.openTemplateDefinitionKeys);
-    if (details.open) {
-      openKeys.add(key);
-    } else {
-      openKeys.delete(key);
-    }
-    state.openTemplateDefinitionKeys = [...openKeys];
+    updateOpenTemplateDefinitionKey(key, details.open);
   }, true);
 
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
+    const richTarget = getRichTarget(target);
+    if (richTarget && handleRichEditorPointerDown(event, richTarget)) return;
     const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
     if (!pickerTrigger) {
       const activeInsertGhost = target.closest<HTMLElement>('.active-component-insert-ghost');
@@ -64,6 +72,9 @@ export function bindClickMisc(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     logClickTrace(event, 'click-misc:enter');
+    if (handleInlineAnswerTypePopoverClick(event, target)) {
+      return;
+    }
     const richTarget = getRichTarget(target);
     if (richTarget) {
       logClickTrace(event, 'click-misc:handled:rich-editor-click');
@@ -161,6 +172,16 @@ export function bindClickMisc(app: HTMLElement): void {
   });
 }
 
+function updateOpenTemplateDefinitionKey(key: string, open: boolean): void {
+  const openKeys = new Set(state.openTemplateDefinitionKeys);
+  if (open) {
+    openKeys.add(key);
+  } else {
+    openKeys.delete(key);
+  }
+  state.openTemplateDefinitionKeys = [...openKeys];
+}
+
 function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): void {
   const picker = pickerTrigger.closest<HTMLElement>('.component-picker');
   if (!picker) {
@@ -237,12 +258,7 @@ function closeOtherComponentPickers(app: HTMLElement, except?: HTMLElement): voi
 
 function revealComponentPicker(picker: HTMLElement): void {
   requestAnimationFrame(() => {
-    const popover = picker.querySelector<HTMLElement>('.component-picker-popover');
-    if (!popover) {
-      return;
-    }
-    popover.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    requestAnimationFrame(() => placeComponentPicker(picker));
+    placeComponentPicker(picker);
   });
 }
 
@@ -252,13 +268,77 @@ function placeComponentPicker(picker: HTMLElement): void {
     return;
   }
   picker.style.removeProperty('--component-picker-shift');
+  picker.style.removeProperty('--component-picker-shift-y');
   const padding = 8;
   const rect = popover.getBoundingClientRect();
-  const overflowLeft = padding - rect.left;
-  const overflowRight = rect.right - (window.innerWidth - padding);
+  const scrollSurface = picker.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel, .modal-panel');
+  const surfaceRect = scrollSurface?.getBoundingClientRect();
+  const leftEdge = Math.max(padding, surfaceRect ? surfaceRect.left + padding : padding);
+  const rightEdge = Math.min(window.innerWidth - padding, surfaceRect ? surfaceRect.right - padding : window.innerWidth - padding);
+  const topEdge = Math.max(padding, surfaceRect ? surfaceRect.top + padding : padding);
+  const bottomEdge = Math.min(window.innerHeight - padding, surfaceRect ? surfaceRect.bottom - padding : window.innerHeight - padding);
+  const overflowLeft = leftEdge - rect.left;
+  const overflowRight = rect.right - rightEdge;
+  const overflowTop = topEdge - rect.top;
+  const overflowBottom = rect.bottom - bottomEdge;
   if (overflowLeft > 0) {
     picker.style.setProperty('--component-picker-shift', `${overflowLeft}px`);
   } else if (overflowRight > 0) {
     picker.style.setProperty('--component-picker-shift', `${-overflowRight}px`);
   }
+  if (overflowTop > 0) {
+    picker.style.setProperty('--component-picker-shift-y', `${overflowTop}px`);
+  } else if (overflowBottom > 0) {
+    picker.style.setProperty('--component-picker-shift-y', `${-overflowBottom}px`);
+  }
+}
+
+/**
+ * The answer-type popover picks the marker type and radio group for the selected run.
+ * It lives inside the editor shell, so it has to claim its own clicks before the rich
+ * editor treats them as caret movement.
+ */
+function handleInlineAnswerTypePopoverClick(event: MouseEvent, target: HTMLElement): boolean {
+  const control = target.closest<HTMLElement>('.hvy-choice-mode-switch');
+  if (!control) {
+    return false;
+  }
+  const typeOption = target.closest<HTMLElement>('[data-field="inline-answer-type"]');
+  if (typeOption) {
+    event.preventDefault();
+    logClickTrace(event, 'click-misc:handled:inline-answer-type');
+    applyInlineAnswerTypeChoice(control, {
+      radio: typeOption.dataset.answerType === 'radio',
+      groupName: typeOption.dataset.answerGroupName ?? null,
+    });
+    return true;
+  }
+  if (target.closest<HTMLElement>('[data-field="inline-answer-new-group"]')) {
+    event.preventDefault();
+    logClickTrace(event, 'click-misc:handled:inline-answer-new-group');
+    const form = control.querySelector<HTMLFormElement>('.choice-mode-name-form');
+    if (form) {
+      form.hidden = false;
+      const input = form.querySelector<HTMLInputElement>('.choice-mode-name-input');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+    }
+    return true;
+  }
+  if (target.closest<HTMLElement>('.choice-mode-name-cancel')) {
+    event.preventDefault();
+    logClickTrace(event, 'click-misc:handled:inline-answer-group-name-cancel');
+    const form = control.querySelector<HTMLFormElement>('.choice-mode-name-form');
+    if (form) form.hidden = true;
+    return true;
+  }
+  if (target.closest<HTMLElement>('button[type="submit"], .choice-mode-name-input')) {
+    // Let the name form submit and keep the caret in its own input.
+    return true;
+  }
+  // Clicks on the popover chrome must not move the caret out of the answer run.
+  event.preventDefault();
+  return true;
 }

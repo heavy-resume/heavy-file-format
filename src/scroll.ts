@@ -1,6 +1,43 @@
 import { state } from './state';
 import type { PaneScrollState } from './types';
 
+export interface ElementScrollAnchor {
+  elementSelector: string;
+  scrollContainerSelector: string;
+  viewportTop: number;
+}
+
+export function captureElementScrollAnchor(
+  root: HTMLElement,
+  element: HTMLElement,
+  elementSelector: string,
+): ElementScrollAnchor | null {
+  const scrollContainer = element.closest<HTMLElement>('.editor-sidebar-panel, .editor-shell .editor-tree');
+  if (!scrollContainer || !root.contains(scrollContainer)) return null;
+  return {
+    elementSelector,
+    scrollContainerSelector: scrollContainer.classList.contains('editor-sidebar-panel')
+      ? '.editor-sidebar-panel'
+      : '.editor-shell .editor-tree',
+    viewportTop: element.getBoundingClientRect().top,
+  };
+}
+
+export function restoreElementScrollAnchor(root: HTMLElement, anchor: ElementScrollAnchor | null): void {
+  if (!anchor) return;
+  const restore = (): void => {
+    const element = root.querySelector<HTMLElement>(anchor.elementSelector);
+    const scrollContainer = root.querySelector<HTMLElement>(anchor.scrollContainerSelector);
+    if (!element || !scrollContainer) return;
+    scrollContainer.scrollTop += element.getBoundingClientRect().top - anchor.viewportTop;
+  };
+  restore();
+  window.requestAnimationFrame(() => {
+    restore();
+    window.requestAnimationFrame(restore);
+  });
+}
+
 export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): PaneScrollState {
   const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
   const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
@@ -36,7 +73,7 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
       fullPane.scrollTop = scroll.fullPaneTop;
     }
     if (editorTree) {
-      editorTree.scrollTop = scroll.editorTop;
+      preserveEditorScrollTop(editorTree, scroll.editorTop);
     }
     if (editorSidebarPanel) {
       editorSidebarPanel.scrollTop = scroll.editorSidebarTop;
@@ -54,6 +91,22 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
     restore();
     window.requestAnimationFrame(restore);
   });
+}
+
+export function preserveEditorScrollTop(scrollContainer: HTMLElement, scrollTop: number): void {
+  const maximumScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+  if (maximumScrollTop < scrollTop) {
+    let tail = scrollContainer.querySelector<HTMLElement>(':scope > .editor-document-tail');
+    if (!tail) {
+      tail = scrollContainer.ownerDocument.createElement('div');
+      tail.className = 'editor-document-tail';
+      tail.setAttribute('aria-hidden', 'true');
+      scrollContainer.appendChild(tail);
+    }
+    const currentHeight = tail.getBoundingClientRect().height;
+    tail.style.height = `${Math.ceil(currentHeight + scrollTop - maximumScrollTop + 1)}px`;
+  }
+  scrollContainer.scrollTop = scrollTop;
 }
 
 export function centerPendingEditorSection(app: HTMLElement): void {
@@ -95,11 +148,13 @@ export function focusPendingSectionTitleEditor(app: HTMLElement): void {
 }
 
 export function scrollPendingEditorActivation(app: HTMLElement): void {
+  restorePendingHistoryFocus(app);
   const pending = state.pendingEditorActivation;
   if (!pending) {
     return;
   }
   if (pending.suppressFocus) {
+    recordEditorActivationScrollTop(app, pending);
     state.pendingEditorActivation = null;
     return;
   }
@@ -118,14 +173,34 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
   });
 }
 
+function restorePendingHistoryFocus(app: HTMLElement): void {
+  const preferred = state.pendingHistoryFocus;
+  if (!preferred) {
+    return;
+  }
+  const matches = app.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(preferred.field)}"]`);
+  const target = matches.item(preferred.fieldIndex ?? 0);
+  state.pendingHistoryFocus = null;
+  if (!target) {
+    return;
+  }
+  focusEditorActivationTarget(target);
+  restorePreferredEditorSelection(target, preferred);
+}
+
 export function captureEditorDeactivationAnchor(
   app: HTMLElement,
   sectionKey: string,
-  blockId: string
+  blockId: string,
+  sourceBlock?: HTMLElement | null
 ): NonNullable<typeof state.pendingEditorDeactivation> | null {
-  const block = app.querySelector<HTMLElement>(
+  const block = sourceBlock?.matches(
     `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(blockId)}"]`
-  );
+  )
+    ? sourceBlock
+    : app.querySelector<HTMLElement>(
+        `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(blockId)}"]`
+      );
   const scrollContainer = block?.closest<HTMLElement>(
     '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
   );
@@ -140,11 +215,16 @@ export function captureEditorDeactivationAnchor(
   const activeTextEditor = block.querySelector<HTMLElement>(
     '.rich-editor[data-field="block-rich"], .rich-editor.text-fill-in-editor'
   );
-  const anchorKind = activeTextEditor ? 'text' : 'block';
-  const anchorTop = activeTextEditor?.getBoundingClientRect().top ?? blockRect.top;
   const scrollRect = scrollContainer.getBoundingClientRect();
   const visibleTop = scrollRect.top + scrollContainer.clientTop;
   const visibleBottom = visibleTop + scrollContainer.clientHeight;
+  const elementAnchor = activeTextEditor
+    ? null
+    : findVisibleEditorDeactivationAnchor(block, visibleTop, visibleBottom);
+  const anchorKind = activeTextEditor ? 'text' : elementAnchor ? 'element' : 'block';
+  const anchorTop = activeTextEditor?.getBoundingClientRect().top
+    ?? elementAnchor?.getBoundingClientRect().top
+    ?? blockRect.top;
   const editorIsClipped = blockRect.top < visibleTop || blockRect.bottom > visibleBottom;
   const expandedHeight = Number.isFinite(passiveHeight)
     ? Math.max(0, blockRect.height - passiveHeight)
@@ -154,9 +234,10 @@ export function captureEditorDeactivationAnchor(
     blockId,
     anchorKind,
     anchorTop,
+    elementAnchor: elementAnchor?.dataset.editorDeactivationAnchor,
     scrollSurface,
     scrollTopBeforeClose: scrollContainer.scrollTop,
-    scrollAdjustment: editorIsClipped
+    scrollAdjustment: !elementAnchor && editorIsClipped
       && userScrollDirection === 'down'
       && Number.isFinite(userScrollStartTop)
       && Number.isFinite(passiveHeight)
@@ -166,6 +247,23 @@ export function captureEditorDeactivationAnchor(
         )
       : 0,
   };
+}
+
+function findVisibleEditorDeactivationAnchor(
+  block: HTMLElement,
+  visibleTop: number,
+  visibleBottom: number
+): HTMLElement | null {
+  const viewportCenter = (visibleTop + visibleBottom) / 2;
+  return Array.from(block.querySelectorAll<HTMLElement>('[data-editor-deactivation-anchor]'))
+    .filter((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      return rect.bottom >= visibleTop && rect.top <= visibleBottom;
+    })
+    .sort((left, right) => (
+      Math.abs(left.getBoundingClientRect().top - viewportCenter)
+      - Math.abs(right.getBoundingClientRect().top - viewportCenter)
+    ))[0] ?? null;
 }
 
 export function scrollPendingEditorDeactivation(app: HTMLElement): void {
@@ -189,6 +287,61 @@ export function scrollPendingEditorDeactivation(app: HTMLElement): void {
   });
 }
 
+export function restoreCapturedEditorDeactivationScrollTop(
+  app: HTMLElement,
+  captured: NonNullable<typeof state.pendingEditorDeactivation>
+): void {
+  const scrollTop = captured.resolvedScrollTop ?? captured.scrollTopBeforeClose;
+  const restore = (): void => {
+    const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(captured.scrollSurface));
+    if (scrollContainer) {
+      scrollContainer.scrollTop = scrollTop;
+    }
+  };
+  restore();
+  window.requestAnimationFrame(() => {
+    restore();
+    window.requestAnimationFrame(restore);
+  });
+}
+
+export function hasEditorViewportMovedSinceActivation(
+  app: HTMLElement,
+  captured: NonNullable<typeof state.pendingEditorDeactivation>
+): boolean {
+  const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(captured.scrollSurface));
+  const activationScrollTop = scrollContainer?.dataset.activeEditorActivationScrollTop;
+  if (!scrollContainer || activationScrollTop === undefined) {
+    return true;
+  }
+  return Math.abs(scrollContainer.scrollTop - Number(activationScrollTop)) > 0.5;
+}
+
+export function restoreEditorActivationScrollTop(
+  app: HTMLElement,
+  captured: NonNullable<typeof state.pendingEditorDeactivation>,
+  returnScroll: PaneScrollState
+): void {
+  const scrollTop = captured.scrollSurface === 'editor'
+    ? returnScroll.editorTop
+    : captured.scrollSurface === 'editor-sidebar'
+      ? returnScroll.editorSidebarTop
+      : captured.scrollSurface === 'reader'
+        ? returnScroll.readerTop
+        : returnScroll.viewerSidebarTop;
+  const restore = (): void => {
+    const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(captured.scrollSurface));
+    if (scrollContainer) {
+      scrollContainer.scrollTop = scrollTop;
+    }
+  };
+  restore();
+  window.requestAnimationFrame(() => {
+    restore();
+    window.requestAnimationFrame(restore);
+  });
+}
+
 function applyPendingEditorDeactivationScroll(
   app: HTMLElement,
   pending: NonNullable<typeof state.pendingEditorDeactivation>
@@ -198,13 +351,17 @@ function applyPendingEditorDeactivationScroll(
     return;
   }
   if (typeof pending.resolvedScrollTop !== 'number') {
-    const passiveBlock = app.querySelector<HTMLElement>(
+    const passiveBlock = scrollContainer.querySelector<HTMLElement>(
       `.editor-block-passive[data-section-key="${CSS.escape(pending.sectionKey)}"][data-block-id="${CSS.escape(pending.blockId)}"]`
     );
     const passiveAnchorTop = passiveBlock
       ? pending.anchorKind === 'text'
         ? getFirstRenderedTextTop(passiveBlock.querySelector<HTMLElement>('.reader-block'))
-        : passiveBlock.getBoundingClientRect().top
+        : pending.anchorKind === 'element' && pending.elementAnchor
+          ? passiveBlock.querySelector<HTMLElement>(
+            `[data-editor-deactivation-anchor="${CSS.escape(pending.elementAnchor)}"]`
+          )?.getBoundingClientRect().top ?? null
+          : passiveBlock.getBoundingClientRect().top
       : null;
     const anchorAdjustment = pending.scrollAdjustment === 0 && passiveAnchorTop !== null
       ? passiveAnchorTop - pending.anchorTop
@@ -268,17 +425,116 @@ function focusPendingEditorActivation(
     return;
   }
   const fallbackTarget = getPrimaryEditorActivationTarget(block) ?? block;
-  const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
+  const preferredTarget = resolvePreferredEditorActivationTarget(block, pending);
+  const anchorTarget = preferredTarget ?? fallbackTarget;
+  const scrollContainer = block.closest<HTMLElement>(
+    '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
+  );
   if (typeof pending.anchorTop === 'number') {
-    const editableTop = fallbackTarget.getBoundingClientRect().top;
-    const pushedDownBy = editableTop - pending.anchorTop;
-    if (editorTree && pushedDownBy > 0) {
-      editorTree.scrollTop += pushedDownBy;
+    const editableTop = anchorTarget.isContentEditable
+      ? getFirstRenderedTextTop(anchorTarget) ?? anchorTarget.getBoundingClientRect().top
+      : anchorTarget.getBoundingClientRect().top;
+    const displacement = editableTop - pending.anchorTop;
+    if (scrollContainer && Math.abs(displacement) > 0.5) {
+      scrollContainer.scrollTop += displacement;
     }
   }
-  const target = getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
+  const target = preferredTarget ?? getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
   focusEditorActivationTarget(target, pending.clientX, pending.clientY);
+  restorePreferredEditorSelection(target, pending.preferredEditorTarget);
+  recordEditorActivationScrollTop(app, pending);
   state.pendingEditorActivation = null;
+}
+
+function recordEditorActivationScrollTop(
+  app: HTMLElement,
+  pending: NonNullable<typeof state.pendingEditorActivation>
+): void {
+  const block = app.querySelector<HTMLElement>(
+    `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(pending.blockId)}"]`
+  );
+  const scrollContainer = block?.closest<HTMLElement>(
+    '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
+  );
+  if (scrollContainer) {
+    scrollContainer.dataset.activeEditorActivationScrollTop = String(scrollContainer.scrollTop);
+  }
+}
+
+function resolvePreferredEditorActivationTarget(
+  block: HTMLElement,
+  pending: NonNullable<typeof state.pendingEditorActivation>
+): HTMLElement | null {
+  const preferred = pending.preferredEditorTarget;
+  if (!preferred) {
+    return null;
+  }
+  if (preferred.field === 'table-cell'
+    && typeof preferred.rowIndex === 'number'
+    && typeof preferred.cellIndex === 'number') {
+    return block.querySelector<HTMLElement>(
+      `[data-field="table-cell"][data-row-index="${preferred.rowIndex}"][data-cell-index="${preferred.cellIndex}"]`
+    );
+  }
+  if (preferred.field === 'table-column' && typeof preferred.columnIndex === 'number') {
+    return block.querySelector<HTMLElement>(
+      `[data-field="table-column"][data-column-index="${preferred.columnIndex}"]`
+    );
+  }
+  const matches = block.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(preferred.field)}"]`);
+  return matches.item(preferred.fieldIndex ?? 0);
+}
+
+function restorePreferredEditorSelection(
+  target: HTMLElement,
+  preferred: NonNullable<typeof state.pendingEditorActivation>['preferredEditorTarget'] | undefined
+): void {
+  if (!preferred) {
+    return;
+  }
+  if (preferred.controlSelection && (target instanceof HTMLTextAreaElement || isTextSelectionInput(target))) {
+    const length = target.value.length;
+    target.setSelectionRange(
+      Math.min(preferred.controlSelection.start, length),
+      Math.min(preferred.controlSelection.end, length),
+      preferred.controlSelection.direction
+    );
+    return;
+  }
+  if (!preferred.editableSelection || !target.isContentEditable) {
+    return;
+  }
+  const anchor = resolveNodePath(target, preferred.editableSelection.anchorPath);
+  const focus = resolveNodePath(target, preferred.editableSelection.focusPath);
+  const selection = window.getSelection();
+  if (!anchor || !focus || !selection) {
+    return;
+  }
+  selection.setBaseAndExtent(
+    anchor,
+    clampNodeOffset(anchor, preferred.editableSelection.anchorOffset),
+    focus,
+    clampNodeOffset(focus, preferred.editableSelection.focusOffset)
+  );
+}
+
+function resolveNodePath(root: Node, path: number[]): Node | null {
+  let current: Node = root;
+  for (const index of path) {
+    const child = current.childNodes.item(index);
+    if (!child) {
+      return null;
+    }
+    current = child;
+  }
+  return current;
+}
+
+function clampNodeOffset(node: Node, offset: number): number {
+  const length = node.nodeType === Node.TEXT_NODE
+    ? node.textContent?.length ?? 0
+    : node.childNodes.length;
+  return Math.max(0, Math.min(offset, length));
 }
 
 function getEditorActivationTarget(
@@ -367,7 +623,7 @@ function isTextSelectionInput(target: HTMLElement): target is HTMLInputElement {
   if (!(target instanceof HTMLInputElement)) {
     return false;
   }
-  return ['email', 'number', 'password', 'search', 'tel', 'text', 'url'].includes(target.type);
+  return ['password', 'search', 'tel', 'text', 'url'].includes(target.type);
 }
 
 function getCaretRangeFromPoint(clientX: number, clientY: number): Range | null {

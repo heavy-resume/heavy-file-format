@@ -1,0 +1,102 @@
+/* Scoped adaptation of highlight.js' GitHub theme. */
+.hvy-document pre code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1em;
+}
+
+.hvy-document code.hljs {
+  padding: 3px 5px;
+}
+
+.hvy-document .hljs {
+  color: var(--hvy-code-text);
+  background: var(--hvy-code-bg);
+}
+
+.hvy-document .hljs-doctag,
+.hvy-document .hljs-keyword,
+.hvy-document .hljs-meta .hljs-keyword,
+.hvy-document .hljs-template-tag,
+.hvy-document .hljs-template-variable,
+.hvy-document .hljs-type,
+.hvy-document .hljs-variable.language_ {
+  color: var(--hvy-code-keyword);
+}
+
+.hvy-document .hljs-title,
+.hvy-document .hljs-title.class_,
+.hvy-document .hljs-title.class_.inherited__,
+.hvy-document .hljs-title.function_ {
+  color: var(--hvy-code-function);
+}
+
+.hvy-document .hljs-attr,
+.hvy-document .hljs-attribute,
+.hvy-document .hljs-literal,
+.hvy-document .hljs-meta,
+.hvy-document .hljs-number,
+.hvy-document .hljs-operator,
+.hvy-document .hljs-variable,
+.hvy-document .hljs-selector-attr,
+.hvy-document .hljs-selector-class,
+.hvy-document .hljs-selector-id {
+  color: var(--hvy-code-builtin);
+}
+
+.hvy-document .hljs-regexp,
+.hvy-document .hljs-string,
+.hvy-document .hljs-meta .hljs-string {
+  color: var(--hvy-code-string);
+}
+
+.hvy-document .hljs-built_in,
+.hvy-document .hljs-symbol {
+  color: var(--hvy-code-builtin);
+}
+
+.hvy-document .hljs-comment,
+.hvy-document .hljs-code,
+.hvy-document .hljs-formula {
+  color: var(--hvy-code-muted);
+}
+
+.hvy-document .hljs-name,
+.hvy-document .hljs-quote,
+.hvy-document .hljs-selector-tag,
+.hvy-document .hljs-selector-pseudo {
+  color: var(--hvy-code-string);
+}
+
+.hvy-document .hljs-subst {
+  color: var(--hvy-code-text);
+}
+
+.hvy-document .hljs-section {
+  color: var(--hvy-code-keyword);
+  font-weight: bold;
+}
+
+.hvy-document .hljs-bullet {
+  color: var(--hvy-warning-text);
+}
+
+.hvy-document .hljs-emphasis {
+  color: var(--hvy-code-text);
+  font-style: italic;
+}
+
+.hvy-document .hljs-strong {
+  color: var(--hvy-code-text);
+  font-weight: bold;
+}
+
+.hvy-document .hljs-addition {
+  color: var(--hvy-success);
+  background-color: var(--hvy-success-bg);
+}
+
+.hvy-document .hljs-deletion {
+  color: var(--hvy-danger);
+  background-color: color-mix(in srgb, var(--hvy-danger) 12%, var(--hvy-code-bg));
+}

@@ -5,7 +5,7 @@ import { logClickTrace } from '../click-trace';
 export function bindClickActions(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const actionButton = target.closest<HTMLElement>('[data-action]');
+    const actionButton = resolveAppActionTarget(target);
     logClickTrace(event, 'app-action-dispatch:enter', {
       action: actionButton?.dataset.action ?? null,
     });
@@ -56,6 +56,16 @@ export function bindClickActions(app: HTMLElement): void {
     });
     handler({ app, actionButton, event, sectionKey, blockId, target });
   });
+}
+
+export function resolveAppActionTarget(target: HTMLElement): HTMLElement | null {
+  const nearestAction = target.closest<HTMLElement>('[data-action]');
+  if (nearestAction?.dataset.action !== 'activate-block') {
+    return nearestAction;
+  }
+  const expandableStubToggle = target.closest<HTMLElement>('[data-action="toggle-editor-expandable"]');
+  return expandableStubToggle?.closest<HTMLElement>('.editor-block-passive[data-action="activate-block"]')
+    ?? nearestAction;
 }
 
 function requiresRemoveConfirmation(action: string): boolean {

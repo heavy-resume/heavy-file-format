@@ -222,6 +222,9 @@ function getComponentPasteTargetAttrsFromElement(target: HTMLElement): Record<st
     ...(pasteTarget.dataset.pasteParentBlockId ? { parentBlockId: pasteTarget.dataset.pasteParentBlockId } : {}),
     ...(pasteTarget.dataset.pasteTargetBlockId ? { targetBlockId: pasteTarget.dataset.pasteTargetBlockId } : {}),
     ...(pasteTarget.dataset.pasteTargetGridItemId ? { targetGridItemId: pasteTarget.dataset.pasteTargetGridItemId } : {}),
+    ...(pasteTarget.dataset.pasteSectionInsertion ? { sectionInsertion: pasteTarget.dataset.pasteSectionInsertion } : {}),
+    ...(pasteTarget.dataset.pasteSectionBeforeKind ? { sectionBeforeKind: pasteTarget.dataset.pasteSectionBeforeKind } : {}),
+    ...(pasteTarget.dataset.pasteSectionBeforeId ? { sectionBeforeId: pasteTarget.dataset.pasteSectionBeforeId } : {}),
   };
 }
 

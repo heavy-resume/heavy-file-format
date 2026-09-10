@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
+import { state, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
 import {
   encodeComponentListRuntimeView,
   getComponentListDisplayState,
@@ -11,8 +11,8 @@ import { findPdfStylePreset } from '../../pdf-style-presets';
 import { setSearchCategory, setSearchFilterEnabled } from '../../search/actions';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import type { SearchCategory } from '../../search/types';
+import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 
-const loadDbTableRuntime = () => import('../../plugins/db-table');
 
 export function bindChangeControls(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
@@ -67,41 +67,6 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'sqlite-cell' && target instanceof HTMLInputElement) {
-      const tableName = target.dataset.tableName ?? '';
-      const columnName = target.dataset.columnName ?? '';
-      const rowId = Number.parseInt(target.dataset.rowid ?? '', 10);
-      const isDraftRow = target.dataset.sqliteDraftRow === 'true';
-      if (tableName.length === 0 || columnName.length === 0) {
-        return;
-      }
-      if (isDraftRow) {
-        if (target.value.length === 0) {
-          return;
-        }
-        recordHistory(`sqlite-draft-row:${tableName}:${columnName}`);
-        void loadDbTableRuntime()
-          .then(({ materializeDbTableDraftRow }) => materializeDbTableDraftRow(tableName, columnName, target.value))
-          .then(() => {
-            getRenderApp()();
-          })
-          .catch((error) => {
-            console.error('[hvy:sqlite-plugin] draft row materialization failed', error);
-          });
-        return;
-      }
-      if (Number.isNaN(rowId)) {
-        return;
-      }
-      recordHistory(`sqlite-cell:${tableName}:${rowId}:${columnName}`);
-      void loadDbTableRuntime()
-        .then(({ updateDbTableCell }) => updateDbTableCell(tableName, rowId, columnName, target.value))
-        .catch((error) => {
-          console.error('[hvy:sqlite-plugin] cell update failed', error);
-        });
-      return;
-    }
-
     if (field === 'image-upload' && target instanceof HTMLInputElement) {
       const file = target.files?.[0];
       if (!file) return;
@@ -114,9 +79,27 @@ export function bindChangeControls(app: HTMLElement): void {
       if (!editor) {
         return;
       }
+      Array.from(target.options).forEach((option) => {
+        option.toggleAttribute('selected', option.selected);
+      });
       if (handleBlockFieldInput(editor)) {
-        syncReusableTemplateForBlock(editor.dataset.sectionKey ?? '', editor.dataset.blockId ?? '');
+        const sectionKey = editor.dataset.sectionKey ?? '';
+        const blockId = editor.dataset.blockId ?? '';
+        const sortValueKey = target.dataset.sortValueKey ?? '';
+        syncReusableTemplateForBlock(sectionKey, blockId);
         refreshReaderPanelsOutsideActiveEditor(editor);
+        runDocumentEditHooksAfterCommit(null, () => {
+          if (document.activeElement !== document.body) {
+            return;
+          }
+          const nextTarget = [...app.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]')]
+            .find((candidate) =>
+              candidate.dataset.sectionKey === sectionKey
+              && candidate.dataset.blockId === blockId
+              && candidate.dataset.sortValueKey === sortValueKey
+            );
+          nextTarget?.focus({ preventScroll: true });
+        });
       }
       return;
     }
@@ -204,51 +187,6 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'sqlite-column-name' && target instanceof HTMLInputElement) {
-      const tableName = target.dataset.tableName ?? '';
-      const oldColumnName = target.dataset.oldColumnName ?? '';
-      if (tableName.length === 0 || oldColumnName.length === 0) {
-        return;
-      }
-      const trimmed = target.value.trim();
-      if (trimmed.length === 0) {
-        const proceed = window.confirm(`Delete column "${oldColumnName}"?`);
-        if (!proceed) {
-          target.value = oldColumnName;
-          return;
-        }
-        recordHistory(`sqlite-column-drop:${tableName}:${oldColumnName}`);
-        void loadDbTableRuntime()
-          .then(({ dropDbTableColumn }) => dropDbTableColumn(tableName, oldColumnName))
-          .then(() => {
-            getRenderApp()();
-          })
-          .catch((error) => {
-            console.error('[hvy:sqlite-plugin] column drop failed', error);
-            target.value = oldColumnName;
-            window.alert(error instanceof Error ? error.message : 'Failed to delete column.');
-            getRenderApp()();
-          });
-        return;
-      }
-      recordHistory(`sqlite-column:${tableName}:${oldColumnName}`);
-      void loadDbTableRuntime()
-        .then(({ renameDbTableColumn }) => renameDbTableColumn(tableName, oldColumnName, target.value))
-        .then(() => {
-          const nextColumnName = target.value.trim();
-          if (nextColumnName.length === 0) {
-            return;
-          }
-          target.dataset.oldColumnName = nextColumnName;
-          void loadDbTableRuntime().then(({ syncSqliteColumnNameInDom }) => {
-            syncSqliteColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
-          });
-        })
-        .catch((error) => {
-          console.error('[hvy:sqlite-plugin] column rename failed', error);
-          getRenderApp()();
-        });
-    }
   });
 }
 

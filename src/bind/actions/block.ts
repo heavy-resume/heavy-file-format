@@ -1,10 +1,10 @@
 import { state, getRenderApp, getRefreshReaderPanels, REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
-import { findBlockContainerById, findBlockContainerInList, findSectionByKey } from '../../section-ops';
+import { findBlockContainerById, findBlockContainerInList, findSectionByKey, insertBlockAtSectionInsertionBoundary, removeBlockFromSectionRenderSequence } from '../../section-ops';
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
-import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
+import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageAltTextModal, openImageAttachmentPickerModal, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
@@ -20,23 +20,24 @@ import {
   prepareBlockForDocumentPasteWithResult,
 } from '../../editor-clipboard';
 import { showTransientNotice } from '../../transient-notice';
-import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
 import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
-import { routeNextUndoToDocument } from '../../edit-command-routing';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { normalizeTextCaption, updateTextCaptionAlign } from '../../caption';
-import { decryptComponentInDocument, encryptComponentInDocument } from '../../encrypted-components';
+import { decryptComponentInDocument } from '../../encrypted-components';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
+import { readSectionInsertionBoundary } from '../../editor/section-insertion';
 
 type ComponentPlacementContainer = 'section' | 'grid' | 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
 
-const addBlock: ActionHandler = ({ actionButton, section }) => {
+const addBlock: ActionHandler = ({ app, actionButton, section }) => {
+  const sectionBoundary = readSectionInsertionBoundary(actionButton);
   const insertPlacement = actionButton.dataset.insertPlacement === 'before' || actionButton.dataset.insertPlacement === 'after'
     ? actionButton.dataset.insertPlacement
     : null;
   const targetBlockId = actionButton.dataset.targetBlockId ?? '';
-  if (!section || (section.lock && (!insertPlacement || !targetBlockId))) {
+  if (!section || (sectionBoundary && section.lock) || (section.lock && (!insertPlacement || !targetBlockId))) {
     return;
   }
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
@@ -46,15 +47,30 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   if (openReusableTemplateModalIfNeeded(component, { kind: 'section', sectionKey: section.key })) {
     return;
   }
+  const scrollBeforeAdd = typeof app?.querySelector === 'function'
+    ? capturePaneScroll(state.paneScroll, app)
+    : state.paneScroll;
+  const renderAddedBlock = (): void => {
+    state.pendingPaneScrollRestore = scrollBeforeAdd;
+    getRenderApp()();
+  };
   recordHistory();
   const newBlock = createEmptyBlock(component);
   if (component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
+  if (sectionBoundary) {
+    if (insertBlockAtSectionInsertionBoundary(section, newBlock, sectionBoundary)) {
+      setActiveEditorBlock(section.key, newBlock.id);
+      markActiveEditorBlockAsNew(newBlock.id);
+      renderAddedBlock();
+    }
+    return;
+  }
   if (insertPlacement && targetBlockId && insertBlockRelativeToTarget(section.blocks, targetBlockId, newBlock, insertPlacement, !section.lock)) {
     setActiveEditorBlock(section.key, newBlock.id);
     markActiveEditorBlockAsNew(newBlock.id);
-    getRenderApp()();
+    renderAddedBlock();
     return;
   }
   if (insertPlacement || targetBlockId) {
@@ -71,7 +87,7 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   section.blocks.push(newBlock);
   setActiveEditorBlock(section.key, newBlock.id);
   markActiveEditorBlockAsNew(newBlock.id);
-  getRenderApp()();
+  renderAddedBlock();
 };
 
 const addEmptySectionHeading: ActionHandler = ({ section }) => {
@@ -109,11 +125,23 @@ const imagePreset: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   applyImagePreset(sectionKey, blockId, preset);
 };
 
-const imageUseExisting: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
+const imageUseExisting: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
+  const attachmentModal = actionButton.closest<HTMLElement>('.image-attachment-modal-root');
   useExistingImageAttachment(sectionKey, blockId, actionButton.dataset.imageFilename ?? '');
+  attachmentModal?.remove();
+  app.querySelector<HTMLButtonElement>(
+    `[data-action="open-image-attachment-modal"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+  )?.focus();
+};
+
+const openImageAttachmentModal: ActionHandler = ({ app, sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  openImageAttachmentPickerModal(app, sectionKey, blockId);
 };
 
 const imageDeleteUnused: ActionHandler = ({ actionButton }) => {
@@ -148,6 +176,27 @@ const openImageCaptionModal: ActionHandler = ({ sectionKey, blockId }) => {
     title: 'Image Caption',
   };
   getRenderApp()();
+};
+
+const openImageAltModal: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
+  if (blockId) {
+    openImageAltTextModal(app, sectionKey, blockId, actionButton);
+  }
+};
+
+const downloadImage: ActionHandler = ({ actionButton }) => {
+  const url = actionButton.dataset.imageDownloadUrl ?? '';
+  const filename = actionButton.dataset.imageDownloadFilename ?? '';
+  if (!url || !filename) {
+    return;
+  }
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.hidden = true;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
 };
 
 const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
@@ -188,7 +237,7 @@ const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }
     }
   }
   actionButton
-    .closest('.align-buttons')
+    .closest('.rich-toolbar')
     ?.querySelectorAll<HTMLButtonElement>('[data-align-value]')
     .forEach((button) => {
       const selected = button.dataset.alignValue === align;
@@ -258,8 +307,27 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
   }
   recordHistory();
   const scrollBeforeDelete = capturePaneScroll(state.paneScroll, app);
-  const sqliteRowModal = state.sqliteRowComponentModal;
-  if (sqliteRowModal?.sectionKey === sectionKey) {
+  if (reusableName && state.reusableDefinitionEditModal?.kind === 'component') {
+    const modal = state.reusableDefinitionEditModal;
+    const definition = getComponentDefsFromMeta(state.document.meta)[modal.index];
+    const flavor = modal.activeFlavorIndex == null ? null : definition?.flavors?.[modal.activeFlavorIndex] ?? null;
+    const template = flavor?.template ?? definition?.template;
+    if (definition && template?.id === blockId) {
+      if (flavor) {
+        flavor.template = undefined;
+        flavor.schema = undefined;
+      } else {
+        definition.template = undefined;
+        definition.schema = undefined;
+        definition.baseType = 'text';
+      }
+      clearActiveEditorBlock(blockId);
+      getRenderApp()();
+      return;
+    }
+  }
+  const rowComponentModal = state.dbTableRowComponentModal;
+  if (rowComponentModal?.sectionKey === sectionKey) {
     const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey
       ? (state.activeEditorBlock?.blockId ?? null)
       : null;
@@ -269,9 +337,9 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
       (removedBlock !== null && findBlockInList([removedBlock], activeBlockId) !== null)
     );
     const parentId = activeIsAffected
-      ? findBlockContainerInList(sqliteRowModal.blocks, blockId, null)?.ownerBlockId ?? null
+      ? findBlockContainerInList(rowComponentModal.blocks, blockId, null)?.ownerBlockId ?? null
       : null;
-    removeBlockFromList(sqliteRowModal.blocks, blockId);
+    removeBlockFromList(rowComponentModal.blocks, blockId);
     if (activeIsAffected && activeBlockId) {
       clearActiveEditorBlock(activeBlockId);
     }
@@ -279,13 +347,12 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
       setActiveEditorBlock(sectionKey, parentId);
       state.pendingEditorActivation = null;
     }
-    state.sqliteRowComponentModal = {
-      ...sqliteRowModal,
-      blocks: [...sqliteRowModal.blocks],
+    state.dbTableRowComponentModal = {
+      ...rowComponentModal,
+      blocks: [...rowComponentModal.blocks],
       error: null,
     };
     state.pendingPaneScrollRestore = scrollBeforeDelete;
-    routeNextUndoToDocument();
     getRenderApp()();
     return;
   }
@@ -318,7 +385,6 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
     state.pendingEditorActivation = null;
   }
   state.pendingPaneScrollRestore = scrollBeforeDelete;
-  routeNextUndoToDocument();
   getRenderApp()();
 };
 
@@ -331,9 +397,9 @@ const moveBlock = (offset: -1 | 1): ActionHandler => ({ sectionKey, blockId }) =
     return;
   }
   recordHistory();
-  const sqliteRowModal = state.sqliteRowComponentModal;
-  if (sqliteRowModal?.sectionKey === sectionKey) {
-    const location = findBlockContainerInList(sqliteRowModal.blocks, blockId, null);
+  const rowComponentModal = state.dbTableRowComponentModal;
+  if (rowComponentModal?.sectionKey === sectionKey) {
+    const location = findBlockContainerInList(rowComponentModal.blocks, blockId, null);
     if (!location) {
       return;
     }
@@ -346,9 +412,9 @@ const moveBlock = (offset: -1 | 1): ActionHandler => ({ sectionKey, blockId }) =
       return;
     }
     location.container.splice(targetIndex, 0, movedBlock);
-    state.sqliteRowComponentModal = {
-      ...sqliteRowModal,
-      blocks: [...sqliteRowModal.blocks],
+    state.dbTableRowComponentModal = {
+      ...rowComponentModal,
+      blocks: [...rowComponentModal.blocks],
     };
     getRenderApp()();
     return;
@@ -371,23 +437,16 @@ const openComponentMeta: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
-const encryptComponent: ActionHandler = ({ sectionKey, blockId }) => {
+const openEncryptionModal: ActionHandler = ({ sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
-  void (async () => {
-    try {
-      recordHistory(`component:${blockId}:encrypt`);
-      if (!state.encryption) {
-        state.encryption = { keyring: {} };
-      }
-      const result = await encryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
-      showTransientNotice(`Encrypted component with key ${result.keyId}.`);
-      getRenderApp()();
-    } catch (error) {
-      showTransientNotice(error instanceof Error ? error.message : 'Component could not be encrypted.');
-    }
-  })();
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return;
+  }
+  state.encryptionModal = { sectionKey, blockId };
+  getRenderApp()();
 };
 
 const decryptComponent: ActionHandler = ({ sectionKey, blockId }) => {
@@ -498,6 +557,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
   const targetPlacement = actionButton.dataset.placement === 'before' || actionButton.dataset.placement === 'after'
     ? actionButton.dataset.placement
     : 'end';
+  const sectionBoundary = placementContainer === 'section' ? readSectionInsertionBoundary(actionButton) : null;
   const gridBlock = placementContainer === 'grid' && parentBlockId ? findBlockByIds(sectionKey, parentBlockId) : null;
   if (placementContainer === 'grid' && (!gridBlock || gridBlock.schema.component !== 'grid')) {
     state.componentPlacement = null;
@@ -521,6 +581,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     placement.sectionKey === sectionKey &&
     (
       targetBlockId === placement.blockId ||
+      (sectionBoundary?.beforeKind === 'block' && sectionBoundary.beforeId === placement.blockId) ||
       parentBlockId === placement.blockId ||
       (placementContainer === 'grid' && getGridItemBlockId(sectionKey, parentBlockId, targetGridItemId) === placement.blockId) ||
       (parentBlockId.length > 0 && blockContainsBlockId(sourceBlock, parentBlockId))
@@ -603,7 +664,13 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     recordPlacementHistory();
   }
 
-  if (placementContainer === 'grid') {
+  if (placementContainer === 'section' && sectionBoundary) {
+    if (!insertBlockAtSectionInsertionBoundary(targetSection, placedBlock, sectionBoundary)) {
+      state.componentPlacement = null;
+      getRenderApp()();
+      return;
+    }
+  } else if (placementContainer === 'grid') {
     if (!gridBlock) {
       return;
     }
@@ -630,7 +697,6 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
   if (placementMode === 'copy') {
     markActiveEditorBlockAsNew(activePlacedBlockId);
   }
-  routeNextUndoToDocument();
   getRenderApp()();
 };
 
@@ -664,11 +730,14 @@ export const blockActions: Record<string, ActionHandler> = {
   'add-empty-section-heading': addEmptySectionHeading,
   'toggle-schema': toggleSchema,
   'image-preset': imagePreset,
+  'open-image-attachment-modal': openImageAttachmentModal,
   'image-use-existing': imageUseExisting,
   'image-delete-unused': imageDeleteUnused,
   'image-delete-current': imageDeleteCurrent,
   'image-take-photo': imageTakePhoto,
   'open-image-caption-modal': openImageCaptionModal,
+  'open-image-alt-modal': openImageAltModal,
+  'download-image': downloadImage,
   'set-block-align': setBlockAlign,
   'set-text-fill-in': setTextFillIn,
   'remove-text-fill-in': removeTextFillIn,
@@ -679,7 +748,7 @@ export const blockActions: Record<string, ActionHandler> = {
   'move-block-down': moveBlock(1),
   'focus-modal': focusModal,
   'open-component-meta': openComponentMeta,
-  'encrypt-component': encryptComponent,
+  'open-encryption-modal': openEncryptionModal,
   'decrypt-component': decryptComponent,
   'copy-component': copyComponent,
   'copy-expandable-stub-pane': copyExpandablePane('stub'),
@@ -843,7 +912,9 @@ function getGridItemBlockId(sectionKey: string, gridBlockId: string, gridItemId:
 
 function removeBlockForPlacement(sectionKey: string, blockId: string): boolean {
   const section = findSectionByKey(state.document.sections, sectionKey);
-  return section ? removeBlockForPlacementFromList(section.blocks, blockId) : false;
+  if (!section) return false;
+  return removeBlockFromSectionRenderSequence(section, blockId)
+    || removeBlockForPlacementFromList(section.blocks, blockId);
 }
 
 function removeBlockForPlacementFromList(blocks: VisualBlock[], blockId: string): boolean {

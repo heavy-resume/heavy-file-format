@@ -1,19 +1,23 @@
 import './default-theme.css';
+import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
 import './style.css';
+import './layout/reference-shell.css';
+import './layout/reference-application-controls.css';
 import './state-tracker.css';
-import 'highlight.js/styles/github.css';
+import './highlight-theme.css';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
+import type { SectionLocation } from './editor/types';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { getTemplateFields, renderTemplatePanel } from './editor/template';
 import { renderCliView } from './cli-ui/render';
 import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
-import type { ReaderPanelRefreshOptions } from './state';
+import type { EditorBlockRefreshOptions, ReaderPanelRefreshOptions } from './state';
 import type { AppState, ReaderViewFilter } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
@@ -23,15 +27,15 @@ import { renderOption } from './utils';
 import { resolveBaseComponent } from './component-defs';
 import { ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelpers, findBlockByIds } from './block-ops';
-import { commitHistorySnapshot } from './history';
+import { commitHistorySnapshot, recordHistory } from './history';
 import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
-import { bindChatThreadUi, captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
+import { refreshRenderedChatSurface } from './chat/chat-thread-ui';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
-import { loadSessionState, saveSessionState } from './state-persistence';
+import { loadSessionStateAsync, saveSessionState } from './state-persistence';
 import { setHostPlugins } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
@@ -40,6 +44,7 @@ import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators
 import { skillRatingExamplePlugin } from '../examples/plugins/skill-rating';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
+import { renderPdfPreviewPlaceholder, syncActivePdfPreview } from './pdf-preview/pdf-preview-controller';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { centerSearchResultLenses } from './search/render';
 import { refreshSearchSurface, renderSearchCollapsedSurface, renderSearchFloatingSurface } from './search/surface-refresh';
@@ -50,21 +55,28 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
-import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
+import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
+import { createEditorBlockElement, createEditorSectionElement, insertEditorTopLevelSectionDom, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
-import { virtualizeRenderedSections } from './section-virtualizer';
+import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { renderNewDocumentModal } from './new-document-modal';
 import { normalizePdfStylePresets } from './pdf-style-presets';
 import { initializeReferenceDocumentDirtyTracking, renderReferenceDocumentDirtyIndicator } from './reference-document-dirty';
+import { initializeSessionAttachmentRecovery } from './session-attachment-tail-storage';
+import { decryptEncryptedComponents } from './encrypted-components';
+import { createReferenceEncryptionOptions } from './reference-encryption-keyring';
+import { registerHvyWebMcpTools } from './webmcp';
+import { notifyDocumentMayHaveChanged } from './document-change';
+import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
   throw new Error('App container not found.');
 }
 const app = appRoot;
-app.classList.add('hvy-document');
+app.classList.add('hvy-reference-app', 'hvy-document');
 setThemeRoot(app);
 setReferenceAppConfig({
   semanticFilterProvider: window.HVY_REFERENCE_CONFIG?.semanticFilterProvider ?? chatSemanticFilterProvider,
@@ -75,9 +87,12 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'defaultExampleBtn', label: 'Default Example', selectedExample: 'default' },
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
   { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
+  { id: 'surveyExampleBtn', label: 'Survey Example', selectedExample: 'survey' },
   { id: 'videoDemoExampleBtn', label: 'Video Demo', selectedExample: 'video-demo' },
+  { id: 'asteroidsExampleBtn', label: 'Asteroids', selectedExample: 'asteroids' },
   { id: 'pluginSortValuesExampleBtn', label: 'Plugin Sort Values', selectedExample: 'plugin-sort-values' },
   { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
+  { id: 'sepaRecreationExampleBtn', label: 'SEPA Recreation', selectedExample: 'sepa-recreation' },
   { id: 'meetingMinutesTemplateBtn', label: 'Meeting Minutes Template', selectedExample: 'meeting-minutes-template' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
@@ -99,7 +114,7 @@ async function createDefaultDocument() {
   return deserializeDocumentBytes(bytes, '.hvy');
 }
 
-function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>): AppState {
+function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>, encryption: NonNullable<AppState['encryption']>): AppState {
   return {
     document,
     filename: 'example.hvy',
@@ -112,6 +127,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     chatSearchCache: null,
     embeddingProvider: createProxyEmbeddingProvider(),
     crossDocumentLinksEnabled: false,
+    encryption,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -185,7 +201,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     future: [],
     isRestoring: false,
     componentMetaModal: null,
-    sqliteRowComponentModal: null,
+    encryptionModal: null,
+    dbTableRowComponentModal: null,
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
@@ -197,6 +214,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    searchRevealedAncestors: {},
     readerContainerState: {},
     readerDeferredSectionBodies: {},
     readerView: {},
@@ -214,7 +232,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
   };
 }
 
-function applySessionState(initial: AppState, savedSession: ReturnType<typeof loadSessionState>): AppState {
+function applySessionState(initial: AppState, savedSession: Awaited<ReturnType<typeof loadSessionStateAsync>>): AppState {
   if (!savedSession) {
     return initial;
   }
@@ -233,18 +251,20 @@ function applySessionState(initial: AppState, savedSession: ReturnType<typeof lo
       ...initial.chat,
       settings: savedSession.chat.settings,
       draft: savedSession.chat.draft,
+      attachments: savedSession.chat.attachments,
+      pendingAttachmentIds: savedSession.chat.pendingAttachmentIds,
       messages: savedSession.chat.messages,
       panelOpen: savedSession.chat.panelOpen,
     },
     search: savedSession.search.filterEnabled
       ? {
-          ...savedSession.search,
-          filterEnabled: false,
-          results: [],
-          navigationResultIds: [],
-          activeResultId: null,
-          isLoading: Boolean(savedSession.search.submittedQuery.trim()),
-        }
+        ...savedSession.search,
+        filterEnabled: false,
+        results: [],
+        navigationResultIds: [],
+        activeResultId: null,
+        isLoading: Boolean(savedSession.search.submittedQuery.trim()),
+      }
       : savedSession.search,
     cliDraft: savedSession.cli.draft,
     cliSession: savedSession.cli.session,
@@ -270,11 +290,11 @@ function renderContextMenu(): string {
   const popupStyle = `left: ${menu.x}px; top: ${menu.y}px;`;
   const backdropStyle = menu.targetRect
     ? [
-        `--hvy-context-target-left: ${menu.targetRect.left}px`,
-        `--hvy-context-target-top: ${menu.targetRect.top}px`,
-        `--hvy-context-target-width: ${menu.targetRect.width}px`,
-        `--hvy-context-target-height: ${menu.targetRect.height}px`,
-      ].join('; ')
+      `--hvy-context-target-left: ${menu.targetRect.left}px`,
+      `--hvy-context-target-top: ${menu.targetRect.top}px`,
+      `--hvy-context-target-width: ${menu.targetRect.width}px`,
+      `--hvy-context-target-height: ${menu.targetRect.height}px`,
+    ].join('; ')
     : '';
   const target = menu.blockId
     ? document.querySelector<HTMLElement>(`.viewer-shell .reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
@@ -376,19 +396,17 @@ function renderDescriptionPopulateModal(): string {
           <strong>${escapeHtml(progressText)}</strong>
           ${progress.current ? `<span>${escapeHtml(progress.current)}</span>` : ''}
         </div>
-        ${
-          progress.lastGenerated
-            ? `<div class="description-progress-last">
+        ${progress.lastGenerated
+      ? `<div class="description-progress-last">
                  <span>Last generated</span>
                  <strong>${escapeHtml(progress.lastGenerated)}</strong>
                </div>`
-            : ''
-        }
-        ${
-          progress.skippedLeaves > 0
-            ? `<p class="muted">${escapeHtml(`${progress.skippedLeaves} component${progress.skippedLeaves === 1 ? '' : 's'} skipped to avoid duplicating content or layout wrappers.`)}</p>`
-            : ''
-        }
+      : ''
+    }
+        ${progress.skippedLeaves > 0
+      ? `<p class="muted">${escapeHtml(`${progress.skippedLeaves} component${progress.skippedLeaves === 1 ? '' : 's'} skipped to avoid duplicating content or layout wrappers.`)}</p>`
+      : ''
+    }
       </section>
     </div>
   `;
@@ -416,6 +434,9 @@ function renderDocumentComponentOptions(selected: string): string {
 
 editorRenderer = createEditorRenderer(
   {
+    get document() {
+      return state.document;
+    },
     get documentMeta() {
       return state.document.meta as Record<string, unknown>;
     },
@@ -432,7 +453,7 @@ editorRenderer = createEditorRenderer(
       return state.document.sections;
     },
     get showAdvancedEditor() {
-      const rowModal = state.sqliteRowComponentModal;
+      const rowModal = state.dbTableRowComponentModal;
       if (rowModal && !rowModal.readOnly) {
         if (rowModal.mode === 'advanced') {
           return true;
@@ -448,6 +469,9 @@ editorRenderer = createEditorRenderer(
     },
     get activeEditorBlock() {
       return state.activeEditorBlock;
+    },
+    get activeEditorBlockSnapshots() {
+      return state.activeEditorBlockSnapshots;
     },
     get aiEditorHostBlock() {
       return state.aiEditorHostBlock;
@@ -467,6 +491,9 @@ editorRenderer = createEditorRenderer(
     get readerExpandableState() {
       return state.readerExpandableState;
     },
+    get searchRevealedAncestors() {
+      return state.searchRevealedAncestors;
+    },
     get editorSidebarHelpDismissed() {
       return state.editorSidebarHelpDismissed;
     },
@@ -483,7 +510,7 @@ editorRenderer = createEditorRenderer(
       return state.editorMode === 'mobile-adjustment';
     },
     get editingReusableDefinition() {
-      return state.reusableDefinitionEditModal?.mode === 'edit';
+      return Boolean(state.reusableDefinitionEditModal);
     },
     get openTemplateDefinitionKeys() {
       return state.openTemplateDefinitionKeys;
@@ -571,8 +598,8 @@ readerRenderer = createReaderRenderer(
     get captionTextModal() {
       return state.captionTextModal;
     },
-    get sqliteRowComponentModal() {
-      return state.sqliteRowComponentModal;
+    get dbTableRowComponentModal() {
+      return state.dbTableRowComponentModal;
     },
     get dbTableQueryModal() {
       return state.dbTableQueryModal;
@@ -595,6 +622,9 @@ readerRenderer = createReaderRenderer(
     get componentMetaModal() {
       return state.componentMetaModal;
     },
+    get encryptionModal() {
+      return state.encryptionModal;
+    },
     get themeModalOpen() {
       return state.themeModalOpen;
     },
@@ -610,6 +640,9 @@ readerRenderer = createReaderRenderer(
     get currentView() {
       return state.currentView;
     },
+    get crossDocumentLinksEnabled() {
+      return state.crossDocumentLinksEnabled;
+    },
     get showAdvancedEditor() {
       return state.showAdvancedEditor;
     },
@@ -618,6 +651,9 @@ readerRenderer = createReaderRenderer(
     },
     get readerExpandableState() {
       return state.readerExpandableState;
+    },
+    get searchRevealedAncestors() {
+      return state.searchRevealedAncestors;
     },
     get readerContainerState() {
       return state.readerContainerState;
@@ -665,6 +701,7 @@ readerRenderer = createReaderRenderer(
 
 function renderApp(): void {
   const renderId = incrementRenderCount();
+  invalidateInlineAnswerGroupIndex();
   const startedAt = performance.now();
   let captureMs = 0;
   let themeMs = 0;
@@ -679,6 +716,8 @@ function renderApp(): void {
   let stepStartedAt = performance.now();
   const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
   const capturedScroll = captureRenderScroll(app, state.paneScroll, pendingPaneScrollRestore);
+  const editorViewportHeight = app.querySelector<HTMLElement>('#editorTree')?.clientHeight ?? window.innerHeight;
+  const readerViewportHeight = app.querySelector<HTMLElement>('#readerDocument')?.clientHeight ?? window.innerHeight;
   state.paneScroll = capturedScroll.paneScroll;
   state.pendingPaneScrollRestore = null;
   captureMs = performance.now() - stepStartedAt;
@@ -695,9 +734,10 @@ function renderApp(): void {
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
-  const isDocumentMetaView = isEditorView && isAdvancedEditor && state.metaPanelOpen;
+  const isDocumentMetaView = isEditorView && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
   const pdfDocument = isPdfDocument(state.document);
+  const readerToolsAvailable = !(pdfDocument && isViewerView);
   const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();
   const readerSidebarSectionsHtml = pdfDocument ? '' : readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
@@ -724,18 +764,17 @@ function renderApp(): void {
           </div>
           ${canPreviewSurface ? renderPreviewControlStack() : '<div></div>'}
           ${renderWorkspaceRightControls({
-            isEditorView,
-            isMobileAdjustmentEditor,
-            isAdvancedEditor,
-            isRawEditor,
-          })}
+    isEditorView,
+    isMobileAdjustmentEditor,
+    isAdvancedEditor,
+    isRawEditor,
+  })}
         </div>
-        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
-          ${isCliEditor || isDocumentMetaView ? '' : renderSearchCollapsedSurface()}
-          ${
-            isEditorView
-              ? `${isRawEditor
-                  ? `<div class="raw-editor-shell">
+        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane${isCliEditor || isDocumentMetaView ? '' : ' workspace-content-pane'}`)}>
+          ${isCliEditor || isDocumentMetaView || !readerToolsAvailable ? '' : renderSearchCollapsedSurface()}
+          ${isEditorView
+      ? `${isRawEditor
+        ? `<div class="raw-editor-shell">
                        <div class="raw-editor-head">
                          <div>
                            <h3>Raw HVY</h3>
@@ -747,34 +786,33 @@ function renderApp(): void {
                          </div>
                        </div>
                        ${state.rawEditorError ? `<div class="raw-editor-error" role="alert">${escapeHtml(state.rawEditorError)}</div>` : ''}
-                       ${
-                         state.rawEditorDiagnostics.length > 0
-                           ? `<div class="raw-editor-diagnostics" role="status">
+                       ${state.rawEditorDiagnostics.length > 0
+          ? `<div class="raw-editor-diagnostics" role="status">
                                 ${state.rawEditorDiagnostics
-                                  .map(
-                                    (diagnostic) => `<article class="raw-editor-diagnostic raw-editor-diagnostic-${escapeAttr(diagnostic.severity)}">
+            .map(
+              (diagnostic) => `<article class="raw-editor-diagnostic raw-editor-diagnostic-${escapeAttr(diagnostic.severity)}">
                                         <strong>${escapeHtml(diagnostic.severity === 'error' ? 'Error' : 'Warning')}</strong>
                                         <p>${escapeHtml(diagnostic.message)}</p>
                                         <p class="raw-editor-diagnostic-hint">${escapeHtml(diagnostic.hint)}</p>
                                       </article>`
-                                  )
-                                  .join('')}
+            )
+            .join('')}
                               </div>`
-                           : ''
-                       }
+          : ''
+        }
                        <textarea id="rawEditor" class="raw-editor-textarea" data-field="raw-editor-text" spellcheck="false">${escapeHtml(state.rawEditorText)}</textarea>
                      </div>`
-                  : isCliEditor
-                  ? renderCliView({
-                      cwd: state.cliSession.cwd,
-                      draft: state.cliDraft,
-                      history: state.cliHistory,
-                      escapeHtml,
-                      escapeAttr,
-                    })
-                  : isDocumentMetaView
-                  ? `<div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div>`
-                  : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
+        : isCliEditor
+          ? renderCliView({
+            cwd: state.cliSession.cwd,
+            draft: state.cliDraft,
+            history: state.cliHistory,
+            escapeHtml,
+            escapeAttr,
+          })
+          : isDocumentMetaView
+            ? `<div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div>`
+            : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                   ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
@@ -785,12 +823,15 @@ function renderApp(): void {
                         ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
                       </div>
                     </aside>`}
-                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
+                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections, {
+                    scrollTop: capturedScroll.paneScroll.editorTop,
+                    viewportHeight: editorViewportHeight,
+                  })}</div>
                 </div>`}`
-              : `<div${renderResponsivePreviewFrameAttrs(
-                  `viewer-shell ${pdfDocument && !isAiView ? 'phvy-viewer-shell ' : ''}${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`,
-                  pdfDocument && !isAiView ? renderPdfDocumentViewerThemeStyle(state.document, escapeAttr) : ''
-                )}>
+      : `<div${renderResponsivePreviewFrameAttrs(
+        `viewer-shell ${pdfDocument && !isAiView ? 'phvy-viewer-shell ' : ''}${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`,
+        pdfDocument && !isAiView ? renderPdfDocumentViewerThemeStyle(state.document, escapeAttr) : ''
+      )}>
                    ${renderTransientNotice()}
                    ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                      <aside class="viewer-sidebar">
@@ -802,34 +843,35 @@ function renderApp(): void {
                          <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                        </div>
                      </aside>` : ''}
-                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'}${state.responsivePreview === 'full' ? '' : ' viewer-document-preview'}${state.responsivePreview === 'phone' || state.responsivePreview === 'tablet' ? ' viewer-document-compact' : ''} hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${pdfDocument && isViewerView ? renderPdfPreviewPlaceholder() : readerRenderer.renderReaderSections(state.document.sections, isViewerView ? {
+                     scrollTop: capturedScroll.paneScroll.readerTop,
+                     viewportHeight: readerViewportHeight,
+                   } : undefined)}</div>
                    ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}
-                   ${
-                     isAiView
-                       ? `${renderAiEditPopover(state, { escapeAttr, escapeHtml })}`
-                       : ''
-                   }
+                   ${isAiView
+        ? `${renderAiEditPopover(state, { escapeAttr, escapeHtml })}`
+        : ''
+      }
                  </div>`
-          }
-          ${
-            isCliEditor || isDocumentMetaView
-              ? ''
-              : `${renderChatPanel(
-                  state.chat,
-                  state.document,
-                  { escapeAttr, escapeHtml },
-                  isViewerView ? 'qa' : 'document-edit',
-                  state.currentView === 'editor' || state.currentView === 'ai',
-                  'reference',
-                  {
-                    chatContext: state.chatContext,
-                    embeddingAvailable: Boolean(state.embeddingProvider),
-                    canPersistEmbeddingCache: state.document.extension === '.hvy',
-                  }
-                )}
+    }
+          ${isCliEditor || isDocumentMetaView || !readerToolsAvailable
+      ? ''
+      : `${renderChatPanel(
+        state.chat,
+        state.document,
+        { escapeAttr, escapeHtml },
+        isViewerView ? 'qa' : 'document-edit',
+        state.currentView === 'editor' || state.currentView === 'ai',
+        'reference',
+        {
+          chatContext: state.chatContext,
+          embeddingAvailable: Boolean(state.embeddingProvider),
+          canPersistEmbeddingCache: state.document.extension === '.hvy',
+        }
+      )}
                 ${renderSearchFloatingSurface()}`
-          }
+    }
         </div>
       </section>
 
@@ -845,6 +887,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   app.innerHTML = markup;
+  syncActivePdfPreview(app, state.document, pdfDocument && isViewerView);
   domMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -860,6 +903,8 @@ function renderApp(): void {
   scheduleReaderHighlightGlow(app);
   virtualizeRenderedSections({
     root: app,
+    materializeSection: materializeVirtualSection,
+    onSectionMeasured: recordVirtualSectionHeight,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
@@ -907,25 +952,32 @@ function renderTopbar(): string {
   return `
     <header class="topbar">
       <div class="title-block">
-        <h1>HVY Reference Implementation</h1>
-        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
+        <h1 class="reference-title">HVY Reference Implementation</h1>
+        <p class="reference-subtitle">Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
+      </div>
+      <div class="reference-rerender-controls" role="group" aria-label="Reference rerender diagnostics">
+        <span class="reference-rerender-label">Rerender</span>
+        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-search">Search</button>
+        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-reader">Reader</button>
+        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-app">App</button>
+        <button type="button" class="hvy-button reference-rerender-button reference-hot-reload-button" data-action="reference-hot-reload" title="Save the current session and reload the page, matching Vite's full-page hot reload lifecycle">Hot Reload</button>
       </div>
       <div class="toolbar">
         <div class="toolbar-section toolbar-section-documents">
-          <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
+          <button id="newBtn" type="button" class="toolbar-primary-button toolbar-document-action">New</button>
           ${renderDocumentMenu()}
         </div>
         <div class="toolbar-section toolbar-section-files">
-          <button id="openLocalFileBtn" type="button" class="hvy-button">Open Local</button>
-          <label class="file-picker">
+          <button id="openLocalFileBtn" type="button" class="hvy-button toolbar-file-action">Open Local</button>
+          <label class="file-picker toolbar-file-action">
             Select File
-            <input id="fileInput" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
+            <input id="fileInput" class="file-picker-input" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
           </label>
-          <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
+          <input id="downloadName" class="toolbar-filename-input" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
           ${renderReferenceDocumentDirtyIndicator()}
-          <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
-          <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
-          <button id="exportPdfBtn" type="button" class="hvy-button">Export PDF</button>
+          <button id="saveFileBtn" type="button" class="hvy-button toolbar-file-action">Save File</button>
+          <button id="downloadBtn" type="button" class="hvy-button toolbar-file-action">Download File</button>
+          <button id="exportPdfBtn" type="button" class="hvy-button toolbar-file-action">Export PDF</button>
         </div>
       </div>
     </header>
@@ -933,17 +985,7 @@ function renderTopbar(): string {
 }
 
 function refreshChatSurface(): boolean {
-  const dock = app.querySelector<HTMLElement>('.chat-dock');
-  const backdrop = app.querySelector<HTMLElement>('.chat-backdrop');
-  const searchSurface = app.querySelector<HTMLElement>('[data-search-surface="floating"]');
-  const host = dock?.parentElement ?? searchSurface?.parentElement;
-  if (!host) {
-    return false;
-  }
-  const capturedScroll = captureChatThreadScroll(app);
-
-  const template = document.createElement('template');
-  template.innerHTML = renderChatPanel(
+  return refreshRenderedChatSurface(app, renderChatPanel(
     state.chat,
     state.document,
     { escapeAttr, escapeHtml },
@@ -955,32 +997,7 @@ function refreshChatSurface(): boolean {
       embeddingAvailable: Boolean(state.embeddingProvider),
       canPersistEmbeddingCache: state.document.extension === '.hvy',
     }
-  );
-  const nextBackdrop = template.content.querySelector<HTMLElement>('.chat-backdrop');
-  const nextDock = template.content.querySelector<HTMLElement>('.chat-dock');
-  if (!nextDock) {
-    return false;
-  }
-
-  backdrop?.remove();
-  if (nextBackdrop) {
-    host.insertBefore(nextBackdrop, dock ?? searchSurface ?? null);
-  }
-  if (dock) {
-    dock.replaceWith(nextDock);
-  } else {
-    host.insertBefore(nextDock, searchSurface ?? null);
-  }
-  if (searchSurface) {
-    searchSurface.classList.toggle('is-chat-open', state.chat.panelOpen);
-  }
-  bindChatThreadUi(
-    nextDock.querySelector<HTMLDivElement>('.chat-thread'),
-    nextDock.querySelector<HTMLDivElement>('[data-chat-scroll-container]'),
-    nextDock.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]')
-  );
-  restoreChatThreadScroll(app, capturedScroll);
-  return true;
+  ));
 }
 
 function renderDocumentMenu(): string {
@@ -988,17 +1005,17 @@ function renderDocumentMenu(): string {
   const label = current?.label ?? 'Documents';
   return `
     <details class="document-menu">
-      <summary>
-        <span>Documents</span>
-        <strong>${escapeHtml(label)}</strong>
+      <summary class="document-menu-toggle">
+        <span class="document-menu-label">Documents</span>
+        <strong class="document-menu-current">${escapeHtml(label)}</strong>
       </summary>
       <div class="document-menu-panel">
         ${DOCUMENT_MENU_ITEMS
-          .map((item) => {
-            const selected = item.selectedExample === state.selectedExample;
-            return `<button id="${escapeAttr(item.id)}" type="button" class="${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(item.label)}</button>`;
-          })
-          .join('')}
+      .map((item) => {
+        const selected = item.selectedExample === state.selectedExample;
+        return `<button id="${escapeAttr(item.id)}" type="button" class="document-menu-action toolbar-document-action ${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(item.label)}</button>`;
+      })
+      .join('')}
       </div>
     </details>
   `;
@@ -1014,7 +1031,7 @@ function renderResponsivePreviewControls(): string {
   return `<div class="responsive-preview-controls compact-control-group" role="group" aria-label="Document preview width">
     ${options
       .map(
-        (option) => `<button type="button" class="${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
+        (option) => `<button type="button" class="compact-control-button ${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
       )
       .join('')}
   </div>`;
@@ -1042,21 +1059,16 @@ function renderWorkspaceRightControls(options: {
   isRawEditor: boolean;
 }): string {
   return `<div class="workspace-right-controls">
-    ${
-      options.isEditorView
-        ? `<div class="editor-top-controls">
+    ${options.isEditorView
+      ? `<div class="editor-top-controls">
             ${isPdfDocument(state.document) ? '<span class="pdf-document-badge" title="PDF template document">PDF Doc</span>' : ''}
-            <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
-            <button type="button" class="${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
-            <button type="button" class="${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
-            <button type="button" class="${options.isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
-            ${
-              options.isAdvancedEditor
-                ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
-                : ''
-            }
+            <button type="button" class="compact-control-button ${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+            <button type="button" class="compact-control-button ${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
+            <button type="button" class="compact-control-button ${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
+            <button type="button" class="compact-control-button ${options.isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
+            <button type="button" class="compact-control-button ${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>
           </div>`
-        : ''
+      : ''
     }
     ${renderMetaFilterControls()}
   </div>`;
@@ -1066,10 +1078,10 @@ function renderMetaFilterControls(): string {
   const status = state.metaFilter.error
     ? state.metaFilter.error
     : state.metaFilter.status
-    ? state.metaFilter.status
-    : state.metaFilter.resultCount === null
-    ? ''
-    : `${state.metaFilter.resultCount} result${state.metaFilter.resultCount === 1 ? '' : 's'}`;
+      ? state.metaFilter.status
+      : state.metaFilter.resultCount === null
+        ? ''
+        : `${state.metaFilter.resultCount} result${state.metaFilter.resultCount === 1 ? '' : 's'}`;
   const modeLabel = state.search.filterQueryMode === 'semantic' ? 'Semantic' : 'Keyword';
   const behaviorLabel = state.search.filterMode === 'hide' ? 'Hide' : 'Shade';
   return `<form id="metaFilterComposer" class="meta-filter-controls" aria-label="Meta filter current document">
@@ -1091,9 +1103,9 @@ function renderMetaFilterControls(): string {
       </button>
     </div>
     <details class="meta-filter-options">
-      <summary>
-        <span>Filter options</span>
-        <strong data-meta-filter-options-label>${escapeHtml(modeLabel)} · ${escapeHtml(behaviorLabel)}</strong>
+      <summary class="meta-filter-options-toggle">
+        <span class="meta-filter-options-label">Filter options</span>
+        <strong class="meta-filter-options-value" data-meta-filter-options-label>${escapeHtml(modeLabel)} · ${escapeHtml(behaviorLabel)}</strong>
       </summary>
       <div class="meta-filter-options-panel">
         <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
@@ -1172,10 +1184,10 @@ function renderResponsivePreviewFrameAttrs(baseClass: string, inlineStyle = ''):
     state.responsivePreview === 'phone'
       ? '390px'
       : state.responsivePreview === 'tablet'
-      ? '768px'
-      : state.responsivePreview === 'desktop'
-      ? maxWidth || '960px'
-      : '';
+        ? '768px'
+        : state.responsivePreview === 'desktop'
+          ? maxWidth || '960px'
+          : '';
   const className = `${baseClass} hvy-preview-frame hvy-preview-frame-${state.responsivePreview}`;
   const styleValues = [width ? `width: ${escapeAttr(width)};` : '', inlineStyle].filter(Boolean).join(' ');
   const style = styleValues ? ` style="${styleValues}"` : '';
@@ -1190,6 +1202,11 @@ function renderSidebarTabLabel(): string {
 }
 
 function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
+  invalidateInlineAnswerGroupIndex();
+  if (isPdfDocument(state.document) && state.currentView === 'viewer') {
+    syncActivePdfPreview(app, state.document, true);
+    return;
+  }
   const refreshId = incrementRefreshReaderCount();
   const startedAt = nowMs();
   let modalMs = 0;
@@ -1215,6 +1232,8 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     const lazyStartedAt = nowMs();
     virtualizeRenderedSections({
       root: app,
+      materializeSection: materializeVirtualSection,
+      onSectionMeasured: recordVirtualSectionHeight,
       afterRestore: (scope) => {
         reconcilePluginMounts(scope, { prune: false });
         syncTextToolbarLayout(scope);
@@ -1313,6 +1332,159 @@ function refreshReaderSection(root: ParentNode, sectionKey: string, options: { r
   return refreshed;
 }
 
+function refreshEditorSection(sectionKey: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const refreshed = refreshEditorSectionDom({
+    root: app,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  if (refreshed) {
+    virtualizeRenderedSections({
+      root: app,
+      materializeSection: materializeVirtualSection,
+      onSectionMeasured: recordVirtualSectionHeight,
+      afterRestore: (scope) => {
+        reconcilePluginMounts(scope, { prune: false });
+        syncTextToolbarLayout(scope);
+        if (options.runVisibilityScripts !== false) {
+          void runButtonVisibilityScripts(scope);
+        }
+        initializeCarouselReaders(scope);
+        bindLazyImageHydration(scope);
+      },
+    });
+  }
+  return refreshed;
+}
+
+function insertEditorTopLevelSection(sectionKey: string, location: SectionLocation): boolean {
+  const inserted = insertEditorTopLevelSectionDom({
+    root: app,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    location,
+    afterInsert: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      void runButtonVisibilityScripts(element);
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  if (!inserted) {
+    return false;
+  }
+  commitHistorySnapshot();
+  focusPendingSectionTitleEditor(app);
+  centerPendingEditorSection(app);
+  scrollPendingEditorActivation(app);
+  void runPluginDocumentHooks('unknown');
+  return true;
+}
+
+function refreshEditorBlock(sectionKey: string, blockId: string, options: EditorBlockRefreshOptions = {}): boolean {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return false;
+  }
+  return refreshEditorBlockDom({
+    root: app,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    block,
+    replacementBlocks: options.replacementBlocks,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+}
+
+function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTMLElement[] | null {
+  const sectionKey = placeholder.dataset.sectionKey ?? '';
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
+    return null;
+  }
+  const parentLocked = section.lock || placeholder.dataset.parentLocked === 'true';
+  if (placeholder.dataset.hvyVirtualKind === 'editor') {
+    const scroller = placeholder.closest<HTMLElement>('.editor-tree');
+    const isSubsection = placeholder.dataset.hvyVirtualSubsection === 'true'
+      || !state.document.sections.some((candidate) => candidate === section);
+    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, isSubsection, scroller ? {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight,
+      layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 90,
+    } : undefined);
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader') {
+    const scroller = placeholder.closest<HTMLElement>('.reader-document');
+    return createReaderSectionElement(placeholder.ownerDocument, readerRenderer, section, scroller ? {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight,
+      layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 44,
+    } : undefined);
+  }
+  const rangeBlockIds = placeholder.dataset.blockIds?.split(' ').filter(Boolean) ?? [];
+  if (placeholder.dataset.hvyVirtualKind === 'editor-block-range') {
+    return rangeBlockIds.flatMap((blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      const element = block
+        ? createEditorBlockElement(placeholder.ownerDocument, editorRenderer, sectionKey, block, state.document.sections, parentLocked)
+        : null;
+      return element ? [element] : [];
+    });
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block-range') {
+    return rangeBlockIds.flatMap((blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      const element = block ? createReaderBlockElement(placeholder.ownerDocument, readerRenderer, section, block) : null;
+      return element ? [element] : [];
+    });
+  }
+  const blockId = placeholder.dataset.blockId ?? '';
+  const block = blockId ? findBlockByIds(sectionKey, blockId) : null;
+  if (!block) {
+    return null;
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'editor-block') {
+    return createEditorBlockElement(placeholder.ownerDocument, editorRenderer, sectionKey, block, state.document.sections, parentLocked);
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block') {
+    return createReaderBlockElement(placeholder.ownerDocument, readerRenderer, section, block);
+  }
+  return null;
+}
+
+function recordVirtualSectionHeight(sectionKey: string, kind: string, height: number, blockId?: string): void {
+  if (kind === 'editor') {
+    editorRenderer.recordEditorSectionHeight(sectionKey, height);
+  } else if (kind === 'reader') {
+    readerRenderer.recordReaderSectionHeight(sectionKey, height);
+  } else if (kind === 'editor-block' && blockId) {
+    editorRenderer.recordEditorBlockHeight(sectionKey, blockId, height);
+  } else if (kind === 'reader-block' && blockId) {
+    readerRenderer.recordReaderBlockHeight(sectionKey, blockId, height);
+  }
+}
+
 function refreshModalPreview(): void {
   if (!state.modalSectionKey) {
     return;
@@ -1380,8 +1552,8 @@ function getReaderHighlightGlowKey(element: HTMLElement): string {
   const surface = element.closest('#readerSidebarSections, #aiSidebarSections')
     ? 'sidebar'
     : element.closest('#readerDocument, #aiReaderDocument')
-    ? 'reader'
-    : 'unknown';
+      ? 'reader'
+      : 'unknown';
   return `${surface}:${element.dataset.readerViewTarget || element.id || element.dataset.blockId || ''}`;
 }
 
@@ -1406,18 +1578,38 @@ initCallbacks({
   refreshReaderPanels,
   refreshReaderSection,
   refreshReaderBlock,
+  refreshEditorBlock,
+  refreshEditorSection,
+  insertEditorTopLevelSection,
   refreshModalPreview,
-  observeLinks: () => {},
+  observeLinks: () => { },
   componentRenderHelpers: localGetComponentRenderHelpers(),
   readerRenderer,
 });
 
 async function bootstrap(): Promise<void> {
-  const savedSession = loadSessionState();
+  await initializeSessionAttachmentRecovery();
+  const savedSession = await loadSessionStateAsync();
   setHostPlugins([...builtInPlugins, skillRatingExamplePlugin, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();
-  initState(applySessionState(createInitialState(await createDefaultDocument()), savedSession));
+  initState(applySessionState(createInitialState(await createDefaultDocument(), createReferenceEncryptionOptions()), savedSession));
+  await decryptEncryptedComponents(state.document, state.encryption);
   initializeReferenceDocumentDirtyTracking();
+  initializeWebMCPPolyfill();
+  const webMcpRegistration = registerHvyWebMcpTools({}, {
+    getDocument: () => state.document,
+    embeddingProvider: state.embeddingProvider,
+    chatContext: state.chatContext,
+    beforeMutation: () => recordHistory(undefined, { notify: false }),
+    onMutation: () => {
+      state.rawEditorText = serializeDocument(state.document);
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
+      notifyDocumentMayHaveChanged('webmcp', 'ai');
+      renderApp();
+    },
+  });
+  window.addEventListener('pagehide', () => webMcpRegistration.destroy(), { once: true });
   bindSessionPersistence();
   saveSessionState(state);
   initColorModeSync();
@@ -1425,7 +1617,7 @@ async function bootstrap(): Promise<void> {
   void refreshRestoredSearch(savedSession);
 }
 
-async function refreshRestoredSearch(savedSession: ReturnType<typeof loadSessionState>): Promise<void> {
+async function refreshRestoredSearch(savedSession: Awaited<ReturnType<typeof loadSessionStateAsync>>): Promise<void> {
   const savedSearch = savedSession?.search;
   if (!savedSearch?.submittedQuery.trim()) {
     return;
@@ -1438,7 +1630,7 @@ async function refreshRestoredSearch(savedSession: ReturnType<typeof loadSession
     await submitSearch();
   }
   if (savedSearch.filterEnabled) {
-    await applySearchFilter({ enabled: true });
+    await applySearchFilter({ enabled: true, root: app });
   }
   saveSessionState(state);
 }
@@ -1448,7 +1640,7 @@ bootstrap().catch((error) => {
   app.innerHTML = `
     <main class="layout reference-layout hvy-embed-layout">
       <section class="pane full-pane">
-        <h2>Startup Problem</h2>
+        <h2 class="pane-heading">Startup Problem</h2>
         <p>The app failed before the first render.</p>
         <pre>${escapeHtml(message)}</pre>
       </section>

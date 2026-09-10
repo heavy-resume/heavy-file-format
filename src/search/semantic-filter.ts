@@ -8,8 +8,8 @@ import type {
   HvySemanticFilterMatch,
   HvySemanticFilterProvider,
 } from './types';
-
-const SEMANTIC_FILTER_WINDOW_CONCURRENCY = 3;
+import { requestSemanticFilterMatches } from './semantic-response';
+import { normalizeSemanticFilterConcurrency } from './semantic-filter-concurrency';
 
 export async function runSemanticFilterWindows(options: {
   prompt: string;
@@ -18,26 +18,51 @@ export async function runSemanticFilterWindows(options: {
   documentTitle?: string;
   traceRunId?: string;
   signal?: AbortSignal;
+  concurrency?: number;
+  maxAttempts?: number;
   onWindowComplete?: (progress: { completedWindows: number; matchedCandidates: number }) => void;
 }): Promise<HvySemanticFilterMatch[]> {
+  const runAbortController = new AbortController();
+  const abortRunFromCaller = (): void => runAbortController.abort(options.signal?.reason);
+  if (options.signal?.aborted) {
+    abortRunFromCaller();
+  } else {
+    options.signal?.addEventListener('abort', abortRunFromCaller, { once: true });
+  }
+  const runSignal = runAbortController.signal;
   const matches: HvySemanticFilterMatch[] = [];
   let nextWindowIndex = 0;
   let completedWindows = 0;
   let matchedCandidates = 0;
-  const workerCount = Math.min(SEMANTIC_FILTER_WINDOW_CONCURRENCY, Math.max(1, options.windows.length));
+  const concurrency = normalizeSemanticFilterConcurrency(options.concurrency);
+  const workerCount = Math.min(concurrency, Math.max(1, options.windows.length));
 
   const runWorker = async (): Promise<void> => {
-    while (!options.signal?.aborted) {
+    while (!runSignal.aborted) {
       const window = options.windows[nextWindowIndex];
       nextWindowIndex += 1;
       if (!window) {
         return;
       }
-      const windowMatches = await options.provider(buildSemanticFilterWindowRequest(options.prompt, window, {
+      const providerRequest = buildSemanticFilterWindowRequest(options.prompt, window, {
         ...(options.documentTitle ? { documentTitle: options.documentTitle } : {}),
         ...(options.traceRunId ? { traceRunId: options.traceRunId } : {}),
-        ...(options.signal ? { signal: options.signal } : {}),
-      }));
+        signal: runSignal,
+      });
+      let windowMatches: HvySemanticFilterMatch[];
+      try {
+        windowMatches = await requestSemanticFilterMatches(options.provider, providerRequest, {
+          maxAttempts: options.maxAttempts,
+        });
+      } catch (error) {
+        if (!runSignal.aborted) {
+          runAbortController.abort(error);
+        }
+        throw error;
+      }
+      if (runSignal.aborted) {
+        return;
+      }
       matches.push(...windowMatches);
       completedWindows += 1;
       matchedCandidates += windowMatches.length;
@@ -45,8 +70,12 @@ export async function runSemanticFilterWindows(options: {
     }
   };
 
-  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
-  return matches;
+  try {
+    await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+    return matches;
+  } finally {
+    options.signal?.removeEventListener('abort', abortRunFromCaller);
+  }
 }
 
 export function buildSemanticSearchResults(

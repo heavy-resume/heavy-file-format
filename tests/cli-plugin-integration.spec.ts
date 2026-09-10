@@ -114,7 +114,7 @@ scripts:
   const addForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add chore' }) });
   await addForm.locator('textarea[name="Description"]').fill('Dishes');
   await addForm.getByRole('button', { name: 'Add chore' }).click();
-  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'Dishes' })).toBeVisible({
+  await expect(page.locator('.hvy-database-table-reader').filter({ hasText: 'Dishes' })).toBeVisible({
     timeout: PLUGIN_SETTLE_TIMEOUT_MS,
   });
 
@@ -122,16 +122,67 @@ scripts:
   await assignForm.locator('input[name="Chore"]').fill('Dishes');
   await assignForm.locator('select[name="Assignee"]').selectOption('Child');
   await assignForm.getByRole('button', { name: 'Assign chore' }).click();
-  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'assigned' })).toBeVisible();
+  await expect(page.locator('.hvy-database-table-reader').filter({ hasText: 'assigned' })).toBeVisible();
 
   const completeForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Complete chore' }) });
   await completeForm.locator('input[name="Chore"]').fill('Dishes');
   await completeForm.locator('select[name="Completed by"]').selectOption('Child');
   await completeForm.getByRole('button', { name: 'Complete chore' }).click();
 
-  const weeklyLeaders = page.locator('#weekly-leaders .hvy-db-table-plugin-reader');
+  const weeklyLeaders = page.locator('#weekly-leaders .hvy-database-table-reader');
   await expect(weeklyLeaders).toContainText('Child');
   await expect(weeklyLeaders).toContainText('1');
+});
+
+test('form database scripts store Brython None parameters as SQLite NULL', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="nullableMount"></div>';
+    // Built-in plugins are opt-in per mount, so the form plugin has to be requested.
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import('/src/embed-full.ts');
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"nullable-values"}-->
+#! Nullable values
+
+<!--hvy:plugin {"id":"nullable-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Save","showSubmit":true,"submitScript":"submit"}}-->
+fields:
+  - label: Optional value
+    type: text
+scripts:
+  submit: |-
+    doc.db.execute("CREATE TABLE IF NOT EXISTS example (optional_value TEXT)")
+    doc.db.execute("INSERT INTO example (optional_value) VALUES (?)", [None])
+`;
+    const visualDocument = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    (window as Window & { __nullableDocument?: typeof visualDocument }).__nullableDocument = visualDocument;
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#nullableMount')!,
+      document: visualDocument,
+      mode: 'viewer',
+      plugins: [plugins.form],
+    });
+  });
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await waitForScriptingIdle(page);
+
+  // waitForScriptingIdle only waits for the runtime map to empty, which is already true if
+  // the submit script has not started yet, so poll for the row the script actually writes.
+  await expect.poll(() => page.evaluate(async () => {
+    const { createScriptingDbRuntime } = await import('/src/plugins/db-table.ts');
+    const visualDocument = (window as Window & { __nullableDocument?: Parameters<typeof createScriptingDbRuntime>[0] }).__nullableDocument;
+    if (!visualDocument) throw new Error('Nullable test document missing.');
+    const database = await createScriptingDbRuntime(visualDocument);
+    try {
+      return database.api.query('SELECT optional_value FROM example');
+    } catch {
+      return null;
+    } finally {
+      database.dispose();
+    }
+  }), { timeout: SCRIPTING_IDLE_TIMEOUT_MS }).toEqual([{ optional_value: null, '0': null }]);
 });
 
 test('scripting globals do not expose browser globals or wrapper internals', async ({ page }) => {
@@ -391,6 +442,63 @@ doc.header.set("datetime_result", f"{monday_year}-W{monday_week:02d}|{sunday_yea
   );
 });
 
+test('scripting checked random library supports safe sequence and numeric helpers', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"random"}-->
+#! Random
+
+<!--hvy:plugin {"id":"random-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["random"]}}-->
+from random import choice, choices, randint, random as random_value, randrange, sample, shuffle, uniform
+
+shuffled = [1, 2, 3]
+shuffle(shuffled)
+failures = []
+
+def expect_failure(label, action):
+    try:
+        action()
+        failures.append(label + ":missed")
+    except BaseException:
+        failures.append(label + ":blocked")
+
+expect_failure("choice", lambda: choice([]))
+expect_failure("randrange", lambda: randrange(1, 1))
+expect_failure("sample", lambda: sample([1], 2))
+expect_failure("weights", lambda: choices([1, 2], weights=[1], k=1))
+expect_failure("both_weights", lambda: choices([1, 2], weights=[1, 1], cum_weights=[1, 2], k=1))
+expect_failure("zero_weights", lambda: choices([1, 2], weights=[0, 0], k=1))
+
+result = [
+    str(0.0 <= random_value() < 1.0),
+    choice(["only"]),
+    str(randrange(5, 6)),
+    str(randrange(7, 6, -2)),
+    str(randint(4, 4)),
+    str(uniform(2.5, 2.5)),
+    "".join(str(value) for value in sorted(sample([1, 2, 3], 3))),
+    "".join(choices(["x"], k=3)),
+    "".join(choices(["off", "on"], weights=[0, 1], k=3)),
+    "".join(choices(["off", "on"], cum_weights=[0, 2], k=2)),
+    "".join(str(value) for value in sorted(shuffled)),
+    ",".join(failures),
+]
+doc.header.set("random_result", "|".join(result))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(
+    page,
+    'random_result',
+    'True|only|5|7|4|2.5|123|xxx|ononon|onon|123|choice:blocked,randrange:blocked,sample:blocked,weights:blocked,both_weights:blocked,zero_weights:blocked'
+  );
+});
+
 test('scripting checked datetime library does not expose runtime capabilities', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
@@ -555,12 +663,22 @@ fields:
     type: select
 scripts:
   load: |-
+    initial_runs = doc.header.get("form_initial_runs") or 0
+    doc.header.set("form_initial_runs", initial_runs + 1)
     doc.form.set_options("Choice", [("a", "Alpha"), ("b", "Beta")])
+    doc.header.set("initial_choice", doc.form.get_value("Choice"))
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
 
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Submit' }) });
+  await expect(form.locator('select[name="Choice"] option')).toContainText(['Alpha', 'Beta']);
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('form_initial_runs: 1');
+  await expect(page.locator('#rawEditor')).toContainText('initial_choice: a');
+  await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(form.locator('select[name="Choice"] option')).toContainText(['Alpha', 'Beta']);
 });
 
@@ -568,6 +686,27 @@ test('chore chart example populates chore dropdowns from the attached database',
   await page.goto('/');
   await page.locator('#fileInput').setInputFiles('examples/chore-chart-3.hvy');
   await expect(page.getByLabel('Download file name')).toHaveValue('chore-chart-3.hvy');
+  await page.getByRole('button', { name: 'CLI' }).click();
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/chores-pivot/plugin.json',
+    '{"id":"chores-pivot","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"chores","queryLimit":10}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/leaderboard/plugin.json',
+    '{"id":"leaderboard","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"completions","queryLimit":10}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/add-chore/plugin.json',
+    '{"id":"add-chore","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitScript":"submit","submitLabel":"Add chore"}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/assign-chore/plugin.json',
+    '{"id":"assign-chore","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","changeScript":"load","submitScript":"submit","submitLabel":"Assign chore"}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/complete-chore/plugin.json',
+    '{"id":"complete-chore","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","changeScript":"load","submitScript":"submit","submitLabel":"Complete chore"}}'
+  ));
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('#chores-pivot')).toContainText('Pick up clothes');

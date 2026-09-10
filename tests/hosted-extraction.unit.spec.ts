@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from 'vitest';
-import { injectPreviewMetadata } from '../hosted-viewer/server.mjs';
+import { createHostedViewerServer, injectPreviewMetadata } from '../hosted-viewer/server.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -100,6 +100,62 @@ print("hello")
     },
   ]);
   expect(Array.from(extractedDb)).toEqual([31, 139, 8, 0, 1, 2, 3]);
+});
+
+test('expected result: hosted named PDF keeps metadata, filename, bytes, and preview content type', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hvy-hosted-pdf-extract-'));
+  const source = join(dir, 'handbook.hvy');
+  const outDir = join(dir, 'site');
+  const publicDir = join(dir, 'public');
+  const prefix = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"handbook"}-->
+#! Handbook
+
+ [Read it](@attachment:Employee%20Handbook)
+<!--hvy:tail {"id":"file:opaque-id","role":"user-file","name":"Employee Handbook","filename":"employee-handbook.pdf","mediaType":"application/pdf","length":4}-->
+--HVY-TAIL--
+`;
+  const prefixBytes = new TextEncoder().encode(prefix);
+  const pdfBytes = new Uint8Array([37, 80, 68, 70]);
+  const sourceBytes = new Uint8Array(prefixBytes.length + pdfBytes.length);
+  sourceBytes.set(prefixBytes, 0);
+  sourceBytes.set(pdfBytes, prefixBytes.length);
+  await writeFile(source, sourceBytes);
+
+  await execFileAsync(process.execPath, ['scripts/extract-hvy-assets.mjs', source, '--out', outDir], {
+    cwd: process.cwd(),
+  });
+
+  const manifest = JSON.parse(await readFile(join(outDir, 'attachments.json'), 'utf8'));
+  expect(manifest.attachments).toEqual([{
+    id: 'file:opaque-id',
+    meta: {
+      role: 'user-file',
+      name: 'Employee Handbook',
+      filename: 'employee-handbook.pdf',
+      mediaType: 'application/pdf',
+    },
+    length: 4,
+    url: 'attachment/file%3Aopaque-id/employee-handbook.pdf',
+  }]);
+  expect(Array.from(await readFile(join(outDir, manifest.attachments[0].url)))).toEqual([37, 80, 68, 70]);
+
+  await mkdir(publicDir);
+  const server = createHostedViewerServer({ publicRoot: publicDir, siteRoot: outDir });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Expected hosted viewer port');
+    const response = await fetch(`http://127.0.0.1:${address.port}/${manifest.attachments[0].url}`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([37, 80, 68, 70]);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test('expected result: hosted extraction writes preview metadata from front matter without tail bytes', async () => {

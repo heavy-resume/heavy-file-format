@@ -1,0 +1,8 @@
+.hvy-reference-host {
+  margin: 0;
+  overflow: hidden;
+}
+
+.hvy-reference-host .hvy-reference-app {
+  height: 100dvh;
+}

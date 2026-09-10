@@ -1,0 +1,5 @@
+Location markers name positions inside component templates where a plugin can supply a derived component.
+Set locationMarkerName to the stable name the plugin will use.
+The same name may appear more than once; every matching marker receives a fresh clone of the supplied component.
+Unresolved markers are visible while authoring and hidden in reader output.
+Location markers do not store plugin content or create nested plugin serialization.

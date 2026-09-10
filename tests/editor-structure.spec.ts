@@ -1,11 +1,29 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Documents live behind the collapsed document menu, so it has to be opened first. */
+async function openDocument(page: Page, name: string): Promise<void> {
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name, exact: true }).click();
+}
+
 async function runCliCommand(page: Page, command: string): Promise<void> {
   const lineCount = await page.locator('#cliOutput .cli-line').count();
   const isPlaceholder = (await page.locator('#cliOutput').textContent())?.includes('/ $ man ls') ?? false;
   await page.locator('#cliInput').fill(command);
   await page.keyboard.press('Enter');
   await expect(page.locator('#cliOutput .cli-line')).toHaveCount(isPlaceholder ? lineCount : lineCount + 1);
+}
+
+/**
+ * Opens the sidebar and waits out its entry animation. Panel children start at
+ * `opacity: 0` with a 90ms delay plus a 180ms fade, so clicking straight after the tab
+ * races the transition and fails actionability even though the geometry is already final.
+ */
+async function openSidebarPanel(page: Page, panel: string): Promise<void> {
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(page.locator(panel)).toHaveCSS('opacity', '1');
 }
 
 async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
@@ -58,12 +76,14 @@ hvy_version: 0.1
   <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {}-->
-    ## Summary
+    ## <!--hvy:sort-value {"key":"Name"}-->Summary<!--/hvy:sort-value-->
 
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
     Expanded detail
+
+   <!--hvy:button {"buttonLabel":"Nested action"}-->
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
@@ -75,9 +95,14 @@ hvy_version: 0.1
 
   await expect(activeBlock.locator('[data-field="block-expandable-stub-lock"]')).toHaveCount(0);
   await expect(activeBlock.locator('[data-field="block-expandable-content-lock"]')).toHaveCount(0);
+  await expect(activeBlock.locator('button button')).toHaveCount(0);
+  await expect(activeBlock.locator('> .editor-block-done-row')).toBeVisible();
 
   await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
-  await activeBlock.locator('[data-expandable-panel="expanded"]').first().click();
+  const expandedPreview = activeBlock.locator('.expandable-part-expanded .expandable-collapsed-preview-button');
+  await expect(expandedPreview).toHaveJSProperty('tagName', 'DIV');
+  await expandedPreview.focus();
+  await page.keyboard.press('Enter');
 
   await expect(activeBlock.getByRole('button', { name: 'Expandable stub component type' })).toBeVisible();
   await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
@@ -150,8 +175,11 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const expandablePassive = page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first();
+  await expandablePassive.getByRole('heading', { name: 'Summary' }).click();
   const expandableEditor = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+  await expect(expandableEditor).toBeVisible();
+  await expect(expandableEditor.locator('.rich-editor')).toHaveCount(0);
   await expandableEditor.locator('[data-expandable-panel="stub"]').first().click();
 
   await expandableEditor.locator('.expandable-part-stub .editor-block-passive').first().click();
@@ -418,7 +446,7 @@ hvy_version: 0.1
   expect(perfMessages).toHaveLength(0);
 });
 
-test('typing in an AI image editor preserves the active control', async ({ page }) => {
+test('typing in an AI image alt dialog preserves the draft control until done', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -434,13 +462,18 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
+  // An empty image renders as an editor placeholder in AI view, not a reader block,
+  // so its own Edit affordance is the way in.
   const reader = page.locator('#aiReaderDocument');
-  await reader.locator('.reader-block-image').click({ button: 'right' });
-  await page.getByRole('button', { name: 'Edit component' }).click();
-  const alt = reader.locator('.editor-block[data-active-editor-block="true"] [data-field="image-alt"]');
+  await reader.locator('.editor-block-passive[data-block-id]').getByRole('button', { name: 'Edit', exact: true }).click();
+  await reader.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Alt Text' }).click();
+  const altDialog = page.getByRole('dialog', { name: 'Alt Text' });
+  const alt = altDialog.getByRole('textbox', { name: 'Image description' });
   await alt.fill('Updated alt');
   await expect(alt).toBeFocused();
   await expect(alt).toHaveValue('Updated alt');
+  await altDialog.getByRole('button', { name: 'Done' }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).state.document.sections[0]?.blocks[0]?.schema.imageAlt)).toBe('Updated alt');
 });
 
 test('ai double click opens component menu without leaving text selected', async ({ page }) => {
@@ -519,7 +552,7 @@ test('ai resume summary placeholder expands parent before editing', async ({ pag
 test('ai resume summary placeholder margin expands parent before editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
 
   await page.locator('#aiReaderDocument .expand-stub-toggle').first().dispatchEvent('click', {
@@ -534,7 +567,7 @@ test('ai resume summary placeholder margin expands parent before editing', async
 test('ai resume summary body text expands parent instead of opening text editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
 
   await page
@@ -549,9 +582,9 @@ test('ai resume summary body text expands parent instead of opening text editor'
 test('ai sidebar skill click expands collapsed record before editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   const skillsSection = page.locator('#aiSidebarSections #skills');
   await skillsSection.click();
@@ -590,7 +623,7 @@ hvy_version: 0.1
 test('canceling a newly added featured xref removes it without opening list editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
 
   const topSkillsList = page.locator('[data-component-id="top-skills-list"]').first();
   await topSkillsList.locator('[data-action="add-component-list-item"]').click();
@@ -908,9 +941,9 @@ component_defs:
 test('ai mode template-created skill stays in passive reader mode', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   await page.locator('#aiSidebarSections #skills [data-action="add-component-list-item"]', { hasText: 'Add Skill' }).click();
   const modal = page.locator('.modal-root', { has: page.locator('input[data-template-variable="skill"]') });
@@ -1162,7 +1195,7 @@ test('resume xref to sidebar record opens sidebar in viewer and ai modes', async
   await expect(page.locator('#readerSidebarSections #tool-developer-containers')).toBeVisible();
 
   await page.getByRole('button', { name: 'AI', exact: true }).click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
   await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
   await page.locator('#aiReaderDocument .reader-xref-card', { hasText: 'Developer Containers' }).first().click();
   await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
@@ -1434,9 +1467,9 @@ hvy_version: 0.1
 test('ai sidebar expandable hover does not cover active editor delete button', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   const skillsSection = page.locator('#aiSidebarSections #skills');
   await skillsSection.click();
@@ -1688,6 +1721,98 @@ hvy_version: 0.1
   await expect(activeBlock.locator('.expandable-part-expanded .expandable-header .expandable-pane-meta-button')).toBeVisible();
 });
 
+test('grid cell CSS moves into advanced-only cell meta', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"layout","gridColumns":1}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {}-->
+    Grid content
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.editor-grid-passive-preview') }).click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.grid-fields') });
+  await expect(activeBlock.locator('.grid-cell-meta-button')).toHaveCount(0);
+  await expect(activeBlock.getByText('Cell CSS', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.grid-fields') });
+  await activeBlock.locator('.grid-cell-meta-button').click();
+  await activeBlock.locator('[data-field="block-grid-item-id"]').fill('content-cell');
+  await expect(activeBlock.locator('[data-field="block-grid-item-id"]')).toHaveValue('content-cell');
+  await activeBlock.locator('[data-field="block-grid-item-css"]').fill('padding: 0.5rem;');
+
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.grid-fields') });
+  await activeBlock.locator('.grid-cell-meta-button').click();
+  await expect(activeBlock.locator('[data-field="block-grid-item-id"]')).toHaveValue('content-cell');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:grid:0 {"id":"content-cell","css":"padding: 0.5rem;"}-->');
+});
+
+test('grid cell meta paints above nested active component controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"layout","gridColumns":1}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:container {"id":"details"}-->
+
+    <!--hvy:text {}-->
+     Nested content
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.editor-grid-passive-preview') }).click();
+  const gridBlock = page.locator('.editor-block', { has: page.locator('.grid-fields') }).first();
+  await gridBlock.locator('.grid-cell-meta-button').click();
+
+  const metaBody = gridBlock.locator('.grid-cell-meta-body');
+  const nestedActions = gridBlock.locator('.grid-item-editor-shell .editor-block-context-actions').first();
+  await expect(metaBody).toBeVisible();
+  await expect(nestedActions).toBeVisible();
+  const metaBox = await metaBody.boundingBox();
+  const actionsBox = await nestedActions.boundingBox();
+  expect(metaBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  const overlapLeft = Math.max(metaBox!.x, actionsBox!.x);
+  const overlapRight = Math.min(metaBox!.x + metaBox!.width, actionsBox!.x + actionsBox!.width);
+  const overlapTop = Math.max(metaBox!.y, actionsBox!.y);
+  const overlapBottom = Math.min(metaBox!.y + metaBox!.height, actionsBox!.y + actionsBox!.height);
+  expect(overlapRight).toBeGreaterThan(overlapLeft);
+  expect(overlapBottom).toBeGreaterThan(overlapTop);
+
+  const topLayer = await page.evaluate(({ x, y }) => {
+    return document.elementFromPoint(x, y)?.closest('.grid-cell-meta-body')?.className ?? '';
+  }, {
+    x: (overlapLeft + overlapRight) / 2,
+    y: (overlapTop + overlapBottom) / 2,
+  });
+  expect(topLayer).toContain('grid-cell-meta-body');
+});
+
 test('editor-only scripting maintenance section only renders in advanced mode', async ({ page }) => {
   await page.goto('/');
 
@@ -1724,6 +1849,9 @@ hvy_version: 0.1
   await page.locator('#editorTree .editor-block-passive', { hasText: 'maintenance script' }).click();
   await expect(page.locator('#editorTree .hvy-scripting-head')).toContainText('Python');
   await expect(page.locator('#editorTree .hvy-scripting-editor-script-label')).toHaveText('editor script');
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await expect(page.locator('#editorTree .hvy-scripting-editor-script-label')).toHaveText('editor script');
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
   const scriptEditor = page.getByRole('textbox', { name: 'Python script' });
   const highlightedScript = page.locator('#editorTree .hvy-scripting-highlight');
   await expect(page.locator('#editorTree .hvy-scripting-highlight .hljs-built_in')).toHaveText('print');
@@ -1787,6 +1915,35 @@ hvy_version: 0.1
   await page.locator('[data-action="switch-view"][data-view="editor"]').click();
   await expect(page.getByRole('button', { name: 'Basic' })).toHaveClass(/secondary/);
   await expect(page.locator('#editorTree')).not.toContainText('maintenance script');
+});
+
+test('initial scripting editor content scrolls horizontally with a user gesture', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"script-scroll-repro"}-->
+#! Script Scroll Repro
+
+ <!--hvy:plugin {"id":"long-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  initial_horizontal_scroll_repro = "${'long-script-value-'.repeat(30)}"
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'initial_horizontal_scroll_repro' }).click();
+
+  const scriptEditor = page.getByRole('textbox', { name: 'Python script' });
+  const sourceEditor = page.locator('#editorTree .hvy-scripting-source-editor');
+  await expect(scriptEditor).toBeVisible();
+  await expect.poll(() => sourceEditor.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeGreaterThan(32);
+
+  await scriptEditor.hover();
+  await page.mouse.wheel(500, 0);
+
+  await expect.poll(() => sourceEditor.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
 });
 
 test('script-only sections render at the bottom of the editor', async ({ page }) => {
@@ -2179,6 +2336,44 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('text toolbar fill-in converts the selected duplicate text occurrence', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"duplicate"}-->
+  # Repeat and Repeat
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Repeat and Repeat' }).click();
+  await page.locator('.rich-editor').evaluate((editable) => {
+    const textNode = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const start = textNode.textContent.lastIndexOf('Repeat');
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + 'Repeat'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (editable as HTMLElement).focus();
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await page.locator('.rich-editor').dispatchEvent('keyup');
+  await useSelectionAsFillIn(page);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# Repeat and <!-- value {"placeholder":"Repeat"} -->');
+});
+
 test('undo after browser-selected Use as Fill-in does not enter the fill-in or abort editing', async ({ page }) => {
   await page.goto('/');
 
@@ -2460,7 +2655,7 @@ hvy_version: 0.1
   expect(fillInToolbarLayout.boundsPosition).toBe('absolute');
   expect(fillInToolbarLayout.slotDisplay).toBe('grid');
   expect(fillInToolbarLayout.slotHeight).toBeGreaterThan(fillInToolbarLayout.firstToolbarHeight);
-  expect(fillInToolbarLayout.spacerHeight).toBe(fillInToolbarLayout.slotHeight);
+  expect(fillInToolbarLayout.spacerHeight).toBe(0);
   await activeBlock.locator('[data-field="text-fill-in-value"]').evaluate((fillIn) => {
     const range = document.createRange();
     range.selectNode(fillIn);
@@ -2576,9 +2771,9 @@ hvy_version: 0.1
 test('resume template location fill-ins keep focus in AI view', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   const locationBlock = page.locator('#aiSidebarSections #locations');
   const fillIns = locationBlock.locator('[data-field="text-fill-in-value"]');
@@ -2677,7 +2872,10 @@ hvy_version: 0.1
   await fillIn.focus();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
   await page.keyboard.type('Line two');
-  await expect(fillIn).toContainText(/Line one\s+Line two/);
+  // The editor parks a zero-width caret anchor in the fill-in whose position varies; it is
+  // stripped on serialization, so compare the text without it.
+  await expect.poll(async () => (await fillIn.evaluate((node) => node.textContent ?? '')).replaceAll('\u200b', ''))
+    .toMatch(/Line one\s+Line two/);
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-field="text-fill-in-value"]:focus')).toHaveCount(0);
 
@@ -2777,13 +2975,14 @@ test('section highlight control lives in section meta next to contained', async 
   await expect(page.locator('#rawEditor')).toContainText('"highlight":true');
 });
 
-test('active component done and cancel buttons are centered below the editor body', async ({ page }) => {
+test('active text component centers cancel and done when the floating toolbar is hidden', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
   const cancelButton = activeBlock.locator('.editor-block-cancel-button');
   const doneButton = activeBlock.locator('.editor-block-done-button');
+  await activeBlock.getByRole('button', { name: 'Hide text controls' }).click();
 
   await expect(activeBlock.locator('.editor-block-head').getByRole('button', { name: 'Done' })).toHaveCount(0);
   await expect(activeBlock.locator('.editor-block-head').getByRole('button', { name: 'Cancel' })).toHaveCount(0);
@@ -3489,7 +3688,7 @@ hvy_version: 0.1
   expect(afterDoneScrollTop).toBeGreaterThan(0);
 });
 
-test('cancel only compensates for expanded editor height traversed by downward scrolling', async ({ page }) => {
+test('cancel preserves the viewport anchor across editor height changes', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -3519,33 +3718,21 @@ hvy_version: 0.1
   await tree.evaluate((node) => {
     node.scrollTop = Math.max(0, node.scrollTop - 180);
   });
-  await target.click();
+  const cancelReturnExpectedResult = await tree.evaluate((node) => node.scrollTop);
+  await target.dispatchEvent('click');
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') });
   await expect(activeBlock).toBeVisible();
-  const unscrolledEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
   await expect(target).toBeVisible();
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  expect(Math.abs(Math.round(await target.evaluate((root) => {
-    const text = root.querySelector('.reader-block')?.firstChild;
-    if (!text) return Number.NaN;
-    const range = document.createRange();
-    range.selectNodeContents(text);
-    return range.getBoundingClientRect().top;
-  })) - Math.round(unscrolledEditorTop))).toBeLessThanOrEqual(2);
+  expect(Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelReturnExpectedResult));
 
   await target.click();
   await expect(activeBlock).toBeVisible();
-  const unchangedDoneEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
+  const unchangedDoneExpectedResult = await tree.evaluate((node) => node.scrollTop);
   await activeBlock.getByRole('button', { name: 'Done' }).dispatchEvent('click');
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.abs(Math.round(await target.evaluate((root) => {
-    const text = root.querySelector('.reader-block')?.firstChild;
-    if (!text) return Number.NaN;
-    const range = document.createRange();
-    range.selectNodeContents(text);
-    return range.getBoundingClientRect().top;
-  })) - Math.round(unchangedDoneEditorTop))).toBeLessThanOrEqual(2);
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(unchangedDoneExpectedResult));
 
   await target.click();
   await expect(activeBlock).toBeVisible();
@@ -3553,23 +3740,13 @@ hvy_version: 0.1
     const { state } = await import(/* @vite-ignore */ '/src/state.ts');
     return state.pendingEditorActivation;
   })).toBeNull();
-  await tree.evaluate((node) => {
-    node.dataset.activeEditorUserScrollDirection = 'up';
-    delete node.dataset.activeEditorUserScrollStartTop;
-  });
   await tree.evaluate((node) => {
     node.scrollTop -= 100;
   });
-  const upwardEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
+  const upwardExpectedResult = await tree.evaluate((node) => node.scrollTop);
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.abs(Math.round(await target.evaluate((root) => {
-    const text = root.querySelector('.reader-block')?.firstChild;
-    if (!text) return Number.NaN;
-    const range = document.createRange();
-    range.selectNodeContents(text);
-    return range.getBoundingClientRect().top;
-  })) - Math.round(upwardEditorTop))).toBeLessThanOrEqual(2);
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(upwardExpectedResult));
 
   await target.click();
   await expect(activeBlock).toBeVisible();
@@ -3577,24 +3754,83 @@ hvy_version: 0.1
     const { state } = await import(/* @vite-ignore */ '/src/state.ts');
     return state.pendingEditorActivation;
   })).toBeNull();
-  const cancelScrollStart = await tree.evaluate((node) => node.scrollTop);
-  await tree.evaluate((node) => {
-    node.dataset.activeEditorUserScrollDirection = 'down';
-    node.dataset.activeEditorUserScrollStartTop = String(node.scrollTop);
-  });
   await tree.evaluate((node) => {
     node.scrollTop += 300;
   });
   const cancelScrollBeforeClose = await tree.evaluate((node) => node.scrollTop);
-  const cancelExpectedResult = cancelScrollBeforeClose - Math.min(
-    cancelScrollBeforeClose - cancelScrollStart,
-    Math.max(0, await activeBlock.evaluate((node) => node.getBoundingClientRect().height) - passiveHeight)
-  );
   await expect(activeBlock).toHaveAttribute('data-passive-block-height', String(passiveHeight));
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
 
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelExpectedResult));
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelScrollBeforeClose));
+});
+
+test('default example preserves bottom scroll when adding and deleting text below Mermaid', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/');
+  await page.waitForTimeout(300);
+  await openDocument(page, 'Default Example');
+
+  const sectionKey = await page.getByRole('button', { name: 'Diagram Example', exact: true }).evaluate((button) => {
+    const section = button.closest<HTMLElement>('article.editor-section-card');
+    return section?.dataset.sectionKey ?? '';
+  });
+  expect(sectionKey).not.toBe('');
+  const section = page.locator(`article.editor-section-card[data-section-key="${sectionKey}"]`);
+  const addComponent = section.locator(':scope > .editor-blocks > .compact-add-component-ghost').last();
+  const editorTree = page.locator('#editorTree');
+  await editorTree.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  await page.waitForTimeout(100);
+  await addComponent.evaluate((element) => element.scrollIntoView({ block: 'nearest' }));
+  await page.waitForTimeout(100);
+  await addComponent.getByRole('button', { name: 'Section component type' }).dispatchEvent('mousedown');
+  await expect(addComponent.locator('.component-picker')).toHaveAttribute('data-open', 'true');
+  const recordEditorScroll = async (action: () => Promise<void>): Promise<number[]> => {
+    const recording = page.evaluate(() => new Promise<number[]>((resolve) => {
+      const samples: number[] = [];
+      const startedAt = performance.now();
+      const sample = (): void => {
+        samples.push(document.querySelector<HTMLElement>('#editorTree')?.scrollTop ?? -1);
+        if (performance.now() - startedAt < 300) {
+          requestAnimationFrame(sample);
+        } else {
+          resolve(samples);
+        }
+      };
+      requestAnimationFrame(sample);
+    }));
+    await page.waitForTimeout(20);
+    await action();
+    return recording;
+  };
+  const addExpectedResult = await editorTree.evaluate((node) => node.scrollTop);
+  const addScrollSamples = await recordEditorScroll(() => (
+    addComponent.locator('.component-picker-row-direct[data-component="text"]').dispatchEvent('click')
+  ));
+
+  const activeText = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator('.rich-editor[data-field="block-rich"]'),
+  });
+  await expect(activeText).toBeVisible();
+  expect(addScrollSamples.every((scrollTop) => Math.round(scrollTop) === Math.round(addExpectedResult))).toBe(true);
+
+  await activeText.locator('.rich-editor[data-field="block-rich"]').fill('Text added below the Mermaid example');
+  await activeText.getByRole('button', { name: 'Done' }).dispatchEvent('click');
+
+  const passiveText = page.locator('.editor-block-passive', { hasText: 'Text added below the Mermaid example' });
+  await expect(passiveText).toBeVisible();
+  await expect.poll(() => passiveText.evaluate((node) => node.getAnimations().length)).toBe(0);
+  await passiveText.dispatchEvent('click');
+  await expect(activeText).toBeVisible();
+  await activeText.locator(':scope > [data-action="remove-block"]').dispatchEvent('click');
+  const confirmDelete = page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true });
+  await expect(confirmDelete).toBeVisible();
+  const deleteExpectedResult = await editorTree.evaluate((node) => node.scrollTop);
+  const deleteScrollSamples = await recordEditorScroll(() => confirmDelete.dispatchEvent('click'));
+  await expect(passiveText).toHaveCount(0);
+  expect(deleteScrollSamples.every((scrollTop) => Math.round(scrollTop) === Math.round(deleteExpectedResult))).toBe(true);
 });
 
 test('AI mode cancel does not scroll for components at different container positions', async ({ page }) => {
@@ -3660,8 +3896,6 @@ hvy_version: 0.1
     scroller.scrollTop += Math.max(0, editorRect.bottom - visibleBottom + 10);
   });
   await reader.evaluate((node) => {
-    node.dataset.activeEditorUserScrollDirection = 'down';
-    node.dataset.activeEditorUserScrollStartTop = String(node.scrollTop);
     node.scrollTop += 5;
   });
   const fullyVisibleScrollTop = await reader.evaluate((node) => node.scrollTop);
@@ -3782,7 +4016,7 @@ hvy_version: 0.1
 test('active nested list item exposes delete controls on ancestor components', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3819,23 +4053,65 @@ hvy_version: 0.1
   );
   await expect(listEditor.locator('> [data-action="remove-block"]')).toBeVisible();
   await expect(expandableEditor.locator('> [data-action="remove-block"]')).toBeVisible();
-
   await expandableEditor.locator('> [data-action="remove-block"]').click();
   await page.getByRole('button', { name: 'Delete' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw).not.toContain('Founder details');
   expect(raw).toContain('component-list');
 });
 
+test('PHVY component-list text item can be deleted', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"items"}-->
+#! Items
+
+ <!--hvy:component-list {"id":"items-list","componentListComponent":"text"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {"id":"foo"}-->
+    Foo
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {"id":"bar"}-->
+    Bar
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.evaluate(async () => {
+    const { getRenderApp, state } = await import('/src/state.ts');
+    state.document.extension = '.phvy';
+    getRenderApp()();
+  });
+
+  await page.locator('.editor-block-passive', { hasText: 'Foo' }).last().click();
+  const activeItem = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator('.editor-block-title', { hasText: /^text$/ }),
+  }).last();
+  await expect(activeItem.locator('> [data-action="remove-block"]')).toBeVisible();
+  await activeItem.locator('> [data-action="remove-block"]').click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  await expect(page.locator('.editor-block-passive', { hasText: 'Foo' })).toHaveCount(0);
+  await expect(page.locator('.editor-block-passive', { hasText: 'Bar' })).toBeVisible();
+});
+
 test('cli-created expanded history record can be closed and followed by another list item', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.getByRole('button', { name: 'CLI' }).click();
-  await runCliCommand(page, 'hvy insert 0 history-record /body/history/component-list-2 --id history-reproco-founder --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\'');
-  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[{"cells":["2025-2026","ReproCo","Founder"]}]'));
-  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-content/text-0/text.txt', '### ReproCo'));
+  await runCliCommand(page, 'hvy insert 0 history-record /body/history/history-list --id history-reproco-founder --using-template \'{"role":"","organization":"","date_range":"","location":"","description":"","accomplishments":""}\'');
+  await runCliCommand(page, writeFileCommand('/body/history/history-list/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[{"cells":["2025-2026","ReproCo","Founder"]}]'));
+  await runCliCommand(page, writeFileCommand('/body/history/history-list/history-reproco-founder/expandable-content/text-0/text.txt', '### ReproCo'));
 
   await page.getByRole('button', { name: 'AI' }).click();
   const aiRecord = page.locator('#aiReaderDocument .reader-block', { hasText: 'ReproCo' }).first();
@@ -3844,7 +4120,7 @@ test('cli-created expanded history record can be closed and followed by another 
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add Job' }).first()).toBeVisible();
   const passiveRecord = page.locator('.editor-block-passive', { hasText: 'ReproCo' }).last();
   await expect(passiveRecord).not.toContainText('Empty text');
 
@@ -3854,12 +4130,17 @@ test('cli-created expanded history record can be closed and followed by another 
   }).last();
   await expect(activeRecord).not.toContainText('Empty text');
   await activeRecord.locator('> .editor-block-done-row > [data-action="deactivate-block"]').click();
-  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
-  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+  // Activating a nested record leaves its ancestors active too, so close whatever remains
+  // rather than assuming a fixed nesting depth.
+  const activeBlocks = page.locator('.editor-block[data-active-editor-block="true"]');
+  for (let remaining = await activeBlocks.count(); remaining > 0; remaining = await activeBlocks.count()) {
+    await activeBlocks.locator('> .editor-block-done-row > [data-action="deactivate-block"]').first().click();
+  }
+  await expect(activeBlocks).toHaveCount(0);
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add Job' }).first()).toBeVisible();
 
-  await page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first().click();
-  await page.locator('.modal-panel', { hasText: 'history-record' }).getByRole('button', { name: 'Insert' }).click();
+  await page.locator('.passive-list-add-ghost', { hasText: 'Add Job' }).first().click();
+  await page.locator('.modal-panel', { hasText: 'Add History Record' }).getByRole('button', { name: 'Add', exact: true }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/<!--hvy:history-record/g) ?? []).toHaveLength(2);
@@ -3907,7 +4188,7 @@ hvy_version: 0.1
 test('editing the second resume project does not duplicate it after done', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'Basic' }).click();
 
   const projectEntry = page.locator('.editor-block-passive', { hasText: 'Autonomous Agent Hackathon' }).last();
@@ -3938,7 +4219,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'TypeScript View' }).click();
 
@@ -3976,7 +4257,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
     page.locator('#tools-technologies .reader-container', { hasText: 'AI / Agent Tooling' }).first()
   ).toHaveClass(/is-expanded/);
   const sidebarSectionIds = await page.locator('#readerSidebarSections section[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
-  expect(sidebarSectionIds).toEqual(['locations', 'skills', 'tools-technologies']);
+  expect(sidebarSectionIds).toEqual(['locations', 'skills', 'tools-technologies', 'languages']);
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await expect(page.locator('#editorTree .is-reader-view-dimmed')).toHaveCount(0);
@@ -3988,7 +4269,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
 
-  await page.getByRole('button', { name: 'CRM Example' }).click();
+  await openDocument(page, 'CRM Example');
   await expect(page.getByRole('button', { name: 'No View' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);
@@ -4030,6 +4311,55 @@ hvy_version: 0.1
   await expect(page.locator('[data-field="block-component-list-component"]')).toHaveCount(0);
 });
 
+test('component-list meta edits its item type and shared sort values', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: sample-entry
+    baseType: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: Open
+            value: open
+---
+
+<!--hvy: {"id":"lists"}-->
+#! Lists
+
+ <!--hvy:component-list {"id":"sample-list","componentListComponent":"sample-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:sample-entry {"id":"sample-item"}-->
+    Status: <!--hvy:sort-value {"key":"Status"}-->Open<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Status: Open' }).first().click({ position: { x: 4, y: 4 } });
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="open-component-meta"]').click();
+
+  const componentMeta = page.locator('.component-meta-modal', { hasText: 'Component Meta: component-list' });
+  await expect(componentMeta.getByLabel('List Item Type')).toHaveValue('sample-entry');
+  await expect(componentMeta.getByLabel('List Item Type')).toBeDisabled();
+  await expect(componentMeta).toContainText('Remove all list items before changing the item type.');
+  await expect(componentMeta).toContainText('Shared by every list using sample-entry');
+
+  const sortValues = componentMeta.getByRole('region', { name: 'Sort Values' });
+  await sortValues.locator('.component-sort-value-summary').click();
+  const expectedResult = sortValues.locator('[data-field="def-enum-option-label"]');
+  await expectedResult.fill('In Progress');
+  await expect(expectedResult).toBeFocused();
+
+  await componentMeta.locator('[data-modal-action="close"]').click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('label: In Progress');
+});
+
 test('component move and copy use placement boundaries', async ({ page }) => {
   await page.goto('/');
 
@@ -4061,7 +4391,7 @@ hvy_version: 0.1
   await page.locator('[data-action="place-component"][data-placement="after"]').nth(1).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Beta' }).first().click();
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-move"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Beta' }).getByRole('button', { name: 'Move', exact: true }).click();
   await page.locator('[data-action="place-component"][data-placement="before"]').first().click();
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -4307,7 +4637,7 @@ hvy_version: 0.1
   await page.locator('.editor-sidebar [data-action="place-component"][data-placement="after"]').last().click();
 
   await page.locator('.editor-sidebar .editor-block-passive', { hasText: 'Side note' }).click();
-  await page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] [data-action="start-component-move"]').click();
+  await page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"]', { hasText: 'Side note' }).getByRole('button', { name: 'Move', exact: true }).click();
   await page.locator('.editor-sidebar-tab').click();
   await expect(page.locator('.component-placement-target')).not.toHaveCount(0);
   await page.locator('#editorTree [data-action="place-component"][data-placement="before"]').first().click();
@@ -4458,8 +4788,9 @@ hvy_version: 0.1
   await page.locator('[data-placement-container="grid"][data-placement="after"]').first().click();
 
   await page.locator('#editorTree .editor-block-passive', { hasText: 'Beta' }).first().click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Beta');
-  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move', exact: true }).click();
+  const activeBeta = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Beta' });
+  await expect(activeBeta).toContainText('Beta');
+  await activeBeta.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(4);
   await expect(page.locator('[data-placement-container="grid"]').first()).toContainText('Move (in grid)');
   await page.locator('[data-placement-container="grid"][data-placement="after"]').last().click();
@@ -4515,8 +4846,9 @@ hvy_version: 0.1
   await page.locator('[data-placement-container="container"][data-placement="after"]').first().click();
 
   await page.locator('#editorTree .editor-block-passive', { hasText: 'Beta' }).first().click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Beta');
-  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move', exact: true }).click();
+  const activeBeta = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Beta' });
+  await expect(activeBeta).toContainText('Beta');
+  await activeBeta.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(page.locator('[data-placement-container="container"]')).toHaveCount(3);
   await expect(page.locator('[data-placement-container="container"]').first()).toContainText('Move (in container)');
   await page.locator('[data-placement-container="container"][data-placement="after"]').last().click();
@@ -4563,6 +4895,8 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  // Placement targets only exist inside open panes, so both have to be open to offer both.
+  await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
   await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
   await page.locator('.editor-block-passive', { hasText: 'Skill details' }).click();
   await page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') }).locator('[data-action="start-component-copy"]').last().click();
@@ -4732,7 +5066,9 @@ component_defs:
   await skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
 
   await expect(skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Cancel place', exact: true })).toBeVisible();
-  await expect(page.locator('[data-action="place-component"]')).toHaveCount(2);
+  // Before/after the skill-card itself, plus before/after inside the stub pane the test opened.
+  await expect(page.locator('[data-placement-container="section"]')).toHaveCount(2);
+  await expect(page.locator('[data-placement-container="expandable-stub"]')).toHaveCount(2);
 });
 
 test('component placement works inside expandable children of a locked section', async ({ page }) => {

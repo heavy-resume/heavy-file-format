@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import {
   buildPythonProgram,
@@ -15,9 +15,10 @@ import {
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { syncSortValuesForDocument } from '../src/sort-values';
-import { initCallbacks, initState } from '../src/state';
+import { initCallbacks, initState, state } from '../src/state';
+import { getReaderSectionExpandedOverride } from '../src/navigation';
 import { createTestState } from './serialization-test-helpers';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
@@ -86,6 +87,17 @@ test('buildPythonProgram exposes doc sub-apis through the doc proxy', () => {
   const expectedResult = buildPythonProgram('runtime-doc-json-test');
 
   expect(expectedResult).toContain('class __HvyDocProxy__:');
+  expect(expectedResult).toContain('class __HvyPluginsProxy__:');
+  expect(expectedResult).toContain('class __HvyDbProxy__:');
+  expect(expectedResult).toContain('def call(self, plugin_id, method, args=None, **kwargs):');
+  expect(expectedResult).toContain('def __hvy_plugin_to_json__(value, callbacks, path=\'\'):');
+  expect(expectedResult).toContain('if callable(value):');
+  expect(expectedResult).toContain('callbacks[path] = __hvy_wrap_plugin_callback__(value)');
+  expect(expectedResult).toContain('return self.__js_doc.plugins.call_marshaled(plugin_id, method, args_json, callbacks)');
+  expect(expectedResult).toContain('__hvy_runtime__.doc.callback_error(');
+  expect(expectedResult).toContain('self.plugins = __HvyPluginsProxy__(js_doc)');
+  expect(expectedResult).toContain('self.db = __HvyDbProxy__(js_doc)');
+  expect(expectedResult).toContain('return self.__js_doc.db.execute_json(sql, __hvy_to_json__(params))');
   expect(expectedResult).toContain('return getattr(self.__js_doc, name)');
 });
 
@@ -551,6 +563,100 @@ component_defs:
   expect(expectedResult).toEqual({ Time: '2026-07-08T16:15:00.000Z' });
 });
 
+test('component handle set_sort_value updates the annotation before deriving its sort key', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    sortValueDefs:
+      Outcome:
+        type: text
+---
+
+<!--hvy: {"id":"applications"}-->
+#! Applications
+
+ <!--hvy:component-list {"id":"entries","componentListComponent":"application-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:application-entry {"id":"application-1","sortKeys":{"Outcome":"Active"},"expandableAlwaysShowStub":true}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Outcome: <!--hvy:sort-value {"key":"Outcome"}-->Active<!--/hvy:sort-value-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document });
+  const application = (runtime.doc.tool('get_components', { component: 'application-entry' }) as Array<{
+    set_sort_value(key: string, value: unknown): number;
+  }>)[0]!;
+
+  const expectedResult = application.set_sort_value('Outcome', 'Rejected');
+  runtime.doc.rerender();
+
+  expect(expectedResult).toBe(1);
+  expect(document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!.schema.expandableStubBlocks.children[0]!.text)
+    .toContain('<!--hvy:sort-value {"key":"Outcome"}-->Rejected<!--/hvy:sort-value-->');
+  expect(document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!.schema.sortKeys)
+    .toEqual({ Outcome: 'Rejected' });
+});
+
+test('scripting runtime can defer mutation rendering to its document hook caller', () => {
+  const renderApp = vi.fn();
+  const refreshReaderPanels = vi.fn();
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels,
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {"id":"note"}-->
+Before
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, renderOnMutation: false });
+
+  runtime.markMutated();
+  runtime.doc.rerender();
+
+  expect(refreshReaderPanels).not.toHaveBeenCalled();
+  expect(renderApp).not.toHaveBeenCalled();
+});
+
+test('scripting runtime checks the cycle boundary before a mutation-triggered render', () => {
+  const renderApp = vi.fn();
+  const onMutationFlushed = vi.fn();
+  const beforeMutationRender = vi.fn(() => {
+    throw new Error('cycle stopped');
+  });
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  initState(createTestState(document));
+  const runtime = createScriptingRuntime({ document, beforeMutationRender, onMutationFlushed });
+
+  runtime.doc.header.set('changed', true);
+
+  expect(() => runtime.doc.rerender()).toThrow('cycle stopped');
+  expect(beforeMutationRender).toHaveBeenCalledOnce();
+  expect(renderApp).not.toHaveBeenCalled();
+  expect(onMutationFlushed).toHaveBeenCalledOnce();
+});
+
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -586,6 +692,9 @@ test('createScriptingRuntime exposes a supplied database API', () => {
   expect(runtime.doc.db.execute('INSERT INTO chores (title) VALUES (?)', ['Sweep'])).toBe(
     'ran INSERT INTO chores (title) VALUES (?) with ["Sweep"]'
   );
+  expect(runtime.doc.db.execute_json('INSERT INTO chores (title) VALUES (?)', '[null]')).toBe(
+    'ran INSERT INTO chores (title) VALUES (?) with [null]'
+  );
 });
 
 test('createScriptingRuntime exposes synchronous hvy cli commands', () => {
@@ -612,7 +721,7 @@ hvy_version: 0.1
   const runtime = createScriptingRuntime({ document });
 
   expect(runtime.doc.cli.run('cat /id/note/raw.hvy')).toContain('Before');
-  expect(runtime.doc.cli.write('/id/note/text.json', '{ "css": "margin: 0;" }')).toBe('/id/note/text.json: written');
+  expect(runtime.doc.cli.write('/id/note/text.json', '{ "id": "note", "css": "margin: 0;" }')).toBe('/id/note/text.json: written');
   expect(() => runtime.doc.cli.write('/id/note/raw.hvy', '<!--hvy:text {"id":"note"}-->\n After')).toThrow(
     'doc.cli.write does not write raw.hvy files.'
   );
@@ -763,7 +872,7 @@ test('createScriptingRuntime points db-table SQL callers at doc.db instead of cl
   });
 
   expect(() => runtime.doc.cli.run('hvy plugin db-table exec "CREATE TABLE things (id INTEGER)"')).toThrow(
-    'doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.'
+    'doc.cli.run cannot run asynchronous db-table runtime commands. Use the interactive CLI, doc.db.query, or doc.db.execute instead.'
   );
 });
 
@@ -792,4 +901,45 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
   expect(getRunnableScriptingTargetsForView(targets, 'editor').map((target) => target.blockId)).toEqual(['editor-script']);
   expect(getRunnableScriptingTargetsForView(targets, 'viewer').map((target) => target.blockId)).toEqual(['document-script']);
   expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script']);
+});
+
+test('component handle expand applies transient reader state without changing serialized defaults', () => {
+  const refreshReaderPanels = vi.fn();
+  const renderApp = vi.fn();
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"records","expanded":false}-->
+#! Records
+
+ <!--hvy:expandable {"id":"new-record","expandableExpanded":false}-->
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {}-->
+    Newly created record
+`, '.hvy');
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels,
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createTestState(document));
+  const serializedBefore = serializeDocument(document);
+  const runtime = createScriptingRuntime({ document });
+  const record = (runtime.doc.tool('get_components', { component: 'expandable' }) as Array<{
+    expand(): void;
+  }>)[0]!;
+
+  record.expand();
+  runtime.doc.rerender();
+
+  const block = document.sections[0]!.blocks[0]!;
+  expect(state.readerExpandableState[`${document.sections[0]!.key}:${block.id}`]).toBe(true);
+  expect(getReaderSectionExpandedOverride(document.sections[0]!)).toBe(true);
+  expect(block.schema.expandableExpanded).toBe(false);
+  expect(serializeDocument(document)).toBe(serializedBefore);
+  expect(refreshReaderPanels).toHaveBeenCalledOnce();
+  expect(renderApp).toHaveBeenCalledOnce();
 });

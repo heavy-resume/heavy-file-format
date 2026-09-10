@@ -56,39 +56,12 @@ function renderComponentListPlacementBlockList(
   blocks: VisualBlock[],
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
-  const pdfDocument = helpers.isPdfDocument?.() === true;
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
-  const output: string[] = [];
-  if (!locked && !pdfDocument && blocks.length > 0) {
-    output.push(helpers.renderComponentPlacementTarget({
-      container: 'component-list',
-      sectionKey,
-      parentBlockId: block.id,
-      placement: 'before',
-      targetBlockId: blocks[0]?.id,
-    }));
-  }
-  for (const innerBlock of blocks) {
-    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, locked));
-    if (!locked && !pdfDocument) {
-      output.push(helpers.renderComponentPlacementTarget({
-        container: 'component-list',
-        sectionKey,
-        parentBlockId: block.id,
-        placement: 'after',
-        targetBlockId: innerBlock.id,
-      }));
-    }
-  }
-  if (!locked && !pdfDocument && blocks.length === 0) {
-    output.push(helpers.renderComponentPlacementTarget({
-      container: 'component-list',
-      sectionKey,
-      parentBlockId: block.id,
-      placement: 'end',
-    }));
-  }
-  return output.join('');
+  return helpers.renderEditorNestedBlocks(sectionKey, blocks, {
+    container: 'component-list',
+    parentBlockId: block.id,
+    locked,
+  });
 }
 
 export const renderComponentListReader: ComponentReaderRenderer = (section, block, helpers) => {

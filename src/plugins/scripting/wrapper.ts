@@ -1,12 +1,27 @@
 import { loadBrython, getBrython } from './brython-loader';
 import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
+import { createScriptingPluginsApi } from './plugin-apis';
 import type { HvyPdfExportRuleRecorder } from '../../pdf-export/types';
 import type { VisualDocument } from '../../types';
 import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
-import { hasDocumentDbTables } from '../db-table-model';
+import { hasDocumentDatabaseTables } from '../database-table-targets';
 import { notifyDocumentMayHaveChanged } from '../../document-change';
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
+import {
+  beginScriptCycleExecution,
+  createScriptInvocationIdentity,
+  type ScriptCycleExecution,
+} from './cycle-coordinator';
+import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
+import {
+  isScriptingCallbackRuntimeDisposed,
+  registerScriptingCallbackCleanup,
+} from './callback-lifecycle';
+import {
+  normalizeBrythonHostArguments,
+  normalizeBrythonHostValue,
+} from './brython-host-values';
 
 export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're', 'datetime'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
@@ -233,7 +248,7 @@ function withSuppressedBrythonConsoleNoise(run: () => void): void {
 }
 
 function shouldInitializeScriptingDb(document: VisualDocument, source: string): boolean {
-  if (hasDocumentDbTables(document)) {
+  if (hasDocumentDatabaseTables(document)) {
     return true;
   }
   return /\bdoc\s*\.\s*db\b|\bdb\b/u.test(source);
@@ -682,6 +697,32 @@ class __HvyRandomModule__:
     def random(self):
         return __hvy_window__.Math.random()
 
+    def choice(self, sequence):
+        size = len(sequence)
+        if size == 0:
+            raise IndexError("Cannot choose from an empty sequence")
+        return sequence[int(__hvy_window__.Math.floor(self.random() * size))]
+
+    def randrange(self, start, stop=None, step=1):
+        if stop is None:
+            stop = start
+            start = 0
+        if not isinstance(start, int) or not isinstance(stop, int) or not isinstance(step, int):
+            raise TypeError("non-integer arg for randrange()")
+        if step == 0:
+            raise ValueError("zero step for randrange()")
+        values = range(start, stop, step)
+        size = len(values)
+        if size == 0:
+            raise ValueError("empty range for randrange()")
+        return values[int(__hvy_window__.Math.floor(self.random() * size))]
+
+    def randint(self, a, b):
+        return self.randrange(a, b + 1)
+
+    def uniform(self, a, b):
+        return a + (b - a) * self.random()
+
     def shuffle(self, items):
         index = len(items) - 1
         while index > 0:
@@ -690,6 +731,61 @@ class __HvyRandomModule__:
             items[index] = items[swap_index]
             items[swap_index] = temp
             index -= 1
+
+    def sample(self, population, k):
+        if not isinstance(k, int):
+            raise TypeError("sample counts must be integers")
+        size = len(population)
+        if k < 0 or k > size:
+            raise ValueError("Sample larger than population or is negative")
+        pool = [population[index] for index in range(size)]
+        result = []
+        for index in range(k):
+            swap_index = index + int(__hvy_window__.Math.floor(self.random() * (size - index)))
+            result.append(pool[swap_index])
+            pool[swap_index] = pool[index]
+        return result
+
+    def choices(self, population, weights=None, *, cum_weights=None, k=1):
+        if not isinstance(k, int):
+            raise TypeError("the number of choices must be an integer")
+        size = len(population)
+        if size == 0:
+            raise IndexError("Cannot choose from an empty sequence")
+        if weights is not None and cum_weights is not None:
+            raise TypeError("Cannot specify both weights and cumulative weights")
+        if weights is None and cum_weights is None:
+            return [self.choice(population) for _ in range(k)]
+
+        if cum_weights is None:
+            cumulative = []
+            total = 0
+            for weight in weights:
+                total += weight
+                cumulative.append(total)
+        else:
+            cumulative = list(cum_weights)
+        if len(cumulative) != size:
+            raise ValueError("The number of weights does not match the population")
+        total = cumulative[-1] + 0.0
+        if total <= 0.0:
+            raise ValueError("Total of weights must be greater than zero")
+        if not __hvy_window__.Number.isFinite(total):
+            raise ValueError("Total of weights must be finite")
+
+        result = []
+        for _ in range(k):
+            target = self.random() * total
+            low = 0
+            high = size - 1
+            while low < high:
+                middle = (low + high) // 2
+                if target < cumulative[middle]:
+                    high = middle
+                else:
+                    low = middle + 1
+            result.append(population[low])
+        return result
 
 
 def __hvy_is_leap_year__(year):
@@ -1274,6 +1370,67 @@ def __hvy_to_json__(value):
     return __hvy_json_escape__(value)
 
 
+def __hvy_json_pointer_segment__(value):
+    return str(value).replace('~', '~0').replace('/', '~1')
+
+
+def __hvy_wrap_plugin_callback__(callback):
+    def __hvy_plugin_callback__(*args):
+        __hvy_callback_trace_enabled__ = False
+        try:
+            if __hvy_trace_enabled__:
+                __hvy_sys__.settrace(__hvy_trace__)
+                __hvy_callback_trace_enabled__ = True
+            return callback(*args)
+        except Exception as __hvy_callback_err__:
+            __hvy_runtime__.doc.callback_error(
+                __hvy_window__.__BRYTHON__.error_trace(__hvy_callback_err__)
+            )
+            return None
+        finally:
+            if __hvy_callback_trace_enabled__:
+                try:
+                    __hvy_sys__.settrace(None)
+                except Exception:
+                    pass
+    return __hvy_plugin_callback__
+
+
+def __hvy_plugin_to_json__(value, callbacks, path=''):
+    if callable(value):
+        callbacks[path] = __hvy_wrap_plugin_callback__(value)
+        return 'null'
+    if value is None:
+        return 'null'
+    if value is True:
+        return 'true'
+    if value is False:
+        return 'false'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return __hvy_json_escape__(value)
+    if isinstance(value, (list, tuple)):
+        return '[' + ','.join([
+            __hvy_plugin_to_json__(item, callbacks, path + '/' + str(index))
+            for index, item in enumerate(value)
+        ]) + ']'
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            key_text = str(key)
+            parts.append(
+                __hvy_json_escape__(key_text) + ':' +
+                __hvy_plugin_to_json__(
+                    item,
+                    callbacks,
+                    path + '/' + __hvy_json_pointer_segment__(key_text)
+                )
+            )
+        return '{' + ','.join(parts) + '}'
+    return __hvy_json_escape__(value)
+
+
 class __HvyToolProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc
@@ -1301,11 +1458,46 @@ class __HvyToolProxy__:
             raise TypeError("doc.tool.NAME accepts at most one positional args dict")
         return __hvy_named_tool__
 
+class __HvyPluginsProxy__:
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
+
+    def call(self, plugin_id, method, args=None, **kwargs):
+        if args is None:
+            merged = {}
+        elif isinstance(args, dict):
+            merged = dict(args)
+        else:
+            raise TypeError("doc.plugins.call args must be a dict when provided")
+        merged.update(kwargs)
+        callbacks = {}
+        args_json = __hvy_plugin_to_json__(merged, callbacks)
+        return self.__js_doc.plugins.call_marshaled(plugin_id, method, args_json, callbacks)
+
+
+class __HvyDbProxy__:
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
+
+    def query(self, sql, params=None):
+        return self.__js_doc.db.query_json(sql, __hvy_to_json__(params))
+
+    def execute(self, sql, params=None):
+        return self.__js_doc.db.execute_json(sql, __hvy_to_json__(params))
+
+    def get_tables(self):
+        return self.__js_doc.db.get_tables()
+
+    def get_updated_tables(self, table_name=''):
+        return self.__js_doc.db.get_updated_tables(table_name)
+
 
 class __HvyDocProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc
         self.tool = __HvyToolProxy__(js_doc)
+        self.plugins = __HvyPluginsProxy__(js_doc)
+        self.db = __HvyDbProxy__(js_doc)
 
     def __getattr__(self, name):
         return getattr(self.__js_doc, name)
@@ -1399,10 +1591,13 @@ export interface RunUserScriptOptions {
   pluginVersion?: string;
   maxLines?: number;
   changeReason?: HvyPluginHookChangeReason;
+  renderOnMutation?: boolean;
   form?: ScriptingFormApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   injectedGlobals?: Record<string, unknown>;
   libraries?: readonly string[];
+  databaseChanges?: DatabaseChangeSnapshot;
+  onCallbackError?: (result: ScriptingRunResult) => void;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -1440,7 +1635,10 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
 
   let stateRuntime: StateRuntime | null = null;
   try {
-    stateRuntime = getActiveStateRuntime();
+    const activeStateRuntime = getActiveStateRuntime();
+    if (activeStateRuntime.state.document === options.document) {
+      stateRuntime = activeStateRuntime;
+    }
   } catch {
     // Standalone scripting tests and pre-bootstrap runs do not have an active state runtime.
   }
@@ -1453,7 +1651,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       scriptingDb = await createScriptingDbRuntime(options.document, () => {
         dbMutated = true;
         runtime?.markMutated();
-      });
+      }, options.databaseChanges);
     } catch (error) {
       return {
         ok: false,
@@ -1466,13 +1664,81 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       };
     }
   }
+  let cycleExecution: ScriptCycleExecution | null = null;
+  if (stateRuntime) {
+    cycleExecution = beginScriptCycleExecution(
+      stateRuntime,
+      options.document,
+      createScriptInvocationIdentity(options.componentId ?? 'hvy-script', options.source)
+    );
+  }
+  let renderCycleExecution = cycleExecution;
+  let initialExecutionActive = true;
+  let hasPluginCallbacks = false;
+  let callbackResourcesActive = true;
+  const callbackIdentity = createScriptInvocationIdentity(
+    options.componentId ?? 'hvy-script',
+    options.source
+  );
+  const releaseCallbackResources = () => {
+    if (!callbackResourcesActive) return;
+    callbackResourcesActive = false;
+    scriptingDb?.dispose();
+  };
   runtime = createScriptingRuntime({
     document: options.document,
     previousDocument: options.previousDocument,
     maxLines: options.maxLines,
     changeReason: options.changeReason,
+    renderOnMutation: options.renderOnMutation,
     form: options.form,
     db: scriptingDb?.api,
+    plugins: createScriptingPluginsApi(options.document, {
+      allowAsync: false,
+      requireDocumentPermission: true,
+      onMutation: () => runtime?.markMutated(),
+      wrapCallback: (callback) => {
+        hasPluginCallbacks = true;
+        return (...args) => {
+          if (!callbackResourcesActive) return undefined;
+          if (
+            stateRuntime
+            && (
+              isScriptingCallbackRuntimeDisposed(stateRuntime)
+              || stateRuntime.state.document !== options.document
+            )
+          ) {
+            releaseCallbackResources();
+            return undefined;
+          }
+          const invokeCallback = () => normalizeBrythonHostValue(
+            callback(...normalizeBrythonHostArguments(args))
+          );
+          if (initialExecutionActive || !stateRuntime) {
+            const result = invokeCallback();
+            runtime?.doc.rerender();
+            return result;
+          }
+          const callbackCycle = beginScriptCycleExecution(
+            stateRuntime,
+            options.document,
+            callbackIdentity
+          );
+          const previousRenderCycle = renderCycleExecution;
+          renderCycleExecution = callbackCycle;
+          try {
+            return runWithStateRuntime(stateRuntime, () => {
+              const result = invokeCallback();
+              runtime?.doc.rerender();
+              return result;
+            });
+          } finally {
+            renderCycleExecution = previousRenderCycle;
+            callbackCycle.complete();
+          }
+        };
+      },
+    }),
     exportRuleRecorder: options.exportRuleRecorder,
     onMutationFlushed: () => {
       if (!stateRuntime) {
@@ -1482,6 +1748,17 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
       });
     },
+    beforeMutationRender: () => renderCycleExecution?.beforeMutationRender(),
+    onCallbackError: (error) => options.onCallbackError?.({
+      ok: false,
+      error: summarizeScriptingError(error),
+      errorDetail: cleanScriptingErrorDetail(error),
+      stepsExecuted: runtime?.stats.stepsExecuted ?? 0,
+      stepBudget: runtime?.stats.stepBudget ?? (options.maxLines ?? 100_000),
+      linesExecuted: runtime?.stats.linesExecuted ?? 0,
+      toolCalls: runtime?.stats.toolCalls ?? 0,
+      logs: [...(runtime?.stats.logs ?? [])],
+    }),
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
@@ -1500,76 +1777,85 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   scriptElement.id = `hvy-script-${runtimeId}`;
   scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId, options.injectedGlobals ?? {}, libraries);
 
-  return new Promise((resolve) => {
-    scripting.callbacks[runtimeId] = () => {
-      const error = scripting.errors[runtimeId];
-      const result: ScriptingRunResult = error
-        ? {
-            ok: false,
-            error: summarizeScriptingError(error),
-            errorDetail: cleanScriptingErrorDetail(error),
-            stepsExecuted: runtime.stats.stepsExecuted,
-            stepBudget: runtime.stats.stepBudget,
-            linesExecuted: runtime.stats.linesExecuted,
-            toolCalls: runtime.stats.toolCalls,
-            logs: [...runtime.stats.logs],
-          }
-        : {
-            ok: true,
-            stepsExecuted: runtime.stats.stepsExecuted,
-            stepBudget: runtime.stats.stepBudget,
-            linesExecuted: runtime.stats.linesExecuted,
-            toolCalls: runtime.stats.toolCalls,
-            returnValue: scripting.results[runtimeId],
-            logs: [...runtime.stats.logs],
-          };
+  try {
+    return await new Promise((resolve) => {
+      scripting.callbacks[runtimeId] = () => {
+        initialExecutionActive = false;
+        const error = scripting.errors[runtimeId];
+        const result: ScriptingRunResult = error
+          ? {
+              ok: false,
+              error: summarizeScriptingError(error),
+              errorDetail: cleanScriptingErrorDetail(error),
+              stepsExecuted: runtime.stats.stepsExecuted,
+              stepBudget: runtime.stats.stepBudget,
+              linesExecuted: runtime.stats.linesExecuted,
+              toolCalls: runtime.stats.toolCalls,
+              logs: [...runtime.stats.logs],
+            }
+          : {
+              ok: true,
+              stepsExecuted: runtime.stats.stepsExecuted,
+              stepBudget: runtime.stats.stepBudget,
+              linesExecuted: runtime.stats.linesExecuted,
+              toolCalls: runtime.stats.toolCalls,
+              returnValue: scripting.results[runtimeId],
+              logs: [...runtime.stats.logs],
+            };
 
-      delete scripting.runtimes[runtimeId];
-      delete scripting.sources[runtimeId];
-      delete scripting.instrumentedSources[runtimeId];
-      delete scripting.errors[runtimeId];
-      delete scripting.results[runtimeId];
-      delete scripting.callbacks[runtimeId];
-      scriptingDb?.dispose();
-      if (dbMutated) {
-        runtime.doc.rerender();
-      }
-
-      resolve(result);
-    };
-
-    try {
-      const brython = getBrython() as unknown as {
-        run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
-      };
-      if (typeof brython.run_script !== 'function') {
-        throw new Error('Brython run_script API unavailable.');
-      }
-      const runScript = brython.run_script;
-
-      withSuppressedBrythonConsoleNoise(() => {
-        runScript(
-          scriptElement,
-          scriptElement.textContent || '',
-          `hvy_script_${runtimeId}`,
-          `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
-          true
-        );
-      });
-    } catch (error) {
-      let message = String(error);
-      try {
-        const brython = getBrython() as unknown as { error_trace?: (e: unknown) => string };
-        if (typeof brython.error_trace === 'function' && error && typeof error === 'object' && '__class__' in error) {
-          message = brython.error_trace(error);
-        } else if (error instanceof Error) {
-          message = error.message;
+        delete scripting.runtimes[runtimeId];
+        delete scripting.sources[runtimeId];
+        delete scripting.instrumentedSources[runtimeId];
+        delete scripting.errors[runtimeId];
+        delete scripting.results[runtimeId];
+        delete scripting.callbacks[runtimeId];
+        if (hasPluginCallbacks && stateRuntime) {
+          registerScriptingCallbackCleanup(stateRuntime, releaseCallbackResources);
+        } else {
+          releaseCallbackResources();
         }
-      } catch (_) {
-        // fallback to original error string
+        if (dbMutated) {
+          runtime.doc.rerender();
+        }
+
+        resolve(result);
+      };
+
+      try {
+        const brython = getBrython() as unknown as {
+          run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
+        };
+        if (typeof brython.run_script !== 'function') {
+          throw new Error('Brython run_script API unavailable.');
+        }
+        const runScript = brython.run_script;
+
+        withSuppressedBrythonConsoleNoise(() => {
+          runScript(
+            scriptElement,
+            scriptElement.textContent || '',
+            `hvy_script_${runtimeId}`,
+            `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
+            true
+          );
+        });
+      } catch (error) {
+        let message = String(error);
+        try {
+          const brython = getBrython() as unknown as { error_trace?: (e: unknown) => string };
+          if (typeof brython.error_trace === 'function' && error && typeof error === 'object' && '__class__' in error) {
+            message = brython.error_trace(error);
+          } else if (error instanceof Error) {
+            message = error.message;
+          }
+        } catch (_) {
+          // fallback to original error string
+        }
+        scripting.errors[runtimeId] = message;
+        scripting.callbacks[runtimeId]();
       }
-      scripting.errors[runtimeId] = message;
-      scripting.callbacks[runtimeId]();
-    }
-  });
+    });
+  } finally {
+    cycleExecution?.complete();
+  }
 }

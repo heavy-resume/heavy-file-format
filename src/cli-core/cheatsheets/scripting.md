@@ -30,7 +30,7 @@ doc.tool.request_structure()
 
 `doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout. It supports document/file commands such as `hvy insert`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. It does not run pipes, shell chains, redirection, `ask`, `done`, or db-table SQL commands; use `doc.db.query` and `doc.db.execute` for SQL.
 
-`doc.cli.write(PATH, CONTENT)` replaces one writable non-raw virtual file, such as generated component `.json`, `.css`, `.txt`, and table data files. It intentionally refuses `raw.hvy`; use structured CLI commands for component creation and removal.
+`doc.cli.write(PATH, CONTENT)` replaces one writable non-raw virtual file, such as generated component `.json`, `.css`, `.txt`, and table data files. In generated component `.json` files, removing a property resets that exposed field to its component default; use an explicit empty string when the intended value is empty. It intentionally refuses `raw.hvy`; use structured CLI commands for component creation and removal.
 
 `doc.time.now_iso()` returns the current client timestamp, `doc.time.now_local()` returns a human-readable date/time with the computer's local timezone label, `doc.time.now_unix_ms()` returns Unix milliseconds, and `doc.time.today_iso()` returns the client-local date as `YYYY-MM-DD`.
 

@@ -1,6 +1,6 @@
 import { requestProxyCompletion, traceAgentLoopEvent, type HostChatClient } from './chat/chat';
 import { getRegisteredPluginAiHints } from './ai-plugin-hints';
-import { getDocumentDbTableNames } from './plugins/db-table-model';
+import { getDocumentDatabaseTableNames } from './plugins/database-table-targets';
 import type { ChatMessage, ChatSettings, ToolLoopCompactionOptions, VisualDocument } from './types';
 import {
   buildDocumentEditFormatInstructions,
@@ -217,13 +217,13 @@ async function runDocumentEditToolLoop(params: {
   signal?: AbortSignal;
 }): Promise<{ summary: string }> {
   let snapshot = summarizeDocumentStructure(params.document);
-  let configuredDbTableNames = getDocumentDbTableNames(params.document);
+  let configuredDbTableNames = getDocumentDatabaseTableNames(params.document);
   let dbObjectNames = configuredDbTableNames.length > 0
     ? await loadDbTableRuntime().then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(params.document))
     : [];
   const pluginHints = getRegisteredPluginAiHints();
   const refreshDbContext = async (summary: string): Promise<string> => {
-    configuredDbTableNames = getDocumentDbTableNames(params.document);
+    configuredDbTableNames = getDocumentDatabaseTableNames(params.document);
     dbObjectNames = configuredDbTableNames.length > 0
       ? await loadDbTableRuntime().then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(params.document))
       : [];

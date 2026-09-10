@@ -54,6 +54,30 @@ export function arrowRightIcon(): string {
   </svg>`;
 }
 
+export function verticalTriangleArrowsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-vertical-triangle-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 1 2.5 10h19L12 1ZM12 23l9.5-9h-19l9.5 9Z" />
+  </svg>`;
+}
+
+export function horizontalTriangleArrowsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-horizontal-triangle-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="m1 12 9 9V3l-9 9Zm22 0-9-9v18l9-9Z" />
+  </svg>`;
+}
+
+export function chevronLeftIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-chevron-left" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="m15 5-7 7 7 7" />
+  </svg>`;
+}
+
+export function chevronRightIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-chevron-right" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="m9 5 7 7-7 7" />
+  </svg>`;
+}
+
 export function cameraIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-camera" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="M9 5l1.5-2h3L15 5h3.5A2.5 2.5 0 0 1 21 7.5v9A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5H9Z" />
@@ -65,5 +89,24 @@ export function refreshIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-refresh" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="M20 6v5h-5M4 18v-5h5" />
     <path d="M18.2 9A7 7 0 0 0 6.1 6.7L4 8.8M5.8 15A7 7 0 0 0 17.9 17.3L20 15.2" />
+  </svg>`;
+}
+
+export function settingsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-settings" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" />
+  </svg>`;
+}
+
+export function wrenchIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-wrench" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a5 5 0 0 0 6.4-6.4l-3 3-3-3 3-3Z" />
+  </svg>`;
+}
+
+export function componentLocationIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-component-location" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+    <rect x="9" y="9" width="6" height="6" rx="1" />
   </svg>`;
 }

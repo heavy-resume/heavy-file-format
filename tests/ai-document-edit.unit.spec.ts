@@ -40,7 +40,7 @@ import { executePatchHeaderTool } from '../src/ai-header-edit-tools';
 import { deserializeDocument, serializeDocument, serializeSectionFragment } from '../src/serialization';
 import { initCallbacks, initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
-import { dbTablePluginRegistration } from '../src/plugins/db-table-plugin';
+import { dbTablePlugin as dbTablePluginRegistration } from '../src/plugins/db-table/db-table-component';
 import { formPluginRegistration } from '../src/plugins/form';
 import { setHostPlugins } from '../src/plugins/registry';
 
@@ -159,7 +159,7 @@ hvy_version: 0.1
   const summary = summarizeDocumentStructure(document).summary;
 
   expect(summary).toContain('plugin id="chores-table"');
-  expect(summary).toContain('AI hint: Dynamic data-backed table/view display. Target: "chores".');
+  expect(summary).toContain('AI hint: Relationship-aware configurable database table/view. Target: "chores".');
 });
 
 test('summarizeDocumentStructure hides content deeper than three nesting levels', () => {
@@ -223,7 +223,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   const instructions = buildDocumentEditFormatInstructions({
     pluginHints: [
       {
-        id: 'dev.test.widget',
+        name: 'dev.test.widget',
         displayName: 'Widget',
         hint: 'Use widget YAML in the component body.',
       },
@@ -237,7 +237,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('Use `batch` only when it is listed for the current phase and the calls are a known ordered sequence of concrete tool calls.');
   expect(instructions).toContain('Plan at tool-action granularity: one plan step should be completable by one normal tool call or one batch.');
   expect(instructions).toContain('If several edits will be executed together in one batch, describe that whole batch outcome as one plan step');
-  expect(instructions).toContain('Registered plugin ids: dev.test.widget.');
+  expect(instructions).toContain('Registered plugin names: dev.test.widget.');
   expect(instructions).toContain('Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.');
   expect(instructions).toContain('Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.');
   expect(instructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
@@ -271,7 +271,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const dbPluginInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
-    pluginHints: [{ id: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ name: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
     request: 'Create a db table viewer.',
   });
   expect(dbPluginInstructions).toContain('Current edit phase: database.');
@@ -283,7 +283,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const explicitDbPhaseInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
-    pluginHints: [{ id: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ name: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
     request: 'Create a db table viewer.',
     phase: 'database',
   });
@@ -291,7 +291,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(explicitDbPhaseInstructions).toContain('Valid tools for this phase are: `answer`, `plan`, `query_db_table`, `execute_sql`, `view_component`, `done`.');
 
   const dbPluginOnlyInstructions = buildDocumentEditFormatInstructions({
-    pluginHints: [{ id: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ name: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
   });
   expect(dbPluginOnlyInstructions).not.toContain('`execute_sql`');
   expect(dbPluginOnlyInstructions).toContain(
@@ -299,7 +299,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   );
 
   const noPluginInstructions = buildDocumentEditFormatInstructions();
-  expect(noPluginInstructions).not.toContain('Registered plugin ids:');
+  expect(noPluginInstructions).not.toContain('Registered plugin names:');
 
   const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true, phase: 'mutation' });
   expect(activePlanInstructions).toContain('Current edit phase: mutation.');
@@ -3275,7 +3275,8 @@ component_defs:
   expect(context).toContain('<!--hvy:grid:0 {"id":"example-left"}-->');
   expect(context).toContain('<!--hvy:grid:1 {"id":"example-right"}-->');
   expect(context).toContain('Component: example-table');
-  expect(context).toContain('<!--hvy:example-table {"tableColumns":["Example","Detail"],"tableRows":[{"cells":["Example value","Detail value"]}]}-->');
+  expect(context).toContain('<!--hvy:example-table {"tableColumns":["Example","Detail"]}-->');
+  expect(context).toContain('| Example value | Detail value |');
   expect(context).toContain('Component: example-text');
   expect(context).toContain('Example source-backed text.');
 });
@@ -5169,8 +5170,8 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const grepResult = lastToolResultBeforeCall(1);
   expect(grepResult).toContain('Match 1 of 1 (component_id="long-text")');
-  expect(grepResult).toContain(`  12 | ${' '.repeat(2)}${'a'.repeat(398)}`);
-  expect(grepResult).toContain(`  13 | ${'a'.repeat(12)}wrapped-needle`);
+  expect(grepResult).toContain(`  13 | ${' '.repeat(2)}${'a'.repeat(398)}`);
+  expect(grepResult).toContain(`  14 | ${'a'.repeat(12)}wrapped-needle`);
 });
 
 test('requestAiDocumentEditTurn can get css and css properties for ids', async () => {
@@ -5307,7 +5308,7 @@ title: Existing
 
   expect(() => executePatchHeaderTool({
     tool: 'patch_header',
-    edits: [{ op: 'replace', start_line: 3, end_line: 4, text: 'section_defaults:\n  wrapper_style: "margin-bottom: 24px;"' }],
+    edits: [{ op: 'replace', start_line: 4, end_line: 5, text: 'section_defaults:\n  wrapper_style: "margin-bottom: 24px;"' }],
   }, document)).toThrow('section_defaults only supports the "css" and "contained" fields. Unsupported field: wrapper_style.');
   expect(document.meta.section_defaults).toEqual({ css: 'margin: 0 0 0.5rem;' });
   expect(document.meta.title).toBe('Existing');
@@ -5391,6 +5392,7 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toBe(`---
 hvy_version: 0.1
 reader_max_width: 60rem
+sidebar_max_width: 40rem
 section_defaults:
   css: "margin: 0 0 0.5rem;"
 ---
@@ -5867,7 +5869,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions ?? '';
-  expect(firstToolInstructions).toContain('Registered plugin ids: hvy.form.');
+  expect(firstToolInstructions).toContain('Registered plugin names: hvy.form.');
   expect(firstToolInstructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
   expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
@@ -5909,7 +5911,7 @@ hvy_version: 0.1
   expect(helpResult).toContain('Tool result for get_help:');
   expect(helpResult).toContain('Form (hvy.form)');
   expect(helpResult).toContain('Supported form YAML keys include `fields`');
-  expect(helpResult).toContain('Form-level behavior keys live in pluginConfig');
+  expect(helpResult).toContain('Form-level behavior and styling keys live in pluginConfig');
   expect(helpResult).toContain('Form scripts receive `doc` plus `doc.form`');
   expect(helpResult).toContain('Use `doc.form.get_value`');
   expect(helpResult).not.toContain('doc.db.query');

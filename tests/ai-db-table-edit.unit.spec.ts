@@ -118,6 +118,7 @@ test('buildDbTableEditFormatInstructions names the table and lists all four tool
   expect(instructions).toContain('`edit_fragment`');
   expect(instructions).toContain('`done`');
   expect(instructions).toContain('SELECT is rejected here');
+  expect(buildDbTableEditFormatInstructions('work_items', 'hvy.db-table')).toContain('hvy.db-table');
 });
 
 test('buildDbTableEditContext embeds schema, sample rows, and the component fragment', () => {

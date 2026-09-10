@@ -83,6 +83,9 @@ function getPickerPasteTargetAttrs(options: AddComponentPickerOptions): Record<s
           'data-paste-placement-container': 'section',
           'data-paste-placement': options.extraAttrs?.['data-insert-placement'] ?? 'end',
           ...(options.extraAttrs?.['data-target-block-id'] ? { 'data-paste-target-block-id': options.extraAttrs['data-target-block-id'] } : {}),
+          ...(options.extraAttrs?.['data-section-insertion'] ? { 'data-paste-section-insertion': options.extraAttrs['data-section-insertion'] } : {}),
+          ...(options.extraAttrs?.['data-section-before-kind'] ? { 'data-paste-section-before-kind': options.extraAttrs['data-section-before-kind'] } : {}),
+          ...(options.extraAttrs?.['data-section-before-id'] ? { 'data-paste-section-before-id': options.extraAttrs['data-section-before-id'] } : {}),
         }
       : {};
   }
@@ -214,6 +217,7 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       items: [
         ...(areTablesEnabled() ? [{ value: 'table', label: 'Table', description: 'a static table of information' }] : []),
         { value: 'xref-card', label: 'Reference', description: 'reference another document item' },
+        { value: 'location-marker', label: 'Component Location', description: 'mark where plugin-supplied components can appear' },
       ],
     },
   ];

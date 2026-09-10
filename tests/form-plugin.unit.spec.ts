@@ -1,8 +1,21 @@
 import { describe, expect, test } from 'vitest';
 
-import { parseFormSpec, serializeFormConfig, serializeFormSpec } from '../src/plugins/form';
+import { claimFormInitialization, parseFormSpec, serializeFormConfig, serializeFormSpec } from '../src/plugins/form';
+import { getFormPhotoResizeBounds, normalizeFormPhotoMeta } from '../src/plugins/form-photo-field/form-photo-field';
+import type { VisualBlock } from '../src/editor/types';
+import type { VisualDocument } from '../src/types';
 
 describe('form plugin YAML', () => {
+  test('initialization is claimed once per document and form component lifecycle', () => {
+    const document = {} as VisualDocument;
+    const form = { text: '', schema: { pluginConfig: {} } } as VisualBlock;
+
+    expect(claimFormInitialization(document, form)).toBe(true);
+    expect(claimFormInitialization(document, form)).toBe(false);
+    expect(claimFormInitialization(document, { text: '', schema: { pluginConfig: {} } } as VisualBlock)).toBe(true);
+    expect(claimFormInitialization({} as VisualDocument, form)).toBe(true);
+  });
+
   test('normalizes fields, options, scripts, and triggers from YAML', () => {
     const parsed = parseFormSpec(`fields:
   - label: Food
@@ -27,6 +40,7 @@ scripts:
     doc.form.set_value("Notes", "Bring a spoon.")
 `, {
       initialScript: 'populate_food',
+      changeScript: 'populate_food',
       submitScript: 'populate_food',
       submitLabel: 'Save lunch order',
       showSubmit: false,
@@ -61,6 +75,7 @@ scripts:
     });
     expect(parsed.spec.scripts.populate_food).toContain('doc.form.set_value');
     expect(parsed.spec.initialScript).toBe('populate_food');
+    expect(parsed.spec.changeScript).toBe('populate_food');
     expect(parsed.spec.submitScript).toBe('populate_food');
     expect(parsed.spec.submitLabel).toBe('Save lunch order');
     expect(parsed.spec.showSubmit).toBe(false);
@@ -116,12 +131,14 @@ scripts:
       actionsCss: 'grid-column: 1 / -1;',
       submitCss: 'margin-inline-start: auto;',
       submitLabel: 'Send details',
+      changeScript: 'submit_form',
       submitScript: 'submit_form',
     })).toMatchObject({
       formCss: 'display: grid;',
       actionsCss: 'grid-column: 1 / -1;',
       submitCss: 'margin-inline-start: auto;',
       submitLabel: 'Send details',
+      changeScript: 'submit_form',
       submitScript: 'submit_form',
     });
   });
@@ -166,5 +183,56 @@ scripts:
       scriptLibraries: ['random', 're', 'datetime'],
       scriptStepBudget: 1234,
     });
+  });
+
+  test('normalizes and serializes photo constraints for submit scripts', () => {
+    const parsed = parseFormSpec(`fields:
+  - label: Profile Photo
+    type: photo
+    required: true
+    meta:
+      accept:
+        - image/jpeg
+        - image/png
+      maxBytes: 5000000
+      maxWidth: 1200
+      maxHeight: 1200
+scripts:
+  submit: |
+    photo = doc.form.get_value("Profile Photo")
+`);
+
+    expect(parsed.error).toBeNull();
+    expect(parsed.spec.fields[0]).toMatchObject({
+      label: 'Profile Photo',
+      type: 'photo',
+      value: null,
+      required: true,
+      meta: {
+        accept: ['image/jpeg', 'image/png'],
+        maxBytes: 5_000_000,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      },
+    });
+
+    const expectedResult = serializeFormSpec(parsed.spec);
+    expect(expectedResult).toContain('type: photo');
+    expect(expectedResult).toContain('maxBytes: 5000000');
+    expect(expectedResult).toContain('maxWidth: 1200');
+    expect(expectedResult).toContain('maxHeight: 1200');
+    expect(expectedResult).not.toContain('value: null');
+  });
+
+  test('photo dimensions override document defaults only when configured', () => {
+    expect(getFormPhotoResizeBounds(
+      normalizeFormPhotoMeta({ maxWidth: 800 }),
+      { image_attachment_max_dimensions: { width: 1600, height: 900 } },
+    )).toEqual({ width: 800 });
+
+    expect(getFormPhotoResizeBounds(
+      normalizeFormPhotoMeta({}),
+      { image_attachment_max_dimensions: { width: 1600, height: 900 } },
+    )).toEqual({ width: 1600, height: 900 });
   });
 });

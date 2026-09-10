@@ -3,6 +3,13 @@ import type { VisualSection } from '../editor/types';
 import { findVirtualDirectoryForBlock } from '../cli-core/virtual-file-system';
 import { getSectionId } from '../section-ops';
 import { getTextCaptionMarkdown } from '../caption';
+import { markdownToReaderHtml } from '../markdown';
+import { renderedMarkdownHtmlToSearchText } from '../rendered-markdown-text';
+import {
+  getPluginVisualDescription,
+  PLUGIN_VISUAL_DESCRIPTION_FIELD,
+  PLUGIN_VISUAL_DESCRIPTION_LABEL,
+} from '../plugins/visual-description';
 import type { HvySearchMatch, HvySearchProvider, HvySearchRequest, HvySearchResult, SearchCategory } from './types';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
@@ -19,6 +26,7 @@ const FIELD_LABELS: Record<string, string> = {
   tableColumns: 'Table',
   tableCells: 'Table',
   pluginConfig: 'Plugin',
+  [PLUGIN_VISUAL_DESCRIPTION_FIELD]: PLUGIN_VISUAL_DESCRIPTION_LABEL,
 };
 
 export const builtInSearchProvider: HvySearchProvider = (request) => {
@@ -94,7 +102,7 @@ function visitBlocks(
     const label = getBlockLabel(block, section);
     const blockLocationLabel = getBlockLocationLabel(block) || nearestLocationLabel;
     for (const category of categories) {
-      const candidates = getBlockCandidates(block, category);
+      const candidates = getBlockCandidates(request.document, block, category);
       addMatches({
         request,
         results,
@@ -140,7 +148,7 @@ function addMatches(options: {
   locationLabel?: string;
   contextLabel: string;
   documentOrder: number;
-  candidates: Array<{ field: string; label: string; value: string }>;
+  candidates: SearchCandidate[];
 }): void {
   const query = options.request.query.trim();
   if (!query) {
@@ -148,33 +156,41 @@ function addMatches(options: {
   }
   const matches: HvySearchMatch[] = [];
   for (const candidate of options.candidates) {
-    const matchIndex = findMatchIndex(candidate.value, query, options.request.caseSensitive);
-    if (matchIndex < 0) {
+    const rawMatchIndices = findMatchIndices(candidate.value, query, options.request.caseSensitive);
+    const matchValue = rawMatchIndices.length > 0 ? candidate.value : candidate.searchValue ?? candidate.value;
+    const matchIndices = rawMatchIndices.length > 0
+      ? rawMatchIndices
+      : findMatchIndices(matchValue, query, options.request.caseSensitive);
+    if (matchIndices.length === 0) {
       continue;
     }
-    const key = [
-      options.category,
-      options.targetKind,
-      options.section.key,
-      options.block?.id ?? '',
-      candidate.field,
-    ].join(':');
-    if (options.seen.has(key)) {
-      continue;
+    for (const matchIndex of matchIndices) {
+      const key = [
+        options.category,
+        options.targetKind,
+        options.section.key,
+        options.block?.id ?? '',
+        candidate.field,
+        matchIndex,
+      ].join(':');
+      if (options.seen.has(key)) {
+        continue;
+      }
+      options.seen.add(key);
+      matches.push({
+        field: candidate.field,
+        label: candidate.label,
+        preview: createPreview(matchValue, matchIndex, query.length),
+        matchedText: matchValue.slice(matchIndex, matchIndex + query.length),
+        matchOrdinal: matches.length,
+      });
     }
-    options.seen.add(key);
-    matches.push({
-      field: candidate.field,
-      label: candidate.label,
-      preview: createPreview(candidate.value, matchIndex, query.length),
-      matchedText: candidate.value.slice(matchIndex, matchIndex + query.length),
-    });
   }
   if (matches.length === 0) {
     return;
   }
-  const firstMatch = matches[0]!;
   const targetPath = options.targetPath ?? (options.block ? findVirtualDirectoryForBlock(options.request.document, options.block) ?? undefined : undefined);
+  const firstMatch = matches[0]!;
   options.results.push({
     id: `search-${options.results.length + 1}`,
     category: options.category,
@@ -188,6 +204,7 @@ function addMatches(options: {
     contextLabel: options.contextLabel,
     preview: firstMatch.preview,
     matchedText: firstMatch.matchedText,
+    matchOrdinal: firstMatch.matchOrdinal,
     sourceField: summarizeMatches(matches, options.category),
     matches,
     documentOrder: options.documentOrder,
@@ -204,8 +221,20 @@ function getExpandableLocationLabel(block: VisualBlock, pane: 'stub' | 'expanded
     : (block.schema.expandableContentDescription ?? '').trim();
 }
 
-function findMatchIndex(value: string, query: string, caseSensitive: boolean): number {
-  return caseSensitive ? value.indexOf(query) : value.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+function findMatchIndices(value: string, query: string, caseSensitive: boolean): number[] {
+  const haystack = caseSensitive ? value : value.toLocaleLowerCase();
+  const needle = caseSensitive ? query : query.toLocaleLowerCase();
+  const indices: number[] = [];
+  let fromIndex = 0;
+  while (fromIndex <= haystack.length - needle.length) {
+    const matchIndex = haystack.indexOf(needle, fromIndex);
+    if (matchIndex < 0) {
+      break;
+    }
+    indices.push(matchIndex);
+    fromIndex = matchIndex + needle.length;
+  }
+  return indices;
 }
 
 function createPreview(value: string, matchIndex: number, length: number): string {
@@ -219,7 +248,14 @@ function createPreview(value: string, matchIndex: number, length: number): strin
   return `${start > 0 ? '...' : ''}${cleanSearchResultText(value.slice(start, end))}${end < value.length ? '...' : ''}`;
 }
 
-function getSectionCandidates(section: VisualSection, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
+interface SearchCandidate {
+  field: string;
+  label: string;
+  value: string;
+  searchValue?: string;
+}
+
+function getSectionCandidates(section: VisualSection, category: SearchCategory): SearchCandidate[] {
   if (category === 'tags') {
     return [{ field: 'tags', label: FIELD_LABELS.tags, value: section.tags }];
   }
@@ -229,7 +265,7 @@ function getSectionCandidates(section: VisualSection, category: SearchCategory):
   return [{ field: 'title', label: FIELD_LABELS.title, value: section.title }];
 }
 
-function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
+function getBlockCandidates(document: HvySearchRequest['document'], block: VisualBlock, category: SearchCategory): SearchCandidate[] {
   if (category === 'tags') {
     return [{ field: 'tags', label: FIELD_LABELS.tags, value: block.schema.tags ?? '' }];
   }
@@ -241,15 +277,30 @@ function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array
     ];
   }
   return [
-    { field: 'text', label: FIELD_LABELS.text, value: block.text },
+    {
+      field: 'text',
+      label: FIELD_LABELS.text,
+      value: block.text,
+      searchValue: renderedMarkdownHtmlToSearchText(markdownToReaderHtml(block.text)),
+    },
     { field: 'xrefTitle', label: FIELD_LABELS.xrefTitle, value: block.schema.xrefTitle ?? '' },
     { field: 'xrefDetail', label: FIELD_LABELS.xrefDetail, value: block.schema.xrefDetail ?? '' },
     { field: 'containerTitle', label: FIELD_LABELS.containerTitle, value: block.schema.containerTitle ?? '' },
     { field: 'imageAlt', label: FIELD_LABELS.imageAlt, value: block.schema.imageAlt ?? '' },
-    { field: 'caption', label: FIELD_LABELS.caption, value: getTextCaptionMarkdown(block.schema.caption) },
+    {
+      field: 'caption',
+      label: FIELD_LABELS.caption,
+      value: getTextCaptionMarkdown(block.schema.caption),
+      searchValue: renderedMarkdownHtmlToSearchText(markdownToReaderHtml(getTextCaptionMarkdown(block.schema.caption))),
+    },
     { field: 'tableColumns', label: FIELD_LABELS.tableColumns, value: (block.schema.tableColumns ?? []).join(' ') },
     { field: 'tableCells', label: FIELD_LABELS.tableCells, value: (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') },
     { field: 'pluginConfig', label: FIELD_LABELS.pluginConfig, value: JSON.stringify(block.schema.pluginConfig ?? {}) },
+    {
+      field: PLUGIN_VISUAL_DESCRIPTION_FIELD,
+      label: FIELD_LABELS[PLUGIN_VISUAL_DESCRIPTION_FIELD],
+      value: getPluginVisualDescription(document, block),
+    },
   ];
 }
 

@@ -1,9 +1,7 @@
-import { buildProxyChatRequest, requestChatCompletion, type ProxyToolTurn } from './chat';
+import { buildProxyChatRequest, type ProxyToolTurn } from './chat';
 import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat-provider-payload';
 import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
-import { hasDocumentDbTables } from '../plugins/db-table-model';
-import { runQaToolLoop } from '../ai-qa';
-import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
+import type { ChatAttachment, ChatAttachmentReference, ChatMessage, ChatSettings, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import {
@@ -15,6 +13,7 @@ import {
   type ChatCliSelectedComponentFocus,
   type ChatCliSimTurnState,
 } from '../chat-cli/chat-cli-edit-loop';
+import { runViewerAgent } from './viewer-agent';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];
@@ -45,13 +44,18 @@ export interface DocumentEditCliSimAdvance {
   askedQuestion?: string;
 }
 
-export function appendUserChatMessage(messages: ChatMessage[], question: string): ChatMessage[] {
+export function appendUserChatMessage(
+  messages: ChatMessage[],
+  question: string,
+  attachments: ChatAttachmentReference[] = []
+): ChatMessage[] {
   return [
     ...messages,
     {
       id: crypto.randomUUID(),
       role: 'user',
       content: question,
+      ...(attachments.length > 0 ? { attachments } : {}),
     },
   ];
 }
@@ -83,45 +87,27 @@ export async function requestChatTurn(params: {
       error: null,
     };
   }
-  let reasoningSummary = '';
-  let tokenUsage: ChatTokenUsage | null = null;
-
   try {
-    const answer = params.allowDbQaTools !== false && hasDocumentDbTables(params.document)
-      ? await runQaToolLoop({
-          settings: params.settings,
-          document: params.document,
-          messages: nextMessages,
-          question: params.question,
-          signal: params.signal,
-        })
-      : await requestChatCompletion({
-          settings: params.settings,
-          document: params.document,
-          messages: nextMessages,
-          question: params.question,
-          chatContext: params.chatContext,
-          chatContextProvider: params.chatContextProvider,
-          chatSearchCache: params.chatSearchCache,
-          embeddingProvider: params.embeddingProvider,
-          onContextPreparation: params.onContextPreparation,
-          onReasoningSummary: (summary) => {
-            reasoningSummary = summary;
-          },
-          onTokenUsage: (usage) => {
-            tokenUsage = usage;
-          },
-          signal: params.signal,
-        });
+    const result = await runViewerAgent({
+      settings: params.settings,
+      document: params.document,
+      messages: nextMessages,
+      question: params.question,
+      chatContext: params.chatContext,
+      chatContextProvider: params.chatContextProvider,
+      embeddingProvider: params.embeddingProvider,
+      onContextPreparation: params.onContextPreparation,
+      signal: params.signal,
+    });
     return {
       messages: [
         ...nextMessages,
         {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: answer,
-          ...(reasoningSummary ? { reasoning: reasoningSummary } : {}),
-          ...(tokenUsage ? { tokenUsage } : {}),
+          content: result.answer,
+          ...(result.reasoningSummary ? { reasoning: result.reasoningSummary } : {}),
+          ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}),
         },
       ],
       error: null,
@@ -202,12 +188,17 @@ export async function requestDocumentEditChatTurn(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   request: string;
+  attachments?: ChatAttachment[];
+  messageAttachments?: ChatAttachment[];
+  chatContext?: HvyChatContextOptions | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   selectedComponent?: ChatCliSelectedComponentFocus;
   onMutation?: (group?: string, mutation?: ChatCliMutationSummary) => void;
   onProgress?: (message: ChatMessage) => void;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
-  const nextMessages = appendUserChatMessage(params.messages, params.request);
+  const attachmentReferences = (params.messageAttachments ?? params.attachments ?? []).map(({ text: _text, ...attachment }) => attachment);
+  const nextMessages = appendUserChatMessage(params.messages, params.request, attachmentReferences);
   const workMessageId = crypto.randomUUID();
   const workState: ChatWorkState = {
     status: 'running',
@@ -238,7 +229,10 @@ export async function requestDocumentEditChatTurn(params: {
       settings: params.settings,
       document: params.document,
       request: params.request,
+      attachments: params.attachments,
       priorMessages: params.messages,
+      chatContext: params.chatContext,
+      embeddingProvider: params.embeddingProvider,
       selectedComponent: params.selectedComponent,
       onMutation: params.onMutation,
       onProgress: (content) =>
@@ -310,13 +304,18 @@ export async function buildDocumentEditCliSimRequest(params: {
   messages: ChatMessage[];
   request: string;
   selectedComponent?: ChatCliSelectedComponentFocus;
+  chatContext?: HvyChatContextOptions | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   signal?: AbortSignal;
 }): Promise<DocumentEditCliSimRequest> {
   const initial = await buildChatCliInitialSimTurnState({
+    settings: params.settings,
     document: params.document,
     request: params.request,
     priorMessages: params.messages,
     selectedComponent: params.selectedComponent,
+    ...(params.chatContext ? { chatContext: params.chatContext } : {}),
+    ...(params.embeddingProvider ? { embeddingProvider: params.embeddingProvider } : {}),
     signal: params.signal,
   });
   const requestPayload = buildProxyChatRequest({

@@ -78,9 +78,27 @@ const moveGridItem = (direction: -1 | 1): ActionHandler => ({ actionButton, sect
   getRenderApp()();
 };
 
+const adjustGridColumns: ActionHandler = ({ actionButton }) => {
+  const field = actionButton.closest<HTMLElement>('.grid-columns-header-field');
+  const input = field?.querySelector<HTMLInputElement>('.grid-columns-input');
+  if (!field || !input) {
+    return;
+  }
+  const delta = Number(actionButton.dataset.gridColumnsDelta);
+  const minimum = Number(input.min) || 1;
+  const maximum = Number(input.max) || 6;
+  const current = Number(input.value);
+  const next = Math.max(minimum, Math.min(maximum, (Number.isFinite(current) ? current : minimum) + delta));
+  input.value = String(next);
+  input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertReplacementText' }));
+  field.querySelector<HTMLButtonElement>('[data-grid-columns-delta="1"]')?.toggleAttribute('disabled', next >= maximum);
+  field.querySelector<HTMLButtonElement>('[data-grid-columns-delta="-1"]')?.toggleAttribute('disabled', next <= minimum);
+};
+
 export const gridActions: Record<string, ActionHandler> = {
   'add-grid-item': addGridItem,
   'remove-grid-item': removeGridItem,
   'move-grid-item-up': moveGridItem(-1),
   'move-grid-item-down': moveGridItem(1),
+  'adjust-grid-columns': adjustGridColumns,
 };

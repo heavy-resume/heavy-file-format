@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify';
 import './diagram.css';
 
 import { DEFAULT_DIAGRAM_SYNTAX } from './diagram-defaults';
-import { DIAGRAM_PLUGIN_ID } from './registry';
+import { createBuiltInPluginMetadata, DIAGRAM_PLUGIN_ID } from './registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from './types';
 import diagramDocumentation from './diagram.about.txt?raw';
 
@@ -18,6 +18,11 @@ export { DEFAULT_DIAGRAM_SOURCE } from './diagram-defaults';
 export const DEFAULT_DIAGRAM_CONFIG: DiagramConfig = {
   syntax: DEFAULT_DIAGRAM_SYNTAX,
 };
+
+export const MERMAID_RENDER_CONFIG = {
+  // Keep labels as SVG text so the SVG-only sanitizer does not discard them.
+  htmlLabels: false,
+} as const;
 
 let mermaidModulePromise: Promise<MermaidApi> | null = null;
 let diagramRenderCounter = 0;
@@ -48,6 +53,7 @@ function configureMermaid(mermaid: MermaidApi, root: HTMLElement): void {
     startOnLoad: false,
     securityLevel: 'strict',
     theme: 'base',
+    ...MERMAID_RENDER_CONFIG,
     themeVariables: {
       background: read('--hvy-surface', '#ffffff'),
       mainBkg: read('--hvy-surface', '#ffffff'),
@@ -185,7 +191,7 @@ function escapeHtml(value: string): string {
 export const diagramPluginFactory: HvyPluginFactory = build;
 
 export const diagramPlugin: HvyPlugin = {
-  id: DIAGRAM_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(DIAGRAM_PLUGIN_ID),
   displayName: 'Diagram',
   documentation: {
     filename: 'about-diagram.txt',

@@ -5,12 +5,14 @@ import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
-import { getTableColumns } from './table-ops';
+import { getTableColumns, normalizeTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
 import { normalizeSortValueDefs } from './sort-values';
+import { DEFAULT_PARAGRAPH_SPACING } from './document-typography';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
+export const DEFAULT_SIDEBAR_MAX_WIDTH = '40rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
 export const DEFAULT_SECTION_CONTAINED = true;
 export const DEFAULT_BLOCK_CSS = 'margin: 0.5rem 0;';
@@ -86,14 +88,22 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         expandableContentBlocks: { lock: false, children: [] },
       } as unknown as BlockSchema;
     case 'table':
-      return { ...base, kind: 'table', tableColumns: ['Column 1', 'Column 2'], tableShowHeader: true, tableRows: [] } as unknown as BlockSchema;
+      return {
+        ...base,
+        kind: 'table',
+        tableColumns: ['Column 1', 'Column 2'],
+        tableColumnProperties: {},
+        tableShowHeader: true,
+        tableRows: [],
+      } as unknown as BlockSchema;
     case 'image':
-      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: null } as unknown as BlockSchema;
+      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: null, allowDocumentImageReuse: true } as unknown as BlockSchema;
     case 'carousel':
       return {
         ...base,
         kind: 'carousel',
         carouselImages: [],
+        allowDocumentImageReuse: true,
         carouselDurationMs: 3000,
         carouselPauseOnHover: true,
         carouselShowControls: true,
@@ -114,6 +124,12 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         buttonOutputCharLimit: 1000,
         buttonPositionTargetId: '',
         buttonCss: '',
+      } as unknown as BlockSchema;
+    case 'location-marker':
+      return {
+        ...base,
+        kind: 'location-marker',
+        locationMarkerName: '',
       } as unknown as BlockSchema;
     case 'encrypted':
       return {
@@ -437,6 +453,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
   }
   if (schema.kind === 'table') {
     schema.tableColumns = parseTableColumns(candidate.tableColumns, schema.tableColumns);
+    schema.tableColumnProperties = parseTableColumnProperties(candidate.tableColumnProperties);
     schema.tableShowHeader = candidate.tableShowHeader !== false;
     schema.tableRows = rows.map((row) => {
       const mapped = row as JsonObject;
@@ -449,10 +466,12 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.imageFile = typeof candidate.imageFile === 'string' ? candidate.imageFile : schema.imageFile;
     schema.imageAlt = typeof candidate.imageAlt === 'string' ? candidate.imageAlt : schema.imageAlt;
     schema.caption = normalizeTextCaption(candidate.caption);
+    schema.allowDocumentImageReuse = candidate.allowDocumentImageReuse !== false;
     schema.css = typeof candidate.css === 'string' ? candidate.css : schema.css;
   }
   if (schema.kind === 'carousel') {
     schema.carouselImages = parseCarouselImages(candidate.carouselImages);
+    schema.allowDocumentImageReuse = candidate.allowDocumentImageReuse !== false;
     schema.carouselDurationMs = parsePositiveNumber(candidate.carouselDurationMs, schema.carouselDurationMs);
     schema.carouselPauseOnHover = candidate.carouselPauseOnHover !== false;
     schema.carouselShowControls = candidate.carouselShowControls !== false;
@@ -470,6 +489,11 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.buttonOutputCharLimit = parsePositiveNumber(candidate.buttonOutputCharLimit, schema.buttonOutputCharLimit);
     schema.buttonPositionTargetId = typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : schema.buttonPositionTargetId;
     schema.buttonCss = typeof candidate.buttonCss === 'string' ? candidate.buttonCss : schema.buttonCss;
+  }
+  if (schema.kind === 'location-marker') {
+    schema.locationMarkerName = typeof candidate.locationMarkerName === 'string'
+      ? candidate.locationMarkerName
+      : schema.locationMarkerName;
   }
   if (schema.kind === 'encrypted') {
     schema.keyId = typeof candidate.keyId === 'string' ? candidate.keyId : schema.keyId;
@@ -557,9 +581,42 @@ function parsePositiveNumber(raw: unknown, fallback: number): number {
 
 function parseTableColumns(raw: unknown, fallback: string[]): string[] {
   if (Array.isArray(raw)) {
-    return raw.map((column) => String(column ?? ''));
+    return normalizeTableColumns(raw.map((column) => String(column ?? '')));
   }
   return [...fallback];
+}
+
+export function parseTableColumnProperties(raw: unknown): BlockSchema['tableColumnProperties'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const properties: BlockSchema['tableColumnProperties'] = {};
+  for (const [column, value] of Object.entries(raw as JsonObject)) {
+    if (!column || !value || typeof value !== 'object' || Array.isArray(value)) {
+      continue;
+    }
+    const candidate = value as JsonObject;
+    const entry: BlockSchema['tableColumnProperties'][string] = {};
+    if (typeof candidate.width === 'string' && candidate.width.trim() && candidate.width.trim() !== 'auto') {
+      entry.width = candidate.width.trim();
+    }
+    if (candidate.wrap === true) {
+      entry.wrap = true;
+    }
+    if (candidate.truncate === false) {
+      entry.truncate = false;
+    }
+    if (candidate.align === 'center' || candidate.align === 'right') {
+      entry.align = candidate.align;
+    }
+    if (candidate.headerAlign === 'left' || candidate.headerAlign === 'right') {
+      entry.headerAlign = candidate.headerAlign;
+    }
+    if (Object.keys(entry).length > 0) {
+      properties[column] = entry;
+    }
+  }
+  return properties;
 }
 
 // Internal helper for grid/table callbacks that always skip component defaults
@@ -642,9 +699,13 @@ export function createBlankDocument(extension: VisualDocument['extension'] = '.h
     meta: {
       hvy_version: 0.1,
       reader_max_width: DEFAULT_READER_MAX_WIDTH,
+      sidebar_max_width: DEFAULT_SIDEBAR_MAX_WIDTH,
       section_defaults: {
         css: DEFAULT_SECTION_CSS,
         contained: DEFAULT_SECTION_CONTAINED,
+      },
+      typography: {
+        paragraphSpacing: DEFAULT_PARAGRAPH_SPACING,
       },
     },
     extension,
@@ -935,6 +996,7 @@ export function ensureGridItems(schema: BlockSchema): void {
     return {
       id: item.id || makeId('griditem'),
       idGenerated: item.idGenerated === true || generated,
+      ...(typeof item.css === 'string' ? { css: item.css } : {}),
       block: item.block && typeof item.block === 'object' && 'id' in item.block && 'schema' in item.block
         ? item.block
         : item.block ? _parseBlock(item.block) : _createBlock('text', true),

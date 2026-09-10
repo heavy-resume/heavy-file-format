@@ -19,6 +19,7 @@ export type SortKeyValue = number | string;
 export interface GridItem {
   id: string;
   idGenerated?: boolean;
+  css?: string;
   block: VisualBlock;
 }
 
@@ -38,6 +39,7 @@ export type BuiltinComponentName =
   | 'image'
   | 'carousel'
   | 'button'
+  | 'location-marker'
   | 'encrypted'
   | 'plugin'
   | 'xref-card';
@@ -120,15 +122,29 @@ export interface ExpandableBlockSchema extends BaseBlockSchema {
 export interface TableBlockSchema extends BaseBlockSchema {
   kind: 'table';
   tableColumns: string[];
+  tableColumnProperties: TableColumnPropertiesMap;
   tableShowHeader: boolean;
   tableRows: TableRow[];
 }
+
+export type TableColumnAlignment = 'left' | 'center' | 'right';
+
+export interface TableColumnProperties {
+  width?: string;
+  wrap?: boolean;
+  truncate?: boolean;
+  align?: TableColumnAlignment;
+  headerAlign?: TableColumnAlignment;
+}
+
+export type TableColumnPropertiesMap = Record<string, TableColumnProperties>;
 
 export interface ImageBlockSchema extends BaseBlockSchema {
   kind: 'image';
   imageFile: string;
   imageAlt: string;
   caption: TextCaptionPayload | null;
+  allowDocumentImageReuse: boolean;
 }
 
 export interface TextCaptionPayload {
@@ -139,6 +155,7 @@ export interface TextCaptionPayload {
 export interface CarouselBlockSchema extends BaseBlockSchema {
   kind: 'carousel';
   carouselImages: CarouselImage[];
+  allowDocumentImageReuse: boolean;
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;
   carouselShowControls: boolean;
@@ -158,6 +175,11 @@ export interface ButtonBlockSchema extends BaseBlockSchema {
   buttonOutputCharLimit: number;
   buttonPositionTargetId: string;
   buttonCss: string;
+}
+
+export interface LocationMarkerBlockSchema extends BaseBlockSchema {
+  kind: 'location-marker';
+  locationMarkerName: string;
 }
 
 export interface EncryptedBlockSchema extends BaseBlockSchema {
@@ -193,6 +215,7 @@ export type ComponentBlockSchema =
   | ImageBlockSchema
   | CarouselBlockSchema
   | ButtonBlockSchema
+  | LocationMarkerBlockSchema
   | EncryptedBlockSchema
   | PluginBlockSchema
   | XrefCardBlockSchema;
@@ -231,11 +254,13 @@ interface RuntimeSchemaFieldAccess {
   expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;
   tableColumns: string[];
+  tableColumnProperties: TableColumnPropertiesMap;
   tableShowHeader: boolean;
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
   caption: TextCaptionPayload | null;
+  allowDocumentImageReuse: boolean;
   carouselImages: CarouselImage[];
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;
@@ -252,6 +277,7 @@ interface RuntimeSchemaFieldAccess {
   buttonOutputCharLimit: number;
   buttonPositionTargetId: string;
   buttonCss: string;
+  locationMarkerName: string;
   keyId: string;
   encryptedAttachmentId: string;
   encryptedBlock: VisualBlock | null;

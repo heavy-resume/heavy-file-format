@@ -2,7 +2,8 @@ import { builtInSearchProvider } from './search-provider';
 import { createDocumentFilterSnapshot } from './document-filter';
 import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
-import { state, getRenderApp, getRefreshReaderPanels, getRefreshSearchSurface } from '../state';
+import { restoreVirtualizedBlock, restoreVirtualizedSection } from '../section-virtualizer';
+import { state, getRefreshEditorSection, getRenderApp, getRefreshReaderPanels, getRefreshSearchSurface } from '../state';
 import type {
   HvySearchResult,
   SearchCategory,
@@ -14,6 +15,8 @@ import { focusSearchInput } from './render';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { searchSnapshotToState } from './snapshot';
 import { parseTags, serializeTags } from '../editor/tag-editor';
+import { expandSearchMatchResults } from './match-navigation';
+import { clearRenderedSearchMatches, setCurrentSearchMatch } from './current-match';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
 export function openSearch(app: HTMLElement): void {
@@ -47,6 +50,12 @@ export function closeSearch(app?: HTMLElement): void {
   state.search.requestNonce += 1;
   state.search.isLoading = false;
   state.search.semanticProgress = null;
+  if (app) {
+    setCurrentSearchMatch(app, null);
+    if (!keepFilter) {
+      clearRenderedSearchMatches(app);
+    }
+  }
   refreshSearchUi(app);
 }
 
@@ -142,7 +151,7 @@ export async function submitSearch(app?: ParentNode): Promise<void> {
       return;
     }
     state.search.results = normalizeSearchResults(results);
-    state.search.navigationResultIds = getDocumentOrderSearchResults(state.search.results).map((result) => result.id);
+    state.search.navigationResultIds = expandSearchMatchResults(getDocumentOrderSearchResults(state.search.results)).map((result) => result.id);
     if (state.search.filterEnabled && state.currentView === 'editor') {
       state.currentView = 'viewer';
       app = undefined;
@@ -167,19 +176,18 @@ export async function submitSearch(app?: ParentNode): Promise<void> {
 }
 
 export function selectSearchResult(app: HTMLElement, resultId: string): void {
-  const result = state.search.results.find((candidate) => candidate.id === resultId);
+  const result = expandSearchMatchResults(state.search.results).find((candidate) => candidate.id === resultId);
   if (!result) {
     return;
   }
   state.search.navigationResultIds = getSearchNavigationResults(app).map((candidate) => candidate.id);
   state.search.activeResultId = result.id;
   state.search.open = true;
+  const isEnteringQuickSearch = !state.search.resultsCollapsed;
   state.search.resultsCollapsed = true;
-  if (state.currentView === 'editor') {
-    revealEditorSearchTargetInState(result);
-  }
-  getRenderApp()();
-  runAfterSearchResultRender(() => {
+  const requiresEditorReveal = state.currentView === 'editor' && revealEditorSearchTargetInState(result);
+  const requiresFullRender = isEnteringQuickSearch || requiresEditorReveal;
+  const navigate = () => {
     if (state.currentView === 'editor') {
       navigateToEditorSearchTarget(result, app);
       return;
@@ -189,8 +197,15 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
       sectionKey: result.sectionKey,
       blockId: result.blockId,
       matchText: result.matchedText,
+      matchOrdinal: result.matchOrdinal,
     }, app);
-  });
+  };
+  if (requiresFullRender || !getRefreshSearchSurface()(app)) {
+    getRenderApp()();
+    runAfterSearchResultRender(navigate);
+    return;
+  }
+  navigate();
 }
 
 function runAfterSearchResultRender(callback: () => void): void {
@@ -199,13 +214,51 @@ function runAfterSearchResultRender(callback: () => void): void {
   });
 }
 
-function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement): void {
+/**
+ * Mirrors the reader navigation path: a section scrolled out of view is virtualized to a
+ * placeholder, so the target has to be restored and then waited for before it exists in
+ * the DOM. Without this, results in virtualized sections silently do nothing.
+ */
+const EDITOR_SEARCH_TARGET_ATTEMPTS = 8;
+
+function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement, attempt = 0): void {
   alignEditorSidebarToSearchResult(result, app);
+  const sectionPlaceholder = app.querySelector<HTMLElement>(
+    `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"][data-section-key="${CSS.escape(result.sectionKey)}"]`
+  );
+  if (sectionPlaceholder && !getRefreshEditorSection()(result.sectionKey)) {
+    restoreVirtualizedSection(app, result.sectionKey);
+  }
+  if (result.blockId) {
+    restoreVirtualizedBlock(app, result.sectionKey, result.blockId);
+  }
   const target = findEditorSearchTarget(result, app);
   if (!target) {
+    if (attempt < EDITOR_SEARCH_TARGET_ATTEMPTS) {
+      window.setTimeout(() => navigateToEditorSearchTarget(result, app, attempt + 1), 60);
+      return;
+    }
+    console.error('[hvy:search] Unable to find editor target for search result.', {
+      sectionKey: result.sectionKey,
+      blockId: result.blockId ?? '',
+    });
     return;
   }
-  scrollEditorSearchTargetIntoView(target);
+  pinEditorSearchTarget(target);
+  const marker = findEditorSearchMarker(target, result.matchedText, result.matchOrdinal);
+  const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(result.matchedText?.trim());
+  if (wantsSearchMarker && !marker && attempt < EDITOR_SEARCH_TARGET_ATTEMPTS) {
+    window.setTimeout(() => navigateToEditorSearchTarget(result, app, attempt + 1), 60);
+    return;
+  }
+  setCurrentSearchMatch(app, marker);
+  scrollEditorSearchTargetIntoView(marker ?? target);
+}
+
+function pinEditorSearchTarget(target: HTMLElement): void {
+  if (target.classList.contains('is-temp-highlighted')) {
+    return;
+  }
   target.classList.add('is-temp-highlighted');
   window.setTimeout(() => {
     target.classList.remove('is-temp-highlighted');
@@ -223,33 +276,42 @@ function alignEditorSidebarToSearchResult(result: HvySearchResult, app: HTMLElem
   }
 }
 
-function revealEditorSearchTargetInState(result: HvySearchResult): void {
+function revealEditorSearchTargetInState(result: HvySearchResult): boolean {
   const section = findSectionByKeyDeep(state.document.sections, result.sectionKey);
   if (!section) {
-    return;
+    return false;
   }
-  state.editorSidebarOpen = section.location === 'sidebar';
   if (!result.blockId) {
-    return;
+    return false;
   }
   const path = findBlockPathInList(section.blocks, result.blockId);
   if (!path) {
-    return;
+    return false;
   }
+  let requiresFullRender = false;
   for (const block of path.slice(0, -1)) {
     if (resolveBaseComponentFromMeta(block.schema.component, state.document.meta) !== 'expandable') {
       continue;
     }
     const readerStateKey = `${section.key}:${block.id}`;
     state.readerExpandableState[readerStateKey] = true;
+    // Editing surfaces ignore reader session state, so the reveal is recorded separately.
+    if (!state.searchRevealedAncestors[readerStateKey]) {
+      requiresFullRender = true;
+    }
+    state.searchRevealedAncestors[readerStateKey] = true;
     const editorStateKey = `${section.key}:${block.id}`;
     const current = state.expandableEditorPanels[editorStateKey] ?? { stubOpen: false, expandedOpen: false };
+    if (!current.stubOpen || !current.expandedOpen) {
+      requiresFullRender = true;
+    }
     state.expandableEditorPanels[editorStateKey] = {
       ...current,
       stubOpen: true,
       expandedOpen: true,
     };
   }
+  return requiresFullRender;
 }
 
 function findEditorSearchTarget(result: HvySearchResult, app: HTMLElement): HTMLElement | null {
@@ -267,15 +329,50 @@ function findEditorSearchTarget(result: HvySearchResult, app: HTMLElement): HTML
 function scrollEditorSearchTargetIntoView(target: HTMLElement): void {
   const container = target.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel');
   if (container) {
-    const targetRect = target.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    container.scrollTo({
-      top: Math.max(0, container.scrollTop + targetRect.top - (containerRect.top + containerRect.height / 2)),
-      behavior: 'smooth',
-    });
+    scrollEditorSearchTargetAfterLayoutSettles(target, container);
     return;
   }
   target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+const EDITOR_SEARCH_LAYOUT_SAMPLE_MS = 50;
+const EDITOR_SEARCH_STABLE_SAMPLES = 4;
+const EDITOR_SEARCH_MAX_LAYOUT_SAMPLES = 24;
+
+function scrollEditorSearchTargetAfterLayoutSettles(
+  target: HTMLElement,
+  container: HTMLElement,
+  sample = 0,
+  stableSamples = 0,
+  previousGeometry = ''
+): void {
+  if (!target.isConnected || !container.isConnected) {
+    return;
+  }
+  const targetRect = target.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const geometry = `${container.scrollHeight}:${Math.round(targetRect.top - containerRect.top + container.scrollTop)}`;
+  const nextStableSamples = geometry === previousGeometry ? stableSamples + 1 : 1;
+  if (nextStableSamples < EDITOR_SEARCH_STABLE_SAMPLES && sample < EDITOR_SEARCH_MAX_LAYOUT_SAMPLES) {
+    window.setTimeout(() => {
+      scrollEditorSearchTargetAfterLayoutSettles(target, container, sample + 1, nextStableSamples, geometry);
+    }, EDITOR_SEARCH_LAYOUT_SAMPLE_MS);
+    return;
+  }
+  container.scrollTo({
+    top: Math.max(0, container.scrollTop + targetRect.top - (containerRect.top + containerRect.height / 2)),
+    behavior: 'smooth',
+  });
+}
+
+function findEditorSearchMarker(target: HTMLElement, matchText?: string, matchOrdinal = 0): HTMLElement | null {
+  const markers = [...target.querySelectorAll<HTMLElement>('.search-match-marker')];
+  const normalized = matchText?.trim().toLocaleLowerCase();
+  if (!normalized) {
+    return markers[matchOrdinal] ?? markers[0] ?? null;
+  }
+  const matchingMarkers = markers.filter((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized);
+  return matchingMarkers[matchOrdinal] ?? matchingMarkers[0] ?? markers[0] ?? null;
 }
 
 export function selectAdjacentSearchResult(app: HTMLElement, direction: 1 | -1): void {
@@ -322,7 +419,7 @@ export function setSearchFilterQueryMode(mode: SearchFilterQueryMode, app?: HTML
   refreshSearchUi(app, { focusInput: true });
 }
 
-export async function applySearchFilter(options: { enabled?: boolean } = {}): Promise<void> {
+export async function applySearchFilter(options: { enabled?: boolean; root?: ParentNode } = {}): Promise<void> {
   const enabled = options.enabled ?? !state.search.filterEnabled;
   if (!enabled) {
     state.search.filterEnabled = false;
@@ -344,7 +441,7 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     getRefreshReaderPanels()();
   }
   if (state.search.filterQueryMode === 'semantic') {
-    await submitSemanticFilter();
+    await submitSemanticFilter(options.root);
   } else if (queryChanged) {
     await submitSearch();
   }
@@ -405,7 +502,7 @@ function refreshSearchUi(app?: ParentNode, options: { focusInput?: boolean } = {
   }
 }
 
-async function submitSemanticFilter(): Promise<void> {
+async function submitSemanticFilter(root?: ParentNode): Promise<void> {
   const prompt = state.search.queryDraft.trim();
   state.search.submittedQuery = prompt;
   state.search.submittedFilterQueryMode = 'semantic';
@@ -422,7 +519,7 @@ async function submitSemanticFilter(): Promise<void> {
     state.search.navigationResultIds = [];
     state.search.isLoading = false;
     state.search.semanticProgress = null;
-    getRenderApp()();
+    refreshSearchUi(root);
     return;
   }
 
@@ -432,7 +529,7 @@ async function submitSemanticFilter(): Promise<void> {
   state.search.abortController = abortController;
   state.search.isLoading = true;
   state.search.semanticProgress = null;
-  getRenderApp()();
+  refreshSearchUi(root, { focusInput: true });
 
   try {
     const traceRunId = `semantic-filter:${requestNonce}:${Date.now().toString(36)}`;
@@ -449,7 +546,9 @@ async function submitSemanticFilter(): Promise<void> {
           return;
         }
         state.search.semanticProgress = progress;
-        getRenderApp()();
+        if (!root || !getRefreshSearchSurface()(root, { progressOnly: true })) {
+          getRenderApp()();
+        }
       },
     });
     if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
@@ -471,6 +570,7 @@ async function submitSemanticFilter(): Promise<void> {
     }
     state.search.results = [];
     state.search.navigationResultIds = [];
+    state.search.semanticProgress = null;
     state.search.error = error instanceof Error ? error.message : 'Semantic filtering failed.';
   } finally {
     if (state.search.requestNonce !== requestNonce) {
@@ -478,7 +578,7 @@ async function submitSemanticFilter(): Promise<void> {
     }
     state.search.isLoading = false;
     state.search.abortController = null;
-    getRenderApp()();
+    refreshSearchUi(root);
   }
 }
 
@@ -577,10 +677,10 @@ function normalizeSearchResults(results: HvySearchResult[]): HvySearchResult[] {
 
 function getSearchNavigationResults(app: HTMLElement): HvySearchResult[] {
   if (!shouldUseRenderedSearchOrder()) {
-    return getDocumentOrderSearchResults(state.search.results);
+    return expandSearchMatchResults(getDocumentOrderSearchResults(state.search.results));
   }
   const viewOrder = getRenderedSearchTargetOrder(app);
-  return [...state.search.results].sort((left, right) => {
+  const orderedComponents = [...state.search.results].sort((left, right) => {
     const leftKey = getSearchResultTargetKey(left);
     const rightKey = getSearchResultTargetKey(right);
     const leftViewOrder = viewOrder.get(leftKey);
@@ -590,6 +690,7 @@ function getSearchNavigationResults(app: HTMLElement): HvySearchResult[] {
     }
     return (left.documentOrder ?? 0) - (right.documentOrder ?? 0);
   });
+  return expandSearchMatchResults(orderedComponents);
 }
 
 function getDocumentOrderSearchResults(results: HvySearchResult[]): HvySearchResult[] {

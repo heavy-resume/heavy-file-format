@@ -28,6 +28,18 @@ function coerceReturnedBoolean(value: unknown): boolean {
   return !!value;
 }
 
+/**
+ * `pending` renders as `display: none`, and hiding an ancestor of the caret collapses the
+ * DOM selection for good. Only the first evaluation has no answer to show, so only it may
+ * hide; later evaluations keep the previous answer until the script resolves. That also
+ * drops a forced hide/show reflow pair per block per keystroke.
+ */
+function markVisibilityPending(element: HTMLElement): void {
+  if (!element.dataset.visibleState) {
+    element.dataset.visibleState = 'pending';
+  }
+}
+
 export async function runButtonVisibilityScripts(root: ParentNode): Promise<void> {
   const startedAt = nowMs();
   const runtime = getActiveStateRuntime();
@@ -51,11 +63,14 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
       element.dataset.visibleState = 'visible';
       return;
     }
-    element.dataset.visibleState = 'pending';
+    markVisibilityPending(element);
     const result = await runUserScript({
       document: runtime.state.document,
       source,
       componentId: block.schema.id || block.id,
+      onCallbackError: () => {
+        if (element.isConnected) element.dataset.visibleState = 'hidden';
+      },
     });
     if (!element.isConnected) {
       return;
@@ -76,11 +91,20 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
       element.dataset.visibleState = 'visible';
       return;
     }
-    element.dataset.visibleState = 'pending';
+    markVisibilityPending(element);
     const result = await runUserScript({
       document: runtime.state.document,
       source,
       componentId: block.schema.id || block.id,
+      onCallbackError: (callbackResult) => {
+        if (!element.isConnected) return;
+        element.dataset.visibleState = 'hidden';
+        const status = element.querySelector<HTMLElement>('[data-hvy-button-status="true"]');
+        if (status) {
+          status.textContent = callbackResult.error ?? 'Visibility script failed.';
+          status.classList.add('is-error');
+        }
+      },
     });
     if (!element.isConnected) {
       return;
@@ -142,6 +166,9 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
       document: runtime.state.document,
       source: block.schema.buttonSourceScript,
       componentId: block.schema.id || block.id,
+      onCallbackError: (callbackResult) => {
+        setStatus(callbackResult.error ?? 'Source script callback failed.', true);
+      },
     });
     if (!sourceResult.ok) {
       throw new Error(sourceResult.error ?? 'Source script failed.');
@@ -183,6 +210,9 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
       injectedGlobals: {
         response,
         source,
+      },
+      onCallbackError: (callbackResult) => {
+        setStatus(callbackResult.error ?? 'Target script callback failed.', true);
       },
     });
     if (!targetResult.ok) {

@@ -513,7 +513,8 @@ hvy_version: 0.1
 
   expect(expectedResult.model).toBe('text-embedding-ada-002');
   expect(expectedResult.chunks).toHaveLength(1);
-  expect(expectedResult.chunks[0]!.id).toBe('section:/body/summary');
+  expect(expectedResult.chunks[0]!.id).toBe('component:summary-note');
+  expect(expectedResult.chunks[0]!.targetPath).toBe('/body/summary/summary-note');
   expect(expectedResult.chunks[0]!.text).toContain('alpha implementation evidence');
   expect(expectedResult.inputsToEmbed).toEqual([{
     id: expectedResult.chunks[0]!.id,
@@ -546,8 +547,8 @@ hvy_version: 0.1
     document,
     embeddingModel: 'text-embedding-ada-002',
   });
-  const summaryChunk = initialPlan.chunks.find((chunk) => chunk.id === 'section:/body/summary')!;
-  const detailsChunk = initialPlan.chunks.find((chunk) => chunk.id === 'section:/body/details')!;
+  const summaryChunk = initialPlan.chunks.find((chunk) => chunk.id === 'component:summary-note')!;
+  const detailsChunk = initialPlan.chunks.find((chunk) => chunk.id === 'component:details-note')!;
 
   const expectedResult = planEmbeddingIndexUpdate({
     document,

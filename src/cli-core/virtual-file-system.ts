@@ -1,12 +1,12 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
+import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
 import type { VisualDocument } from '../types';
 import { getSectionId } from '../section-ops';
 import { makeId } from '../utils';
 import { FORM_PLUGIN_ID, getHostPlugin, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { parseFormSpec, serializeFormSpec } from '../plugins/form';
-import { getTableColumns } from '../table-ops';
+import { getTableColumnProperties, getTableColumns, setTableColumns } from '../table-ops';
 import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-help';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 import { getHvyReferenceDocs } from './reference-library';
@@ -15,7 +15,10 @@ import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
+import { isDocumentParagraphSpacing } from '../document-typography';
 import { measurePhase } from '../perf-trace';
+import { defaultBlockSchema, parseTableColumnProperties } from '../document-factory';
+import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -49,13 +52,13 @@ export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: Hvy
 }
 
 export function buildHvyVirtualBlockSubtreeFileSystem(
-  meta: JsonObject,
+  document: VisualDocument,
   block: VisualBlock,
   blockPath: string,
   naming?: HvyVirtualPathNamingState
 ): HvyVirtualFileSystem {
   const entries = new Map<string, HvyVirtualEntry>();
-  addBlock(entries, meta, block, blockPath, naming);
+  addBlock(entries, document, block, blockPath, naming);
   return { entries };
 }
 
@@ -88,7 +91,7 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
   );
 
   measurePhase('cli.fs.build.sections', {}, () => {
-    addSectionList(entries, document.meta, document.sections.filter((section) => !section.isGhost), '/body', naming);
+    addSectionList(entries, document, document.sections, '/body', naming);
   });
   measurePhase('cli.fs.build.docs', {}, () => {
     addDocsDirectory(entries, document.meta);
@@ -163,6 +166,15 @@ function validateHeaderCssValues(meta: JsonObject): void {
       if (style && typeof style === 'object' && !Array.isArray(style) && typeof (style as JsonObject).css === 'string') {
         assertCssValueIsDeclarationString((style as JsonObject).css as string, `heading_styles.${styleName}.css`);
       }
+    }
+  }
+  const typography = meta.typography;
+  if (typeof typography !== 'undefined') {
+    if (!typography || typeof typography !== 'object' || Array.isArray(typography)) {
+      throw new Error('typography must be an object with a paragraphSpacing CSS length.');
+    }
+    if (!isDocumentParagraphSpacing((typography as JsonObject).paragraphSpacing)) {
+      throw new Error('typography.paragraphSpacing must be a non-negative CSS length such as "0.45rem".');
     }
   }
   const pdfPage = meta.pdf_page;
@@ -388,7 +400,7 @@ export function resolveVirtualPath(fs: HvyVirtualFileSystem, cwd: string, input 
   return normalized;
 }
 
-function addSection(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, section: VisualSection, sectionPath: string, naming?: HvyVirtualPathNamingState): void {
+function addSection(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, section: VisualSection, sectionPath: string, naming?: HvyVirtualPathNamingState): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   entries.set(`${sectionPath}/section.json`, {
     kind: 'file',
@@ -406,31 +418,35 @@ function addSection(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, sec
     path: `${sectionPath}/about-section.txt`,
     read: () => formatSectionAbout(section),
   });
-  addBlockList(entries, meta, section.blocks, sectionPath, naming);
-  addSectionList(entries, meta, section.children.filter((child) => !child.isGhost), sectionPath, naming);
+  addBlockList(entries, document, section.blocks, sectionPath, naming);
+  addSectionList(entries, document, section.children, sectionPath, naming);
 }
 
-function addSectionList(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, sections: VisualSection[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
+function addSectionList(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, sections: VisualSection[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
+  const visibleSections = sections.filter((section) => !section.isGhost);
   const keys: string[] = [];
-  sections.forEach((section, index) => {
+  visibleSections.forEach((section, index) => {
     const key = uniqueName(sectionDirectoryName(section, index), entries, parentPath);
     keys.push(key);
-    addSection(entries, meta, section, `${parentPath}/${key}`, naming);
+    addSection(entries, document, section, `${parentPath}/${key}`, naming);
   });
-  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(sections, keys, nextKeys));
+  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) =>
+    reorderVisibleByKeys(sections, visibleSections, keys, nextKeys)
+  );
 }
 
-function addBlockList(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, blocks: VisualBlock[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
+function addBlockList(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, blocks: VisualBlock[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
   const keys: string[] = [];
   blocks.forEach((block, index) => {
     const key = stableBlockDirectoryName(block, index, entries, parentPath, naming);
     keys.push(key);
-    addBlock(entries, meta, block, `${parentPath}/${key}`, naming);
+    addBlock(entries, document, block, `${parentPath}/${key}`, naming);
   });
   addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(blocks, keys, nextKeys));
 }
 
-function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block: VisualBlock, blockPath: string, naming?: HvyVirtualPathNamingState): void {
+function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, block: VisualBlock, blockPath: string, naming?: HvyVirtualPathNamingState): void {
+  const meta = document.meta;
   entries.set(blockPath, { kind: 'dir', path: blockPath });
   const baseComponent = getBlockBaseComponent(meta, block);
   const componentFile = `${blockPath}/${sanitizePathSegment(block.schema.component) || 'component'}.json`;
@@ -438,7 +454,12 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
     kind: 'file',
     path: componentFile,
     read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema, meta), null, 2)}\n`,
-    write: (content) => applyBlockSchemaJson(block.schema, componentNameFromPath(componentFile), parseJsonObject(content, componentFile)),
+    write: (content) => applyBlockSchemaJson(
+      block.schema,
+      componentNameFromPath(componentFile),
+      baseComponent as BuiltinComponentName,
+      parseJsonObject(content, componentFile)
+    ),
   });
   const componentName = sanitizePathSegment(block.schema.component) || 'component';
   entries.set(`${blockPath}/${componentName}.css`, {
@@ -466,19 +487,20 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
     read: () => formatComponentAbout(meta, block.schema.component),
   });
   addPluginDocumentationFile(entries, block, blockPath);
+  addPluginVisualDescriptionFile(entries, document, block, blockPath);
   addTableDataFiles(entries, meta, block, blockPath);
   addFormScriptFiles(entries, block, blockPath);
 
-  addNamedBlockChildren(entries, meta, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
+  addNamedBlockChildren(entries, document, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
   if (baseComponent === 'component-list') {
-    addBlockList(entries, meta, block.schema.componentListBlocks ?? [], blockPath, naming);
+    addBlockList(entries, document, block.schema.componentListBlocks ?? [], blockPath, naming);
   }
-  addNamedBlockChildren(entries, meta, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, baseComponent === 'expandable', naming);
-  addNamedBlockChildren(entries, meta, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, baseComponent === 'expandable', naming);
-  addGridItems(entries, meta, block.schema.gridItems ?? [], `${blockPath}/grid`, baseComponent === 'grid', naming);
+  addNamedBlockChildren(entries, document, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, baseComponent === 'expandable', naming);
+  addNamedBlockChildren(entries, document, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, baseComponent === 'expandable', naming);
+  addGridItems(entries, document, block.schema.gridItems ?? [], `${blockPath}/grid`, baseComponent === 'grid', naming);
 }
 
-function addGridItems(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, gridItems: GridItem[], directoryPath: string, keepEmptyDirectory = false, naming?: HvyVirtualPathNamingState): void {
+function addGridItems(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, gridItems: GridItem[], directoryPath: string, keepEmptyDirectory = false, naming?: HvyVirtualPathNamingState): void {
   if (gridItems.length === 0 && !keepEmptyDirectory) {
     return;
   }
@@ -487,7 +509,7 @@ function addGridItems(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, g
   gridItems.forEach((item, index) => {
     const key = stableBlockDirectoryName(item.block, index, entries, directoryPath, naming);
     keys.push(key);
-    addBlock(entries, meta, item.block, `${directoryPath}/${key}`, naming);
+    addBlock(entries, document, item.block, `${directoryPath}/${key}`, naming);
   });
   addOrderFile(entries, `${directoryPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(gridItems, keys, nextKeys));
 }
@@ -629,9 +651,26 @@ function addPluginDocumentationFile(entries: Map<string, HvyVirtualEntry>, block
   });
 }
 
+function addPluginVisualDescriptionFile(
+  entries: Map<string, HvyVirtualEntry>,
+  document: VisualDocument,
+  block: VisualBlock,
+  blockPath: string
+): void {
+  if (!getPluginVisualDescription(document, block)) {
+    return;
+  }
+  const path = `${blockPath}/plugin.visual-description.txt`;
+  entries.set(path, {
+    kind: 'file',
+    path,
+    read: () => `${formatPluginVisualDescriptionForAgent(getPluginVisualDescription(document, block))}\n`,
+  });
+}
+
 function addNamedBlockChildren(
   entries: Map<string, HvyVirtualEntry>,
-  meta: JsonObject,
+  document: VisualDocument,
   blocks: VisualBlock[],
   directoryPath: string,
   keepEmptyDirectory = false,
@@ -641,7 +680,7 @@ function addNamedBlockChildren(
     return;
   }
   entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  addBlockList(entries, meta, blocks, directoryPath, naming);
+  addBlockList(entries, document, blocks, directoryPath, naming);
 }
 
 function addOrderFile(entries: Map<string, HvyVirtualEntry>, path: string, keys: string[], reorder: (nextKeys: string[]) => void): void {
@@ -681,6 +720,18 @@ function readOrderFileKeys(content: string, path: string, currentKeys: string[])
 function reorderByKeys<T>(items: T[], currentKeys: string[], nextKeys: string[]): void {
   const byKey = new Map(currentKeys.map((key, index) => [key, items[index]]));
   items.splice(0, items.length, ...nextKeys.map((key) => byKey.get(key)).filter((item): item is T => item !== undefined));
+}
+
+function reorderVisibleByKeys<T>(items: T[], visibleItems: T[], currentKeys: string[], nextKeys: string[]): void {
+  const reordered = [...visibleItems];
+  reorderByKeys(reordered, currentKeys, nextKeys);
+  let visibleIndex = 0;
+  for (let index = 0; index < items.length; index += 1) {
+    if (visibleItems.includes(items[index]!)) {
+      items[index] = reordered[visibleIndex]!;
+      visibleIndex += 1;
+    }
+  }
 }
 
 function addSectionBlockLookup(
@@ -962,9 +1013,11 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.imageFile = schema.imageFile;
     value.imageAlt = schema.imageAlt;
     value.caption = schema.caption;
+    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
   }
   if (baseComponent === 'carousel') {
     value.carouselImages = schema.carouselImages;
+    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
     value.carouselDurationMs = schema.carouselDurationMs;
     value.carouselPauseOnHover = schema.carouselPauseOnHover;
     value.carouselShowControls = schema.carouselShowControls;
@@ -1042,14 +1095,74 @@ function formatComponentDirectoryMapping(component: string, baseComponent: strin
     lines.push('- grid/children-order.json reorders grid items.');
   } else if (baseComponent === 'table') {
     lines.push('- tableColumns.json and tableRows.json are writable static table data files.');
+    lines.push('- tableColumnProperties.json is a writable sparse presentation map keyed by exact column name.');
   } else if (baseComponent === 'plugin') {
     lines.push('- plugin.txt is plugin-owned body text; plugin.json contains plugin id and config.');
   }
   return lines;
 }
 
-function applyBlockSchemaJson(schema: BlockSchema, component: string, value: JsonObject): void {
+function applyBlockSchemaJson(
+  schema: BlockSchema,
+  component: string,
+  baseComponent: BuiltinComponentName,
+  value: JsonObject
+): void {
+  const defaults = defaultBlockSchema(component, baseComponent);
   schema.component = component;
+  schema.id = defaults.id;
+  schema.css = defaults.css;
+  schema.lock = defaults.lock;
+  schema.align = defaults.align;
+  schema.slot = defaults.slot;
+  schema.sortKeys = defaults.sortKeys;
+  schema.derivedSortKeyNames = defaults.derivedSortKeyNames;
+  schema.groupKeys = defaults.groupKeys;
+  schema.tags = defaults.tags;
+  schema.description = defaults.description;
+  schema.hideIfYes = defaults.hideIfYes;
+  schema.placeholder = defaults.placeholder;
+  schema.fillIn = defaults.fillIn;
+  schema.xrefTitle = defaults.xrefTitle;
+  schema.xrefDetail = defaults.xrefDetail;
+  if (baseComponent === 'container') {
+    schema.containerTitle = defaults.containerTitle;
+    schema.containerExpanded = defaults.containerExpanded;
+    schema.containerCollapsedPreviewRem = defaults.containerCollapsedPreviewRem;
+  } else if (baseComponent === 'component-list') {
+    schema.componentListComponent = defaults.componentListComponent;
+    schema.componentListItemLabel = defaults.componentListItemLabel;
+    schema.componentListDefaultSortKey = defaults.componentListDefaultSortKey;
+    schema.componentListDefaultSortDirection = defaults.componentListDefaultSortDirection;
+    schema.componentListDefaultGroupKey = defaults.componentListDefaultGroupKey;
+    schema.componentListGroupsExpanded = defaults.componentListGroupsExpanded;
+    schema.componentListGroupCollapsedPreviewRem = defaults.componentListGroupCollapsedPreviewRem;
+  } else if (baseComponent === 'grid') {
+    schema.gridColumns = defaults.gridColumns;
+    schema.gridStackWidth = defaults.gridStackWidth;
+  } else if (baseComponent === 'xref-card') {
+    schema.xrefTarget = defaults.xrefTarget;
+    schema.xrefTargetTagFilter = defaults.xrefTargetTagFilter;
+  } else if (baseComponent === 'table') {
+    schema.tableShowHeader = defaults.tableShowHeader;
+  } else if (baseComponent === 'image') {
+    schema.imageFile = defaults.imageFile;
+    schema.imageAlt = defaults.imageAlt;
+    schema.caption = defaults.caption;
+    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
+  } else if (baseComponent === 'carousel') {
+    schema.carouselImages = defaults.carouselImages;
+    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
+    schema.carouselDurationMs = defaults.carouselDurationMs;
+    schema.carouselPauseOnHover = defaults.carouselPauseOnHover;
+    schema.carouselShowControls = defaults.carouselShowControls;
+    schema.carouselShowIndicators = defaults.carouselShowIndicators;
+    schema.carouselShowFrame = defaults.carouselShowFrame;
+  } else if (baseComponent === 'plugin') {
+    schema.plugin = defaults.plugin;
+    schema.pluginConfig = defaults.pluginConfig;
+    schema.pluginSortValues = defaults.pluginSortValues;
+  }
   if (typeof value.id === 'string') schema.id = value.id;
   if (typeof value.css === 'string') {
     assertCssValueIsDeclarationString(value.css, `${component}.json css`);
@@ -1098,11 +1211,12 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
   if (typeof value.xrefTargetTagFilter === 'string') schema.xrefTargetTagFilter = value.xrefTargetTagFilter;
-  if (Array.isArray(value.tableColumns)) schema.tableColumns = parseStringList(value.tableColumns);
+  if (Array.isArray(value.tableColumns)) setTableColumns(schema, parseStringList(value.tableColumns));
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
   if (typeof value.imageAlt === 'string') schema.imageAlt = value.imageAlt;
+  if (typeof value.allowDocumentImageReuse === 'boolean') schema.allowDocumentImageReuse = value.allowDocumentImageReuse;
   if ('caption' in value) schema.caption = normalizeTextCaption(value.caption);
   if (Array.isArray(value.carouselImages)) schema.carouselImages = value.carouselImages
     .map((item) => {
@@ -1158,7 +1272,22 @@ function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, meta: JsonObje
     path: `${blockPath}/tableColumns.json`,
     read: () => `${JSON.stringify(getTableColumns(block.schema), null, 2)}\n`,
     write: (content) => {
-      block.schema.tableColumns = parseJsonStringArray(content, `${blockPath}/tableColumns.json`);
+      setTableColumns(block.schema, parseJsonStringArray(content, `${blockPath}/tableColumns.json`));
+    },
+  });
+  entries.set(`${blockPath}/tableColumnProperties.json`, {
+    kind: 'file',
+    path: `${blockPath}/tableColumnProperties.json`,
+    read: () => `${JSON.stringify(Object.fromEntries(
+      [...new Set([
+        ...getTableColumns(block.schema),
+        ...Object.keys(block.schema.tableColumnProperties ?? {}),
+      ])].map((column) => [column, getTableColumnProperties(block.schema, column)])
+    ), null, 2)}\n`,
+    write: (content) => {
+      block.schema.tableColumnProperties = parseTableColumnProperties(
+        parseJsonObject(content, `${blockPath}/tableColumnProperties.json`)
+      );
     },
   });
   entries.set(`${blockPath}/tableRows.json`, {
@@ -1175,7 +1304,7 @@ function writeBlockBodyText(block: VisualBlock, meta: JsonObject, content: strin
   const baseComponent = getBlockBaseComponent(meta, block);
   if (baseComponent === 'table') {
     throw new Error(
-      'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead.'
+      'table.txt is a read-only preview for static table components. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json instead.'
     );
   }
 

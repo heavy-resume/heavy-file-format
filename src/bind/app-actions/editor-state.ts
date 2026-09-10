@@ -1,8 +1,9 @@
-import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
+import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
+import { splitTextParagraphsOnCommit } from '../../text-paragraph-split';
 import { recordHistory } from '../../history';
-import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
+import { captureEditorDeactivationAnchor, capturePaneScroll, hasEditorViewportMovedSinceActivation, restoreCapturedEditorDeactivationScrollTop, restoreEditorActivationScrollTop, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
@@ -20,16 +21,19 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   }
   event.stopPropagation();
   const targetElement = event.target as HTMLElement | null;
+  const clickedSortValueKey = targetElement?.closest<HTMLElement>('[data-hvy-sort-value="true"]')?.dataset.sortValueKey?.trim() ?? '';
   const textEditorMode = targetElement?.closest('[data-field="text-fill-in-value"]') ? 'fill-in' : 'rich';
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
   const anchor = passiveBlock ? getPassiveTextAnchor(passiveContent, targetElement) : undefined;
+  const preferredEditorTarget = capturePreferredEditorActivationTarget(targetElement);
   const aiPlaceholderActivation = state.currentView === 'ai' && Boolean(targetElement?.closest('.editor-passive-empty-text.has-placeholder'));
   state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
   if (aiPlaceholderActivation) {
     state.aiModeTipDismissed = true;
   }
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: aiPlaceholderActivation, textEditorMode });
+  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
   if (state.currentView === 'ai') {
     setAiEditorHostBlock(sectionKey, blockId);
   }
@@ -42,10 +46,61 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
       clientY: event.clientY,
       preferTextFocus: true,
       immediateFocus: aiPlaceholderActivation ? true : state.pendingEditorActivation.immediateFocus,
+      suppressFocus: clickedSortValueKey ? true : state.pendingEditorActivation.suppressFocus,
+      ...(preferredEditorTarget ? { preferredEditorTarget } : {}),
     };
   }
-  getRenderApp()();
+  if (!getRefreshEditorBlock()(sectionKey, refreshBlockId) && !getRefreshEditorSection()(sectionKey)) {
+    getRenderApp()();
+  } else {
+    scrollPendingEditorActivation(app);
+  }
+  if (clickedSortValueKey) {
+    openActivatedEnumSortValue(app, sectionKey, blockId, clickedSortValueKey);
+  }
 };
+
+function capturePreferredEditorActivationTarget(
+  targetElement: HTMLElement | null
+): NonNullable<typeof state.pendingEditorActivation>['preferredEditorTarget'] | null {
+  const tableCell = targetElement?.closest<HTMLTableCellElement>('.reader-table .table-main-row > td');
+  const tableRow = tableCell?.closest<HTMLTableRowElement>('.table-main-row');
+  const tableBody = tableRow?.parentElement;
+  if (tableCell && tableRow && tableBody) {
+    const rowIndex = Array.from(tableBody.querySelectorAll<HTMLTableRowElement>(':scope > .table-main-row')).indexOf(tableRow);
+    if (rowIndex >= 0) {
+      return {
+        field: 'table-cell',
+        rowIndex,
+        cellIndex: tableCell.cellIndex,
+      };
+    }
+  }
+  const tableColumn = targetElement?.closest<HTMLTableCellElement>('.reader-table thead > tr > th');
+  return tableColumn
+    ? {
+        field: 'table-column',
+        columnIndex: tableColumn.cellIndex,
+      }
+    : null;
+}
+
+function openActivatedEnumSortValue(app: HTMLElement, sectionKey: string, blockId: string, key: string): void {
+  const activeBlock = [...app.querySelectorAll<HTMLElement>('.editor-block[data-active-editor-block="true"]')]
+    .find((candidate) => candidate.dataset.sectionKey === sectionKey && candidate.dataset.blockId === blockId);
+  const select = [...(activeBlock?.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]') ?? [])]
+    .find((candidate) => candidate.dataset.sortValueKey === key);
+  if (!select) {
+    return;
+  }
+  select.focus({ preventScroll: true });
+  try {
+    select.showPicker();
+  } catch {
+    // Focusing still leaves the enum ready for keyboard interaction when the
+    // browser does not permit a programmatically opened native picker.
+  }
+}
 
 type PassiveTextAnchor = {
   top: number;
@@ -108,18 +163,25 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   }
   event.stopPropagation();
   const block = findBlockByIds(sectionKey, blockId);
+  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
   const editorBlock = actionButton.closest?.<HTMLElement>('.editor-block') ?? null;
   if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block))) {
     return;
   }
-  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
+  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId, editorBlock);
   commitActiveTextFillIn('deactivate-block');
   commitActiveInlineTableEdit(sectionKey, blockId);
+  const richEditor = editorBlock?.querySelector<HTMLElement>('.rich-editor[data-field="block-rich"]') ?? null;
+  const splitBlocks = richEditor
+    ? splitTextParagraphsOnCommit(state.document, sectionKey, blockId, richEditor)
+    : null;
   const blockChanged = hasActiveEditorBlockChanges(sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
   const sortValuesChanged = state.currentView === 'ai' && (result === 'closed' || result === 'removed')
     ? syncSortValuesForDocument(state.document)
     : false;
+  const runsDocumentEditHooks = (result === 'closed' || result === 'removed')
+    && (blockChanged || result === 'removed' || sortValuesChanged);
   if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
@@ -127,9 +189,21 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
-  getRenderApp()();
-  if ((result === 'closed' || result === 'removed') && (blockChanged || result === 'removed' || sortValuesChanged)) {
-    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app));
+  const refreshedEditorSurface = (result !== 'removed' && getRefreshEditorBlock()(sectionKey, refreshBlockId, {
+    replacementBlocks: splitBlocks ?? undefined,
+  }))
+    || getRefreshEditorSection()(sectionKey);
+  if (!refreshedEditorSurface) {
+    getRenderApp()();
+  } else {
+    scrollPendingEditorDeactivation(app);
+  }
+  if (runsDocumentEditHooks) {
+    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app), () => {
+      if (deactivationAnchor) {
+        restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
+      }
+    }, sectionKey);
   }
 };
 
@@ -148,31 +222,59 @@ function commitActiveInlineTableEdit(sectionKey: string, blockId: string): void 
   commitInlineTableEdit(activeElement);
 }
 
-const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
+const cancelBlockEdit: AppActionHandler = ({ app, actionButton, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
-  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
+  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
+  const deactivationAnchor = captureEditorDeactivationAnchor(
+    app,
+    sectionKey,
+    blockId,
+    actionButton.closest?.<HTMLElement>('.editor-block') ?? null
+  );
+  const activationReturnScroll = state.activeEditorBlockReturnScroll;
+  const restoreActivationViewport = Boolean(
+    activationReturnScroll
+    && deactivationAnchor
+    && !hasEditorViewportMovedSinceActivation(app, deactivationAnchor)
+  );
+  const refreshAfterCancel = (): void => {
+    getRefreshReaderPanels()();
+    const refreshedEditorSurface = getRefreshEditorBlock()(sectionKey, refreshBlockId)
+      || getRefreshEditorSection()(sectionKey);
+    if (!refreshedEditorSurface) {
+      getRenderApp()();
+      if (restoreActivationViewport && activationReturnScroll && deactivationAnchor) {
+        restoreEditorActivationScrollTop(app, deactivationAnchor, activationReturnScroll);
+      }
+      return;
+    }
+    state.pendingEditorDeactivation = null;
+    if (restoreActivationViewport && activationReturnScroll && deactivationAnchor) {
+      restoreEditorActivationScrollTop(app, deactivationAnchor, activationReturnScroll);
+    } else if (deactivationAnchor) {
+      restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
+    }
+  };
   const result = cancelEditorBlockEdit(sectionKey, blockId);
   if (result === 'needs-confirmation') {
     openRemoveConfirmationModal(() => {
       const confirmedResult = cancelEditorBlockEdit(sectionKey, blockId, { confirmChangedNewBlock: true });
       if (confirmedResult === 'closed' || confirmedResult === 'removed') {
-        state.pendingEditorDeactivation = deactivationAnchor;
+        state.pendingEditorDeactivation = restoreActivationViewport ? null : deactivationAnchor;
         state.activeEditorBlockReturnScroll = null;
       }
-      getRefreshReaderPanels()();
-      getRenderApp()();
+      refreshAfterCancel();
     }, app);
     return;
   }
   if (result === 'closed' || result === 'removed') {
-    state.pendingEditorDeactivation = deactivationAnchor;
+    state.pendingEditorDeactivation = restoreActivationViewport ? null : deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
   }
-  getRefreshReaderPanels()();
-  getRenderApp()();
+  refreshAfterCancel();
 };
 
 const toggleEditorExpandable: AppActionHandler = ({ event, sectionKey, blockId }) => {

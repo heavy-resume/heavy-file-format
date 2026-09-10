@@ -95,7 +95,10 @@ export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): Rea
     const previousVisibility = captureVisibilityStates(reader);
     options.capturePluginFocus?.();
     let phaseStartedAt = nowMs();
-    const readerHtml = options.readerRenderer.renderReaderSections(options.sections);
+    const readerHtml = options.readerRenderer.renderReaderSections(options.sections, {
+      scrollTop,
+      viewportHeight: reader.clientHeight,
+    });
     readerRenderMs = elapsedMs(phaseStartedAt);
     recordMeasurement('refreshReader.reader.render', readerRenderMs, { sections: options.sections.length });
     phaseStartedAt = nowMs();

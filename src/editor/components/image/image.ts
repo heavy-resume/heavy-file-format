@@ -1,9 +1,10 @@
 import './image.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { VisualBlock, VisualSection } from '../../types';
+import type { VisualDocument } from '../../../types';
 import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
-import { getAttachmentDescriptors } from '../../../attachment-store';
-import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
+import { ensureDocumentAttachmentStore, getAttachmentDescriptors, normalizeAttachmentBytes, type HvyAttachmentHostAdapter } from '../../../attachment-store';
+import { state, getRefreshEditorSection, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
 import { recordHistory } from '../../../history';
@@ -12,14 +13,28 @@ import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolve
 import { cameraIcon, closeIcon, plusIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
 import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
-import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
-import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
+import { getMatchingImagePresetCss, hasExplicitImageSizeCss, mergeImagePresetCss } from './image-preset-css';
+import { normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
+import { addImageIntrinsicDimensions, getImageIntrinsicDimensions } from '../../../image-intrinsic-dimensions';
 
 export { mergeImagePresetCss } from './image-preset-css';
 
-const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
-const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
+type HostImageUrlResolution =
+  | { status: 'pending'; promise: Promise<string | null> }
+  | { status: 'resolved'; url: string | null };
+
+export interface ImageAttachmentResolutionContext {
+  document: VisualDocument;
+  attachmentHost: HvyAttachmentHostAdapter | null;
+}
+
+let documentBlobUrlCache = new WeakMap<VisualDocument, Map<string, { url: string; bytes: Uint8Array }>>();
+let hostImageUrlCache = new WeakMap<HvyAttachmentHostAdapter, Map<string, HostImageUrlResolution>>();
+const managedBlobUrls = new Set<string>();
+let imageUrlCacheVersion = 0;
 const lazyImageHydrationObservers = new WeakMap<ParentNode, IntersectionObserver[]>();
+const imageAttachmentPickerStates = new WeakMap<HTMLElement, { expanded: boolean; observer: ResizeObserver | null }>();
+const IMAGE_ATTACHMENT_PICKER_ROWS = 2;
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
 const IMAGE_SIZE_PRESETS = ['small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
 
@@ -41,26 +56,176 @@ export function getImageBlobUrl(filename: string): string | null {
     return null;
   }
   const attachmentId = getImageAttachmentId(filename);
-  const hostUrl = state.attachmentHost?.resolveUrl?.(attachmentId);
-  if (typeof hostUrl === 'string' && hostUrl.length > 0) {
+  const hostUrl = getHostImageUrl(state.attachmentHost, attachmentId);
+  if (typeof hostUrl === 'string') {
     return hostUrl;
   }
-  const attachment = getImageAttachment(state.document, filename);
+  return getDocumentImageBlobUrl(state.document, filename);
+}
+
+export function captureImageAttachmentResolutionContext(): ImageAttachmentResolutionContext {
+  return {
+    document: state.document,
+    attachmentHost: state.attachmentHost ?? null,
+  };
+}
+
+export async function resolveImageBlobUrl(
+  filename: string,
+  context = captureImageAttachmentResolutionContext()
+): Promise<string | null> {
+  if (!filename) {
+    return null;
+  }
+  const { attachmentHost, document } = context;
+  const attachmentId = getImageAttachmentId(filename);
+  const hostUrl = getHostImageUrl(attachmentHost, attachmentId);
+  const resolvedHostUrl = typeof hostUrl === 'string' ? hostUrl : await hostUrl;
+  if (resolvedHostUrl) {
+    return resolvedHostUrl;
+  }
+  const documentUrl = getDocumentImageBlobUrl(document, filename);
+  if (documentUrl || !attachmentHost) {
+    return documentUrl;
+  }
+  try {
+    const recalled = await attachmentHost.recall(attachmentId);
+    if (!recalled) {
+      return null;
+    }
+    const url = recalled instanceof Blob
+      ? normalizeHostImageUrl(recalled)
+      : createManagedImageBlobUrl(
+          await normalizeAttachmentBytes(recalled),
+          getAttachmentDescriptors(document).find((descriptor) => descriptor.id === attachmentId)?.meta.mediaType
+            ?? inferImageMediaType(filename)
+        );
+    if (url) {
+      cacheResolvedHostImageUrl(attachmentHost, attachmentId, url);
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function getDocumentImageBlobUrl(document: VisualDocument, filename: string): string | null {
+  const attachment = getImageAttachment(document, filename);
   if (!attachment || attachment.bytes.length === 0) {
     return null;
   }
-  const cached = blobUrlCache.get(filename);
+  let cache = documentBlobUrlCache.get(document);
+  if (!cache) {
+    cache = new Map();
+    documentBlobUrlCache.set(document, cache);
+  }
+  const cached = cache.get(filename);
   if (cached && cached.bytes === attachment.bytes) {
     return cached.url;
   }
   if (cached) {
     URL.revokeObjectURL(cached.url);
+    managedBlobUrls.delete(cached.url);
   }
   const mediaType = typeof attachment.meta.mediaType === 'string' ? attachment.meta.mediaType : 'application/octet-stream';
   const blob = new Blob([Uint8Array.from(attachment.bytes)], { type: mediaType });
   const url = URL.createObjectURL(blob);
-  blobUrlCache.set(filename, { url, bytes: attachment.bytes });
+  managedBlobUrls.add(url);
+  cache.set(filename, { url, bytes: attachment.bytes });
   return url;
+}
+
+function getHostImageUrl(
+  host: typeof state.attachmentHost,
+  attachmentId: string,
+): string | Promise<string | null> | null {
+  if (!host?.resolveUrl) {
+    return null;
+  }
+  let cache = hostImageUrlCache.get(host);
+  if (!cache) {
+    cache = new Map();
+    hostImageUrlCache.set(host, cache);
+  }
+  const cached = cache.get(attachmentId);
+  if (cached?.status === 'resolved') {
+    return cached.url;
+  }
+  if (cached?.status === 'pending') {
+    return cached.promise;
+  }
+  const cacheVersion = imageUrlCacheVersion;
+  let result: string | Blob | null | Promise<string | Blob | null>;
+  try {
+    result = host.resolveUrl(attachmentId);
+  } catch {
+    cache.delete(attachmentId);
+    return null;
+  }
+  if (!isPromiseLike(result)) {
+    const url = normalizeHostImageUrl(result);
+    if (url) {
+      cache.set(attachmentId, { status: 'resolved', url });
+    } else {
+      cache.delete(attachmentId);
+    }
+    return url;
+  }
+  const promise = Promise.resolve(result)
+    .then((resolved) => {
+      if (cacheVersion !== imageUrlCacheVersion) {
+        return getHostImageUrl(host, attachmentId);
+      }
+      const url = normalizeHostImageUrl(resolved);
+      if (url) {
+        cache?.set(attachmentId, { status: 'resolved', url });
+      } else {
+        cache?.delete(attachmentId);
+      }
+      return url;
+    })
+    .catch(() => {
+      if (cacheVersion === imageUrlCacheVersion) {
+        cache?.delete(attachmentId);
+      }
+      return null;
+    });
+  cache.set(attachmentId, { status: 'pending', promise });
+  return promise;
+}
+
+function normalizeHostImageUrl(value: string | Blob | null): string | null {
+  if (typeof value === 'string') {
+    return value.length > 0 ? value : null;
+  }
+  if (!(value instanceof Blob)) {
+    return null;
+  }
+  const url = URL.createObjectURL(value);
+  managedBlobUrls.add(url);
+  return url;
+}
+
+function createManagedImageBlobUrl(bytes: Uint8Array, mediaType: unknown): string {
+  const blob = new Blob([Uint8Array.from(bytes)], {
+    type: typeof mediaType === 'string' ? mediaType : 'application/octet-stream',
+  });
+  const url = URL.createObjectURL(blob);
+  managedBlobUrls.add(url);
+  return url;
+}
+
+function cacheResolvedHostImageUrl(host: HvyAttachmentHostAdapter, attachmentId: string, url: string): void {
+  let cache = hostImageUrlCache.get(host);
+  if (!cache) {
+    cache = new Map();
+    hostImageUrlCache.set(host, cache);
+  }
+  cache.set(attachmentId, { status: 'resolved', url });
+}
+
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as Promise<T> | null)?.then === 'function';
 }
 
 export function hasImageAttachmentSource(filename: string): boolean {
@@ -68,8 +233,7 @@ export function hasImageAttachmentSource(filename: string): boolean {
     return false;
   }
   const id = getImageAttachmentId(filename);
-  const hostUrl = state.attachmentHost?.resolveUrl?.(id);
-  if (typeof hostUrl === 'string' && hostUrl.length > 0) {
+  if (state.attachmentHost) {
     return true;
   }
   return getAttachmentDescriptors(state.document).some((descriptor) => descriptor.id === id);
@@ -93,19 +257,30 @@ export function renderImageElement(options: {
   const srcAttr = url ? ` src="${options.helpers.escapeAttr(url)}"` : '';
   const loadingAttr = options.lazy ?? true ? ' loading="lazy"' : '';
   const styleAttr = options.style ? ` style="${options.helpers.escapeAttr(options.style)}"` : '';
+  const descriptor = getAttachmentDescriptors(state.document)
+    .find((candidate) => candidate.id === getImageAttachmentId(options.filename));
+  const dimensions = descriptor ? getImageIntrinsicDimensions(descriptor.meta) : null;
+  const dimensionsAttr = dimensions
+    ? ` width="${dimensions.width}" height="${dimensions.height}"`
+    : '';
   const lazyAttr = options.lazyCarousel ? ' data-hvy-carousel-lazy-image="true"' : '';
-  const imageLazyAttr = shouldDeferSrc && !options.lazyCarousel ? ' data-hvy-lazy-image="true"' : '';
-  return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${imageLazyAttr}${styleAttr} />`;
+  const imageLazyAttr = !url && !options.lazyCarousel ? ' data-hvy-lazy-image="true"' : '';
+  return `<img${classAttr}${srcAttr}${loadingAttr}${dimensionsAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${imageLazyAttr}${styleAttr} />`;
 }
 
 export function clearImageBlobUrlCache(): void {
-  for (const entry of blobUrlCache.values()) {
-    URL.revokeObjectURL(entry.url);
+  imageUrlCacheVersion += 1;
+  for (const url of managedBlobUrls) {
+    URL.revokeObjectURL(url);
   }
-  blobUrlCache.clear();
+  managedBlobUrls.clear();
+  documentBlobUrlCache = new WeakMap();
+  hostImageUrlCache = new WeakMap();
 }
 
 export function bindLazyImageHydration(root: ParentNode): void {
+  const attachmentContext = captureImageAttachmentResolutionContext();
+  initializeImageAttachmentPickers(root, attachmentContext);
   const startedAt = nowMs();
   lazyImageHydrationObservers.get(root)?.forEach((observer) => observer.disconnect());
   lazyImageHydrationObservers.delete(root);
@@ -114,8 +289,9 @@ export function bindLazyImageHydration(root: ParentNode): void {
   if (images.length === 0) {
     return;
   }
+  const hydrateImage = (image: HTMLImageElement) => hydrateLazyImage(image, attachmentContext);
   if (typeof IntersectionObserver === 'undefined') {
-    images.forEach(hydrateLazyImage);
+    images.forEach(hydrateImage);
     logPerfTrace('image-lazy-hydration:bind', {
       elapsedMs: elapsedMs(startedAt),
       imageCount: images.length,
@@ -145,7 +321,7 @@ export function bindLazyImageHydration(root: ParentNode): void {
           return;
         }
         observer.unobserve(entry.target);
-        (imagesByTarget.get(entry.target) ?? []).forEach(hydrateLazyImage);
+        (imagesByTarget.get(entry.target) ?? []).forEach(hydrateImage);
       });
     }, {
       root: scroller,
@@ -166,17 +342,19 @@ export function bindLazyImageHydration(root: ParentNode): void {
   });
 }
 
-function hydrateLazyImage(image: HTMLImageElement): void {
+async function hydrateLazyImage(image: HTMLImageElement, context: ImageAttachmentResolutionContext): Promise<void> {
   if (image.getAttribute('src')) {
     return;
   }
+  image.dataset.hvyAttachmentResolution = 'pending';
   const startedAt = nowMs();
   const filename = image.dataset.imageFilename ?? '';
-  const url = getImageBlobUrl(filename);
+  const url = await resolveImageBlobUrl(filename, context);
   if (url) {
-    observeHydratedImageLoad(image, filename, startedAt);
+    observeHydratedImageLoad(image, filename, context, startedAt);
     image.src = url;
     image.dataset.hvyLazyImage = 'loaded';
+    image.dataset.hvyAttachmentResolution = 'resolved';
     logPerfTrace('image-lazy-hydration:src-set', {
       filename,
       elapsedMs: elapsedMs(startedAt),
@@ -188,7 +366,8 @@ function hydrateLazyImage(image: HTMLImageElement): void {
   }
   const missing = image.ownerDocument.createElement('div');
   missing.className = 'image-empty muted';
-  missing.textContent = `Missing attachment: ${filename}`;
+  missing.dataset.hvyAttachmentResolution = 'failed';
+  missing.textContent = `Attachment resolution failed: ${filename}`;
   image.replaceWith(missing);
   logPerfTrace('image-lazy-hydration:missing', {
     filename,
@@ -196,12 +375,18 @@ function hydrateLazyImage(image: HTMLImageElement): void {
   });
 }
 
-function observeHydratedImageLoad(image: HTMLImageElement, filename: string, startedAt: number): void {
+function observeHydratedImageLoad(
+  image: HTMLImageElement,
+  filename: string,
+  context: ImageAttachmentResolutionContext,
+  startedAt: number
+): void {
   if (image.dataset.hvyLazyImageLoadObserved === 'true') {
     return;
   }
   image.dataset.hvyLazyImageLoadObserved = 'true';
   image.addEventListener('load', () => {
+    preserveLoadedImageIntrinsicDimensions(image, filename, context.document);
     logPerfTrace('image-lazy-hydration:load', {
       filename,
       elapsedMs: elapsedMs(startedAt),
@@ -234,8 +419,36 @@ function observeHydratedImageLoad(image: HTMLImageElement, filename: string, sta
   }, { once: true });
 }
 
+function preserveLoadedImageIntrinsicDimensions(
+  image: HTMLImageElement,
+  filename: string,
+  document: VisualDocument
+): void {
+  const width = Math.round(image.naturalWidth);
+  const height = Math.round(image.naturalHeight);
+  if (!filename || width <= 0 || height <= 0) {
+    return;
+  }
+  if (!image.hasAttribute('width')) {
+    image.setAttribute('width', String(width));
+  }
+  if (!image.hasAttribute('height')) {
+    image.setAttribute('height', String(height));
+  }
+  const attachmentId = getImageAttachmentId(filename);
+  const store = ensureDocumentAttachmentStore(document);
+  const descriptor = store.getDescriptor(attachmentId);
+  if (!descriptor || getImageIntrinsicDimensions(descriptor.meta)) {
+    return;
+  }
+  store.mergeDescriptorMeta(attachmentId, {
+    pixelWidth: width,
+    pixelHeight: height,
+  });
+}
+
 export function renderImageAttachmentPicker(options: {
-  helpers: ComponentRenderHelpers;
+  helpers: Pick<ComponentRenderHelpers, 'escapeAttr' | 'escapeHtml'>;
   action: string;
   actionLabel: string;
   sectionKey: string;
@@ -248,18 +461,16 @@ export function renderImageAttachmentPicker(options: {
   if (filenames.length === 0) {
     return `<div class="image-attachment-empty muted">${options.helpers.escapeHtml(options.emptyText)}</div>`;
   }
-  return `<div class="image-attachment-picker" aria-label="Attached images">
-    ${filenames.map((filename) => {
-      const url = getImageBlobUrl(filename);
+  return `<div class="image-attachment-picker-shell" data-image-attachment-picker-shell>
+    <div class="image-attachment-picker" aria-label="Attached images" data-image-attachment-picker>
+    ${filenames.map((filename, index) => {
       const selected = filename === options.selectedFilename;
       const unused = isImageAttachmentUnused(filename);
-      const preview = url
-        ? `<img src="${options.helpers.escapeAttr(url)}" alt="">`
-        : '<span>Missing</span>';
+      const preview = `<img data-image-attachment-picker-preview data-image-filename="${options.helpers.escapeAttr(filename)}" alt="">`;
       const actionText = selected && options.selectedLabel ? options.selectedLabel : options.actionLabel;
       const actionIcon = selected && options.selectedLabel ? '' : plusIcon();
       const actionTitle = `${actionText}: ${filename}`;
-      return `<div class="image-attachment-choice-wrap">
+      return `<div class="image-attachment-choice-wrap" data-image-picker-index="${index}">
         <button
           type="button"
           class="image-attachment-choice${selected ? ' is-selected' : ''}"
@@ -286,7 +497,132 @@ export function renderImageAttachmentPicker(options: {
         >${closeIcon()}</button>` : ''}
       </div>`;
     }).join('')}
+    </div>
+    <button type="button" class="ghost image-attachment-picker-toggle" data-image-attachment-picker-toggle aria-expanded="false" hidden></button>
   </div>`;
+}
+
+export function openImageAttachmentPickerModal(
+  app: HTMLElement,
+  sectionKey: string,
+  blockId: string,
+): void {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || block.schema.kind !== 'image' || !block.schema.allowDocumentImageReuse) {
+    return;
+  }
+  app.querySelectorAll<HTMLElement>('.image-attachment-modal-root').forEach((openModal) => openModal.remove());
+  const modal = document.createElement('div');
+  modal.className = 'modal-root image-attachment-modal-root';
+  modal.innerHTML = `
+    <div class="modal-overlay" data-image-attachment-modal-close="true"></div>
+    <section class="modal-panel image-attachment-modal" role="dialog" aria-modal="true" aria-label="Use an attached image">
+      <div class="image-attachment-modal-header">
+        <h3>Use an attached image</h3>
+        <button type="button" class="ghost image-attachment-modal-close" data-image-attachment-modal-close="true">${closeIcon()}<span>Close</span></button>
+      </div>
+      ${renderImageAttachmentPicker({
+        helpers: { escapeAttr: escapeModalAttr, escapeHtml: escapeModalHtml },
+        action: 'image-use-existing',
+        actionLabel: 'Use image',
+        sectionKey,
+        blockId,
+        selectedFilename: block.schema.imageFile.trim(),
+        selectedLabel: 'Current image',
+        emptyText: 'No attached images yet.',
+      })}
+    </section>
+  `;
+  const close = () => {
+    modal.remove();
+    app.querySelector<HTMLButtonElement>(
+      `[data-action="open-image-attachment-modal"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+    )?.focus();
+  };
+  modal.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-image-attachment-modal-close="true"]')) {
+      close();
+    }
+  });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      close();
+    }
+  });
+  app.appendChild(modal);
+  initializeImageAttachmentPickers(modal);
+  modal.querySelector<HTMLButtonElement>('.image-attachment-modal-close')?.focus();
+}
+
+export function initializeImageAttachmentPickers(
+  root: ParentNode,
+  attachmentContext = captureImageAttachmentResolutionContext()
+): void {
+  root.querySelectorAll<HTMLElement>('[data-image-attachment-picker-shell]').forEach((shell) => {
+    if (imageAttachmentPickerStates.has(shell)) return;
+    const stateForPicker = { expanded: false, observer: null as ResizeObserver | null };
+    imageAttachmentPickerStates.set(shell, stateForPicker);
+    const update = () => updateImageAttachmentPicker(shell, stateForPicker, attachmentContext);
+    const toggle = shell.querySelector<HTMLButtonElement>('[data-image-attachment-picker-toggle]');
+    toggle?.addEventListener('click', () => {
+      stateForPicker.expanded = !stateForPicker.expanded;
+      update();
+    });
+    if (typeof ResizeObserver !== 'undefined') {
+      stateForPicker.observer = new ResizeObserver(() => {
+        if (!shell.isConnected) {
+          stateForPicker.observer?.disconnect();
+          stateForPicker.observer = null;
+          return;
+        }
+        if (!stateForPicker.expanded) update();
+      });
+      stateForPicker.observer.observe(shell);
+    }
+    update();
+  });
+}
+
+function updateImageAttachmentPicker(
+  shell: HTMLElement,
+  stateForPicker: { expanded: boolean; observer: ResizeObserver | null },
+  attachmentContext: ImageAttachmentResolutionContext,
+): void {
+  const picker = shell.querySelector<HTMLElement>('[data-image-attachment-picker]');
+  const toggle = shell.querySelector<HTMLButtonElement>('[data-image-attachment-picker-toggle]');
+  if (!picker || !toggle) return;
+  const choices = Array.from(picker.querySelectorAll<HTMLElement>('[data-image-picker-index]'));
+  const columnCount = Math.max(1, getComputedStyle(picker).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
+  const collapsedCount = Math.min(choices.length, columnCount * IMAGE_ATTACHMENT_PICKER_ROWS);
+  choices.forEach((choice, index) => {
+    choice.hidden = !stateForPicker.expanded && index >= collapsedCount;
+    if (!choice.hidden) hydrateImageAttachmentPickerPreview(choice, attachmentContext);
+  });
+  const hiddenCount = choices.length - collapsedCount;
+  toggle.hidden = hiddenCount <= 0;
+  toggle.setAttribute('aria-expanded', stateForPicker.expanded ? 'true' : 'false');
+  toggle.textContent = stateForPicker.expanded ? 'Show fewer images' : `Show ${hiddenCount} more image${hiddenCount === 1 ? '' : 's'}`;
+}
+
+async function hydrateImageAttachmentPickerPreview(
+  choice: HTMLElement,
+  attachmentContext: ImageAttachmentResolutionContext
+): Promise<void> {
+  const image = choice.querySelector<HTMLImageElement>('img[data-image-attachment-picker-preview]');
+  if (!image || image.src) return;
+  image.dataset.hvyAttachmentResolution = 'pending';
+  const filename = image.dataset.imageFilename ?? '';
+  const url = await resolveImageBlobUrl(filename, attachmentContext);
+  if (url) {
+    image.src = url;
+    image.dataset.hvyAttachmentResolution = 'resolved';
+    return;
+  }
+  const missing = document.createElement('span');
+  missing.dataset.hvyAttachmentResolution = 'failed';
+  missing.textContent = 'Resolution failed';
+  image.replaceWith(missing);
 }
 
 export function openImageCameraCapture(app: HTMLElement, options: {
@@ -428,17 +764,20 @@ function escapeModalAttr(value: string): string {
   return escapeModalHtml(value).replace(/'/g, '&#39;');
 }
 
-function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): string {
+function renderPreview(
+  block: VisualBlock,
+  helpers: ComponentRenderHelpers,
+  editableCaption?: { sectionKey: string; blockId: string },
+): string {
   const filename = block.schema.imageFile.trim();
-  const alt = block.schema.imageAlt || filename || 'Image';
+  const alt = block.schema.imageAlt;
+  const captionHtml = editableCaption
+    ? renderEditableImageCaption(block, helpers, editableCaption)
+    : renderReadonlyImageCaption(block, helpers);
   if (!filename) {
-    return '<div class="image-empty muted">No image attached.</div>';
+    const empty = '<div class="image-empty muted">No image</div>';
+    return editableCaption ? `<figure class="image-figure">${empty}${captionHtml}</figure>` : empty;
   }
-  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
-  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
-  const captionHtml = captionContent
-    ? `<figcaption class="image-caption" style="text-align: ${helpers.escapeAttr(captionAlign)};">${captionContent}</figcaption>`
-    : '';
   const image = renderImageElement({
     filename,
     alt,
@@ -448,16 +787,44 @@ function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): str
     lazy: true,
   });
   if (!image) {
-    return `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
+    const missing = `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
+    return editableCaption ? `<figure class="image-figure">${missing}${captionHtml}</figure>` : missing;
   }
   return `<figure class="image-figure">${image}${captionHtml}</figure>`;
+}
+
+function renderReadonlyImageCaption(block: VisualBlock, helpers: ComponentRenderHelpers): string {
+  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
+  if (!captionContent) return '';
+  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
+  return `<figcaption class="image-caption" style="text-align: ${helpers.escapeAttr(captionAlign)};">${captionContent}</figcaption>`;
+}
+
+function renderEditableImageCaption(
+  block: VisualBlock,
+  helpers: ComponentRenderHelpers,
+  target: { sectionKey: string; blockId: string },
+): string {
+  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
+  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
+  return `<figcaption class="image-caption image-caption-editor" style="text-align: ${helpers.escapeAttr(captionAlign)};">
+    <button
+      type="button"
+      class="image-caption-trigger${captionContent ? '' : ' is-placeholder'}"
+      data-action="open-image-caption-modal"
+      data-section-key="${helpers.escapeAttr(target.sectionKey)}"
+      data-block-id="${helpers.escapeAttr(target.blockId)}"
+    >${captionContent || '<span class="image-caption-placeholder">Add caption</span>'}</button>
+  </figcaption>`;
 }
 
 export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const filename = block.schema.imageFile.trim();
   const downloadUrl = filename ? getImageBlobUrl(filename) : null;
   const canDeleteCurrentImage = filename && getImageAttachmentReferenceCount(filename) === 1;
-  const activeSizePreset = getMatchingImagePresetCss(block.schema.css, IMAGE_SIZE_PRESETS);
+  const matchedSizePreset = getMatchingImagePresetCss(block.schema.css, IMAGE_SIZE_PRESETS);
+  const activeSizePreset = matchedSizePreset
+    ?? (state.document.extension === '.phvy' && !hasExplicitImageSizeCss(block.schema.css) ? 'fit-width' : null);
   return `
     <div class="image-editor">
       <div class="image-toolbar">
@@ -472,6 +839,23 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           ${renderImageSizePresetButton('large', 'Large', 'Large (40rem wide)', activeSizePreset, sectionKey, block.id, helpers)}
           ${renderImageSizePresetButton('fit-width', 'Fit Width', 'Fit width', activeSizePreset, sectionKey, block.id, helpers)}
           ${renderImageSizePresetButton('fit-height', 'Fit Height', 'Fit height', activeSizePreset, sectionKey, block.id, helpers)}
+        </div>
+        <div class="image-utility-buttons">
+          ${filename && downloadUrl ? `<button
+            type="button"
+            class="ghost image-download-button"
+            data-action="download-image"
+            data-image-download-url="${helpers.escapeAttr(downloadUrl)}"
+            data-image-download-filename="${helpers.escapeAttr(filename)}"
+          >Download</button>` : ''}
+          <button
+            type="button"
+            class="ghost image-alt-button"
+            data-action="open-image-alt-modal"
+            data-section-key="${helpers.escapeAttr(sectionKey)}"
+            data-block-id="${helpers.escapeAttr(block.id)}"
+            aria-haspopup="dialog"
+          >Alt Text</button>
         </div>
       </div>
       <div
@@ -490,56 +874,122 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           title="Delete image attachment"
           aria-label="Delete image attachment ${helpers.escapeAttr(filename)}"
         >${closeIcon()}</button>` : ''}
-        ${renderPreview(block, helpers)}
+        ${renderPreview(block, helpers, { sectionKey, blockId: block.id })}
         <div class="image-dropzone-hint">
           <span>Drop an image here or</span>
           <label class="image-pick-label">
             <input type="file" accept="${IMAGE_ATTACHMENT_ACCEPT}" data-field="image-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" />
             <span class="image-pick-button">choose a file</span>
           </label>
-          <button type="button" class="image-pick-button image-camera-button" data-action="image-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>take a photo</span></button>
-          ${filename && downloadUrl ? `<a class="image-download-link" href="${helpers.escapeAttr(downloadUrl)}" download="${helpers.escapeAttr(filename)}">download</a>` : ''}
         </div>
-        <div class="image-filename muted">${filename ? helpers.escapeHtml(filename) : 'No file selected'}</div>
-      </div>
-      <div class="image-alt-label-container">
-        <label class="image-alt-label">
-          <span>Alt text</span>
-          <textarea
-            rows="2"
-            data-section-key="${helpers.escapeAttr(sectionKey)}"
-            data-block-id="${helpers.escapeAttr(block.id)}"
-            data-field="image-alt"
-            placeholder="Describe the image"
-          >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
-        </label>
-        <label class="image-alt-label">
-          <span>Caption</span>
-          <button
+        <div class="image-camera-row">
+          <button type="button" class="image-pick-button image-camera-button" data-action="image-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>take a photo</span></button>
+          ${block.schema.allowDocumentImageReuse ? `<button
             type="button"
-            class="image-pick-button image-caption-edit-button"
-            data-action="open-image-caption-modal"
+            class="image-pick-button image-camera-button image-attachment-open-button"
+            data-action="open-image-attachment-modal"
             data-section-key="${helpers.escapeAttr(sectionKey)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
-          >${getTextCaptionMarkdown(block.schema.caption).trim() ? 'Edit caption' : 'Add caption'}</button>
-        </label>
-      </div>
-      <div class="image-attachment-panel">
-        <div class="image-attachment-panel-title">Use an attached image</div>
-        ${renderImageAttachmentPicker({
-          helpers,
-          action: 'image-use-existing',
-          actionLabel: 'Use image',
-          sectionKey,
-          blockId: block.id,
-          selectedFilename: filename,
-          selectedLabel: 'Current image',
-          emptyText: 'No attached images yet.',
-        })}
+          >${plusIcon()}<span>Use an attached image...</span></button>` : ''}
+        </div>
+        ${filename ? `<button
+          type="button"
+          class="image-filename muted"
+          data-image-filename-editor
+          data-section-key="${helpers.escapeAttr(sectionKey)}"
+          data-block-id="${helpers.escapeAttr(block.id)}"
+          title="Rename image attachment"
+          aria-label="Rename image attachment ${helpers.escapeAttr(filename)}"
+        >${helpers.escapeHtml(filename)}</button>` : '<div class="image-filename muted">No file selected</div>'}
       </div>
     </div>
   `;
 };
+
+export function openImageAltTextModal(app: HTMLElement, sectionKey: string, blockId: string, trigger: HTMLElement): void {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || block.schema.kind !== 'image') {
+    return;
+  }
+  app.querySelector<HTMLElement>('.image-alt-modal')?.remove();
+  const surface = trigger.closest<HTMLElement>('.editor-shell, .viewer-shell')
+    ?? app.querySelector<HTMLElement>('.editor-shell, .viewer-shell');
+  if (!surface) {
+    return;
+  }
+
+  const modal = document.createElement('section');
+  modal.className = 'image-alt-modal';
+  modal.dataset.draggablePanel = 'true';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'false');
+  modal.setAttribute('aria-label', 'Alt Text');
+  modal.innerHTML = `
+    <div class="image-alt-modal-head">
+      <h3>Alt Text</h3>
+      <span>Drag to relocate</span>
+    </div>
+    <label class="image-alt-modal-field">
+      <span>Image description</span>
+      <textarea rows="4" data-image-alt-draft placeholder="Describe the image">${escapeModalHtml(block.schema.imageAlt)}</textarea>
+    </label>
+    <div class="image-alt-modal-actions">
+      <button type="button" class="ghost" data-image-alt-modal-action="cancel">Cancel</button>
+      <button type="button" class="secondary" data-image-alt-modal-action="done">Done</button>
+    </div>
+  `;
+  surface.append(modal);
+  placeImageAltTextModal(surface, modal, trigger);
+
+  const close = (restoreFocus = true): void => {
+    modal.remove();
+    if (restoreFocus && trigger.isConnected) {
+      trigger.focus();
+    }
+  };
+  const commit = (): void => {
+    const textarea = modal.querySelector<HTMLTextAreaElement>('[data-image-alt-draft]');
+    const nextAlt = textarea?.value ?? '';
+    const currentBlock = findBlockByIds(sectionKey, blockId);
+    if (currentBlock?.schema.kind === 'image' && nextAlt !== currentBlock.schema.imageAlt) {
+      recordHistory(`image-alt:${blockId}`);
+      currentBlock.schema.imageAlt = nextAlt;
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      getRefreshReaderPanels()();
+      trigger.closest<HTMLElement>('.image-editor')?.querySelector<HTMLImageElement>('.image-block-img')?.setAttribute('alt', nextAlt);
+    }
+    close();
+  };
+  modal.addEventListener('click', (event) => {
+    const action = (event.target as HTMLElement).closest<HTMLElement>('[data-image-alt-modal-action]')?.dataset.imageAltModalAction;
+    if (action === 'done') {
+      commit();
+    } else if (action === 'cancel') {
+      close();
+    }
+  });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  });
+  modal.querySelector<HTMLTextAreaElement>('[data-image-alt-draft]')?.focus();
+}
+
+function placeImageAltTextModal(surface: HTMLElement, modal: HTMLElement, trigger: HTMLElement): void {
+  const margin = 8;
+  const surfaceRect = surface.getBoundingClientRect();
+  const triggerRect = trigger.getBoundingClientRect();
+  const maxX = Math.max(margin, surface.clientWidth - modal.offsetWidth - margin);
+  const maxY = Math.max(margin, surface.clientHeight - modal.offsetHeight - margin);
+  const x = Math.min(Math.max(triggerRect.right - surfaceRect.left - modal.offsetWidth, margin), maxX);
+  const preferredY = triggerRect.bottom - surfaceRect.top + margin;
+  const fallbackY = triggerRect.top - surfaceRect.top - modal.offsetHeight - margin;
+  const y = Math.min(Math.max(preferredY <= maxY ? preferredY : fallbackY, margin), maxY);
+  modal.style.left = `${Math.round(x)}px`;
+  modal.style.top = `${Math.round(y)}px`;
+}
 
 function renderImageSizePresetButton(
   preset: string,
@@ -558,6 +1008,12 @@ export const renderImageReader: ComponentReaderRenderer = (_section, block, help
   return `<div class="image-reader">${renderPreview(block, helpers)}</div>`;
 };
 
+function refreshImageEditorSection(sectionKey: string): void {
+  if (!getRefreshEditorSection()(sectionKey)) {
+    getRenderApp()();
+  }
+}
+
 export function applyImagePreset(sectionKey: string, blockId: string, preset: string): void {
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) return;
@@ -567,7 +1023,7 @@ export function applyImagePreset(sectionKey: string, blockId: string, preset: st
   block.schema.css = merged;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
-  getRenderApp()();
+  refreshImageEditorSection(sectionKey);
 }
 
 export function useExistingImageAttachment(sectionKey: string, blockId: string, filename: string): void {
@@ -575,12 +1031,9 @@ export function useExistingImageAttachment(sectionKey: string, blockId: string, 
   if (!block || !listImageFilenames(state.document).includes(filename)) return;
   recordHistory(`image-existing:${blockId}`);
   block.schema.imageFile = filename;
-  if (!block.schema.imageAlt) {
-    block.schema.imageAlt = filename;
-  }
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
-  getRenderApp()();
+  refreshImageEditorSection(sectionKey);
 }
 
 export function deleteUnusedImageAttachment(filename: string): void {
@@ -623,7 +1076,7 @@ export function deleteCurrentImageAttachment(sectionKey: string, blockId: string
   block.schema.caption = null;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
-  getRenderApp()();
+  refreshImageEditorSection(sectionKey);
 }
 
 function countSectionImageReferences(section: VisualSection, filename: string): number {
@@ -660,17 +1113,15 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
   recordHistory(`image-upload:${blockId}`);
   await storeImageAttachment(filename, prepared.mediaType, prepared.bytes);
   block.schema.imageFile = filename;
-  if (!block.schema.imageAlt) {
-    block.schema.imageAlt = filename;
-  }
   clearImageBlobUrlCache();
   syncReusableTemplateForBlock(sectionKey, blockId);
-  getRenderApp()();
+  getRefreshReaderPanels()();
+  refreshImageEditorSection(sectionKey);
 }
 
 export async function storeImageAttachment(filename: string, mediaType: string, bytes: Uint8Array): Promise<void> {
   const id = getImageAttachmentId(filename);
-  const meta: JsonObject = { mediaType };
+  const meta = addImageIntrinsicDimensions(id, { mediaType }, bytes);
   const descriptor = await state.attachmentHost?.store(id, bytes, meta);
   const nextMeta = descriptor && typeof descriptor === 'object' ? descriptor.meta : meta;
   setAttachment(state.document, id, nextMeta, bytes);
@@ -703,7 +1154,12 @@ export async function reduceExistingImageAttachments(): Promise<{ reduced: numbe
     }
     reduced.push({
       id: getImageAttachmentId(filename),
-      meta: { ...attachment.meta, mediaType: prepared.mediaType },
+      meta: addImageIntrinsicDimensions(
+        getImageAttachmentId(filename),
+        { ...attachment.meta, mediaType: prepared.mediaType },
+        prepared.bytes,
+        true
+      ),
       bytes: prepared.bytes,
     });
   }
@@ -719,43 +1175,4 @@ export async function reduceExistingImageAttachments(): Promise<{ reduced: numbe
   clearImageBlobUrlCache();
   getRenderApp()();
   return { reduced: reduced.length, skipped };
-}
-
-export function bindImageDragAndDrop(app: HTMLElement): void {
-  if (imageDragDropBoundRoots.has(app)) {
-    return;
-  }
-  imageDragDropBoundRoots.add(app);
-  const overClass = 'image-dropzone-active';
-  app.addEventListener('dragenter', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    event.preventDefault();
-    dropzone.classList.add(overClass);
-  });
-  app.addEventListener('dragover', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'copy';
-    }
-    dropzone.classList.add(overClass);
-  });
-  app.addEventListener('dragleave', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    if (!dropzone.contains(event.relatedTarget as Node | null)) {
-      dropzone.classList.remove(overClass);
-    }
-  });
-  app.addEventListener('drop', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    event.preventDefault();
-    dropzone.classList.remove(overClass);
-    const file = event.dataTransfer?.files?.[0];
-    if (!file || !isAllowedImageAttachmentMediaType(file.type || inferImageMediaType(file.name))) return;
-    void handleImageUpload(dropzone, file);
-  });
 }

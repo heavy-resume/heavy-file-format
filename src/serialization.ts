@@ -16,6 +16,7 @@ import { makeId, sanitizeOptionalId } from './utils';
 import { resolveBaseComponentFromMeta, isBuiltinComponentName } from './component-defs';
 import {
   DEFAULT_READER_MAX_WIDTH,
+  DEFAULT_SIDEBAR_MAX_WIDTH,
   DEFAULT_SECTION_CSS,
   defaultBlockSchema,
   schemaFromUnknown,
@@ -23,12 +24,16 @@ import {
   getDefaultSectionContained,
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
+  parseTableColumnProperties,
 } from './document-factory';
 import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
 import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
 import { classifyXrefTarget } from './workspace-links';
 import { validateDocumentMetadata } from './document-metadata';
+import { parseStaticTableValueMarkdown, serializeStaticTableValueMarkdown } from './table-value-markdown';
+import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './plugins/declarations';
+import { visitBlocks } from './section-ops';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -100,6 +105,9 @@ export function deserializeDocumentWithDiagnostics(
   if (typeof meta.reader_max_width === 'undefined') {
     meta.reader_max_width = DEFAULT_READER_MAX_WIDTH;
   }
+  if (typeof meta.sidebar_max_width === 'undefined') {
+    meta.sidebar_max_width = DEFAULT_SIDEBAR_MAX_WIDTH;
+  }
   if (typeof meta.section_defaults === 'undefined') {
     meta.section_defaults = { css: DEFAULT_SECTION_CSS };
   }
@@ -146,6 +154,7 @@ export function wrapHvyFragmentAsDocument(
   const meta: JsonObject = {
     hvy_version: 0.1,
     reader_max_width: DEFAULT_READER_MAX_WIDTH,
+    sidebar_max_width: DEFAULT_SIDEBAR_MAX_WIDTH,
     section_defaults: {
       css: DEFAULT_SECTION_CSS,
     },
@@ -266,6 +275,7 @@ function parseBlocks(
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
   const componentListOrder = new WeakMap<VisualBlock, Array<{ block: VisualBlock; slotIndex: number | null; sequence: number }>>();
+  const schemasWithInlineTableRows = new WeakSet<BlockSchema>();
   let currentText: string[] = [];
   let currentSchema: BlockSchema = defaultBlockSchema();
   let currentAttach: BlockAttach = { kind: 'top' };
@@ -287,7 +297,11 @@ function parseBlocks(
     const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
     const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
     const defSchema = def?.schema && typeof def.schema === 'object' && !Array.isArray(def.schema) ? (def.schema as JsonObject) : null;
-    return schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName }, new WeakSet<object>(), documentMeta);
+    const schema = schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName }, new WeakSet<object>(), documentMeta);
+    if (Object.prototype.hasOwnProperty.call(parsed, 'tableRows')) {
+      schemasWithInlineTableRows.add(schema);
+    }
+    return schema;
   };
 
   const flush = (): void => {
@@ -305,9 +319,15 @@ function parseBlocks(
     if (!currentHasDirective && effectiveAttach.kind === 'top') {
       effectiveAttach = getCurrentAttach();
     }
+    const parsedTableRows = currentSchema.kind === 'table'
+      ? parseStaticTableValueMarkdown(normalizedText, currentSchema.tableColumns.length)
+      : null;
+    if (parsedTableRows && !schemasWithInlineTableRows.has(currentSchema)) {
+      currentSchema.tableRows = parsedTableRows;
+    }
     const block: VisualBlock = {
       id: makeId('block'),
-      text: normalizedText,
+      text: parsedTableRows ? '' : normalizedText,
       schema: currentSchema,
       schemaMode: false,
     };
@@ -416,6 +436,7 @@ function parseBlocks(
       attach.parent.schema.gridItems.push({
         id: authoredId || makeId('griditem'),
         idGenerated: !authoredId,
+        css: typeof attach.meta.css === 'string' ? attach.meta.css : '',
         block,
       });
       return;
@@ -1001,6 +1022,10 @@ export async function serializeDocumentBytesAsync(
 
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   const serializedMeta: JsonObject = { ...document.meta };
+  const builtInPluginDeclarations = collectBuiltInPluginDeclarations(document);
+  if (builtInPluginDeclarations.length > 0) {
+    serializedMeta.plugins = builtInPluginDeclarations;
+  }
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
@@ -1016,6 +1041,21 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
     hvy_version: document.meta.hvy_version ?? 0.1,
   }) as JsonObject;
   return stringifyYaml(headerMeta).trim();
+}
+
+function collectBuiltInPluginDeclarations(document: VisualDocument): JsonObject[] {
+  const declarations = normalizeHvyPluginDeclarations(document.meta.plugins);
+  const declaredIds = new Set(declarations.flatMap((declaration) => (
+    typeof declaration.id === 'string' && declaration.id.trim() ? [declaration.id.trim()] : []
+  )));
+  visitBlocks(document.sections, (block) => {
+    if (block.schema.kind !== 'plugin') return;
+    const pluginId = block.schema.plugin.trim();
+    if (!isReservedHvyPluginName(pluginId) || declaredIds.has(pluginId)) return;
+    declarations.push({ id: pluginId });
+    declaredIds.add(pluginId);
+  });
+  return declarations;
 }
 
 function serializeSectionDef(raw: JsonObject): JsonObject {
@@ -1361,7 +1401,8 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
     meta.templateKey = section.templateKey;
   }
 
-  const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;
+  const directiveName = level === 1 ? 'hvy:' : 'hvy:subsection';
+  const directive = `<!--${directiveName} ${JSON.stringify(meta)}-->`;
 
   const blockText = section.blocks
     .map((block) => serializeBlock(block, 1, documentMeta))
@@ -1384,6 +1425,7 @@ function serializeBlockSchema(
     omitComponentListBlocks?: boolean;
     omitExpandableBlocks?: boolean;
     omitGridItems?: boolean;
+    omitTableRows?: boolean;
   } = {},
   documentMeta: JsonObject | null = null
 ): JsonObject {
@@ -1457,6 +1499,7 @@ function serializeBlockSchema(
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         ...(item.idGenerated ? {} : { id: item.id }),
+        ...(item.css?.trim() ? { css: item.css } : {}),
         block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
@@ -1477,8 +1520,12 @@ function serializeBlockSchema(
   }
   if (component === 'table') {
     addArrayIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
+    const tableColumnProperties = parseTableColumnProperties(schema.tableColumnProperties);
+    if (Object.keys(tableColumnProperties).length > 0) {
+      payload.tableColumnProperties = tableColumnProperties;
+    }
     addIfChanged(payload, 'tableShowHeader', schema.tableShowHeader, defaults.tableShowHeader);
-    if (schema.tableRows.length > 0) {
+    if (!options.omitTableRows && schema.tableRows.length > 0) {
       payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));
     }
   }
@@ -1486,9 +1533,11 @@ function serializeBlockSchema(
     addIfChanged(payload, 'imageFile', schema.imageFile, defaults.imageFile);
     addIfChanged(payload, 'imageAlt', schema.imageAlt, defaults.imageAlt);
     addIfChanged(payload, 'caption', schema.caption, defaults.caption);
+    addIfChanged(payload, 'allowDocumentImageReuse', schema.allowDocumentImageReuse, defaults.allowDocumentImageReuse);
   }
   if (component === 'carousel') {
     addArrayIfChanged(payload, 'carouselImages', schema.carouselImages, defaults.carouselImages);
+    addIfChanged(payload, 'allowDocumentImageReuse', schema.allowDocumentImageReuse, defaults.allowDocumentImageReuse);
     addIfChanged(payload, 'carouselDurationMs', schema.carouselDurationMs, defaults.carouselDurationMs);
     addIfChanged(payload, 'carouselPauseOnHover', schema.carouselPauseOnHover, defaults.carouselPauseOnHover);
     addIfChanged(payload, 'carouselShowControls', schema.carouselShowControls, defaults.carouselShowControls);
@@ -1506,6 +1555,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'buttonOutputCharLimit', schema.buttonOutputCharLimit, defaults.buttonOutputCharLimit);
     addIfChanged(payload, 'buttonPositionTargetId', schema.buttonPositionTargetId, defaults.buttonPositionTargetId);
     addIfChanged(payload, 'buttonCss', schema.buttonCss, defaults.buttonCss);
+  }
+  if (component === 'location-marker') {
+    addIfChanged(payload, 'locationMarkerName', schema.locationMarkerName, defaults.locationMarkerName);
   }
   if (component === 'encrypted') {
     addIfChanged(payload, 'keyId', schema.keyId, defaults.keyId);
@@ -1536,7 +1588,10 @@ function serializeBlock(
   const blockDirective = override ?? serializeBlockDirective(block, documentMeta);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
   const nested = serializeNestedBlocks(block, indent + 1, documentMeta);
-  const text = serializeBlockText(block, indent + 1, documentMeta);
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
+  const text = baseComponent === 'table' && block.text.trim().length === 0
+    ? indentMultiline(serializeStaticTableValueMarkdown(block.schema.tableColumns, block.schema.tableRows), indent + 1)
+    : serializeBlockText(block, indent + 1, documentMeta);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
@@ -1544,15 +1599,16 @@ function serializeBlockDirective(block: VisualBlock, documentMeta: JsonObject | 
   const schema = block.schema;
   const component = schema.component.trim();
   const omitId = block.idGenerated === true;
+  const omitTableRows = resolveBaseComponentFromMeta(component, documentMeta) === 'table' && block.text.trim().length === 0;
   if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
     return {
       name: component,
-      schema: serializeBlockSchema(schema, { omitId, omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
+      schema: serializeBlockSchema(schema, { omitId, omitComponent: true, omitTableRows, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
     };
   }
   return {
     name: 'block',
-    schema: serializeBlockSchema(schema, { omitId, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
+    schema: serializeBlockSchema(schema, { omitId, omitTableRows, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
   };
 }
 
@@ -1716,7 +1772,10 @@ function serializeExpandablePart(
 function serializeGridItemBlock(item: GridItem, index: number, indent: number, documentMeta: JsonObject | null): string {
   return serializeSlotWithChild(
     `grid:${index}`,
-    item.idGenerated ? {} : { id: item.id },
+    {
+      ...(item.idGenerated ? {} : { id: item.id }),
+      ...(item.css?.trim() ? { css: item.css } : {}),
+    },
     item.block,
     indent,
     documentMeta

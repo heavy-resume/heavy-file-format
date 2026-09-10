@@ -9,7 +9,7 @@ import {
 } from '../block-ops';
 import { getRichEditorSerializableHtml, markdownToEditorHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, removeNonTextContentFromRichEditor, turndown } from '../markdown';
 import { getCachedComponentRenderHelpers } from '../state';
-import { syncTextToolbarLayout } from '../editor/components/text/text-toolbar-layout';
+import { dismissTextToolbarForEscape, promoteTextToolbarHotkeyAction, syncTextToolbarLayout } from '../editor/components/text/text-toolbar-layout';
 import type { HvyPluginTextEditorInstance, HvyPluginTextEditorMountOptions } from './types';
 
 import '../editor/components/text/text.css';
@@ -23,7 +23,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   let currentMarkdown = options.value;
   let savedSelection: Range | null = null;
   const shell = ownerDocument.createElement('div');
-  shell.className = 'text-editor-shell hvy-plugin-text-editor';
+  shell.className = 'text-editor-shell hvy-plugin-text-editor is-text-toolbar-focus-controlled is-text-toolbar-hidden';
   const toolbarBounds = ownerDocument.createElement('div');
   toolbarBounds.className = 'text-editor-toolbar-bounds';
   const toolbarSlot = ownerDocument.createElement('div');
@@ -48,13 +48,21 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
 
   const syncDisabledState = (): void => {
     shell.classList.toggle('is-disabled', disabled);
+    if (disabled) {
+      shell.classList.add('is-text-toolbar-hidden');
+    }
     shell.dataset.disabled = disabled ? 'true' : 'false';
     editable.contentEditable = disabled ? 'false' : 'true';
     editable.setAttribute('aria-disabled', disabled ? 'true' : 'false');
     editable.tabIndex = disabled ? -1 : 0;
     toolbarSlot.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
-      button.disabled = disabled;
-      button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+      if (button.disabled !== disabled) {
+        button.disabled = disabled;
+      }
+      const ariaDisabled = disabled ? 'true' : 'false';
+      if (button.getAttribute('aria-disabled') !== ariaDisabled) {
+        button.setAttribute('aria-disabled', ariaDisabled);
+      }
     });
   };
 
@@ -66,17 +74,13 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       includeFillIn: options.includeFillIn === true,
       align: options.align ?? 'left',
       currentMarkdown: markdown,
-      textLineStyles: helpers.getTextLineStyles?.() ?? {},
     });
     syncDisabledState();
     syncTextToolbarLayout(shell);
   };
 
   const writeEditable = (markdown: string): void => {
-    editable.innerHTML = markdownToEditorHtml(markdown, {
-      textLineStyles: getCachedComponentRenderHelpers().getTextLineStyles?.() ?? {},
-      textLineStyleMode: 'editor',
-    });
+    editable.innerHTML = markdownToEditorHtml(markdown);
   };
 
   const readMarkdown = (): string => {
@@ -141,6 +145,11 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     if (disabled) {
       return;
     }
+    if (event.key === 'Escape' && !ownerDocument.querySelector('#modalRoot') && dismissTextToolbarForEscape(event.target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (handleRichEditorKeydown(event, editable)) {
       return;
     }
@@ -151,7 +160,9 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     const key = event.key.toLowerCase();
     if (key === 'b' || key === 'i' || key === 'u') {
       event.preventDefault();
-      applyRichAction(key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline', editable);
+      const action = key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline';
+      applyRichAction(action, editable);
+      promoteTextToolbarHotkeyAction(action, editable);
     }
   };
   const onKeyup = (): void => {

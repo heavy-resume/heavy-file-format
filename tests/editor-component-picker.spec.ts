@@ -1,4 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+/** Documents live behind the collapsed document menu, so it has to be opened first. */
+async function openDocument(page: Page, name: string): Promise<void> {
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name, exact: true }).click();
+}
 
 test('section add component affordance is a compact single row', async ({ page }) => {
   await page.goto('/');
@@ -16,8 +24,8 @@ test('default example button loads carousel component and graph plugin', async (
   await page.goto('/');
   await page.waitForTimeout(300);
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
-  await page.getByRole('button', { name: 'Default Example' }).click();
+  await openDocument(page, 'Resume Example');
+  await openDocument(page, 'Default Example');
   await page.getByRole('button', { name: 'Viewer' }).click();
 
   await expect(page.getByLabel('Download file name')).toHaveValue('example.hvy');
@@ -31,7 +39,7 @@ test('default example graph remounts after browser refresh', async ({ page }) =>
   await page.goto('/');
   await page.waitForTimeout(300);
 
-  await page.getByRole('button', { name: 'Default Example' }).click();
+  await openDocument(page, 'Default Example');
   await page.getByRole('button', { name: 'Viewer' }).click();
   await page.locator('#readerDocument').evaluate((reader) => {
     reader.scrollTop = reader.scrollHeight;
@@ -50,11 +58,14 @@ test('viewer carousel stays confined inside phone preview', async ({ page }) => 
   await page.goto('/');
   await page.waitForTimeout(300);
 
-  await page.getByRole('button', { name: 'Default Example' }).click();
+  await openDocument(page, 'Default Example');
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
   const carouselFrame = page.locator('#readerDocument .hvy-carousel-reader-frame').first();
-  await expect(carouselFrame.locator('img').first()).toBeVisible();
+  // Slides are lazily loaded, and the frame's first slide in DOM order is the off-screen
+  // neighbour, so measure only once a rendered slide is on screen.
+  await carouselFrame.scrollIntoViewIfNeeded();
+  await expect(carouselFrame.locator('img:visible').first()).toBeVisible();
 
   const confined = await page.evaluate(() => {
     const reader = document.querySelector<HTMLElement>('#readerDocument');
@@ -86,7 +97,7 @@ test('viewer graph stays confined and expands inside phone preview', async ({ pa
   await page.goto('/');
   await page.waitForTimeout(300);
 
-  await page.getByRole('button', { name: 'Default Example' }).click();
+  await openDocument(page, 'Default Example');
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
   await page.locator('#readerDocument').evaluate((reader) => {
@@ -212,6 +223,9 @@ test('component picker adds a selected plugin directly', async ({ page }) => {
 });
 
 test('component picker adds carousel from images category', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(`${error.name}: ${error.message}`));
+
   await page.goto('/');
   await page.waitForTimeout(300);
 
@@ -226,6 +240,7 @@ test('component picker adds carousel from images category', async ({ page }) => 
 
   await expect(page.locator('.editor-block-title', { hasText: 'Carousel' }).first()).toBeVisible();
   await expect(page.locator('.hvy-carousel-editor').first()).toBeVisible();
+  expect(pageErrors).toHaveLength(0);
 });
 
 test('component picker adds graph plugin and renders a chart canvas', async ({ page }) => {
@@ -274,13 +289,14 @@ test('selected component insert below adds picked components', async ({ page }) 
   await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
 
   await page.locator('.editor-block-passive').first().click();
-  await page.locator('.active-component-insert-ghost-after').getByRole('button', { name: 'Insert component below' }).click();
-  await page.locator('.active-component-insert-ghost-after .component-picker-row-category', { hasText: 'Plugin' }).click();
-  await page.locator('.active-component-insert-ghost-after [data-picker-pane="plugins"] .component-picker-row-leaf', { hasText: 'DB Table' }).evaluate((button) => {
+  const currentInsertBelow = page.locator('.active-component-insert-ghost-after').last();
+  await currentInsertBelow.getByRole('button', { name: 'Insert component below' }).click();
+  await currentInsertBelow.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
+  await currentInsertBelow.locator('[data-picker-pane="plugins"] .component-picker-row-leaf', { hasText: 'DB Table' }).evaluate((button) => {
     if (button instanceof HTMLElement) button.click();
   });
 
-  await expect(page.locator('.active-component-insert-ghost-after .component-picker[data-open="true"]')).toHaveCount(0);
+  await expect(currentInsertBelow.locator('.component-picker[data-open="true"]')).toHaveCount(0);
   await expect(page.locator('.editor-block-title', { hasText: 'DB Table' }).first()).toBeVisible();
 });
 
@@ -308,7 +324,7 @@ test('locked sections do not show selected component insert affordances', async 
   await page.goto('/');
   await page.waitForTimeout(300);
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.locator('.editor-block-passive:visible').first().click();
 
   await expect(page.locator('.active-component-insert-ghost-before')).toHaveCount(0);

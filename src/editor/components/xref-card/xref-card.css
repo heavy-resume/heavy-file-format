@@ -1,5 +1,5 @@
-.editor-xref-card,
-.reader-xref-card {
+.hvy-document .editor-xref-card,
+.hvy-document .reader-xref-card {
   display: grid;
   gap: 0.12rem;
   width: min(100%, 18rem);
@@ -14,11 +14,11 @@
   box-shadow: 0 1px 2px var(--hvy-shadow);
 }
 
-.xref-card-editor {
+.hvy-document .xref-card-editor {
   gap: 0.34rem;
 }
 
-.xref-override-label {
+.hvy-document .xref-override-label {
   color: var(--hvy-text-muted);
   font-size: 0.68rem;
   font-weight: 700;
@@ -26,36 +26,36 @@
   text-transform: uppercase;
 }
 
-.editor-xref-card [contenteditable="true"] {
+.hvy-document .editor-xref-card [contenteditable="true"] {
   border-radius: 5px;
   padding: 0.08rem 0.12rem;
   cursor: text;
 }
 
-.editor-xref-card [contenteditable="true"]:focus {
+.hvy-document .editor-xref-card [contenteditable="true"]:focus {
   outline: 2px solid var(--hvy-focus);
   outline-offset: 1px;
   background: var(--hvy-surface);
 }
 
-.editor-xref-card [contenteditable="true"][data-placeholder]:empty::before {
+.hvy-document .editor-xref-card [contenteditable="true"][data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: var(--hvy-text-muted);
 }
 
-.editor-xref-card.is-target-empty [contenteditable="true"] {
+.hvy-document .editor-xref-card.is-target-empty [contenteditable="true"] {
   color: var(--hvy-text-muted);
   cursor: not-allowed;
   opacity: 0.7;
   pointer-events: none;
 }
 
-.xref-target-picker {
+.hvy-document .xref-target-picker {
   display: grid;
   gap: 0.18rem;
 }
 
-.xref-target-picker span {
+.hvy-document .xref-target-picker span {
   color: var(--hvy-text-muted);
   font-size: 0.72rem;
   font-weight: 700;
@@ -63,14 +63,14 @@
   text-transform: uppercase;
 }
 
-.xref-target-empty {
+.hvy-document .xref-target-empty {
   margin: 0.12rem 0 0;
   color: var(--hvy-text-muted);
   font-size: 0.78rem;
 }
 
-.xref-target-picker input,
-.xref-target-picker select {
+.hvy-document .xref-target-picker input,
+.hvy-document .xref-target-picker select {
   width: 100%;
   min-height: 2rem;
   border: 1px solid var(--hvy-border-input);
@@ -80,57 +80,57 @@
   padding: 0.34rem 0.45rem;
 }
 
-.editor-xref-card.is-invalid-target,
-.reader-xref-card.is-invalid-target {
+.hvy-document .editor-xref-card.is-invalid-target,
+.hvy-document .reader-xref-card.is-invalid-target {
   border-color: var(--hvy-border-alt);
   background: var(--hvy-xref-card-bg);
   color: var(--hvy-text-muted);
   box-shadow: none;
 }
 
-.editor-xref-card.is-invalid-target span,
-.reader-xref-card.is-invalid-target span {
+.hvy-document .editor-xref-card.is-invalid-target span,
+.hvy-document .reader-xref-card.is-invalid-target span {
   color: var(--hvy-text-muted);
 }
 
-.reader-xref-card.is-disabled-target {
+.hvy-document .reader-xref-card.is-disabled-target {
   cursor: not-allowed;
   opacity: 0.68;
 }
 
-.editor-xref-card.is-invalid-target .xref-target-picker input,
-.editor-xref-card.is-invalid-target .xref-target-picker select {
+.hvy-document .editor-xref-card.is-invalid-target .xref-target-picker input,
+.hvy-document .editor-xref-card.is-invalid-target .xref-target-picker select {
   border-color: var(--hvy-border-alt);
   background: var(--hvy-surface-alt);
 }
 
-.reader-xref-card:hover,
-.reader-xref-card:focus-visible {
+.hvy-document .reader-xref-card:hover,
+.hvy-document .reader-xref-card:focus-visible {
   border-color: var(--hvy-focus);
   background: var(--hvy-xref-card-hover-bg);
   text-decoration: none;
 }
 
-.editor-xref-card strong,
-.reader-xref-card strong {
+.hvy-document .editor-xref-card strong,
+.hvy-document .reader-xref-card strong {
   font-size: 0.95rem;
   line-height: 1.2;
 }
 
-.editor-xref-card span,
-.reader-xref-card span {
+.hvy-document .editor-xref-card span,
+.hvy-document .reader-xref-card span {
   color: var(--hvy-text-alt);
   font-size: 0.82rem;
   line-height: 1.2;
 }
 
-.reader-xref-card {
+.hvy-document .reader-xref-card {
   transition: background-color 280ms ease, border-color 280ms ease, box-shadow 280ms ease, transform 280ms ease;
   justify-self: start;
 }
 
-.reader-xref-card:hover,
-.reader-xref-card:focus-visible {
+.hvy-document .reader-xref-card:hover,
+.hvy-document .reader-xref-card:focus-visible {
   border-color: var(--hvy-focus);
   background: var(--hvy-xref-card-hover-bg);
   text-decoration: none;

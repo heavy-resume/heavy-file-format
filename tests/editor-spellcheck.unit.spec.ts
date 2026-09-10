@@ -2,7 +2,7 @@ import { beforeEach, expect, test } from 'vitest';
 
 import { renderTextEditor } from '../src/editor/components/text/text';
 import { renderTextReader } from '../src/editor/components/text/text';
-import { renderXrefCardEditor } from '../src/editor/components/xref-card/xref-card';
+import { renderXrefCardEditor, renderXrefCardReader } from '../src/editor/components/xref-card/xref-card';
 import { initState, state } from '../src/state';
 import type { VisualBlock } from '../src/editor/types';
 import { createTestState } from './serialization-test-helpers';
@@ -82,6 +82,37 @@ test('xref title and detail editors opt into native spellcheck', () => {
   expect(html).toContain('data-field="block-xref-title"');
   expect(html).toContain('data-field="block-xref-detail"');
   expect(html).toContain('data-placeholder="Optional"');
+});
+
+test('expected result: an explicitly empty xref detail does not inherit target detail', () => {
+  const block = {
+    id: 'skill-card',
+    text: '',
+    schema: {
+      component: 'xref-card',
+      xrefTitle: 'TypeScript',
+      xrefDetail: '',
+      xrefTarget: 'tool-typescript',
+      xrefTargetTagFilter: '',
+    },
+  } as unknown as VisualBlock;
+  const html = renderXrefCardReader(
+    { key: 'summary' } as never,
+    block,
+    {
+      ...helpers,
+      getXrefTargetOptions: () => [{
+        value: 'tool-typescript',
+        title: 'TypeScript',
+        detail: 'Primary language',
+      }],
+      getDocumentComponentCss: () => '',
+      isCrossDocumentLinksEnabled: () => false,
+    } as never
+  );
+
+  expect(html).toContain('<strong>TypeScript</strong>');
+  expect(html).not.toContain('Primary language');
 });
 
 test('text reader can show a copy button for any text component', () => {

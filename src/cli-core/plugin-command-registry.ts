@@ -62,8 +62,8 @@ const SCRIPTING_DOC_TOOL_NAMES = [
 ];
 
 const SCRIPTING_HEADER_TOOL_HELP: Record<string, string> = {
-  get_updated_components: 'doc.tool.get_updated_components("xref") returns script component handles after document updates; on initial load it returns none. Use doc.tool.get_components("xref") for an explicit full scan. Handles include get(name), set(name, value), has_tag(tag), get_parent_by_tag(tag), get_ancestor_record(excluded_tags), remove_children_by_tag(tag), and append_child(component, config, text, slot).',
-  get_components: 'doc.tool.get_components("xref") returns all matching script component handles for an explicit full scan. The component filter can match component name or base component. Handles include id, component, base_component, section_id, section_title, get(name), set(name, value), has_tag(tag), get_parent_by_tag(tag), get_ancestor_record(excluded_tags), first_table_cell(index), remove_children_by_tag(tag, slot), and append_child(component, config, text, slot).',
+  get_updated_components: 'doc.tool.get_updated_components("xref") returns script component handles after document updates; on initial load it returns none. Use doc.tool.get_components("xref") for an explicit full scan. Handles include get(name), set(name, value), has_tag(tag), expand(), get_parent_by_tag(tag), get_ancestor_record(excluded_tags), remove_children_by_tag(tag), and append_child(component, config, text, slot).',
+  get_components: 'doc.tool.get_components("xref") returns all matching script component handles for an explicit full scan. The component filter can match component name or base component. Handles include id, component, base_component, section_id, section_title, get(name), set(name, value), has_tag(tag), expand(), get_parent_by_tag(tag), get_ancestor_record(excluded_tags), first_table_cell(index), remove_children_by_tag(tag, slot), and append_child(component, config, text, slot).',
   view_header: '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
   grep_header: '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
   patch_header: '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',
@@ -416,6 +416,8 @@ registerHvyCliPluginCommands({
     'doc.header.get/set/remove/keys reads and writes front matter.',
     'doc.attachments.list/read/write/remove works with document attachments.',
     'doc.db.query(sql, params) and doc.db.execute(sql, params) access the current document SQL backend when available.',
+    'doc.plugins.call(plugin_id, method, args) calls a synchronous installed plugin API when that plugin declaration grants the scripting permission.',
+    'Asynchronous plugin APIs, including network-backed calls, require an authorized power script.',
     'doc.cli.run(command) runs one synchronous virtual CLI command and returns stdout; use doc.db for SQL.',
     'doc.json.parse(response), doc.json.parse_array(response), and doc.json.parse_object(response) extract structured JSON from LLM responses, including fenced JSON or wrapper prose.',
     'doc.time.now_iso(), doc.time.now_local(), doc.time.now_unix_ms(), and doc.time.today_iso() read the current client time.',
@@ -456,6 +458,7 @@ registerHvyCliPluginCommands({
   componentHints: [
     'This plugin displays dynamic data-backed rows from an existing table/view, optionally filtered by a read-only SELECT/WITH query.',
     'plugin.json pluginConfig.table must be a table/view name, not SQL. plugin.txt may contain display SQL, but it does not create tables or views.',
+    'Use hvy plugin db-table presentation COMPONENT_PATH to inspect effective per-column labels, visibility, widths, wrapping, and foreign display settings as JSON; pass the edited JSON back to store only non-default overrides.',
     'For the current built-in SQL backend, create tables/views with hvy plugin db-table exec. Inspect objects with hvy plugin db-table tables/schema/query.',
     'To understand existing backend objects, run hvy plugin db-table tables or hvy plugin db-table schema. Do not grep for CREATE TABLE; it may find stale examples, recipes, or notes.',
   ],
@@ -481,6 +484,10 @@ registerHvyCliPluginCommands({
     {
       command: 'hvy plugin db-table schema [TABLE_OR_VIEW]',
       description: 'Show schema details.',
+    },
+    {
+      command: 'hvy plugin db-table presentation COMPONENT_PATH [JSON]',
+      description: 'Read effective per-column presentation JSON, or write edited JSON while omitting defaults from HVY storage.',
     },
   ],
   helpCommands: [

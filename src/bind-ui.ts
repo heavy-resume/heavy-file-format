@@ -2,7 +2,9 @@ import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
+import bundledSurveyHvy from '../examples/survey.hvy?raw';
 import bundledVideoDemoHvy from '../examples/video-demo.hvy?raw';
+import bundledAsteroidsHvy from '../examples/asteroids.hvy?raw';
 import bundledPluginSortValuesHvy from '../examples/plugin-sort-values.hvy?raw';
 import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
 import bundledMeetingMinutesThvy from '../examples/meeting-minutes.thvy?raw';
@@ -16,12 +18,14 @@ import {
   getRefreshReaderBlock,
   getRefreshReaderPanels,
   getRefreshReaderSection,
+  getRefreshSearchSurface,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
 } from './state';
 import { findSectionByKey } from './section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from './block-ops';
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
+import { applyPersistedAnswerSelection } from './persisted-answer-selection';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
 import { exportCurrentDocumentPdf } from './pdf-export/action';
@@ -31,11 +35,15 @@ import { clearChatConversation } from './chat/chat';
 import { persistPreparedEmbeddingAttachments } from './chat/embedding-context';
 import { restoreDbTableFrameScroll } from './plugins/db-table-model';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
-import { bindImageDragAndDrop } from './editor/components/image/image';
+import { bindImageDragAndDrop } from './editor/components/image/document-image-drop';
+import { bindImageFilenameEditing } from './editor/components/image/image-filename-edit';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { bindDocumentAttachmentManager } from './editor/components/document-attachments/document-attachments';
+import { bindUserFileAttachmentLinks } from './document-attachment-links';
+import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
-import { saveSessionState } from './state-persistence';
+import { saveSessionState, saveSessionStateAsync } from './state-persistence';
 import { createDocumentFilterSnapshot } from './search/document-filter';
 import { createDefaultSearchState } from './search/state';
 import { externalSearchSnapshotToDocumentState } from './search/snapshot';
@@ -55,11 +63,14 @@ import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expan
 import { syncReusableTemplateForBlock } from './reusable';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
+import { setSaveRequestHandler } from './plugins/power-scripting/power-save-request';
+import { setPowerScriptAcceptanceCallbacks } from './plugins/power-scripting/power-scripting-policy';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
 const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
 const SCRIPTING_HELP_API_PATH = '/api/scripting-help-document';
+const SEPA_RECREATION_API_PATH = '/api/sepa-recreation-document';
 const IMPORT_REFERENCE_SOURCE_DOCUMENT = {
   apiPath: IMPORT_REFERENCE_API_PATH,
   errorLabel: 'import reference document',
@@ -68,6 +79,10 @@ const SCRIPTING_HELP_SOURCE_DOCUMENT = {
   apiPath: SCRIPTING_HELP_API_PATH,
   errorLabel: 'scripting help document',
 };
+const SEPA_RECREATION_SOURCE_DOCUMENT = {
+  apiPath: SEPA_RECREATION_API_PATH,
+  errorLabel: 'SEPA Recreation document',
+};
 const SOURCE_DOCUMENTS_BY_EXAMPLE: Partial<Record<SelectedExample, { apiPath: string; errorLabel: string }>> = {
   guide: {
     apiPath: HVY_GUIDE_API_PATH,
@@ -75,7 +90,9 @@ const SOURCE_DOCUMENTS_BY_EXAMPLE: Partial<Record<SelectedExample, { apiPath: st
   },
   'import-reference': IMPORT_REFERENCE_SOURCE_DOCUMENT,
   'scripting-help': SCRIPTING_HELP_SOURCE_DOCUMENT,
+  'sepa-recreation': SEPA_RECREATION_SOURCE_DOCUMENT,
 };
+const acceptedPowerScriptFingerprints = new Set<string>();
 
 interface HvyFileSystemFileHandle {
   name: string;
@@ -173,16 +190,25 @@ async function loadSourceDocumentFromServer(
     throw new Error(`Could not load ${source.errorLabel}: ${response.status} ${response.statusText}`);
   }
   currentFileHandle = null;
-  replaceLoadedDocument(await response.text(), filename, selectedExample);
+  replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), filename, selectedExample);
 }
 
 async function loadDefaultExampleDocument(): Promise<void> {
-  const response = await fetch(bundledExampleHvyUrl, { cache: 'no-store' });
+  await loadBundledBinaryDocument(bundledExampleHvyUrl, 'example.hvy', 'default', 'default example');
+}
+
+async function loadBundledBinaryDocument(
+  assetUrl: string,
+  filename: string,
+  selectedExample: SelectedExample,
+  errorLabel: string
+): Promise<void> {
+  const response = await fetch(assetUrl, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`Could not load default example: ${response.status} ${response.statusText}`);
+    throw new Error(`Could not load ${errorLabel}: ${response.status} ${response.statusText}`);
   }
   currentFileHandle = null;
-  replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), 'example.hvy', 'default');
+  replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), filename, selectedExample);
 }
 
 function loadBundledTextDocument(raw: string, filename: string, selectedExample: typeof state.selectedExample): void {
@@ -190,7 +216,10 @@ function loadBundledTextDocument(raw: string, filename: string, selectedExample:
   replaceLoadedDocument(raw, filename, selectedExample);
 }
 
-async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promise<void> {
+async function saveCurrentDocumentInPlace(
+  downloadName: HTMLInputElement,
+  options: { rerender?: boolean } = {}
+): Promise<void> {
   const normalized = normalizeFilename(state.filename || 'document.hvy');
   state.filename = normalized;
   downloadName.value = normalized;
@@ -201,22 +230,24 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
     const response = await fetch(sourceDocument.apiPath, {
       method: 'PUT',
       headers: {
-        'content-type': 'text/plain; charset=utf-8',
+        'content-type': 'application/octet-stream',
       },
-      body: new TextDecoder().decode(bytes),
+      body: new Blob([
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      ]),
     });
     if (!response.ok) {
       throw new Error(`Could not save ${sourceDocument.errorLabel}: ${response.status} ${response.statusText}`);
     }
     saveSessionState(state);
     markReferenceDocumentSaved();
-    getRenderApp()();
+    if (options.rerender !== false) getRenderApp()();
     return;
   }
   if (!currentFileHandle) {
     downloadBinaryFile(normalized, bytes);
     markReferenceDocumentSaved();
-    getRenderApp()();
+    if (options.rerender !== false) getRenderApp()();
     return;
   }
   const writable = await currentFileHandle.createWritable();
@@ -224,7 +255,42 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   await writable.close();
   saveSessionState(state);
   markReferenceDocumentSaved();
-  getRenderApp()();
+  if (options.rerender !== false) getRenderApp()();
+}
+
+function confirmReferenceDownload(app: HTMLElement, reason: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal-root';
+    modal.innerHTML = `
+      <div class="modal-overlay" data-save-request-action="cancel"></div>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="saveRequestTitle">
+        <div class="modal-head">
+          <h3 id="saveRequestTitle">Download updated document?</h3>
+        </div>
+        <p>${reason.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>
+        <div class="modal-head-actions">
+          <button type="button" class="ghost" data-save-request-action="cancel">Cancel</button>
+          <button type="button" data-save-request-action="confirm">Download updated file</button>
+        </div>
+      </section>
+    `;
+    const finish = (confirmed: boolean) => {
+      modal.remove();
+      resolve(confirmed);
+    };
+    modal.addEventListener('click', (event) => {
+      const action = (event.target as HTMLElement).closest<HTMLElement>('[data-save-request-action]')?.dataset.saveRequestAction;
+      if (action === 'confirm') finish(true);
+      if (action === 'cancel') finish(false);
+    });
+    (
+      app.querySelector<HTMLElement>('.hvy-power-script-reader')
+      ?? app.querySelector<HTMLElement>('.hvy-embed-layout')
+      ?? app
+    ).appendChild(modal);
+    modal.querySelector<HTMLButtonElement>('[data-save-request-action="cancel"]')?.focus();
+  });
 }
 
 export function bindUi(app: HTMLElement): void {
@@ -249,9 +315,27 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterComposer = app.querySelector<HTMLFormElement>('#metaFilterComposer');
   const metaFilterQuery = app.querySelector<HTMLInputElement>('#metaFilterQuery');
   const clearMetaFilterButton = app.querySelector<HTMLButtonElement>('[data-action="clear-meta-filter"]');
+  const rerenderSearchButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-search"]');
+  const rerenderReaderButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-reader"]');
+  const rerenderAppButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-app"]');
+  const hotReloadButton = app.querySelector<HTMLButtonElement>('[data-action="reference-hot-reload"]');
   const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
   const metaFilterBehaviorButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]');
   let pendingAiReaderAction: number | null = null;
+
+  rerenderSearchButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => getRefreshSearchSurface()(app));
+  });
+  rerenderReaderButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => getRefreshReaderPanels()({ surface: 'all' }));
+  });
+  rerenderAppButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => getRenderApp()());
+  });
+  hotReloadButton?.addEventListener('click', async () => {
+    await runInBoundRuntimeAsync(() => saveSessionStateAsync(state));
+    window.location.reload();
+  });
 
   const clearPendingAiReaderAction = (): void => {
     if (pendingAiReaderAction !== null) {
@@ -277,6 +361,12 @@ export function bindUi(app: HTMLElement): void {
     }, getAiEditorDoubleClickDelayMs());
   };
 
+  bindStaticTableReaderInteractions(
+    app,
+    [readerDocument, readerSidebarSections, aiReaderDocument, aiSidebarSections],
+    runReaderAction,
+  );
+
   const scheduleReaderSectionBodyHydration = (sectionKey: string): void => {
     window.requestAnimationFrame(() => {
       runInBoundRuntime(() => {
@@ -295,9 +385,28 @@ export function bindUi(app: HTMLElement): void {
     throw new Error('Missing UI elements for binding.');
   }
 
+  setSaveRequestHandler(async (request) => {
+    const sourceDocument = state.selectedExample ? SOURCE_DOCUMENTS_BY_EXAMPLE[state.selectedExample] : undefined;
+    if (!sourceDocument && !currentFileHandle && !await confirmReferenceDownload(app, request.reason)) {
+      return 'canceled';
+    }
+    await saveCurrentDocumentInPlace(downloadName, { rerender: false });
+    return 'saved';
+  }, runtime);
+  setPowerScriptAcceptanceCallbacks({
+    getAcceptance: ({ fingerprint }) => acceptedPowerScriptFingerprints.has(fingerprint),
+    onAcceptanceChanged: ({ fingerprint, accepted }) => {
+      if (accepted) acceptedPowerScriptFingerprints.add(fingerprint);
+      else acceptedPowerScriptFingerprints.delete(fingerprint);
+    },
+  }, runtime);
+
   bindChatThreadUi(chatThread, chatScrollContainer, chatScrollBottomButton);
   bindImageDragAndDrop(app);
+  bindImageFilenameEditing(app);
   bindCarouselInteractions(app);
+  bindDocumentAttachmentManager(app);
+  bindUserFileAttachmentLinks(app);
   scheduleSidebarHelpAutoClose(app);
 
   metaFilterQuery?.addEventListener('input', () => {
@@ -501,9 +610,19 @@ export function bindUi(app: HTMLElement): void {
     loadBundledTextDocument(bundledStudyToolsHvy, 'study-tools.hvy', 'study-tools');
   });
 
+  const surveyExampleBtn = app.querySelector<HTMLButtonElement>('#surveyExampleBtn');
+  surveyExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledSurveyHvy, 'survey.hvy', 'survey');
+  });
+
   const videoDemoExampleBtn = app.querySelector<HTMLButtonElement>('#videoDemoExampleBtn');
   videoDemoExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledVideoDemoHvy, 'video-demo.hvy', 'video-demo');
+  });
+
+  const asteroidsExampleBtn = app.querySelector<HTMLButtonElement>('#asteroidsExampleBtn');
+  asteroidsExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledAsteroidsHvy, 'asteroids.hvy', 'asteroids');
   });
 
   const pluginSortValuesExampleBtn = app.querySelector<HTMLButtonElement>('#pluginSortValuesExampleBtn');
@@ -514,6 +633,22 @@ export function bindUi(app: HTMLElement): void {
   const pdfTemplateExampleBtn = app.querySelector<HTMLButtonElement>('#pdfTemplateExampleBtn');
   pdfTemplateExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledPdfTemplatePhvy, 'pdf-template.phvy', 'pdf-template');
+  });
+
+  const sepaRecreationExampleBtn = app.querySelector<HTMLButtonElement>('#sepaRecreationExampleBtn');
+  sepaRecreationExampleBtn?.addEventListener('click', () => {
+    void runInBoundRuntimeAsync(async () => {
+      try {
+        await loadSourceDocumentFromServer(
+          SEPA_RECREATION_SOURCE_DOCUMENT,
+          'SEPA_Recreation.phvy',
+          'sepa-recreation'
+        );
+      } catch (error: unknown) {
+        state.rawEditorError = error instanceof Error ? error.message : 'Could not load the SEPA Recreation example.';
+        getRenderApp()();
+      }
+    });
   });
 
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
@@ -1096,15 +1231,34 @@ export function bindUi(app: HTMLElement): void {
     }
   };
 
+  const handlePersistedAnswerChange = (event: Event): void => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.dataset.field !== 'inline-persisted-answer') return;
+    runInBoundRuntime(() => {
+      const touched = applyPersistedAnswerSelection(input);
+      if (touched.length === 0) return;
+      const refreshedEveryBlock = touched.every((target) =>
+        getRefreshReaderBlock()(app, target.sectionKey, target.blockId, { runVisibilityScripts: false })
+      );
+      if (!refreshedEveryBlock) {
+        getRefreshReaderPanels()({ runVisibilityScripts: false });
+      }
+    });
+  };
+
   readerDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   readerSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   aiReaderDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   aiSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
 
   readerDocument?.addEventListener('click', handleReaderAreaClick);
+  readerDocument?.addEventListener('change', handlePersistedAnswerChange);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  readerSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
   aiReaderDocument?.addEventListener('click', handleReaderAreaClick);
+  aiReaderDocument?.addEventListener('change', handlePersistedAnswerChange);
   aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  aiSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
   aiReaderDocument?.addEventListener('dblclick', clearPendingAiReaderAction);
   aiSidebarSections?.addEventListener('dblclick', clearPendingAiReaderAction);
 

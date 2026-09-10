@@ -1,6 +1,6 @@
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
-import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
+import type { ChatAttachmentReference, ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToReaderHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
@@ -18,7 +18,7 @@ import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
 import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-context';
 import { buildEmbeddingChatContext, isEmbeddingChatContextPrepared } from './embedding-context';
-import type { ProxyChatMode } from './chat-provider-payload';
+import type { OpenAiReasoningEffort, ProxyChatMode } from './chat-provider-payload';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 import { closeIcon, copyIcon } from '../icons';
 import { measureAsyncPhase, measurePhase } from '../perf-trace';
@@ -29,7 +29,10 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
-export const MAX_PROXY_COMPLETION_CONTEXT_CHARS = 20_000;
+// Characters, not tokens: roughly 15k tokens of English prose, well inside every current
+// model's window. This is a cost and latency guard, not a provider limit, and hosts can
+// raise or lower it per mount through chatContext.maxContextChars.
+export const MAX_PROXY_COMPLETION_CONTEXT_CHARS = 60_000;
 export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env?.DEV === true || import.meta.env?.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
 export const ENABLE_CHAT_CLI_SIM = import.meta.env?.DEV === true;
 const ENABLE_CHAT_PROXY_DEBUG_LOGS = import.meta.env?.VITE_HVY_ENABLE_CHAT_PROXY_DEBUG_LOGS === 'true';
@@ -53,7 +56,7 @@ interface ProxyChatMessage {
   error?: boolean;
 }
 
-interface ProxyChatRequest {
+export interface ProxyChatRequest {
   provider: ChatSettings['provider'];
   model: string;
   messages: ProxyChatMessage[];
@@ -62,6 +65,7 @@ interface ProxyChatRequest {
   traceRunId?: string;
   tools?: ProviderToolDefinition[];
   toolState?: ProviderToolState;
+  openAiReasoningEffort?: OpenAiReasoningEffort;
 }
 
 interface ProxyChatRequestInput extends Omit<ProxyChatRequest, 'messages'> {
@@ -69,7 +73,7 @@ interface ProxyChatRequestInput extends Omit<ProxyChatRequest, 'messages'> {
   systemInstructions?: string;
 }
 
-interface ProxyChatResponse {
+export interface ProxyChatResponse {
   output: string;
   reasoningSummary?: string;
   usage?: ChatTokenUsage;
@@ -126,6 +130,10 @@ export interface ProxyCompletionParams {
   mode: ProxyChatMode;
   debugLabel?: string;
   traceRunId?: string;
+  // Lets short, mechanical calls (description labels) opt out of reasoning instead
+  // of paying the proxy default meant for conversational chat. Applies to OpenAI and
+  // OpenAI-compatible endpoints only; other providers keep their own default.
+  openAiReasoningEffort?: OpenAiReasoningEffort;
   maxContextChars?: number;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
@@ -160,6 +168,8 @@ export function createDefaultChatState(): ChatState {
   return {
     settings: loadChatSettings(),
     draft: '',
+    attachments: [],
+    pendingAttachmentIds: [],
     messages: [],
     isSending: false,
     status: null,
@@ -174,6 +184,8 @@ export function createDefaultChatState(): ChatState {
 
 export function clearChatConversation(chat: ChatState): void {
   chat.draft = '';
+  chat.attachments = [];
+  chat.pendingAttachmentIds = [];
   chat.messages = [];
   chat.isSending = false;
   chat.status = null;
@@ -384,6 +396,7 @@ export function renderChatPanel(
          <button type="button" class="danger" data-action="cancel-chat-request">Stop</button>
        </div>`
     : `<form id="chatComposer" class="chat-composer">
+         ${renderPendingChatAttachmentsHtml(chat, deps)}
          <label class="chat-composer-field">
            <span>${promptLabel}</span>
            <textarea data-field="chat-input" rows="5" placeholder="${deps.escapeAttr(promptPlaceholder)}">${deps.escapeHtml(chat.draft)}</textarea>
@@ -599,7 +612,17 @@ export async function requestChatCompletion(params: {
     settings: params.settings,
     messages: params.messages,
     context,
-    responseInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    responseInstructions: [
+      'Answer the user from the supplied document evidence when that evidence is sufficient.',
+      'If the user asks you to check, verify, confirm, inspect, search, review, or look again and fresh document inspection is needed, do not guess or merely repeat the prior answer.',
+      'To request fresh document inspection, return exactly one line.',
+      'Begin with the exact command `inspect_document`, add one space, then add a self-contained query derived from the user request and recent conversation.',
+      'Resolve references such as "that", "it", and "again" from the recent conversation when writing the inspection query.',
+      'Do not copy placeholder text. Do not add Markdown fences, JSON, labels, or explanation.',
+      'Otherwise, answer normally using the HVY response formatting rules below.',
+      '',
+      HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    ].join('\n'),
     mode: 'qa',
     debugLabel: 'chat',
     onReasoningSummary: params.onReasoningSummary,
@@ -703,6 +726,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     systemInstructions: params.systemInstructions ?? params.responseInstructions,
     mode: params.mode,
     traceRunId: params.traceRunId,
+    openAiReasoningEffort: params.openAiReasoningEffort,
   });
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
@@ -786,6 +810,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     systemInstructions: params.systemInstructions,
     mode: params.mode,
     traceRunId: params.traceRunId,
+    openAiReasoningEffort: params.openAiReasoningEffort,
     tools: params.tools,
     toolState: params.toolState,
   }));
@@ -845,7 +870,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   }
 
   const typed = payload as ProxyChatResponse | null;
-  if (!typed?.toolState || !Array.isArray(typed.toolCalls) || !Array.isArray(typed.nativeMessages)) {
+  if (!typed || typeof typed !== 'object') {
     throw new Error('Proxy returned an invalid native tool turn.');
   }
   const responsePayload = measurePhase('chat.proxyTool.normalize', { debugLabel }, () => {
@@ -864,9 +889,9 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     output: responsePayload.output,
     reasoningSummary: responsePayload.reasoningSummary,
     ...(responsePayload.usage ? { usage: responsePayload.usage } : {}),
-    toolCalls: typed.toolCalls,
-    nativeMessages: typed.nativeMessages,
-    toolState: typed.toolState,
+    toolCalls: Array.isArray(typed.toolCalls) ? typed.toolCalls : [],
+    nativeMessages: Array.isArray(typed.nativeMessages) ? typed.nativeMessages : [],
+    toolState: typed.toolState ?? createEmptyHostToolState(params.settings.provider),
   };
 }
 
@@ -945,6 +970,9 @@ export function buildProxyChatRequest(request: ProxyChatRequestInput): ProxyChat
   if (request.toolState) {
     payload.toolState = request.toolState;
   }
+  if (request.openAiReasoningEffort) {
+    payload.openAiReasoningEffort = request.openAiReasoningEffort;
+  }
   return payload;
 }
 
@@ -969,7 +997,21 @@ export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {
   });
 }
 
-export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSettings {
+interface ChatSettingsEnvironment {
+  VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
+  VITE_HVY_CHAT_MODEL?: string;
+  VITE_HVY_CHAT_COMPACTION_PROVIDER?: string;
+  VITE_HVY_CHAT_COMPACTION_MODEL?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS?: string;
+  VITE_OPENAI_MODEL?: string;
+  VITE_ANTHROPIC_MODEL?: string;
+  VITE_QWEN_MODEL?: string;
+}
+
+export function getEnvChatSettings(env: ChatSettingsEnvironment): ChatSettings {
   const provider = env.VITE_HVY_CHAT_PROVIDER === 'anthropic' || env.VITE_HVY_CHAT_PROVIDER === 'qwen' ? env.VITE_HVY_CHAT_PROVIDER : 'openai';
   const providerDefaultModel = getDefaultModelForProvider(provider);
   const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : provider === 'qwen' ? env.VITE_QWEN_MODEL : env.VITE_OPENAI_MODEL;
@@ -992,7 +1034,19 @@ export function getDefaultModelForProvider(provider: ChatSettings['provider']): 
 }
 
 function getDefaultChatSettings(): ChatSettings {
-  return getEnvChatSettings();
+  return getEnvChatSettings({
+    VITE_HVY_CHAT_PROVIDER: import.meta.env.VITE_HVY_CHAT_PROVIDER,
+    VITE_HVY_CHAT_MODEL: import.meta.env.VITE_HVY_CHAT_MODEL,
+    VITE_HVY_CHAT_COMPACTION_PROVIDER: import.meta.env.VITE_HVY_CHAT_COMPACTION_PROVIDER,
+    VITE_HVY_CHAT_COMPACTION_MODEL: import.meta.env.VITE_HVY_CHAT_COMPACTION_MODEL,
+    VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES,
+    VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES,
+    VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS,
+    VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS,
+    VITE_OPENAI_MODEL: import.meta.env.VITE_OPENAI_MODEL,
+    VITE_ANTHROPIC_MODEL: import.meta.env.VITE_ANTHROPIC_MODEL,
+    VITE_QWEN_MODEL: import.meta.env.VITE_QWEN_MODEL,
+  });
 }
 
 function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined, defaults: ChatSettings): ChatSettings {
@@ -1005,6 +1059,7 @@ function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
     maxContextChars: normalizeOptionalPositiveInteger(settings?.maxContextChars ?? defaults.maxContextChars),
     toolLoopCompaction: settings?.toolLoopCompaction ?? defaults.toolLoopCompaction,
+    scratchpad: normalizeScratchpadSettings(settings?.scratchpad ?? defaults.scratchpad),
   };
 }
 
@@ -1019,7 +1074,22 @@ export function mergeChatSettings(settings: Partial<ChatSettings> | null | undef
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
     ...(sanitized.maxContextChars ? { maxContextChars: sanitized.maxContextChars } : {}),
     ...(sanitized.toolLoopCompaction ? { toolLoopCompaction: sanitized.toolLoopCompaction } : {}),
+    ...(sanitized.scratchpad ? { scratchpad: sanitized.scratchpad } : {}),
   };
+}
+
+function normalizeScratchpadSettings(settings: ChatSettings['scratchpad']): ChatSettings['scratchpad'] {
+  if (!settings) {
+    return undefined;
+  }
+  const warningChars = normalizeOptionalPositiveInteger(settings.warningChars);
+  const maxChars = normalizeOptionalPositiveInteger(settings.maxChars);
+  return warningChars || maxChars
+    ? {
+        ...(warningChars ? { warningChars } : {}),
+        ...(maxChars ? { maxChars } : {}),
+      }
+    : undefined;
 }
 
 function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
@@ -1029,7 +1099,7 @@ function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
   return Math.floor(value);
 }
 
-function readEnvToolLoopCompaction(env: ImportMetaEnv): ChatSettings['toolLoopCompaction'] | undefined {
+function readEnvToolLoopCompaction(env: ChatSettingsEnvironment): ChatSettings['toolLoopCompaction'] | undefined {
   const toolLoopCompaction = {
     compactAfterMessages: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES),
     keepRecentMessages: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES),
@@ -1186,11 +1256,56 @@ function renderStandardChatMessageHtml(message: ChatMessage, deps: RenderChatPan
         ? renderAssistantMessageHtml(message.content)
         : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
     }</div>
+    ${renderSentChatAttachmentsHtml(message.attachments ?? [], deps)}
     ${
       message.reasoning
         ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
         : ''
     }
+  `;
+}
+
+function renderPendingChatAttachmentsHtml(chat: ChatState, deps: RenderChatPanelDeps): string {
+  const pending = chat.pendingAttachmentIds
+    .map((id) => chat.attachments.find((attachment) => attachment.id === id))
+    .filter((attachment): attachment is NonNullable<typeof attachment> => Boolean(attachment));
+  return `
+    <div class="chat-composer-attachments"${pending.length === 0 ? ' hidden' : ''}>
+      ${pending.map((attachment) => renderChatAttachmentChipHtml(attachment, deps, true)).join('')}
+    </div>
+  `;
+}
+
+function renderSentChatAttachmentsHtml(attachments: ChatAttachmentReference[], deps: RenderChatPanelDeps): string {
+  if (attachments.length === 0) {
+    return '';
+  }
+  return `<div class="chat-message-attachments">${attachments.map((attachment) => renderChatAttachmentChipHtml(attachment, deps, false)).join('')}</div>`;
+}
+
+function renderChatAttachmentChipHtml(
+  attachment: ChatAttachmentReference,
+  deps: RenderChatPanelDeps,
+  pending: boolean
+): string {
+  const id = deps.escapeAttr(attachment.id);
+  const detail = `${attachment.characterCount.toLocaleString()} characters · ${attachment.lineCount.toLocaleString()} lines`;
+  return `
+    <span class="chat-attachment-chip" data-chat-attachment-id="${id}">
+      <span class="chat-attachment-mark" aria-hidden="true"></span>
+      <span class="chat-attachment-copy">
+        <strong>${deps.escapeHtml(attachment.name)}</strong>
+        <small>${deps.escapeHtml(detail)}</small>
+      </span>
+      ${
+        pending
+          ? `<span class="chat-attachment-actions">
+               <button type="button" class="ghost" data-action="restore-chat-attachment" data-attachment-id="${id}">Restore as text</button>
+               <button type="button" class="ghost chat-attachment-remove" data-action="remove-chat-attachment" data-attachment-id="${id}" aria-label="Remove ${deps.escapeAttr(attachment.name)}">${closeIcon()}</button>
+             </span>`
+          : ''
+      }
+    </span>
   `;
 }
 
@@ -1382,8 +1497,11 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     markdownToEditorHtml: renderChatMarkdown,
     renderRichToolbar: () => '',
     renderEditorBlock: () => '',
+    renderEditorNestedBlocks: () => '',
+    renderEditorGridBlocks: () => [],
     renderPassiveEditorBlock: () => '',
     renderReaderBlock: (_section: VisualSection, block: VisualBlock) => renderChatHvyBlock(block, documentMeta),
+    renderReaderGridBlocks: (_section: VisualSection, blocks: VisualBlock[]) => blocks.map((block) => ({ block, html: renderChatHvyBlock(block, documentMeta) })),
     renderReaderBlocks: (_section: VisualSection, blocks: VisualBlock[]) => blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join(''),
     renderReaderListBlocks: (_section: VisualSection, blocks: VisualBlock[]) => blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join(''),
     orderReaderBlocks: (blocks: VisualBlock[]) => blocks,

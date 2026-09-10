@@ -1,10 +1,20 @@
-import type { AppState } from './types';
+import type { AppState, HvyThemeOverrides } from './types';
+import type { SectionLocation, VisualBlock } from './editor/types';
+
+export interface EditorBlockRefreshOptions {
+  runVisibilityScripts?: boolean;
+  replacementBlocks?: VisualBlock[];
+}
 
 export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
 export interface ReaderPanelRefreshOptions {
   runVisibilityScripts?: boolean;
   runDocumentHooks?: boolean;
   surface?: ReaderPanelRefreshSurface;
+}
+export interface SearchSurfaceRefreshOptions {
+  focusInput?: boolean;
+  progressOnly?: boolean;
 }
 
 export const HISTORY_GROUP_WINDOW_MS = 1200;
@@ -43,10 +53,13 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 type RuntimeCallbacks = {
   renderApp: () => void;
   refreshChatSurface: () => boolean;
-  refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
+  refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  refreshEditorBlock: (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean;
+  refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  insertEditorTopLevelSection: (sectionKey: string, location: SectionLocation) => boolean;
   refreshModalPreview: () => void;
   observeLinks: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +71,7 @@ type RuntimeCallbacks = {
 export interface StateRuntime {
   state: AppState;
   callbacks: RuntimeCallbacks;
+  themeOverrides: HvyThemeOverrides;
 }
 
 function createUninitializedCallbacks(): RuntimeCallbacks {
@@ -68,6 +82,9 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
     refreshReaderSection: () => false,
     refreshReaderBlock: () => false,
+    refreshEditorBlock: () => false,
+    refreshEditorSection: () => false,
+    insertEditorTopLevelSection: () => false,
     refreshModalPreview: () => { throw new Error('refreshModalPreview not initialized'); },
     observeLinks: () => {},
     componentRenderHelpers: null,
@@ -77,10 +94,13 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
 let _refreshChatSurface: () => boolean = () => false;
-let _refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean = () => false;
+let _refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean = () => false;
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
+let _refreshEditorBlock: (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean = () => false;
+let _refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
+let _insertEditorTopLevelSection: (sectionKey: string, location: SectionLocation) => boolean = () => false;
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
 let _observeLinks: (root: ParentNode) => void = () => {};
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,10 +108,13 @@ let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
 export function getRefreshChatSurface(): () => boolean { return _refreshChatSurface; }
-export function getRefreshSearchSurface(): (root: ParentNode, options?: { focusInput?: boolean }) => boolean { return _refreshSearchSurface; }
+export function getRefreshSearchSurface(): (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean { return _refreshSearchSurface; }
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
 export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderSection; }
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
+export function getRefreshEditorBlock(): (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean { return _refreshEditorBlock; }
+export function getRefreshEditorSection(): (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshEditorSection; }
+export function getInsertEditorTopLevelSection(): (sectionKey: string, location: SectionLocation) => boolean { return _insertEditorTopLevelSection; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
 export function getObserveLinks(): (root: ParentNode) => void { return _observeLinks; }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,10 +136,13 @@ export function getReaderRenderer(): any {
 export function initCallbacks(callbacks: {
   renderApp: () => void;
   refreshChatSurface?: () => boolean;
-  refreshSearchSurface?: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
+  refreshSearchSurface?: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  refreshEditorBlock?: (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean;
+  refreshEditorSection?: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  insertEditorTopLevelSection?: (sectionKey: string, location: SectionLocation) => boolean;
   refreshModalPreview: () => void;
   observeLinks?: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,6 +154,7 @@ export function initCallbacks(callbacks: {
     activeRuntime = {
       state,
       callbacks: createUninitializedCallbacks(),
+      themeOverrides: {},
     };
   }
   activeRuntime.callbacks = {
@@ -136,6 +163,9 @@ export function initCallbacks(callbacks: {
     refreshSearchSurface: callbacks.refreshSearchSurface ?? (() => false),
     refreshReaderSection: callbacks.refreshReaderSection ?? (() => false),
     refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
+    refreshEditorBlock: callbacks.refreshEditorBlock ?? (() => false),
+    refreshEditorSection: callbacks.refreshEditorSection ?? (() => false),
+    insertEditorTopLevelSection: callbacks.insertEditorTopLevelSection ?? (() => false),
     observeLinks: callbacks.observeLinks ?? (() => {}),
   };
   activateStateRuntime(activeRuntime);
@@ -150,17 +180,20 @@ export function initState(initial: AppState): void {
     activeRuntime = {
       state: initial,
       callbacks: createUninitializedCallbacks(),
+      themeOverrides: {},
     };
   } else {
     activeRuntime.state = initial;
+    activeRuntime.themeOverrides = {};
   }
   activateStateRuntime(activeRuntime);
 }
 
-export function createStateRuntime(initial: AppState): StateRuntime {
+export function createStateRuntime(initial: AppState, themeOverrides: HvyThemeOverrides = {}): StateRuntime {
   return {
     state: initial,
     callbacks: createUninitializedCallbacks(),
+    themeOverrides,
   };
 }
 
@@ -180,6 +213,9 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
   _refreshReaderSection = runtime.callbacks.refreshReaderSection;
   _refreshReaderBlock = runtime.callbacks.refreshReaderBlock;
+  _refreshEditorBlock = runtime.callbacks.refreshEditorBlock;
+  _refreshEditorSection = runtime.callbacks.refreshEditorSection;
+  _insertEditorTopLevelSection = runtime.callbacks.insertEditorTopLevelSection;
   _refreshModalPreview = runtime.callbacks.refreshModalPreview;
   _observeLinks = runtime.callbacks.observeLinks;
   _componentRenderHelpers = runtime.callbacks.componentRenderHelpers;

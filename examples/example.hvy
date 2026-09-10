@@ -145,6 +145,17 @@ for line in output.split('\n'):
             })
         break
 
+<!--hvy:plugin {"id":"random-card-form","css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitScript":"draw_card","submitLabel":"Draw a card","scriptLibraries":["random"]}}-->
+fields:
+  - label: Card
+    type: text
+    placeholder: Click Draw a card
+scripts:
+  draw_card: |
+    import random
+    cards = ["Ace of Hearts", "King of Clubs", "Queen of Diamonds", "Jack of Spades"]
+    doc.form.set_value("Card", random.choice(cards))
+
 
 <!--hvy:subsection {"id":"form-examples"}-->
 #! Form Examples

@@ -3,7 +3,6 @@ hvy_version: 1.0
 title: Video plugin demo
 plugins:
   - id: hvy.video
-    source: builtin://video
 ---
 
 #! Video plugin demo

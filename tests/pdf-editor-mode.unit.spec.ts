@@ -11,7 +11,8 @@ import { initCallbacks, initState, REUSABLE_SECTION_PREFIX, state } from '../src
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualSection } from '../src/editor/types';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance } from '../src/pdf-document-capabilities';
-import { getPdfDocumentPageGuideVariables, renderPdfDocumentViewerThemeStyle } from '../src/pdf-document-theme';
+import { renderPdfDocumentViewerThemeStyle } from '../src/pdf-document-theme';
+import { renderPdfPreviewPlaceholder } from '../src/pdf-preview/pdf-preview-controller';
 import { setHostPlugins } from '../src/plugins/registry';
 import type { VisualDocument } from '../src/types';
 import { escapeHtml } from '../src/utils';
@@ -86,6 +87,9 @@ test('PHVY component picker enables plugins with PDF static render capability', 
   const document = createPdfDocument();
   setHostPlugins([{
     id: 'fake.qr',
+    uuid: 'fake-plugin-qr',
+    version: '1.0.0',
+    hvyApiVersion: '0.1',
     displayName: 'QR',
     create: () => ({ element: globalThis.document.createElement('div') }),
     pdf: {
@@ -119,11 +123,17 @@ test('PHVY component picker lists PDF-supported plugins before unsupported plugi
   setHostPlugins([
     {
       id: 'fake.unsupported',
+      uuid: 'fake-plugin-unsupported',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'Unsupported Plugin',
       create: () => ({ element: globalThis.document.createElement('div') }),
     },
     {
       id: 'fake.supported',
+      uuid: 'fake-plugin-supported',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'Supported Plugin',
       create: () => ({ element: globalThis.document.createElement('div') }),
       pdf: {
@@ -281,7 +291,7 @@ test('PHVY reader rendering omits sidebar surface affordances', () => {
     tempHighlights: new Set<string>(),
     aiEditTarget: { sectionKey: null, blockId: null },
     modalSectionKey: null,
-    sqliteRowComponentModal: null,
+    dbTableRowComponentModal: null,
     dbTableQueryModal: null,
     pdfTemplateImportModal: null,
     reusableSaveModal: null,
@@ -325,7 +335,8 @@ test('PHVY reader rendering omits sidebar surface affordances', () => {
 
   expect(renderer.renderSidebarSections([main, sidebar])).toBe('');
   expect(renderer.renderSidebarHelpBalloon([main, sidebar])).toBe('');
-  expect(renderer.renderReaderSections([main])).toContain('class="phvy-page-guide-layer"');
+  expect(renderer.renderReaderSections([main])).not.toContain('phvy-page-guide-layer');
+  expect(renderPdfPreviewPlaceholder()).toContain('data-hvy-pdf-preview="true"');
 });
 
 test('PHVY viewer paper colors default to white and black', () => {
@@ -335,108 +346,9 @@ test('PHVY viewer paper colors default to white and black', () => {
 
   expect(expectedResult).toContain('--hvy-bg: #ffffff;');
   expect(expectedResult).toContain('--hvy-text: #000000;');
+  expect(expectedResult).toContain('--hvy-link-color: #000000;');
+  expect(expectedResult).toContain('--hvy-link-hover-color: #000000;');
   expect(expectedResult).toContain('--hvy-surface: #ffffff;');
-  expect(expectedResult).toContain('--hvy-pdf-page-width: 612;');
-  expect(expectedResult).toContain('--hvy-pdf-page-height: 792;');
-  expect(expectedResult).toContain('--hvy-pdf-printable-width: 504;');
-  expect(expectedResult).toContain('--hvy-pdf-printable-height: 684;');
-  expect(expectedResult).toContain('--hvy-pdf-margin-left: 54;');
-});
-
-test('PHVY page guide variables use PDF printable dimensions', () => {
-  const document = createPdfDocument();
-
-  const expectedResult = getPdfDocumentPageGuideVariables(document);
-
-  expect(expectedResult).toMatchObject({
-    '--hvy-pdf-page-width': '612',
-    '--hvy-pdf-page-height': '792',
-    '--hvy-pdf-printable-width': '504',
-    '--hvy-pdf-printable-height': '684',
-    '--hvy-pdf-margin-left': '54',
-    '--hvy-pdf-margin-top': '54',
-    '--hvy-pdf-margin-right': '54',
-    '--hvy-pdf-margin-bottom': '54',
-  });
-});
-
-test('PHVY page guide variables use document PDF margins', () => {
-  const document = createPdfDocument();
-  document.meta.pdf_page = {
-    margins: ['0.5in', '1in', '0.5in', '1in'],
-    debug: true,
-  };
-
-  const expectedResult = getPdfDocumentPageGuideVariables(document);
-
-  expect(expectedResult).toMatchObject({
-    '--hvy-pdf-printable-width': '540',
-    '--hvy-pdf-printable-height': '648',
-    '--hvy-pdf-margin-left': '36',
-    '--hvy-pdf-margin-top': '72',
-    '--hvy-pdf-margin-right': '36',
-    '--hvy-pdf-margin-bottom': '72',
-  });
-});
-
-test('PHVY reader rendering enables PDF debug bounds from metadata', () => {
-  const main = createSection('summary');
-  const renderer = createReaderRenderer({
-    documentExtension: '.phvy',
-    documentMeta: { pdf_page: { margins: ['0.5in', '1in', '0.5in', '1in'], debug: true } },
-    documentSections: [main],
-    addComponentBySection: {},
-    tempHighlights: new Set<string>(),
-    aiEditTarget: { sectionKey: null, blockId: null },
-    modalSectionKey: null,
-    sqliteRowComponentModal: null,
-    dbTableQueryModal: null,
-    pdfTemplateImportModal: null,
-    reusableSaveModal: null,
-    reusableTemplateModal: null,
-    sectionTemplateFlavorModal: null,
-    componentMetaModal: null,
-    themeModalOpen: false,
-    themeModalMode: 'full',
-    paletteOverrideId: null,
-    theme: { colors: {} },
-    currentView: 'viewer',
-    showAdvancedEditor: false,
-    responsivePreview: 'full',
-    readerExpandableState: {},
-    readerContainerState: {},
-    readerView: {},
-    readerViewActivatedTargets: new Set<string>(),
-    search: createDefaultSearchState(),
-    componentListReaderViews: {},
-    viewerSidebarHelpDismissed: false,
-  }, {
-    escapeAttr: escapeHtml,
-    escapeHtml,
-    flattenSections: (sections) => sections,
-    findDuplicateSectionIds: () => [],
-    findSectionByKey: () => null,
-    findBlockByIds: () => null,
-    getSectionId: (section) => section.customId,
-    formatSectionTitle: (title) => title,
-    resolveBaseComponent: (componentName) => componentName,
-    ensureExpandableBlocks: () => {},
-    ensureGridItems: () => {},
-    getComponentRenderHelpers: () => ({} as ComponentRenderHelpers),
-    renderEditorBlock: () => '',
-    renderBlockContentEditor: () => '',
-    renderComponentOptions: () => '',
-    renderReusableSectionOptions: () => '',
-    getSectionDefs: () => [],
-    renderBlockMetaFields: () => '',
-  });
-
-  const expectedResult = renderer.renderReaderSections([main]);
-
-  expect(expectedResult).toContain('class="phvy-page-guide-layer is-debug"');
-  expect(expectedResult).toContain('--hvy-pdf-margin-left: 36;');
-  expect(expectedResult).toContain('--hvy-pdf-margin-top: 72;');
-  expect(expectedResult).toContain('--hvy-pdf-printable-height: 648;');
 });
 
 test('PHVY viewer paper colors use document theme overrides', () => {
@@ -445,6 +357,8 @@ test('PHVY viewer paper colors use document theme overrides', () => {
     colors: {
       '--hvy-bg': '#f8fafc',
       '--hvy-text': '#020617',
+      '--hvy-link-color': '#2563eb',
+      '--hvy-link-hover-color': '#1d4ed8',
     },
   };
 
@@ -452,6 +366,10 @@ test('PHVY viewer paper colors use document theme overrides', () => {
 
   expect(expectedResult).toContain('--hvy-bg: #f8fafc;');
   expect(expectedResult).toContain('--hvy-text: #020617;');
+  expect(expectedResult).toContain('--hvy-link-color: #020617;');
+  expect(expectedResult).toContain('--hvy-link-hover-color: #020617;');
+  expect(expectedResult).not.toContain('--hvy-link-color: #2563eb;');
+  expect(expectedResult).not.toContain('--hvy-link-hover-color: #1d4ed8;');
   expect(expectedResult).toContain('--hvy-surface: #f8fafc;');
 });
 
@@ -465,7 +383,7 @@ test('PHVY AI reader rendering omits sidebar add ghost', () => {
     tempHighlights: new Set<string>(),
     aiEditTarget: { sectionKey: null, blockId: null },
     modalSectionKey: null,
-    sqliteRowComponentModal: null,
+    dbTableRowComponentModal: null,
     dbTableQueryModal: null,
     pdfTemplateImportModal: null,
     reusableSaveModal: null,

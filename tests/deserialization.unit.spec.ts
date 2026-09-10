@@ -351,9 +351,23 @@ hvy_version: 0.1
 `, '.hvy');
 
   expect(document.meta.reader_max_width).toBe('60rem');
+  expect(document.meta.sidebar_max_width).toBe('40rem');
   expect(document.meta.section_defaults).toEqual({
     css: 'margin: 0 0 0.5rem;',
   });
+});
+
+test('deserializes sidebar_max_width from document front matter', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+sidebar_max_width: 28rem
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+`, '.hvy');
+
+  expect(document.meta.sidebar_max_width).toBe('28rem');
 });
 
 test('uses document section contained default when section metadata omits contained', () => {
@@ -377,8 +391,7 @@ test('deserializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -401,8 +414,7 @@ test('deserializes a binary SQLite attachment tail from HVY bytes', () => {
   const prefix = `---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -736,8 +748,7 @@ test('deserializes db-table query text from the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -763,8 +774,7 @@ test('deserializes db-table query window settings from plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->

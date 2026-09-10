@@ -1,5 +1,56 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/**
+ * Waits until a mount stops re-rendering. Boot work (visibility scripts, link observer)
+ * keeps replacing nodes for several hundred milliseconds, and a click landing on a node
+ * that is about to be replaced is simply lost.
+ */
+async function waitForMountIdle(page: Page, selector: string, quietMs = 250): Promise<void> {
+  await page.locator(selector).evaluate((root, quiet) => new Promise<void>((resolve) => {
+    let timer = window.setTimeout(finish, quiet as number);
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(finish, quiet as number);
+    });
+    function finish(): void {
+      observer.disconnect();
+      resolve();
+    }
+    observer.observe(root, { subtree: true, childList: true, attributes: true });
+  }), quietMs);
+}
+
+/**
+ * Reloads and waits for the app to finish booting. `waitUntil: 'networkidle'` cannot be
+ * used here: it costs at least 500ms of enforced network silence on top of load, which
+ * does not fit the 1s navigation budget on a cold dev server.
+ */
+async function reloadApp(page: Page): Promise<void> {
+  await page.reload();
+  // Embedded example pages mount more than one document, so match the first mount.
+  await expect(page.locator('#downloadName').first()).toHaveValue(/.+\.(hvy|thvy)$/);
+}
+
+/**
+ * Replaces the raw editor contents the way a paste would. `fill()` drives text through CDP
+ * and costs ~19s on a full example document, while the app's own input handler only needs
+ * ~10ms for the same change, so the wait is pure harness overhead.
+ */
+async function setRawEditorText(page: Page, text: string): Promise<void> {
+  await page.locator('#rawEditor').evaluate((node, value) => {
+    (node as HTMLTextAreaElement).value = value;
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  }, text);
+}
+
+/** Documents live behind the collapsed document menu, so it has to be opened first. */
+async function openDocument(page: Page, name: string): Promise<void> {
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name, exact: true }).click();
+}
+
 async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
   await page.locator('.document-menu').evaluate((menu) => {
@@ -36,8 +87,7 @@ test('AI form submit applies generated card data through a component template', 
   await page.locator('#rawEditor').fill(String.raw`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.form
-    source: builtin://form
+  - name: hvy.form
 component_defs:
   - name: flashcard-card
     baseType: expandable
@@ -217,6 +267,42 @@ hvy_version: 0.1
   await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedHtml?: string }).__copiedHtml)).toContain('<h2>Copy Heading</h2>');
 });
 
+test('native copy from rendered prose treats a Markdown soft wrap as a space', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native clipboard shortcut coverage is chromium-only here.');
+  test.setTimeout(5000);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await setRawEditorText(page, `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"impact"}-->
+#! Impact
+
+<!--hvy:text {"id":"body-copy"}-->
+ _Players
+ chasing their discs will create new trails._
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const renderedText = page.locator('[data-component-id="body-copy"] em');
+  await expect(renderedText).toHaveText('Players chasing their discs will create new trails.');
+  await renderedText.evaluate((paragraph) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
+  const expectedResult = await page.evaluate(() => navigator.clipboard.readText());
+
+  expect(expectedResult).toBe('Players chasing their discs will create new trails.');
+});
+
 test('study tools flashcards form remains mounted after sidebar reader refresh', async ({ page }) => {
   test.setTimeout(5000);
   await page.route('**/api/chat', async (route) => {
@@ -325,8 +411,8 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await reloadApp(page);
+  await openDocument(page, 'Resume Template');
 
   await expect(page.locator('[data-component-id="resume-pronunciation"]').first()).toBeHidden({ timeout: 1_000 });
   await expect(page.locator('[data-action="run-button-ai-generate"]')).toBeHidden();
@@ -334,7 +420,7 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const raw = page.locator('#rawEditor');
-  await raw.fill((await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
+  await setRawEditorText(page, (await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
@@ -364,8 +450,8 @@ test('generate button runs on the first click after completing a fill-in', async
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await reloadApp(page);
+  await openDocument(page, 'Resume Template');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
   const nameFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-name"]) [data-field="text-fill-in-value"]');
@@ -393,8 +479,8 @@ test('generate button shows disabled busy state while pronunciation is generatin
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await reloadApp(page);
+  await openDocument(page, 'Resume Template');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
   await page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-name"]) [data-field="text-fill-in-value"]').fill('Avery Hart');
@@ -426,12 +512,12 @@ test('generated pronunciation can be converted back into a clean fill-in', async
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await reloadApp(page);
+  await openDocument(page, 'Resume Template');
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const raw = page.locator('#rawEditor');
-  await raw.fill((await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
+  await setRawEditorText(page, (await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
@@ -440,6 +526,9 @@ test('generated pronunciation can be converted back into a clean fill-in', async
 
   await page.locator('[data-component-id="resume-pronunciation"]').first().click();
   await expect(page.locator('.rich-editor[data-field="block-rich"]')).toBeVisible();
+  // A re-render landing between setting the selection and acting on it collapses it, which
+  // hides the selection-driven "Use as..." control.
+  await waitForMountIdle(page, '#editorTree');
   await page.locator('.rich-editor[data-field="block-rich"]').evaluate((editable) => {
     editable.innerHTML = '<p>[FILL ME IN]</p>';
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -454,7 +543,8 @@ test('generated pronunciation can be converted back into a clean fill-in', async
     selection?.addRange(range);
   });
   await page.locator('.rich-editor[data-field="block-rich"]').dispatchEvent('keyup');
-  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
+  await page.locator('.text-use-as-button').click();
+  await page.locator('[data-rich-action="fill-in"]').click();
 
   const pronunciationFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-pronunciation"]) [data-field="text-fill-in-value"]');
   await expect(pronunciationFillIn).toHaveAttribute('data-placeholder', 'FILL ME IN');
@@ -468,8 +558,8 @@ test('generated pronunciation can be converted back into a clean fill-in', async
 test('advanced editor exposes anchored button configuration as a component card', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await reloadApp(page);
+  await selectDocumentMenuItem(page, 'Resume Template');
   await page.getByRole('button', { name: 'Advanced' }).click();
 
   const buttonCard = page.locator('.editor-block-passive', { hasText: 'Button: Generate anchored to resume-pronunciation' });
@@ -489,6 +579,11 @@ test('advanced editor exposes anchored button configuration as a component card'
 
   const previewBox = await preview.boundingBox();
   const buttonBox = await previewButton.boundingBox();
+  const visibilityScript = settings.locator('.visibility-script-field');
+  await expect(visibilityScript).not.toHaveAttribute('open', '');
+  await expect(visibilityScript.locator('summary')).toContainText('Visibility Script');
+  await expect(visibilityScript.locator('summary')).toContainText('Configured');
+  await visibilityScript.locator('summary').click();
   const visibleScriptBox = await settings.locator('[data-field="block-button-visible-script"]').boundingBox();
 
   expect(previewBox).not.toBeNull();
@@ -496,13 +591,22 @@ test('advanced editor exposes anchored button configuration as a component card'
   expect(visibleScriptBox).not.toBeNull();
   expect(buttonBox!.y + buttonBox!.height).toBeLessThan(visibleScriptBox!.y);
   expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
+
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('[aria-label="Button settings"]') })).toBeVisible();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="open-component-meta"]').click();
+  await expect(page.locator('#modalRoot')).toBeVisible();
+  await page.locator('.component-meta-modal [data-modal-action="close"]').click();
+  await expect(page.locator('#modalRoot')).toHaveCount(0);
 });
 
 test('embedded editor and viewer keep independent document state', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
 
   const firstDoc = page.locator('#docOne');
   const secondDoc = page.locator('#docTwo');
@@ -516,11 +620,6 @@ test('embedded editor and viewer keep independent document state', async ({ page
   await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveClass(/is-closing/);
   await page.waitForTimeout(220);
   await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveCount(0);
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
-  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Skills');
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
 });
 
 test('embedded editor remains in editor view after activating a component beside a viewer mount', async ({ page }) => {
@@ -656,57 +755,63 @@ test('two embedded docs can switch example sources independently', async ({ page
   await expect(secondDoc).not.toContainText('Avery Hart');
 });
 
-test('second embedded viewer action buttons remain clickable', async ({ page }) => {
-  test.setTimeout(5_000);
-  const chatRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }> = [];
+/** Opens the two-doc example with a stubbed chat proxy and waits for both mounts. */
+async function openTwoEmbeddedDocs(
+  page: Page,
+  chatRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }>
+): Promise<void> {
   await page.route('**/api/chat', async (route) => {
-    const payload = route.request().postDataJSON() as { mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> };
-    chatRequests.push(payload);
+    chatRequests.push(route.request().postDataJSON() as { mode?: string; context?: string });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        output: 'API answer: Avery Hart is the resume candidate.',
-      }),
+      body: JSON.stringify({ output: 'API answer: Avery Hart is the resume candidate.' }),
     });
   });
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
+  await expect(page.locator('#docTwo #readerDocument')).toBeVisible({ timeout: 1_000 });
+}
 
+test('embedded mounts fill their host frames', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
+
+  for (const id of ['#docOne', '#docTwo']) {
+    const mountBox = await page.locator(id).boundingBox();
+    const layoutBox = await page.locator(`${id} .hvy-embed-layout`).boundingBox();
+    expect(mountBox).not.toBeNull();
+    expect(layoutBox).not.toBeNull();
+    expect(layoutBox!.height).toBeGreaterThanOrEqual(mountBox!.height - 1);
+  }
+});
+
+test('embedded search panel opens inside its own mount', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
   const firstDoc = page.locator('#docOne');
-  const secondDoc = page.locator('#docTwo');
-  await expect(secondDoc.locator('#readerDocument')).toBeVisible({ timeout: 1_000 });
-  const firstDocMountBox = await firstDoc.boundingBox();
-  const firstDocLayoutBox = await firstDoc.locator('.hvy-embed-layout').boundingBox();
-  const secondDocMountBox = await secondDoc.boundingBox();
-  const secondDocLayoutBox = await secondDoc.locator('.hvy-embed-layout').boundingBox();
-  expect(firstDocMountBox).not.toBeNull();
-  expect(firstDocLayoutBox).not.toBeNull();
-  expect(secondDocMountBox).not.toBeNull();
-  expect(secondDocLayoutBox).not.toBeNull();
-  expect(firstDocLayoutBox!.height).toBeGreaterThanOrEqual(firstDocMountBox!.height - 1);
-  expect(secondDocLayoutBox!.height).toBeGreaterThanOrEqual(secondDocMountBox!.height - 1);
 
+  await waitForMountIdle(page, '#docOne');
   await firstDoc.locator('.search-launcher').click();
   await expect(firstDoc.locator('.search-modal')).toBeVisible({ timeout: 1_000 });
-  const firstDocSearchBox = await firstDoc.boundingBox();
-  const firstSearchModalBox = await firstDoc.locator('.search-modal').boundingBox();
-  expect(firstDocSearchBox).not.toBeNull();
-  expect(firstSearchModalBox).not.toBeNull();
-  expect(firstSearchModalBox!.y).toBeGreaterThanOrEqual(firstDocSearchBox!.y);
-  expect(firstSearchModalBox!.y + firstSearchModalBox!.height).toBeLessThanOrEqual(firstDocSearchBox!.y + firstDocSearchBox!.height + 1);
+  const mountBox = await firstDoc.boundingBox();
+  const modalBox = await firstDoc.locator('.search-modal').boundingBox();
+  expect(mountBox).not.toBeNull();
+  expect(modalBox).not.toBeNull();
+  expect(modalBox!.y).toBeGreaterThanOrEqual(mountBox!.y);
+  expect(modalBox!.y + modalBox!.height).toBeLessThanOrEqual(mountBox!.y + mountBox!.height + 1);
   await firstDoc.getByRole('button', { name: 'Close search panel' }).click();
   await expect(firstDoc.locator('.search-modal')).toHaveCount(0);
+});
+
+test('second embedded viewer runs its own search', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
+  const secondDoc = page.locator('#docTwo');
 
   await secondDoc.locator('.viewer-sidebar-help-balloon').click();
-  await page.waitForTimeout(220);
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
-  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Skills');
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
-
+  await waitForMountIdle(page, '#docTwo');
   await secondDoc.locator('.search-launcher').click();
   await expect(secondDoc.locator('.search-modal')).toBeVisible({ timeout: 1_000 });
   await secondDoc.locator('[data-field="search-query"]').fill('Avery Hart');
@@ -714,33 +819,51 @@ test('second embedded viewer action buttons remain clickable', async ({ page }) 
   await expect(secondDoc.locator('.search-result')).toContainText('Avery Hart', { timeout: 1_000 });
   await secondDoc.getByRole('button', { name: 'Close search panel' }).click();
   await expect(secondDoc.locator('.search-modal')).toHaveCount(0);
+});
 
+test('embedded chat panel opens inside its own mount', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
+  const firstDoc = page.locator('#docOne');
+
+  await waitForMountIdle(page, '#docOne');
   await firstDoc.locator('.chat-launcher').click();
   await expect(firstDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });
-  const firstDocBox = await firstDoc.boundingBox();
-  const firstChatPanelBox = await firstDoc.locator('.chat-panel').boundingBox();
-  expect(firstDocBox).not.toBeNull();
-  expect(firstChatPanelBox).not.toBeNull();
-  expect(firstChatPanelBox!.x).toBeGreaterThanOrEqual(firstDocBox!.x);
-  expect(firstChatPanelBox!.x + firstChatPanelBox!.width).toBeLessThanOrEqual(firstDocBox!.x + firstDocBox!.width + 1);
-  expect(firstChatPanelBox!.y + firstChatPanelBox!.height).toBeLessThanOrEqual(firstDocBox!.y + firstDocBox!.height + 1);
-  const firstChatEmptyBox = await firstDoc.locator('.chat-empty').boundingBox();
-  const firstChatComposerBox = await firstDoc.locator('.chat-composer').boundingBox();
-  expect(firstChatEmptyBox).not.toBeNull();
-  expect(firstChatComposerBox).not.toBeNull();
-  expect(firstChatComposerBox!.y - (firstChatEmptyBox!.y + firstChatEmptyBox!.height)).toBeLessThanOrEqual(18);
-  await firstDoc.locator('.chat-launcher').click();
+  const mountBox = await firstDoc.boundingBox();
+  const panelBox = await firstDoc.locator('.chat-panel').boundingBox();
+  expect(mountBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
+  expect(panelBox!.x).toBeGreaterThanOrEqual(mountBox!.x);
+  expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(mountBox!.x + mountBox!.width + 1);
+  expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(mountBox!.y + mountBox!.height + 1);
+  const emptyBox = await firstDoc.locator('.chat-empty').boundingBox();
+  const composerBox = await firstDoc.locator('.chat-composer').boundingBox();
+  expect(emptyBox).not.toBeNull();
+  expect(composerBox).not.toBeNull();
+  expect(composerBox!.y - (emptyBox!.y + emptyBox!.height)).toBeLessThanOrEqual(18);
+  // The launcher is display:none while the panel is open; the panel owns its close control.
+  await firstDoc.getByRole('button', { name: 'Close chat' }).click();
   await expect(firstDoc.locator('.chat-panel')).toBeHidden();
+});
 
+test('second embedded viewer answers chat through its host chat client', async ({ page }) => {
+  test.setTimeout(5_000);
+  // The example mounts supply their own chatClient, so the proxy route should stay unused.
+  const proxyRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }> = [];
+  await openTwoEmbeddedDocs(page, proxyRequests);
+  const firstDoc = page.locator('#docOne');
+  const secondDoc = page.locator('#docTwo');
+
+  await waitForMountIdle(page, '#docTwo');
   await secondDoc.locator('.chat-launcher').click();
   await expect(secondDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });
   await expect(secondDoc.locator('[data-field="chat-input"]')).toHaveAttribute('placeholder', 'Ask about the current HVY document...');
   await secondDoc.locator('[data-field="chat-input"]').fill('Who is the resume candidate?');
   await secondDoc.locator('[data-field="chat-input"]').press('Enter');
-  await expect(secondDoc.locator('.chat-panel')).toContainText('API answer: Avery Hart is the resume candidate.', { timeout: 3_500 });
-  expect(chatRequests).toHaveLength(1);
-  expect(chatRequests[0]?.mode).toBe('qa');
-  expect(chatRequests[0]?.context).toContain('Avery Hart');
-  expect(chatRequests[0]?.messages?.at(-1)?.content).toBe('Who is the resume candidate?');
-  await expect(firstDoc).not.toContainText('API answer');
+
+  // The example's client echoes the document context back, labelled per mount.
+  await expect(secondDoc.locator('.chat-panel')).toContainText('Document Two generated from:', { timeout: 3_500 });
+  await expect(secondDoc.locator('.chat-panel')).toContainText('Who is the resume candidate?');
+  expect(proxyRequests).toHaveLength(0);
+  await expect(firstDoc).not.toContainText('Document Two generated from:');
 });

@@ -8,6 +8,7 @@ import {
 import { collectHvyComponentStructureReferences } from '../cli-core/request-structure';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { getSectionId } from '../section-ops';
+import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
 import type {
   HvyRetrievalChunk,
   HvySemanticFilterCandidate,
@@ -88,7 +89,12 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
 
 export function buildSemanticRetrievalChunks(
   document: VisualDocument,
-  options: { targetChunkChars?: number; overlapChars?: number } = {}
+  options: {
+    targetChunkChars?: number;
+    overlapChars?: number;
+    preserveLeafTargets?: boolean;
+    includeLabelInSummary?: boolean;
+  } = {}
 ): HvyRetrievalChunk[] {
   const targetChunkChars = Math.max(1, Math.floor(options.targetChunkChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS));
   const overlapChars = normalizeOverlapChars(options.overlapChars, RETRIEVAL_CHUNK_OVERLAP_CHARS);
@@ -107,9 +113,49 @@ export function buildSemanticRetrievalChunks(
     leaves.push(candidate);
     leavesBySectionKey.set(candidate.sectionKey, leaves);
   }
+  if (options.preserveLeafTargets) {
+    return [...leavesBySectionKey.values()].flatMap((leaves) =>
+      leaves.flatMap((leaf) => buildLeafRetrievalChunks(
+        leaf,
+        targetChunkChars,
+        overlapChars,
+        options.includeLabelInSummary ?? true
+      ))
+    );
+  }
   return [...leavesBySectionKey.entries()].flatMap(([sectionKey, leaves]) =>
-    buildSectionRetrievalChunks(sectionsByKey.get(sectionKey), leaves, targetChunkChars, overlapChars)
+    buildSectionRetrievalChunks(
+      sectionsByKey.get(sectionKey),
+      leaves,
+      targetChunkChars,
+      overlapChars,
+      options.includeLabelInSummary ?? true
+    )
   );
+}
+
+function buildLeafRetrievalChunks(
+  leaf: HvySemanticFilterCandidate,
+  targetChunkChars: number,
+  overlapChars: number,
+  includeLabelInSummary: boolean
+): HvyRetrievalChunk[] {
+  const pieces = buildWindowCandidateChunks(leaf, targetChunkChars, overlapChars)
+    .flatMap((chunk) => splitRetrievalPieceText(
+      chunk,
+      formatRetrievalLeafText(chunk, includeLabelInSummary),
+      targetChunkChars
+    ));
+  return pieces.map((piece, index): HvyRetrievalChunk => ({
+    ...piece.candidate,
+    chunkId: pieces.length === 1 ? piece.candidate.candidateId : `${piece.candidate.candidateId}#chunk:${index + 1}`,
+    sourceCandidateIds: [piece.candidate.candidateId],
+    summary: piece.text,
+    truncated: pieces.length > 1 || piece.candidate.truncated,
+    ...(pieces.length > 1
+      ? { windowChunk: { index, count: pieces.length, start: 0, end: piece.text.length } }
+      : { windowChunk: undefined }),
+  }));
 }
 
 export function buildSemanticFilterWindowRequest(
@@ -192,7 +238,11 @@ export function buildSemanticFilterCandidates(
     const locationLabel = (block.schema.description ?? '').trim() || nearestLocationLabel;
     const targetPath = blockPaths.get(block);
     const targetRef = (targetPath ? targetRefs.componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
-    const summaryResult = truncateSummary(buildBlockSummary(block, baseComponent), maxCandidateSummaryChars);
+    const summaryResult = truncateSummary(
+      buildBlockSummary(document, block, baseComponent),
+      maxCandidateSummaryChars,
+      baseComponent === 'plugin'
+    );
     const contextLabel = contextTrail.filter((part) => part && part !== label).slice(-3).join(' / ');
     blockCandidates.push({
       candidateId: `component:${targetRef}`,
@@ -517,7 +567,8 @@ function buildSectionRetrievalChunks(
   section: HvySemanticFilterCandidate | undefined,
   leaves: HvySemanticFilterCandidate[],
   targetChunkChars: number,
-  overlapChars: number
+  overlapChars: number,
+  includeLabelInSummary: boolean
 ): HvyRetrievalChunk[] {
   if (leaves.length === 0) {
     return [];
@@ -525,7 +576,7 @@ function buildSectionRetrievalChunks(
   const sectionCandidate = section ?? leaves[0]!;
   const pieces = leaves.flatMap((leaf) =>
     buildWindowCandidateChunks(leaf, targetChunkChars, overlapChars).flatMap((chunk) =>
-      splitRetrievalPieceText(chunk, formatRetrievalLeafText(chunk), targetChunkChars)
+      splitRetrievalPieceText(chunk, formatRetrievalLeafText(chunk, includeLabelInSummary), targetChunkChars)
     )
   );
   const groups: Array<{ pieces: typeof pieces; chars: number }> = [];
@@ -578,9 +629,9 @@ function getSectionRetrievalChunkId(section: HvySemanticFilterCandidate, index: 
   return count <= 1 ? baseId : `${baseId}#chunk:${index + 1}`;
 }
 
-function formatRetrievalLeafText(candidate: HvySemanticFilterCandidate): string {
+function formatRetrievalLeafText(candidate: HvySemanticFilterCandidate, includeLabel: boolean): string {
   return [
-    candidate.label ? `Label: ${candidate.label}` : '',
+    includeLabel && candidate.label ? `Label: ${candidate.label}` : '',
     candidate.contextLabel ? `Context: ${candidate.contextLabel}` : '',
     candidate.locationLabel ? `Location: ${candidate.locationLabel}` : '',
     candidate.tags.length ? `Tags: ${candidate.tags.join(', ')}` : '',
@@ -640,10 +691,31 @@ function buildSectionSummary(section: VisualSection): string {
   ].join('\n'));
 }
 
-function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
+function buildBlockSummary(document: VisualDocument, block: VisualBlock, baseComponent: string): string {
   const childSummary = shouldSummarizeChildContent(baseComponent, block)
     ? getNestedBlockSummaryText(block)
     : '';
+  if (baseComponent === 'plugin') {
+    const visualDescription = formatPluginVisualDescriptionForAgent(getPluginVisualDescription(document, block));
+    return [
+      block.schema.plugin ? `Plugin: ${block.schema.plugin}` : '',
+      Object.keys(block.schema.pluginConfig).length > 0
+        ? `Plugin parameters: ${JSON.stringify(block.schema.pluginConfig)}`
+        : '',
+      Object.keys(block.schema.pluginSortValues).length > 0
+        ? `Plugin sort values: ${JSON.stringify(block.schema.pluginSortValues)}`
+        : '',
+      visualDescription,
+      childSummary,
+      ...(block.text.trim().length > 0
+        ? [
+            '--- begin plugin text ---',
+            block.text.trim(),
+            '--- end plugin text ---',
+          ]
+        : []),
+    ].filter(Boolean).join('\n');
+  }
   return cleanText([
     block.schema.component,
     block.schema.tags ?? '',
@@ -751,8 +823,10 @@ function cleanText(value: string): string {
     .trim();
 }
 
-function truncateSummary(value: string, maxChars: number): { summary: string; truncated: boolean } {
-  const clean = cleanText(value);
+function truncateSummary(value: string, maxChars: number, preserveLines = false): { summary: string; truncated: boolean } {
+  const clean = preserveLines
+    ? value.replace(/\r\n?/g, '\n').trim()
+    : cleanText(value);
   if (clean.length <= maxChars) {
     return { summary: clean, truncated: false };
   }

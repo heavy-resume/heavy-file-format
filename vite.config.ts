@@ -13,6 +13,8 @@ const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
 const HVY_GUIDE_FILE_PATH = resolve(process.cwd(), 'hvy-guide.hvy');
 const SCRIPTING_HELP_API_PATH = '/api/scripting-help-document';
 const SCRIPTING_HELP_FILE_PATH = resolve(process.cwd(), 'src/plugins/scripting/help.hvy');
+const SEPA_RECREATION_API_PATH = '/api/sepa-recreation-document';
+const SEPA_RECREATION_FILE_PATH = resolve(process.cwd(), 'examples/SEPA_Recreation.phvy');
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.db-table',
@@ -23,7 +25,9 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.diagram',
   'hvy.qr-code',
   'hvy.video',
-  'hvy.viewer-note',
+  'hvy.editable-text',
+  'hvy.canvas',
+  'hvy.power-scripting',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -48,7 +52,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     id: 'hvy.db-table',
     key: 'dbTable',
     exportName: 'dbTablePlugin',
-    modulePath: 'src/plugins/db-table-plugin.ts',
+    modulePath: 'src/plugins/db-table/db-table-component.ts',
     displayName: 'DB Table',
   },
   {
@@ -102,11 +106,25 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     displayName: 'Video',
   },
   {
-    id: 'hvy.viewer-note',
-    key: 'viewerNote',
-    exportName: 'viewerNotePlugin',
-    modulePath: 'src/plugins/viewer-note.ts',
-    displayName: 'Viewer Note',
+    id: 'hvy.editable-text',
+    key: 'editableText',
+    exportName: 'editableTextPlugin',
+    modulePath: 'src/plugins/editable-text/editable-text.ts',
+    displayName: 'Editable Text',
+  },
+  {
+    id: 'hvy.canvas',
+    key: 'canvas',
+    exportName: 'canvasPlugin',
+    modulePath: 'src/plugins/canvas/canvas.ts',
+    displayName: 'Canvas',
+  },
+  {
+    id: 'hvy.power-scripting',
+    key: 'powerScripting',
+    exportName: 'powerScriptingPlugin',
+    modulePath: 'src/plugins/power-scripting/power-scripting.ts',
+    displayName: 'Power Scripting',
   },
 ];
 
@@ -227,14 +245,14 @@ function handleSourceDocumentRequest(req: IncomingMessage, res: ServerResponse, 
   }
   if (req.method === 'GET') {
     res.statusCode = 200;
-    res.setHeader('content-type', 'text/plain; charset=utf-8');
-    res.end(readFileSync(sourceDocument.filePath, 'utf8'));
+    res.setHeader('content-type', 'application/octet-stream');
+    res.end(readFileSync(sourceDocument.filePath));
     return;
   }
   if (req.method === 'PUT') {
-    void readRequestText(req)
+    void readRequestBytes(req)
       .then((body) => {
-        writeFileSync(sourceDocument.filePath, body, 'utf8');
+        writeFileSync(sourceDocument.filePath, body);
         res.statusCode = 200;
         res.setHeader('content-type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({ ok: true }));
@@ -261,16 +279,19 @@ function getSourceDocumentForRequest(url: string | undefined): { filePath: strin
   if (url?.startsWith(SCRIPTING_HELP_API_PATH)) {
     return { filePath: SCRIPTING_HELP_FILE_PATH, label: 'scripting help document' };
   }
+  if (url?.startsWith(SEPA_RECREATION_API_PATH)) {
+    return { filePath: SEPA_RECREATION_FILE_PATH, label: 'SEPA Recreation document' };
+  }
   return null;
 }
 
-function readRequestText(req: NodeJS.ReadableStream): Promise<string> {
-  return new Promise((resolveText, reject) => {
+function readRequestBytes(req: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolveBody, reject) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer | string) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
-    req.on('end', () => resolveText(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => resolveBody(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 }
@@ -298,6 +319,8 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
   const selected = HVY_BUILT_IN_PLUGIN_DEFINITIONS.filter((definition) => selectedIds.includes(definition.id));
   const definitions = selected.map((definition) => ({
     id: definition.id,
+    version: '0.1.0',
+    hvyApiVersion: '0.1',
     key: definition.key,
     displayName: definition.displayName,
     pdfStatic: definition.pdfStatic === true,
@@ -364,6 +387,8 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
     `function createLazyPlugin(definition) {`,
     `  return {`,
     `    id: definition.id,`,
+    `    version: definition.version,`,
+    `    hvyApiVersion: definition.hvyApiVersion,`,
     `    displayName: definition.displayName,`,
     `    create(ctx) {`,
     `      const root = document.createElement('div');`,

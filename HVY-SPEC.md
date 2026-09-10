@@ -51,17 +51,53 @@ When a renderer has the key for an encrypted component, it SHOULD decrypt the at
 
 Authoring tools that encrypt a component MUST generate a fresh UUID and Fernet key unless the host explicitly provides them. The tool MUST return or report both the UUID and key to the host so the host can persist a UUID-to-key mapping. Encrypting a component MUST NOT cause a whole-document encrypted envelope to be re-decrypted.
 
+Changing an encrypted component's key MUST generate a fresh UUID and Fernet key, re-encrypt the component payload under that key, remove the previous encrypted attachment, and report that the previous key mapping can be discarded. Removing component encryption MUST restore the decrypted component in place, remove its encrypted attachment, and report that its key mapping can be discarded. An authoring tool MUST NOT offer either operation when it cannot decrypt the component payload.
+
 ## 3. Compatibility Model
 
 ### 3.1 Markdown compatibility
 
-If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
+If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is the preferred syntax for italics. An opening single underscore MAY immediately follow a letter or number so authors can begin italics within a word, as in `Someth_ing there_`; the closing underscore must occur at a normal emphasis boundary. This intraword-opening behavior is an HVY Markdown extension and MUST NOT reinterpret ordinary embedded-underscore identifiers such as `snake_case_value`. Authoring clients SHOULD use standard `*text*` emphasis when an italic run directly touches unformatted letters or numbers and underscore delimiters would become ambiguous, such as multiple formatted fragments within one word.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
+Use `~~text~~` for strikethrough. Authoring clients MUST preserve this syntax when serializing strikethrough text from a rich editor.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
 
-Blank lines inside text components are meaningful Markdown paragraph separators. A single text component containing two paragraphs separated by a Markdown blank line SHOULD render with the same paragraph spacing as the equivalent content split into two adjacent text components; blank lines MUST NOT create additional spacer-only vertical margins beyond that normal paragraph/component separation.
+Blank lines inside text components are meaningful Markdown paragraph separators. The normal paragraph gap is configured by `typography.paragraphSpacing` and defaults to `0.45rem`.
 
-Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, internal fragment (`#id`) targets, or host-gated HVY workspace paths. Workspace paths MUST start with `./`, `../`, or `/` and MAY include a fragment target such as `./other.hvy#section-id`. A leading `/` is relative to the host-defined HVY workspace root; it is not a host filesystem root. Readers MUST NOT fetch, resolve, authorize, or traverse workspace paths on their own. Embedded hosts MAY explicitly enable workspace links and handle them through the host link observer. When workspace links are not enabled, readers SHOULD render them as disabled/non-navigable links. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
+On an explicit edit commit, authoring tools MAY split a text component where one or more empty top-level paragraphs separate visible paragraph runs into adjacent text components. Adjacent visible paragraphs without an empty paragraph between them remain in the same text component. This is an editor convenience, not a distinct text-component schema: the authoring tool writes an ordinary `margin-top` declaration into the generated component's `css`, calculated from `typography.paragraphSpacing` and the number of intervening line boundaries. Authoring tools MUST NOT perform this structural split on each keystroke.
+
+A single physical newline inside an ordinary Markdown paragraph is a soft wrap and MUST have the logical plain-text value of one space when rendered, searched, or copied as plain text. Readers MUST preserve meaningful Markdown line boundaries, including blank-line paragraph separators, explicit hard breaks, block structures such as list items and headings, and line breaks inside code blocks.
+
+Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, internal fragment (`#id`) targets, named document attachments (`@attachment:<encoded-name>`), or host-gated HVY workspace paths. Workspace paths MUST start with `./`, `../`, or `/` and MAY include a fragment target such as `./other.hvy#section-id`. A leading `/` is relative to the host-defined HVY workspace root; it is not a host filesystem root. Readers MUST NOT fetch, resolve, authorize, or traverse workspace paths on their own. Embedded hosts MAY explicitly enable workspace links and handle them through the host link observer. When workspace links are not enabled, readers SHOULD render them as disabled/non-navigable links. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
+
+Named document attachment targets begin with the exact ASCII prefix
+`@attachment:` followed by the attachment's UTF-8 name encoded with URI
+component percent encoding. For example:
+
+```markdown
+[Employee handbook](@attachment:Employee%20Handbook)
+```
+
+The decoded name identifies an author-visible tail attachment whose metadata
+contains `role: "user-file"` and the same `name`; the opaque tail attachment
+`id` is not an authoring identifier and MUST NOT be exposed in link creation
+UI. Attachment names MUST be non-empty after trimming. Names are unique within
+a document under comparison of their trimmed Unicode strings after NFKC
+normalization and default Unicode lowercase conversion. Writers MUST preserve
+the chosen display spelling in `name`. An invalid percent escape, empty decoded
+name, missing match, or multiple matching attachments makes the link
+unresolved. Readers MUST NOT navigate to the literal `@attachment:` target;
+they SHOULD render unresolved attachment links as disabled and SHOULD identify
+the missing attachment to authors.
+
+Activating a resolved attachment link requests a preview when the client has a
+safe viewer for the declared media type and otherwise requests a download.
+Clients SHOULD offer download even when preview is available. Preview support
+is a client or host capability, not a document instruction. In particular,
+clients MAY open `application/pdf` attachments in a browser or desktop PDF
+viewer without creating a document component. Temporary, host, `blob:`,
+`file:`, and desktop-protocol URLs MUST NOT replace the authored
+`@attachment:` target in serialized document content.
 
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
@@ -176,6 +212,10 @@ metadata:
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `sidebar_max_width`: optional CSS width value limiting the editor and viewer sidebar. Defaults to `40rem`.
+- `database_table_max_column_width`: optional positive CSS length limiting interactive database-table column resizing and auto-fit. It accepts `px`, `rem`, `em`, or `ch` units and defaults to `40rem`.
+- `typography`: optional object for document-wide text rhythm. `typography.paragraphSpacing` is an optional non-negative CSS length used between Markdown paragraphs and paragraph-flow text components. It defaults to `0.45rem`.
+- `responsive_breakpoints`: optional object mapping surface breakpoint names to simple CSS length tokens. Responsive inline CSS variants use these names. The defaults are `sm: 40rem`, `md: 48rem`, `lg: 64rem`, `xl: 80rem`, and `2xl: 96rem`. Authors MAY override these values or add names. Breakpoint names MUST start with a letter and contain only ASCII letters, digits, and hyphens; values MUST be simple CSS length tokens.
 - `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
 
@@ -286,8 +326,8 @@ Common block metadata fields include:
 - `css`
 
 `id` is an optional author-provided stable identifier for linking, virtual filesystem paths, and reusable component references. Authoring clients MAY generate transient block ids for editing controls or CLI addressing, but MUST NOT serialize generated ids back into block metadata when the author did not provide an id.
-`css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
-Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
+`css` is an optional inline CSS style string applied to the block's principal rendered element. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks. Implementations MAY add bookkeeping or interaction wrappers around a component, but those wrappers MUST NOT intercept `css` when doing so would change the meaning of a declaration. In particular, grid block `css` applies to the element that establishes the grid layout, and image block `css` applies to the rendered image.
+Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. A declaration MAY use a surface-responsive prefix before its property: `md:order: 2;` applies `order: 2` when the outer HVY surface is at least the `md` breakpoint, while `max-md:order: 2;` applies it below `md`. Unprefixed declarations apply at every surface size. Renderers MUST evaluate these variants against the named `hvy-surface` query container, not the browser viewport or an HVY `container` component. Responsive selectors or rules that cannot be expressed as declarations belong in fenced HVY CSS blocks.
 `hideIfYes` is an optional string on any block. Viewer-oriented renderers MUST hide the block when the trimmed, case-insensitive value is `yes`. Empty, missing, or any other value means the block is visible unless another visibility rule hides it. Editor surfaces and document AI editing mode MUST still render the block. Template authors SHOULD use this for template-time conditional hiding, for example `hideIfYes: "{% description | isempty %}"`.
 `visibleScript` is an optional Brython/Python function body on any block. Renderers that support scripting SHOULD run it with the same document component API used by button scripts and show the block only when the return value is truthy. Empty or missing `visibleScript` means the block is visible. This is intended for reusable template affordances whose visibility depends on nearby fill-ins or document state.
 `editorOnly` is an optional boolean on sections and blocks. When true, the section or block exists in editor surfaces and document AI editing mode, but MUST NOT be rendered in the viewer, viewer navigation/sidebar, or viewer-oriented reader views/search results. Use it for authoring controls such as generation buttons that should not become part of the finished document.
@@ -350,6 +390,72 @@ Block content indentation is structural and MUST NOT be interpreted as Markdown 
 
 `hvy:encrypted` is the native encrypted-component directive. It uses the same block directive position as any other component, but its decrypted payload is stored in the HVY tail as described in §2.1 and MUST NOT be serialized as nested visible block content.
 
+#### Persistent inline answers
+
+Text components MAY contain persistent answer markers. These markers represent
+document state rather than form submission fields: changing an answer MUST
+update the text source so ordinary HVY serialization, saving, reopening, and
+sharing preserve the selected state. No plugin or script is required.
+
+`[ ]` and `[x]` represent an unselected and selected independent checkbox.
+`( )` and `(x)` represent an unselected and selected radio option. Every radio
+option belongs to exactly one mutually exclusive group, which MUST contain no
+more than one selected marker.
+
+```markdown
+<!--hvy:text {"id":"survey-answers"}-->
+[x] Send me a copy
+
+- ( ) Email
+- (x) Phone
+- ( ) Mail
+```
+
+Marker `x` values are case-insensitive when reading; authors SHOULD use
+lowercase `x` when writing. Text following a marker is its visible label.
+Readers MUST preserve unrecognized lines and MUST NOT treat inline answers as
+`hvy.form` fields. Non-interactive outputs, including print and PDF-oriented
+rendering, SHOULD display the controls in their persisted state.
+
+##### Radio groups
+
+A radio group is either *named* or *implicit*.
+
+The `<!--hvy:radio-group NAME-->` directive names the group that every following
+radio option joins. It applies from its position onward in document order and
+continues past the end of its own text component into subsequent components,
+until another `radio-group` directive changes it. `<!--hvy:radio-group-->`, with
+no name, ends the active named group and returns following radio options to
+implicit grouping. A named group therefore MAY span any number of text
+components, and a single component MAY contain several groups.
+
+```markdown
+<!--hvy:text {"id":"preferred-contact"}-->
+<!--hvy:radio-group contact-->
+( ) Email
+( ) Phone
+
+<!--hvy:text {"id":"fallback-contact"}-->
+(x) Postal mail
+<!--hvy:radio-group-->
+```
+
+Here all three options form the single `contact` group even though they live in
+two components, and exactly one of them is selected.
+
+Where no named group is active, consecutive radio-option lines within one text
+component form an implicit group; a line that is not a radio option ends it.
+Implicit groups never span components. Group names are document-scoped: two
+`radio-group` directives with the same name refer to the same group no matter
+where they appear.
+
+`radio-group` directives are structural. Renderers MUST NOT display them as
+text, and MUST preserve them through serialization.
+
+Selecting a radio option MUST clear every other marker in its group, including
+markers stored in other components, and MUST write those cleared values back to
+the text source of each component that owns them.
+
 ### 5.7.1 Inline responsive annotations
 
 Text content MAY include paired HVY comment annotations for explicit responsive hints:
@@ -397,11 +503,25 @@ Grid blocks can be emitted with specialized directives so grid item content rema
 
 Grid item `id` metadata is optional. Authoring clients MAY generate transient item ids for editing controls, but MUST NOT serialize generated ids back into inline `gridItems` or `hvy:grid:N` metadata when the author did not provide an id.
 
-Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
+Grid slot directives MAY include `id` and `css`. Slot `css` applies to the rendered grid cell wrapper, while child-block `css` applies to the child component wrapper. This distinction allows cell layout declarations such as `max-md:order: 1;` to reorder cells based on the outer HVY surface width. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
 
 Readers SHOULD trim top and bottom margins on direct grid cell child blocks so grid gaps, rather than nested component edge margins, control spacing between cells.
 
 `gridStackWidth` is an optional string controlling when the grid switches to a single-column stack in responsive renderers. It defaults to `50rem`. It MUST be either `"never"` or a simple CSS length token such as `"30rem"`, `"640px"`, or `"42em"`. `"never"` disables automatic stacking. This field controls only the final stack-to-one-column behavior; authors who need multi-step layouts such as three columns to two columns to one column SHOULD use fenced `hvy:css` container-query rules.
+
+Readers SHOULD use `gridColumns` to generate an equal-width default grid template such as `repeat(2, minmax(0, 1fr))`. This generated declaration is a default, not an override: an explicit `grid-template-columns` declaration in the grid block's `css` MUST take precedence at widths where the grid is not stacked. Automatic stacking controlled by `gridStackWidth` still takes precedence below its threshold unless the value is `"never"`.
+
+For example, a fixed `10rem` left track and a right track that consumes the remaining width is authored as:
+
+```markdown
+<!--hvy:grid {"css":"grid-template-columns: 10rem minmax(0, 1fr);","gridColumns":2,"gridStackWidth":"never"}-->
+
+ <!--hvy:grid:0 {"id":"left"}-->
+  Left content
+
+ <!--hvy:grid:1 {"id":"right"}-->
+  Right content
+```
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
@@ -449,6 +569,7 @@ Cross-reference cards can be emitted as a block directive with all card data in 
 
 Cross-reference card requirements:
 - `xrefTitle` is REQUIRED.
+- `xrefDetail` is optional supporting text. An explicit empty string suppresses supporting text; readers MUST NOT replace an empty value with detail from the referenced target.
 - `xrefTarget` is RECOMMENDED. It MUST be either a local target id (`section-id`), an internal fragment target (`#section-id`), or a host-gated HVY workspace path beginning with `./`, `../`, or `/` and optionally followed by a fragment target. URL/scheme targets such as `http:`, `https:`, `mailto:`, and `file:` are not valid `xrefTarget` values. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
 - Workspace-path xrefs are not filesystem paths. A leading `/` is relative to the host-defined HVY workspace root, not the host filesystem root. The reference implementation MUST NOT fetch, resolve, authorize, or traverse workspace-path xrefs; embedded hosts MAY explicitly enable cross-document links and handle enabled xrefs through the host link observer.
 - `xrefTargetTagFilter` is optional authoring metadata. When present, editors SHOULD filter target pickers to sections or components tagged with at least one listed tag. The value uses the same comma-separated tag syntax as `tags`; it does not affect rendering or link resolution.
@@ -470,9 +591,13 @@ Image blocks reference a binary attachment stored in the document tail:
 ```
 
 Image block fields:
-- `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.4). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
+- `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.6). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
-- `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component. Authoring tools SHOULD default caption schemas to centered text.
+- `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component, including the text schema's inline `css`. Authoring tools SHOULD default caption schemas to centered text. Renderers SHOULD display caption text smaller than ordinary body text when the caption schema does not specify a `font-size`.
+- `allowDocumentImageReuse`: optional boolean controlling authoring UI. It
+  defaults to `true`. When `false`, editors MUST omit controls that browse or
+  select image attachments used elsewhere in the document while preserving
+  direct upload, camera capture, and the component's current image.
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
@@ -487,6 +612,9 @@ Carousel block fields:
 - `carouselImages`: ordered array. Each entry MUST include `imageFile`, a
   filename whose bytes are stored in the tail attachment `image:<imageFile>`.
 - Each carousel image entry MAY include `imageAlt` and `caption` strings.
+- `allowDocumentImageReuse` has the same authoring behavior and `true` default
+  as on image blocks. When `false`, users can still upload or capture new
+  carousel images but cannot browse the document-wide attachment picker.
 - `carouselDurationMs` is optional and defaults to `3000`. Clients SHOULD clamp
   very small or very large values to preserve usability.
 - `carouselPauseOnHover`, `carouselShowControls`,
@@ -497,6 +625,10 @@ Carousel block fields:
 - Clients SHOULD only start automatic movement once the carousel is visible.
 - Missing image attachments SHOULD be rendered as an inline missing-asset
   warning while preserving the carousel configuration on save.
+- Document-wide attachment pickers SHOULD initially show and fetch no more than
+  two rows of thumbnails. When more attachments exist, editors SHOULD provide
+  an explicit expansion control and defer fetching the additional thumbnails
+  until it is expanded.
 
 Rules:
 - The directive MUST be on a single line.
@@ -547,10 +679,11 @@ Component-owned fields are:
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
 - `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
-- `table`: `tableColumns`, `tableShowHeader`, `tableRows`
-- `image`: `imageFile`, `imageAlt`, `caption`
-- `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
+- `table`: `tableColumns`, `tableColumnProperties`, `tableShowHeader`, `tableRows`
+- `image`: `imageFile`, `imageAlt`, `caption`, `allowDocumentImageReuse`
+- `carousel`: `carouselImages`, `allowDocumentImageReuse`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
 - `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
+- `location-marker`: `locationMarkerName`
 
 Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore fields that do not belong to the selected schema shape.
 
@@ -592,7 +725,7 @@ The `children` array uses the same recursive block object shape as other nested 
 
 An expandable with empty `expandableStubBlocks.children` and populated `expandableContentBlocks.children` uses the content pane as its collapsed preview. Readers SHOULD omit the empty stub pane entirely, render a non-editing clipped preview of the first visible content while collapsed, and expand/collapse when the expandable is activated. This differs from a collapsed container preview: activating an expandable toggles it open and closed, while container preview activation opens the container.
 
-The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `hvy.db-table` when rows should come from a backend query.
+The built-in `table` component is static document data represented in memory by `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `hvy.db-table` when rows should come from a backend query.
 
 For static tables, `tableColumns` is a JSON/YAML array of strings:
 
@@ -600,11 +733,74 @@ For static tables, `tableColumns` is a JSON/YAML array of strings:
 tableColumns: ["Column A", "Column B"]
 ```
 
-Each `tableRows` entry contains only:
+Each in-memory `tableRows` entry contains only:
 
 ```yaml
 - cells: ["Cell A", "Cell B"]
 ```
+
+`tableColumnProperties` is an optional sparse object keyed by the exact authored
+string in `tableColumns`. It controls column presentation without changing the
+searchable column labels or row values:
+
+```yaml
+tableColumnProperties:
+  Column A:
+    width: 12rem
+    wrap: true
+  Column B:
+    width: 8rem
+    align: right
+```
+
+Each entry MAY contain `width`, `wrap`, `truncate`, `align`, and `headerAlign`. `width` is a
+CSS width string or `"auto"`; absent or `"auto"` means the column participates
+in automatic layout. When every column is automatic, columns divide the table
+width equally. When authored widths use more space than the rendered table
+surface provides, HTML renderers MUST keep the overflow inside a horizontally
+scrollable table frame rather than widening the document surface. `wrap`
+defaults to `false`. `truncate` defaults to `true` and controls whether
+non-wrapped reader cells use overflow ellipsis; wrapping takes precedence over
+truncation. Editors MUST expose complete header and cell text while it is being
+edited, regardless of this reader presentation setting. `align` defaults to `"left"` for body cells and
+`headerAlign` defaults to `"center"`; alignment values MUST be `"left"`,
+`"center"`, or `"right"`.
+
+Property keys match the exact stored column string, including Markdown or HVY
+inline annotations. Renderers MUST NOT use rendered text, aliases, or fuzzy
+matching. Duplicate column strings share one property entry. Authoring tools
+SHOULD move a property entry when its uniquely named column is renamed and
+SHOULD remove an entry when its last matching column is removed.
+
+Authoring tools SHOULD keep this map sparse: properties equal to their implicit
+defaults, empty entries, and an empty `tableColumnProperties` object SHOULD be
+omitted when serializing. Search, descriptions, embeddings, and other content
+indexes MUST NOT treat property keys or values as document content.
+
+In inline HVY, `tableColumns` remains in the component directive and is the authoritative column definition. Static row values SHOULD be serialized in the component body as a GitHub-Flavored Markdown table:
+
+```markdown
+<!--hvy:table {"tableColumns":["Column A","Column B"],"tableShowHeader":true}-->
+| Column A | Column B |
+| --- | --- |
+| Value A1 | Value B1 |
+| Value A2 | Value B2 |
+```
+
+The GFM header row exists so the body remains a valid Markdown table, but it does not define or override `tableColumns`. `tableShowHeader` controls whether an HVY renderer displays the authoritative inline columns; it does not remove the structural GFM header from the file. Only GFM body rows after the delimiter provide `tableRows` values.
+
+For compatibility, readers MUST continue to accept a `tableRows` array in the inline component directive. Presence of inline `tableRows`, including an explicitly empty array, takes precedence over GFM body values. When inline `tableRows` is absent, readers MUST derive row values from the GFM body. Authoring tools SHOULD emit the GFM body form and omit inline `tableRows` when saving a static table.
+
+HVY table bodies use a reversible GFM cell encoding so stored Markdown, responsive annotations, and line breaks survive round trips. Writers MUST apply these replacements in order:
+
+- `&` becomes `&amp;`.
+- `|` becomes `&#124;`.
+- carriage return, line feed, and tab become `&#13;`, `&#10;`, and `&#9;` respectively.
+- Leading and trailing ASCII spaces become `&#32;` per space so GFM trimming does not discard them.
+
+Readers reverse those canonical entities after separating GFM cells. Markdown punctuation and backslashes otherwise remain authored cell content. Readers MUST use a GFM-aware table parser rather than splitting rows directly on `|`.
+
+Search, descriptions, embeddings, and other content indexes MUST operate on the decoded `tableColumns` and `tableRows` values. They MUST NOT index the GFM header, delimiter, encoded entities, or other table-body serialization scaffolding as generic block text.
 
 Static tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
 
@@ -627,6 +823,14 @@ For inline HVY serialization, stub-pane and content-pane CSS/description metadat
 In the in-memory/schema form used by `component_defs`, these pane-level styles and descriptions are stored as `expandableStubCss`, `expandableContentCss`, `expandableStubDescription`, and `expandableContentDescription`. The expandable block's own `css` and `description` still apply to the outer expandable component wrapper.
 
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
+
+Location-marker blocks name insertion points in component templates for derived plugin output:
+
+```markdown
+<!--hvy:location-marker {"locationMarkerName":"primary-actions"}-->
+```
+
+`locationMarkerName` SHOULD be a non-empty string and is matched exactly. A template MAY repeat a name when the same plugin-supplied component should appear in multiple places. Authoring tools SHOULD show location markers while editing so their names and positions are apparent. Readers MUST render an unresolved location marker as no visible output. Location markers do not create plugin regions or nested plugin serialization; they remain ordinary blocks in the template definition, and any substitution occurs only in a plugin's derived materialized clone.
 
 Preserve and round-trip these fields. When emitting new documents, prefer `hvy:expandable:stub` and `hvy:expandable:content` inline directives over `expandableStubBlocks`/`expandableContentBlocks`; the container object form is used in `component_defs` schemas where inline directives are not applicable.
 
@@ -690,6 +894,8 @@ Component templates MAY include value tokens in any string field. Tokens use Mar
 {% description | isempty %}
 {% project-link %}
 ```
+
+Authoring clients SHOULD provide a visual template-definition surface using the normal component and section editors. A new component template SHOULD begin as an empty section-like canvas that accepts exactly one component; that component determines `baseType`. A new section template uses the same construction model but accepts multiple components. When no alternate flavors exist, the builder SHOULD offer an Add Flavor action. Once flavors exist, it SHOULD provide a dedicated flavor manager that selects flavors by name, previews the selection, and opens a separate flavor-creation step. The main template uses the component-template name and alternate names remain unique. In the template surface, clients MAY let authors select existing text and convert it to a named template token, reuse an existing variable, configure whether it accepts single-line `text` or multiline `block` values, and configure its label and output generator. Component metadata SHOULD use the ordinary component metadata editor. Template definitions remain part of the document header and therefore remain editable through the document's ordinary raw source editor; the dedicated template builder need not duplicate that editor.
 
 Template value notes:
 - `{% name %}` is equivalent to `{% name | text %}`.
@@ -1097,22 +1303,241 @@ Declare plugins in front matter under `plugins`:
 ```yaml
 plugins:
   - id: com.example.timeline
-    source: https://plugins.example.com/timeline.hvyplugin
-    version: 1.2.0
-    integrity: sha256-BASE64_DIGEST
+    uuid: example-timeline-primary
+    versionRange: ^1.2.0
 ```
 
 Required fields:
-- `id`: globally unique plugin identifier. Built-in HVY plugins use the `hvy.*`
-  namespace; third-party plugins SHOULD use a namespace they control.
-- `source`: plugin package location or a client-known plugin locator such as `builtin://...`
+
+- `id`: stable namespace-qualified identifier used by plugin blocks and scripting
+  APIs. Built-in HVY plugins use the `hvy.*` namespace; third-party plugins
+  SHOULD use a namespace they control.
+
+Optional fields:
+
+- `uuid`: optional collision guard. When present, it MUST be a non-empty opaque
+  string of at most 64 Unicode characters. Its format is author-defined; it
+  does not need to use the standard UUID textual format. Authors SHOULD choose
+  a globally unique value and keep it unchanged across versions and ID changes.
+  Hosts MUST compare UUID strings exactly without case folding or normalization.
+  Reserved `hvy.*` built-ins SHOULD omit `uuid`.
 
 Recommended fields:
-- `version`
-- `integrity`
+
+- `versionRange`: versions of the plugin that the document accepts. It MAY be
+  an exact semantic version or a semantic-version range such as `^1.2.0`,
+  `~1.2.0`, or `>=1.2.0 <2.0.0`. When omitted, the declaration accepts any
+  installed version with the matching `id`, optional `uuid`, and `hvyApiVersion`.
+  Built-in `hvy.*` plugin declarations SHOULD omit `versionRange` so documents
+  remain compatible with host-provided built-in versions.
 - `permissions` (declared capabilities)
 
-### 7.2 Plugin metadata at section level
+Plugin package locations, registries, archive digests, signatures, and other
+installation records are host concerns and MUST NOT be stored as plugin
+acquisition instructions in an HVY document. The readable `id` is the
+document-facing reference. An optional `uuid` helps verify that a package
+found under that ID is the intended plugin; a UUID match does not by itself
+authenticate the publisher.
+
+The `hvy.*` namespace is reserved for HVY-owned built-in plugins. Its ID is
+the complete document identity, so a built-in declaration needs neither
+`source` nor `uuid`:
+
+```yaml
+plugins:
+  - id: hvy.form
+```
+
+Readers MUST also accept a document that uses a reserved `hvy.*` built-in
+plugin without declaring it in front matter. This omission is supported for
+compatibility with built-in plugin blocks written before declarations were
+maintained consistently. When serializing such a document, writers MUST add
+the current ID-only declaration for every used, undeclared built-in plugin.
+Third-party plugin blocks still require an explicit declaration.
+
+Readers MUST accept the legacy built-in declaration shape where the built-in
+name was stored in `id`, with or without a `builtin://` source:
+
+```yaml
+plugins:
+  - id: hvy.form
+```
+
+Readers ignore the legacy `source`, and writers SHOULD emit the current ID-only
+form.
+
+The standardized `scripting` permission allows sandboxed `hvy.scripting`
+blocks to call the installed plugin's scripting API. A plugin declaration does
+not install code or grant access by itself: the host MUST also have installed
+that plugin implementation. Clients MUST deny sandboxed calls when either the
+installed scripting capability or this document permission is absent.
+
+### 7.2 Plugin package format
+
+A distributable HVY plugin SHOULD be stored as a single `.hvy.plugin` file.
+The file is a ZIP archive with media type `application/vnd.hvy.plugin+zip`.
+Changing the extension does not change the archive format.
+
+The archive root MUST contain `hvy-plugin.json` and the entry module named by
+that manifest. A conventional package is:
+
+```text
+timeline.hvy.plugin
+├── hvy-plugin.json
+├── plugin.py
+├── helpers.py
+├── plugin.css
+├── documentation.txt
+└── assets/
+    └── timeline-marker.svg
+```
+
+`hvy-plugin.json` is UTF-8 JSON. Its standardized fields are:
+
+```json
+{
+  "formatVersion": "0.2",
+  "id": "com.example.timeline",
+  "uuid": "example-timeline-primary",
+  "version": "1.2.0",
+  "displayName": "Timeline",
+  "entry": "plugin.py",
+  "styles": ["plugin.css"],
+  "documentation": "documentation.txt",
+  "permissions": [],
+  "pythonImports": ["re"],
+  "authorization": "required",
+  "hvyApiVersion": "0.1"
+}
+```
+
+Required fields:
+
+- `formatVersion`: version of this package envelope.
+- `id`: stable namespace-qualified plugin identifier.
+- `version`: plugin package version.
+- `displayName`: human-readable name.
+- `entry`: archive-relative path to a JavaScript ESM or Python/Brython entry
+  module. Format `0.1` packages support JavaScript entries only. Format `0.2`
+  packages support JavaScript and Python entries.
+- `hvyApiVersion`: HVY host plugin API version required by the package.
+
+Optional fields:
+
+- `uuid`: author-defined collision guard using the same non-empty,
+  64-character maximum string format as document declarations.
+- `styles`: array of archive-relative CSS file paths loaded in order.
+- `documentation`: archive-relative path to a UTF-8 documentation file.
+- `permissions`: array of capabilities requested by the installed package.
+- `pythonImports`: for a format `0.2` Python entry, an array of optional Python
+  standard-library modules requested from the host's local Brython bundle. The
+  reference host supports `random`, `re`, and `datetime`.
+- `authorization`: when set to `"required"`, hosts MUST show the plugin as
+  blocked for each file until the user or host explicitly allows it. Hosts MUST
+  be able to inspect this field without importing or executing the entry module.
+
+All manifest paths MUST be relative, use `/` separators, remain inside the
+archive root after normalization, and identify regular files. Package readers
+MUST reject absolute paths, `..` traversal, duplicate normalized paths, links,
+and entries that exceed their configured compressed or expanded size limits.
+Readers SHOULD impose limits on the total file count, expanded byte count, and
+compression ratio.
+
+The entry module MUST be self-contained: it MUST NOT depend on an npm install,
+network-fetched code, or modules outside the package and the host-provided
+runtime. A JavaScript entry MUST default-export either one plugin object
+conforming to the host's `HvyPlugin` contract or a factory that returns that
+object. Its factory receives the parsed manifest and a `resourceUrl(path)`
+function for archive-relative resources.
+
+A Python entry MUST export a top-level `plugin` value. That value is either a
+mapping conforming to the same `HvyPlugin` fields or a callable returning that
+mapping. A callable receives a context mapping with `manifest` and
+`resource_url`. Python package files are mounted under a unique internal module
+namespace; package modules MUST use relative imports for sibling modules. A
+host MUST make its bundled Brython `browser` and `sys` modules available. It
+MUST load requested `pythonImports` and their dependency closure only from its
+local bundle and MUST NOT fetch Python dependencies from the network.
+
+Python values crossing into the host MUST be normalized recursively: `None`
+becomes JavaScript `null`, mappings become plain JavaScript objects, and
+sequences become arrays. Callable values MUST remain JavaScript-callable, and
+values they return later MUST pass through the same normalization. JavaScript
+plugin and host code MUST NOT need to unpack Brython runtime representations.
+Structured JavaScript arguments MAY become Python containers or JavaScript
+proxies. Supported Python coroutine results MUST become Promises for host
+capabilities that permit asynchronous results. A host MUST remove
+package-specific virtual modules and resource URLs when the loaded package is
+disposed. Package Python executes with the same authority as installed
+JavaScript plugin code; package installation and per-document plugin
+authorization are the trust boundaries, not `pythonImports`.
+
+Authors SHOULD bundle JavaScript dependencies into the entry module. Package
+CSS MAY use relative `url(...)` references; loaders MUST resolve them against
+the CSS file's archive path without granting filesystem access.
+
+The exported plugin object's `id`, optional `uuid`, `version`, `displayName`, and
+`hvyApiVersion` MUST exactly match the manifest. This check applies regardless
+of whether a host obtained the module from a ZIP package, built-in registry,
+database, network service, or another source. ZIP decoding is an optional
+source adapter and MUST NOT be required by the core plugin resolver.
+
+The manifest `id`, optional `uuid`, and `version` MUST match the corresponding installed
+plugin record. A host resolving a document declaration MUST first find
+installed packages by `id`, reject packages whose declared `uuid` differs, and select
+the highest installed version satisfying `versionRange`. If no compatible
+package is installed, the plugin is unavailable. If lookup by `id` fails but
+an installed package has the declared `uuid`, the host MAY report that the plugin
+was renamed and offer an explicit document migration; it MUST NOT silently
+rewrite the document.
+
+If multiple installed plugins claim the same `id` with different UUIDs, the
+declaration `uuid` disambiguates them. When a declaration omits `uuid`, a host
+MUST NOT choose between different UUIDs sharing an ID; it MUST treat that ID as
+ambiguous and unavailable until the document selects a UUID.
+
+Archive digests and publisher signatures belong to the host's installation
+record. A host MUST verify them when its installation policy requires it, but
+they are not part of the normal HVY plugin declaration.
+
+Opening a document MUST NOT automatically install or execute a referenced
+package. Installation is a separate, explicit host or user decision. Before
+installation, a host MUST display or otherwise make available the package
+ID, UUID when present, version, installation origin, requested permissions, and
+verification status. Package
+permissions describe what installed code may request; document permissions
+remain a separate per-document authorization and cannot expand the installed
+package's grants.
+
+For a package with `authorization: "required"`, installation does not authorize
+execution. The host MUST defer importing its entry module, applying its styles,
+running its hooks, and creating its components until that plugin is allowed for
+the current file. Before authorization, plugin blocks remain visible as blocked
+placeholders with an allow action unless the host policy hides them. Acceptance
+is keyed by the file and the installed plugin's `id`, optional `uuid`, and exact
+`version`; authorizing one version MUST NOT silently authorize a different
+version. Embedded hosts MAY persist this decision through acceptance callbacks.
+
+Hosts MUST treat package modules, styles, and assets as untrusted. Loading CSS
+MUST NOT allow a plugin to escape the plugin/host styling boundary, and plugins
+MUST use the shared HVY theme roles rather than defining their own global color
+scheme. Publisher signatures MAY be added by a future package-format version;
+an archive digest provides byte identity but does not establish publisher
+identity or publisher authenticity.
+
+Built-in and directly supplied host plugin objects remain valid. A host MAY
+also export them as `.hvy.plugin` packages, but documents MUST NOT require
+built-in plugins to have an on-disk package.
+
+For compatibility with host integrations created before plugin version
+metadata existed, hosts MUST accept directly supplied plugin objects that omit
+`version` and/or `hvyApiVersion`. They are normalized to version `0.0.0` and the
+host's current plugin API version. This compatibility applies only to direct
+host registrations; `.hvy.plugin` manifests and their exported implementations
+remain strict. A normalized `0.0.0` plugin does not satisfy a document range
+that requires a later version. Documents without `versionRange` may use it.
+
+### 7.3 Plugin metadata at section level
 
 Sections can request plugin behavior with metadata:
 
@@ -1121,7 +1546,7 @@ Sections can request plugin behavior with metadata:
 #! Launch Timeline
 ```
 
-### 7.3 Plugin block component
+### 7.4 Plugin block component
 
 Use the `plugin` block when a document embeds a client-resolved plugin instance in normal content flow:
 
@@ -1130,7 +1555,9 @@ Use the `plugin` block when a document embeds a client-resolved plugin instance 
 ```
 
 Plugin block fields:
-- `plugin`: REQUIRED plugin identifier matching a declared plugin
+- `plugin`: REQUIRED plugin identifier matching a declaration's `id`, except
+  that readers accept an undeclared reserved `hvy.*` built-in as described in
+  the built-in compatibility rule above
 - `pluginConfig`: optional object interpreted only by that plugin
 
 HVY core only standardizes the envelope. The meaning of `pluginConfig` is plugin-specific.
@@ -1144,21 +1571,93 @@ MAY use both `pluginConfig` and the text body together (for example,
 structured numeric configuration in `pluginConfig` plus a templated label
 string in the text body).
 
-### 7.4 Plugin installation and selection
+### 7.5 Plugin installation and selection
 
-A plugin is identified by a stable namespace-qualified id and is
+A plugin is referred to by its stable namespace-qualified ID and verified by
+its optional author-defined UUID. It is
 resolved by the host that embeds an HVY reader/editor, not by the document
 itself. Hosts install zero or more plugin implementations at startup; the
 reference reader/editor exposes this as a host-supplied list of plugin objects.
 Each plugin object is a host-installed capability bundle. It MAY provide:
 
 - the plugin `id` matching the value used in `block.plugin`;
+- the optional plugin `uuid` matching the front-matter declaration;
+- the exact plugin `version` and supported `hvyApiVersion`;
 - a human-readable display name (used by editors to populate the plugin
   selector for new `plugin` blocks);
 - one or more renderable component factories that produce plugin instances bound to specific blocks;
 - one or more output generators that produce text directly or produce prompts for a host LLM/chat client;
+- a visual-description capability that synchronously describes user-visible
+  rendered output for search indexing and agent-facing CLI display;
 - a PDF/static render capability that resolves a plugin block to ordinary
   PDF-compatible HVY blocks for export.
+- a scripting API capability whose named methods can be called through
+  `doc.plugins.call(pluginName, method, args)`.
+
+Plugin scripting method arguments MUST be an object and results SHOULD be
+structured-clone-compatible values. Argument values MAY include callbacks at
+plugin-defined nested paths. The scripting bridge MUST preserve those callable
+values while retaining normal JSON normalization for all ordinary values. A
+plugin controls when and how often it invokes a callback, and callback return
+values MUST be returned to the plugin. Values entering or leaving a Brython
+callback MUST use the same recursive host normalization as Python package
+capabilities, so a JavaScript plugin receives ordinary JavaScript values rather
+than Brython runtime representations.
+
+Delayed callbacks from sandboxed scripts MUST resume inside the originating
+scripting runtime with its step and cycle guards, flush resulting document
+mutations, and surface exceptions through the originating script UI. A host
+MUST ignore a retained callback after its document is replaced or its mount is
+destroyed. A synchronously returning plugin method MAY schedule such callbacks;
+this does not make the method asynchronous. Sandboxed `hvy.scripting` calls
+MUST otherwise be synchronous and require the plugin declaration's `scripting`
+permission.
+Asynchronous methods, including host-approved network calls, MUST reject from
+the sandboxed runtime and MAY be awaited by an explicitly authorized
+`hvy.power-scripting` block. Power-script authorization is the applicable trust
+boundary because power scripts already have unrestricted page and network
+access; installed plugin APIs do not weaken that boundary.
+
+The built-in `hvy.scripting` feature version for callback-preserving plugin
+arguments is `0.2`, stored in the scripting block's `pluginConfig.version`.
+Clients implementing `0.2` MUST continue to execute `0.1` scripting blocks;
+those blocks simply did not declare the callback-preserving transport.
+
+The reference sandbox's checked `random` library exposes `random()`,
+`shuffle(items)`, `choice(sequence)`, `randrange(start, stop=None, step=1)`,
+`randint(a, b)`, `uniform(a, b)`, `sample(population, k)`, and
+`choices(population, weights=None, cum_weights=None, k=1)`. It is a constrained
+shim rather than Brython's full standard-library module; state-management,
+cryptographic, byte-generation, and specialized distribution APIs are not
+exposed.
+
+Sandboxed scripting runtimes MAY expose component handles through document
+tools such as `doc.tool.get_components(...)` and
+`doc.tool.get_updated_components(...)`, and MAY return the same handles from
+component-creation or child-append operations. A current component handle MUST
+provide `handle.expand()`. Calling it requests that the handled component be
+expanded in the reader after the current script run. The client MUST also
+expand the component's containing expandable blocks, collapsible containers,
+and section as necessary to make it visible. Calling `expand()` on a removed
+component handle MUST be a no-op.
+
+`handle.expand()` is transient reader UI state. It MUST NOT change authored
+fields such as `expandableExpanded`, `containerExpanded`, or section
+`expanded`; MUST NOT mark the document dirty or emit a document-content change;
+and MUST NOT affect serialized HVY output. Reloading the document therefore
+restores its authored default expansion state. Expansion alone MUST NOT scroll
+the reader, move focus, or highlight the component.
+
+A visual-description capability receives the current plugin block and document
+and returns optional plain text describing rendered output that is not otherwise
+represented by ordinary HVY block text. Hosts MAY index this text and expose it
+through read-only CLI document displays. Hosts MUST label or delimit it as
+rendered output rather than serialized document content when presenting it to
+an AI agent. The returned description is derived, MUST NOT be serialized into
+the HVY document, and MUST NOT be presented as an editable block field. The
+reference CLI exposes a non-empty description as the read-only
+`plugin.visual-description.txt` file in that plugin component's virtual directory and
+includes it in `hvy search` indexing and `hvy preview` output.
 
 An output generator has a globally unique plugin-qualified key, an optional
 human-readable label, optional required template variable names, and a generate
@@ -1210,6 +1709,8 @@ to the plugin. The editor context MUST include:
 - `detailLevel`: a number indicating how much editing UI the host is asking the
   plugin to show.
 
+The plugin context MAY also expose document component-template helpers. Such helpers list `component_defs`, inspect variables and named location markers, clone and fill a selected main template or flavor, render the derived component through the ordinary HVY reader, and mount the host's normal template-value form. A plugin MAY supply a component keyed by `locationMarkerName`; materialization replaces each matching marker in the derived tree with a fresh clone of that component, including markers nested in containers, grids, component lists, and expandable panes. Missing substitutions remain unresolved and therefore render no visible output. The source template and plugin-supplied component MUST NOT be mutated. Plugins remain responsible for persisting their selected template, flavor, values, and any configuration needed to recreate location substitutions in `pluginConfig` or their text body. A materialized template used this way is derived plugin output: it MUST NOT be inserted into or serialized as a nested document tree and is not automatically searchable document content. Plugins SHOULD use their visual-description capability when that derived output needs search or agent visibility.
+
 The conventional `detailLevel` meanings are:
 
 - `0`: hidden, compact, or out-of-the-way plugin UI. This is reserved for
@@ -1229,7 +1730,7 @@ plugin instance until the user picks one. When the document declares a
 preserve the block (including `pluginConfig` and text body) on save, and
 SHOULD render a placeholder indicating the plugin is unavailable.
 
-### 7.5 Tail payload envelope
+### 7.6 Tail payload envelope
 
 `.hvy` files MAY append one or more opaque binary attachments after the Markdown/HVY text body. Attachments are intended for plugin-owned payloads (such as an embedded database) and for component-owned binary assets (such as image files referenced by `image` components).
 
@@ -1252,6 +1753,18 @@ Tail format:
 Tail directive fields:
 - `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload and `image:<filename>` for image component attachments.
 - `mediaType`: RECOMMENDED IANA media type of the decoded payload.
+- `role`: optional string describing the attachment's document role. The value
+  `user-file` identifies an author-managed file that MAY be selected by a
+  named attachment link. Plugin data, encryption payloads, embedding indexes,
+  and other implementation attachments MUST NOT use `user-file`.
+- `name`: REQUIRED non-empty author-visible name when `role` is `user-file`.
+  The name participates in the document-wide uniqueness and link resolution
+  rules in §3.1. It is independent of `id` and `filename`; renaming it MUST NOT
+  move or replace the stored bytes.
+- `filename`: REQUIRED non-empty suggested download filename when `role` is
+  `user-file`. Clients MUST treat it as untrusted display metadata and MUST NOT
+  interpret it as a filesystem path.
+- `pixelWidth` and `pixelHeight`: REQUIRED positive integer intrinsic pixel dimensions for image attachments. Writers MUST include both fields so readers can reserve the image's aspect ratio before retrieving or decoding its bytes.
 - `length`: REQUIRED non-negative integer byte count for that attachment's slice. When omitted on the last directive, the slice consumes all remaining tail bytes.
 - `encoding`: optional. When `"gzip"`, the attachment bytes are gzip-compressed and clients MUST decompress before handing them to the consumer.
 - `plugin`: optional. Names the plugin that owns the attachment.
@@ -1260,6 +1773,18 @@ Rules:
 - Tail payloads are NOT part of Markdown parsing.
 - Tail payloads are only valid for `.hvy`, not `.thvy`.
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
+- User-file attachment names MUST be unique according to §3.1. Replacing a
+  user file SHOULD preserve its `id` and `name` while updating its `filename`,
+  `mediaType`, bytes, and other byte-derived metadata. Renaming a user file in
+  an authoring client MUST update all of that document's `@attachment:` link
+  targets as one edit.
+- Authoring clients SHOULD manage user files in a document metadata surface.
+  A user file dropped on a general document editing surface MUST NOT be stored
+  invisibly: the client MUST ask for confirmation, show the proposed name, and
+  make no document or attachment-store mutation if the user cancels. After a
+  confirmed addition, the client SHOULD reveal the new file in its attachment
+  manager. A file uploaded while creating a link SHOULD be selected for that
+  link immediately.
 - Clients that do not recognize an attachment's declared plugin or media type SHOULD preserve the bytes and pass them through on save, but MAY render the corresponding component as unsupported.
 
 Embedding retrieval caches MAY be stored as derived tail attachments with ids
@@ -1279,16 +1804,16 @@ Deleting an embedding-index attachment MUST NOT change the document's authored
 content or meaning. Template files (`.thvy`) MUST NOT use tail attachments for
 embedding caches.
 
-### 7.6 DB table plugin contract
+### 7.7 DB table plugin contract
 
-The first standardized plugin contract is `hvy.db-table`.
+The standardized database-table contract is `hvy.db-table`. The built-in
+relationship-aware implementation is plugin version `0.2.0`.
 
 Declaration example:
 
 ```yaml
 plugins:
   - id: hvy.db-table
-    source: builtin://db-table
 ```
 
 Block example:
@@ -1300,28 +1825,92 @@ Block example:
  WHERE status != 'Rejected'
 ```
 
-Plugin-specific rules:
-- `pluginConfig.source` MUST currently be `"with-file"`.
-- `pluginConfig.table` MUST be an existing table or view name in the plugin's current data backend. It MUST NOT contain SQL.
-- The plugin block text is interpreted as an optional read-only `SELECT` or `WITH` query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
-- Query text does not create data objects. Tables and views MUST be created through the backend execution API before a DB Table component can reference them.
-- If the plugin block contains non-text structured content, clients SHOULD discard that structured content for this plugin and preserve only the text body as the query value.
-- If the query text is empty after trimming, clients MUST behave as though the query were `SELECT * FROM <pluginConfig.table>`.
-- If the query text is non-empty, clients MUST render the result in a read-only state and SHOULD visually indicate that the table is query-driven rather than directly editable.
-- `pluginConfig.queryDynamicWindow` is an optional boolean. When `true` or absent, query views SHOULD use a moving offset/limit window. When `false`, clients SHOULD instead execute the query with a fixed limit and no moving offset window.
-- `pluginConfig.queryLimit` is an optional integer used when `pluginConfig.queryDynamicWindow` is `false`. Clients MUST clamp it to fewer than 100 rows.
-- Clients MUST enforce an implicit result cap of fewer than 100 rows for query-driven views.
-- Clients SHOULD render at most 50 rows at a time in the visible window and SHOULD advance or rewind the offset window as the user scrolls, for example by shifting the offset after the viewport passes roughly row 75.
-- Sort controls MAY be exposed for direct table views. If exposed, ascending and descending sort orders SHOULD be supported per visible column. Query-driven views SHOULD preserve query-defined ordering instead.
-- The current built-in implementation stores this plugin in exactly one gzip-compressed SQL database in the document tail.
-- Multiple plugin blocks MAY point at different tables within the same attached backend.
+Relationship-aware block example:
 
-Recommended client behavior:
-- Spreadsheet-like table views SHOULD virtualize row rendering and MUST NOT attempt to render every row at once for large tables.
-- Clients MAY store row-attached HVY fragments in companion tables keyed by table name and row identifier.
-- If row-attached HVY is supported, clients MAY expose context-menu actions such as setting or viewing the attached component for a row.
+```markdown
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"contacts","columns":{"id":{"visibility":"compact","width":"5rem"},"relationship_id":{"label":"Organization","width":"16rem","foreignDisplayColumn":"organization"}}}}-->
+```
 
-### 7.7 Form plugin contract
+The plugin block text is an optional read-only `SELECT` or `WITH` query. Empty
+query text selects directly from `pluginConfig.table`; non-empty query text is
+read-only. The absence of `columns` is valid and selects the default
+presentation. `queryDynamicWindow` has no meaning and MUST be ignored.
+
+- `pluginConfig.source` MUST be a non-empty data-source adapter id. The built-in
+  attached SQLite adapter id is `"with-file"`. Clients MUST report an unavailable
+  configured source rather than silently substituting another source.
+- `pluginConfig.queryLimit` is the single page-size setting for direct table,
+  view, and query results. It defaults to 50 rows. Clients MUST clamp authored
+  values to the inclusive range 1 through 1000. Clients MUST NOT impose a separate
+  implicit result cap or render-window limit.
+- A data-source adapter MUST apply the page size and offset at the source. It
+  MUST NOT retrieve an unbounded result into the client and then slice it. An
+  adapter MAY retrieve one additional bounded row to determine whether another
+  page exists.
+- Clients MUST preserve the authored query text as the inner result definition.
+  Source pagination MAY wrap it in a dialect-appropriate outer query. An
+  authored `LIMIT` or `OFFSET` therefore defines the result subset, while the
+  configured page size and current page offset apply outside that subset.
+- Pagination MUST NOT require an exact total-row count. Sources MAY provide one,
+  but clients SHOULD support previous/next navigation using only whether another
+  page exists so remote sources need not evaluate an expensive `COUNT(*)`.
+
+- `pluginConfig.columns` MAY be an object keyed by database or query-result
+  column name. Each entry MAY contain `label`, `visibility`, `width`, `wrap`,
+  and `foreignDisplayColumn`.
+- `visibility` MUST be `"visible"`, `"compact"`, or `"hidden"`. Hidden columns
+  are presentation-only: clients MUST NOT drop the database column or its data,
+  and SHOULD omit hidden cells from rendered DOM. Compact columns remain
+  visible with a narrow default width.
+- `width` MAY be `"auto"` or a non-negative CSS length using `px`, `rem`, `em`,
+  `ch`, or `%`. Clients MUST reject or ignore other values rather than placing
+  arbitrary text into a style declaration.
+- `label` changes the rendered heading without renaming the database column.
+  `wrap: true` requests wrapped cell content; absent or false values use the
+  client's compact overflow behavior.
+- For a direct base-table column participating in a simple single-column
+  SQLite foreign key, `foreignDisplayColumn` selects a column from the
+  referenced table. Clients MUST store the foreign-key value while rendering
+  and editing the selected referenced display value. Nullable relationships
+  SHOULD include an empty option. Composite foreign keys are not defined by
+  this version.
+- Clients MUST enable SQLite foreign-key enforcement on every writable database
+  connection used by the plugin.
+- A single `INTEGER PRIMARY KEY` is a generated surrogate key for
+  presentation and SHOULD default to compact visibility. Other primary-key
+  shapes MUST NOT be assumed to be generated. Authored visibility settings
+  override this presentation default.
+- "Add Row" MUST create only local draft state. A client MUST NOT insert a
+  database row until required values are complete and the user commits the
+  draft. The committed row SHOULD use one parameterized `INSERT`, omitting
+  unset columns that have defaults. Draft typing MUST preserve focus and MUST
+  NOT request a full application rerender.
+- A required user-supplied column with no default MUST remain available during
+  row creation. Clients SHOULD prevent authors from hiding such a column in an
+  editable direct-table presentation.
+- Column presentation is scoped to the plugin block. Multiple database-table blocks MAY
+  present the same backing table with different labels, visibility, widths,
+  wrapping, and foreign display columns.
+- Editable clients SHOULD allow authors to resize visible columns by dragging a
+  heading edge and auto-fit a column to its rendered heading and data by double
+  clicking that edge. Resized widths are stored in the block's column
+  presentation. Clients MUST clamp interactive and auto-fit widths to
+  `database_table_max_column_width`, which defaults to `40rem` when absent or
+  invalid.
+- Clients that support companion-table row-attached HVY fragments SHOULD
+  preserve and expose those fragments. Deleting a database row through the
+  client SHOULD also delete its
+  companion fragment.
+- Editable clients SHOULD present database and plugin-configuration changes
+  from one user command as one atomic undo step. Ordinary reversible writes
+  SHOULD use logical inverse operations. Destructive schema changes and writes
+  with trigger-defined side effects SHOULD use a complete SQLite checkpoint.
+  Checkpoints are client history artifacts, MUST NOT be serialized into the HVY
+  attachment tail, and SHOULD be created before the corresponding command runs.
+  A client using asynchronous checkpoint storage SHOULD serialize database
+  commands and undo/redo navigation through one FIFO queue.
+
+### 7.8 Form plugin contract
 
 The built-in form plugin is `hvy.form`. A form is a plugin component, not
 a native HVY container. HVY stores the plugin block and a plugin-owned YAML text
@@ -1332,7 +1921,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.form
-    source: builtin://form
 ```
 
 Block example:
@@ -1361,8 +1949,9 @@ scripts:
 
 Plugin-specific rules:
 - `pluginConfig.version` is optional and defaults to `"0.1"`.
-- Form-level behavior is stored in `pluginConfig`. `pluginConfig.initialScript`
-  and `pluginConfig.submitScript` reference named scripts from the form body.
+- Form-level behavior is stored in `pluginConfig`. `pluginConfig.initialScript`,
+  `pluginConfig.changeScript`, and `pluginConfig.submitScript` reference named
+  scripts from the form body.
   `pluginConfig.submitLabel` customizes the visible submit button text and
   defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
   `false`, clients MUST omit the visible submit button while preserving the form
@@ -1397,21 +1986,48 @@ Plugin-specific rules:
   inline CSS style string applied to that rendered field wrapper and MUST be
   sanitized like other document-supplied CSS.
 - Supported `type` values are `text`, `textarea`, `number`, `select`,
-  `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, and `hidden`.
-  File inputs are not part of the standard form plugin contract.
+  `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, `hidden`, and
+  `photo`. General-purpose file inputs are not part of the standard form plugin
+  contract.
+- A `photo` field accepts a single image. Its live value is `null` until an
+  image is selected, then is an object containing `attachmentId`, `imageFile`,
+  and `mediaType`. `attachmentId` MUST equal `image:<imageFile>`. The image is
+  stored as a normal HVY tail attachment before field triggers or the form's
+  `submitScript` run, so those scripts can assign `imageFile` directly to an
+  image component without handling raw bytes or base64 data.
+- Photo field `meta.accept` MAY be a MIME-type string, a comma-separated MIME
+  string, or an array of MIME strings. `meta.maxBytes`, `meta.maxWidth`, and
+  `meta.maxHeight` MAY be positive integers. `maxBytes` constrains the selected
+  source file. `maxWidth` and `maxHeight` constrain the stored raster image and
+  MUST preserve its aspect ratio without enlarging smaller images. When neither
+  dimension is set, clients SHOULD use the document or host image attachment
+  limits. A required photo field MUST prevent submission until its attachment
+  has been stored successfully.
 - `rows` applies to `textarea` fields. When present, it MUST be a positive
   integer and controls the initial rendered textarea height in text rows.
 - `options` applies to `select` and `radio`. Each option MAY be a string or an
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
 - `scripts` is a map from script name to Python/Brython source.
-  `pluginConfig.initialScript`, `pluginConfig.submitSourceScript`,
-  `pluginConfig.submitScript`, and field trigger values reference keys in this
-  map.
+  `pluginConfig.initialScript`, `pluginConfig.changeScript`,
+  `pluginConfig.submitSourceScript`, `pluginConfig.submitScript`, and field
+  trigger values reference keys in this map.
+- `pluginConfig.initialScript` runs once for the form component during the
+  current in-memory document lifecycle. DOM remounts, reader refreshes,
+  database-driven rerenders, and view changes MUST NOT cause it to run again.
+  Loading a new document or creating a new form component starts a new
+  lifecycle.
+- `pluginConfig.changeScript` MAY reference a named script that runs after a
+  database-backed document change. Clients MUST coalesce refreshes and run the
+  script once per form component and database revision rather than once per DOM
+  mount. The script can use `doc.db.get_updated_tables(table_name="...")` to
+  avoid querying unrelated tables.
 - `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
   make available to every form script before execution. Supported values are
   client-defined; this reference client supports `"random"`, `"re"`, and `"datetime"`. Import statements
   for unchecked libraries MUST remain blocked by the scripting sandbox.
+  The checked `"random"` library has the same constrained API as the reference
+  `hvy.scripting` sandbox described in section 7.5.
   The reference client's checked `"datetime"` library exposes the timezone-naive
   `datetime` and `timedelta` classes for construction, ISO and numeric-format
   parsing/formatting, arithmetic, comparisons, `weekday()`, and `isocalendar()`.
@@ -1427,6 +2043,12 @@ Plugin-specific rules:
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,
   `set_error(label, message)`, and `clear_error(label)`.
+- `doc.db.get_tables()` returns handles for the current attached SQLite tables.
+  `doc.db.get_updated_tables(table_name="")` returns handles for tables changed
+  since the preceding document-change script lifecycle; each handle exposes
+  `name` and `removed`. On initial load it returns an empty list. When the
+  client knows the database changed but cannot attribute every affected table,
+  it MUST conservatively return all matching current tables.
 - Scripts MAY use `doc.time.now_iso()`, `doc.time.now_local()`,
   `doc.time.now_unix_ms()`, and `doc.time.today_iso()` for current client time.
   `now_iso()` returns an ISO 8601 timestamp, `now_local()` returns a
@@ -1437,7 +2059,7 @@ Plugin-specific rules:
   `doc.form.set_options(...)` rather than by schema-level database source
   declarations.
 
-### 7.8 Graph plugin contract
+### 7.9 Graph plugin contract
 
 The built-in graph plugin is `hvy.graph`. Graph attributes live in
 `pluginConfig`; chart data lives in the plugin text body as CSV.
@@ -1447,7 +2069,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.graph
-    source: builtin://graph
 ```
 
 Block example:
@@ -1480,7 +2101,7 @@ Plugin-specific rules:
 - Invalid CSV or non-numeric chart values SHOULD render an inline plugin error
   while preserving the original plugin text body.
 
-### 7.9 Diagram plugin contract
+### 7.10 Diagram plugin contract
 
 The built-in diagram plugin is `hvy.diagram`. Diagram source lives in the
 plugin text body as Mermaid text. `pluginConfig.syntax` is optional and defaults
@@ -1491,7 +2112,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.diagram
-    source: builtin://diagram
 ```
 
 Block example:
@@ -1514,7 +2134,7 @@ Plugin-specific rules:
 - Renderers MUST sanitize the generated SVG/HTML before inserting it into the
   document.
 
-### 7.10 QR code plugin contract
+### 7.11 QR code plugin contract
 
 The built-in QR code plugin is `hvy.qr-code`. The encoded QR payload lives in
 the plugin text body. QR caption and visual style live in `pluginConfig`.
@@ -1526,7 +2146,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.qr-code
-    source: builtin://qr-code
 ```
 
 Block example:
@@ -1557,7 +2176,7 @@ Plugin-specific rules:
   `image` blocks backed by SVG image attachments. The authored plugin block
   MUST remain unchanged.
 
-### 7.11 Video plugin contract
+### 7.12 Video plugin contract
 
 The built-in video plugin is `hvy.video`. It embeds a remote video by URL. Video
 bytes are not stored as HVY tail attachments.
@@ -1567,7 +2186,6 @@ bytes are not stored as HVY tail attachments.
 hvy_version: 1.0
 plugins:
   - id: hvy.video
-    source: builtin://video
 ---
 
 <!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=iuPWDMY0Li4","title":"Example video"}}-->
@@ -1590,6 +2208,106 @@ SHOULD preserve the plugin block and render an inline placeholder instead of
 loading the iframe. Clients MAY also render an external-open placeholder when a
 provider is known not to support playback in the current embedded browser
 runtime, such as a desktop webview.
+
+### 7.13 Canvas plugin contract
+
+The built-in canvas plugin is `hvy.canvas`. It renders a responsive drawing
+surface that can be pre-drawn in an editor and, when explicitly enabled, drawn
+on in a viewer.
+
+```markdown
+---
+hvy_version: 1.0
+plugins:
+  - id: hvy.canvas
+---
+
+<!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4}}-->
+Sketching surface. Vector artwork is stored in the HVY tail attachment.
+```
+
+Normative configuration and data:
+
+- `pluginConfig.width` and `pluginConfig.height` are optional positive integer
+  logical dimensions. Clients SHOULD default to `800` by `450`.
+- `pluginConfig.viewerDrawing` is an optional boolean that defaults to `false`.
+  When false, viewer surfaces MUST NOT modify the authored drawing through
+  pointer interaction. Editor surfaces MAY always pre-draw.
+- `pluginConfig.strokeColor` is an optional CSS color. When absent, clients
+  SHOULD derive the brush color from the shared document text theme role.
+- `pluginConfig.strokeWidth` is an optional positive number in logical canvas
+  units and SHOULD default to `4`.
+- The plugin text body SHOULD contain only a concise human/AI-facing
+  description. Drawing data MUST be stored in the tail attachment named
+  `canvas:<block-id>` with media type `application/vnd.hvy.canvas+json`.
+- The attachment payload MUST be interpreted as a JSON object with `version:
+  1` and a `strokes` array. Each stroke contains a `color` string, positive `width`
+  number, and one or more `{x, y}` logical coordinate points. An optional
+  `mode` is `erase` for a vector erase path or `fill` for a full-canvas color
+  layer; absent mode means a brush path. Clients MUST preserve valid drawing
+  data across responsive resizing and MUST replay operations in array order.
+- The plugin surface SHOULD expose a script API for retrieving and replacing
+  drawing data, adding strokes, clearing, undoing, redrawing, and exporting the
+  rendered bitmap. Script-driven mutations MUST update the drawing attachment.
+- Clients SHOULD emit lifecycle/change/render notifications so other installed
+  scripts can discover the surface and draw non-persistent overlays. Document
+  content itself MUST NOT be executed as script.
+
+### 7.14 Power scripting plugin contract
+
+The built-in power scripting plugin is `hvy.power-scripting`. It contains
+unrestricted JavaScript for interactive, performance-sensitive behavior that
+cannot be expressed by the sandboxed `hvy.scripting` runtime.
+
+```markdown
+<!--hvy:plugin {"id":"trusted-program","plugin":"hvy.power-scripting","pluginConfig":{"version":"0.1"}}-->
+const canvas = await doc.canvas.wait("drawing");
+doc.animation.start((_time, _delta) => canvas.redraw());
+```
+
+Power scripts have a deliberately different trust and lifecycle model:
+
+- A power script MUST execute only in the document `viewer` view. It MUST NOT
+  execute in editor or AI views.
+- A client MUST default to requiring explicit viewer authorization before
+  executing a power script. The authorization UI MUST warn that the script is
+  unrestricted JavaScript with page, browser API, and document-data access.
+- The viewer MUST be able to hide the power-script prompt without executing the
+  script.
+- An embedding host MAY mark the mounted document trusted and enable power
+  scripts programmatically, or disable/hide them without offering execution.
+  Trust is host/session state and MUST NOT be inferred from document metadata.
+- The plugin text body is JavaScript source and `pluginConfig.version` declares
+  its requested power-scripting API version.
+- The script receives `doc`, which includes the core scripting document APIs
+  and MAY include installed plugin APIs. The reference canvas integration
+  provides `doc.canvas.get(id)` and asynchronous `doc.canvas.wait(id)`.
+- The runtime SHOULD provide managed animation, event-listener, and cleanup
+  helpers. It MUST run registered cleanup callbacks and stop managed animation
+  frames when the block reruns, unmounts, or leaves Viewer mode.
+- The runtime SHOULD provide document-surface dialog helpers for alerts,
+  confirmations, and text prompts. These dialogs SHOULD render inside the
+  mounted/emulated HVY surface and MUST NOT require support for blocking browser
+  `alert`, `confirm`, or `prompt` dialogs.
+- A power script that uses the document database MAY keep its database runtime
+  open for the lifetime of the mounted program. Database mutations MUST use the
+  same attached database and persistence behavior as `doc.db` in basic
+  scripting.
+- Power scripts MAY request that the current document be saved after a
+  meaningful mutation. Embedded hosts SHOULD be able to handle the request with
+  their own persistence callback and serialize the current document, including
+  tail attachments. The request itself MUST NOT prompt or download. A client
+  MAY provide a generic save callback that persists immediately when it has a
+  writable destination and asks the viewer before falling back to a download.
+
+Because power scripts are unrestricted, the sandbox guarantees of
+`hvy.scripting` do not apply. Merely opening or editing a document MUST NOT be
+treated as authorization to run them.
+
+Clients MAY persist a viewer's acceptance outside the document. Persisted
+acceptance SHOULD be keyed to a collision-resistant digest of the ordered
+identities and source of all power scripts so that adding, removing, renaming,
+reordering, or editing trusted code requires a new approval.
 
 ## 8. Security & Runtime Constraints
 

@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest';
 
-import { capturePaneScroll } from '../src/scroll';
+import { captureElementScrollAnchor, capturePaneScroll, restoreElementScrollAnchor } from '../src/scroll';
 import type { PaneScrollState } from '../src/types';
 
 test('capturePaneScroll preserves viewer sidebar scroll position', () => {
@@ -34,5 +34,29 @@ test('capturePaneScroll preserves viewer sidebar scroll position', () => {
     windowLeft: 789,
     windowTop: 987,
   });
+  vi.unstubAllGlobals();
+});
+
+test('element scroll anchors preserve the element viewport position after a structural render', () => {
+  const scrollContainer = {
+    classList: { contains: (name: string) => name === 'editor-tree' },
+    scrollTop: 200,
+  };
+  let layoutTop = 440;
+  const element = {
+    closest: vi.fn(() => scrollContainer),
+    getBoundingClientRect: vi.fn(() => ({ top: layoutTop - scrollContainer.scrollTop })),
+  };
+  const root = {
+    contains: vi.fn(() => true),
+    querySelector: vi.fn((selector: string) => selector === '.editor-shell .editor-tree' ? scrollContainer : element),
+  } as unknown as HTMLElement;
+  vi.stubGlobal('window', { requestAnimationFrame: (callback: FrameRequestCallback) => callback(0) });
+
+  const anchor = captureElementScrollAnchor(root, element as unknown as HTMLElement, '[data-anchor="expected"]');
+  layoutTop = 495;
+  restoreElementScrollAnchor(root, anchor);
+
+  expect(scrollContainer.scrollTop).toBe(255);
   vi.unstubAllGlobals();
 });

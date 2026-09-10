@@ -12,7 +12,7 @@ in `block.schema.pluginConfig`.
 - `scripting.css`: editor and reader styling for the plugin
 - `wrapper.ts`: script preparation, version checks, Brython execution, and error cleanup
 - `runtime.ts`: sandboxed runtime surface exposed to user scripts as `doc`
-- `brython-loader.ts`: lazy-loads Brython from CDN on first execution
+- `brython-loader.ts`: lazy-loads the locally bundled Brython runtime on first execution
 - `help.hvy` / `help-modal.ts`: user-facing help content and modal
 - `version.ts`: supported scripting plugin version constant and helpers
 
@@ -39,11 +39,16 @@ The runtime intentionally avoids Brython AST mutation. The current flow is:
 This was chosen because Brython AST rewriting proved brittle for some compare
 expressions during `compile(...)`.
 
-The loader uses `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
+Document scripts use `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
 virtual filesystem containing only `browser` and `sys`. Keep checked libraries
 such as `random`, `re`, and `datetime` in `wrapper.ts` shims instead of bundling Brython's
 real stdlib modules such as `re`, `python_re`, or `enum`; otherwise checked
 imports can expose a larger module object graph than the sandbox intends.
+
+Installed format-0.2 Python plugin packages use a separate unrestricted
+adapter. Their requested `random`, `re`, and `datetime` modules and dependency
+closures are split into a lazy VFS payload and do not change the document
+script sandbox.
 
 Brython can resolve standard builtins even when the executed globals contain a
 restricted `__builtins__` dictionary. The runtime therefore includes guarded
@@ -84,7 +89,7 @@ trace label instead of the generic `hvy-script`.
 
 The supported client version is defined in `version.ts` as a single constant:
 
-- `SCRIPTING_PLUGIN_VERSION = "0.1"`
+- `SCRIPTING_PLUGIN_VERSION = "0.2"`
 
 Per-block scripting version lives in:
 
@@ -100,6 +105,11 @@ metadata.
 ## Example
 
 ```hvy
-<!--hvy:plugin {"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
 doc.header.set("last_viewed", "from python!")
 ```
+
+Version `0.2` also preserves callable values nested in
+`doc.plugins.call(..., args)`. Plugins may invoke them synchronously or later;
+delayed callbacks resume the originating sandbox guards and are discarded when
+the document or mount is gone. Version `0.1` blocks remain supported.

@@ -9,6 +9,9 @@ import { createDefaultTextCaption, renderTextCaptionElement } from '../caption';
 import { createDefaultTextComponent, renderTextComponentElement } from '../text-component';
 import { mountPluginTextEditor } from './text-editor';
 import { findSortValueOwnerBlock, syncSortValuesForDocument } from '../sort-values';
+import { findSectionByKey } from '../section-ops';
+import { createPluginComponentTemplatesApi } from './component-templates';
+import { resolveOutputGeneratorResponse } from '../template-output-generators';
 import type {
   HvyPluginContext,
   HvyPluginInstance,
@@ -16,6 +19,11 @@ import type {
 } from './types';
 import type { VisualBlock } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
+import { createPluginAuthorizationPrompt } from './authorization/plugin-authorization-prompt';
+import { getPluginAuthorizationMode } from './authorization/plugin-authorization-policy';
+import {
+  loadConditionallyAllowedPlugin,
+} from './authorization/conditional-plugin';
 
 interface SavedFocus {
   element: HTMLElement;
@@ -45,6 +53,11 @@ interface MountedPlugin {
 const MOUNT_KEY_PREFIX = 'hvy-plugin-mount';
 const fallbackMounted = new Map<string, MountedPlugin>();
 const mountedByRuntime = new WeakMap<StateRuntime, Map<string, MountedPlugin>>();
+async function loadConditionalPlugin(registration: HvyPlugin): Promise<HvyPlugin> {
+  const plugin = await loadConditionallyAllowedPlugin(registration);
+  if (!plugin.create) throw new Error(`Plugin "${registration.id}" does not provide a renderable component.`);
+  return plugin;
+}
 
 function getMountedPlugins(): Map<string, MountedPlugin> {
   try {
@@ -92,11 +105,16 @@ function buildContext(
   plugin: HvyPlugin,
   mode: 'editor' | 'reader',
   sectionKey: string,
-  blockId: string
+  blockId: string,
+  hostRoot: HTMLElement
 ): HvyPluginContext | null {
   const runtime = getActiveStateRuntime();
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) {
+    return null;
+  }
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
     return null;
   }
 
@@ -109,7 +127,9 @@ function buildContext(
       recordHistory(`plugin-config:${plugin.id}:${sectionKey}:${blockId}`);
       current.schema.pluginConfig = { ...current.schema.pluginConfig, ...patch };
       syncReusableTemplateForBlock(sectionKey, blockId);
-      getRefreshReaderPanels()();
+      if (state.currentView !== 'viewer') {
+        getRefreshReaderPanels()();
+      }
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
   };
@@ -121,7 +141,9 @@ function buildContext(
       recordHistory(`plugin-text:${plugin.id}:${sectionKey}:${blockId}`);
       current.text = text;
       syncReusableTemplateForBlock(sectionKey, blockId);
-      getRefreshReaderPanels()();
+      if (state.currentView !== 'viewer') {
+        getRefreshReaderPanels()();
+      }
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
   };
@@ -133,7 +155,9 @@ function buildContext(
       recordHistory(`plugin-css:${plugin.id}:${sectionKey}:${blockId}`);
       current.schema.css = css;
       syncReusableTemplateForBlock(sectionKey, blockId);
-      getRefreshReaderPanels()();
+      if (state.currentView !== 'viewer') {
+        getRefreshReaderPanels()();
+      }
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
   };
@@ -157,6 +181,10 @@ function buildContext(
 
   return {
     mode,
+    get view() {
+      return state.currentView;
+    },
+    hostRoot,
     get editor() {
       return {
         mode: mode === 'editor' ? 'edit' as const : 'view' as const,
@@ -213,6 +241,19 @@ function buildContext(
     },
     textEditor: {
       mount: (options) => runWithStateRuntime(runtime, () => mountPluginTextEditor(options)),
+    },
+    templates: {
+      components: createPluginComponentTemplatesApi({
+        document: state.document,
+        section,
+        sectionKey,
+        helpers: getCachedComponentRenderHelpers(),
+        observeLinks: (root) => runWithStateRuntime(runtime, () => getObserveLinks()(root)),
+        resolveGenerator: (response) => runWithStateRuntime(runtime, () => resolveOutputGeneratorResponse({
+          response,
+          settings: state.chat.settings,
+        })),
+      }),
     },
     sortValues: {
       get: (key) => {
@@ -306,10 +347,41 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
       return;
     }
 
-    const ctx = buildContext(registration, mode, sectionKey, blockId);
+    const hostRoot = placeholder.closest<HTMLElement>('.hvy-document') ?? placeholder.parentElement ?? placeholder;
+    const ctx = buildContext(registration, mode, sectionKey, blockId, hostRoot);
     if (!ctx) {
       placeholder.textContent = 'Plugin block is missing.';
       placeholder.classList.add('hvy-plugin-missing');
+      return;
+    }
+
+    if (registration.authorization === 'required') {
+      const authorizationMode = getPluginAuthorizationMode(state.document, registration);
+      if (authorizationMode === 'hidden') {
+        placeholder.textContent = `Plugin "${pluginId}" is blocked by the host.`;
+        placeholder.classList.add('hvy-plugin-missing');
+        return;
+      }
+      const instance = createPluginAuthorizationPrompt({
+        document: state.document,
+        plugin: registration,
+        loadAndMount: async () => {
+          const loaded = await loadConditionalPlugin(registration);
+          const loadedContext = buildContext(loaded, mode, sectionKey, blockId, hostRoot);
+          if (!loadedContext) throw new Error('Plugin block is missing.');
+          return loaded.create!(loadedContext);
+        },
+      });
+      placeholder.replaceWith(instance.element);
+      mounted.set(key, {
+        pluginId,
+        sectionKey,
+        blockId,
+        mode,
+        instance,
+        placeholder: instance.element,
+        pendingFocus: null,
+      });
       return;
     }
 

@@ -5,7 +5,7 @@ import './qr-code.css';
 import { getMatchingImagePresetCss, mergeImagePresetCss } from '../../editor/components/image/image-preset-css';
 import type { VisualBlock } from '../../editor/types';
 import { escapeHtml } from '../../utils';
-import { QR_CODE_PLUGIN_ID } from '../registry';
+import { createBuiltInPluginMetadata, QR_CODE_PLUGIN_ID } from '../registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance, HvyPluginPdfStaticRenderContext } from '../types';
 import qrCodeDocumentation from './about-qr-code.txt?raw';
 import {
@@ -379,7 +379,7 @@ function createQrCodeStylingForPayload(text: string, config: QrCodeConfig, margi
 export const qrCodePluginFactory: HvyPluginFactory = build;
 
 export const qrCodePlugin: HvyPlugin = {
-  id: QR_CODE_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(QR_CODE_PLUGIN_ID),
   displayName: 'QR Code',
   documentation: {
     filename: 'about-qr-code.txt',

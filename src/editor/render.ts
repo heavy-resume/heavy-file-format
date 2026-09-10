@@ -2,23 +2,30 @@ import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
-import type { ComponentPlacementState, ImageAttachmentMaxDimensions } from '../types';
+import type { ComponentDefinition, ComponentPlacementState, ImageAttachmentMaxDimensions, VisualDocument } from '../types';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
 import { renderExpandableEditor } from './components/expandable/expandable';
-import { renderGridEditor } from './components/grid/grid';
+import { renderGridEditor, renderGridHeaderControls } from './components/grid/grid';
 import { renderImageEditor } from './components/image/image';
 import { renderCarouselEditor } from './components/carousel/carousel';
+import { renderCodeEditor } from './components/code/code';
 import { renderPluginEditor, getPluginBlockHeaderLabel } from './components/plugin/plugin';
 import { renderTableEditor } from './components/table/table';
-import { renderTextEditor } from './components/text/text';
+import { renderTemplateValueTokens, renderTextEditor } from './components/text/text';
+import { renderTextToolbarDismissButton } from './components/text/text-toolbar-layout';
 import { renderXrefCardEditor } from './components/xref-card/xref-card';
+import { renderLocationMarkerEditor, renderLocationMarkerPreview } from './components/location-marker/location-marker';
+import { renderDocumentAttachmentManager } from './components/document-attachments/document-attachments';
+import { renderDeleteControl } from './components/delete-control/delete-control';
 import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListItems } from './components/component-list/component-list-labels';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, SortKeyValue, VisualBlock, VisualSection } from './types';
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
+import { renderUserFileAttachmentLinksInHtml } from '../document-attachment-links';
+import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../inline-answer-groups';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -31,14 +38,29 @@ import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { applyWorkspaceLinkRendering } from '../workspace-links';
+import {
+  createChildRenderTreeWindowOptions,
+  createRenderTreeHeightLedger,
+  type RenderTreeWindowEntry,
+} from '../render-tree-window';
+import {
+  createEditorBlockRenderTreeNode,
+  createEditorSectionRenderTreeNode,
+  EDITOR_BLOCK_TREE_LAYOUT,
+  EDITOR_SECTION_TREE_LAYOUT,
+  type EditorRenderTreeItem,
+  type EditorRenderTreeWindowOptions,
+} from './editor-render-tree-window';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
 import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
-import { closeIcon, plusIcon } from '../icons';
+import { closeIcon, plusIcon, wrenchIcon } from '../icons';
 import { getEmptySectionHeadingLevel } from '../section-heading-memory';
+import { getDocumentParagraphSpacing } from '../document-typography';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
+import { getComponentEditorMinimumWidth } from './component-editor-width';
 import {
   formatTextLineStyleCssLines,
   getTextLineStyleLabel,
@@ -57,7 +79,7 @@ import {
   renderHeadingStyleElement,
 } from '../heading-styles';
 import { isPdfAllowedComponentInstance } from '../pdf-document-capabilities';
-import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '../section-ops';
+import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection, visitBlocksInList } from '../section-ops';
 import { getDefaultSectionContained } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
 import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
@@ -87,19 +109,7 @@ interface ThemeConfig {
   colors: Record<string, string>;
 }
 
-interface ComponentDef {
-  name: string;
-  baseType: string;
-  tags?: string;
-  description?: string;
-  schema?: BlockSchema;
-  template?: VisualBlock;
-  flavors?: Array<{
-    name: string;
-    description?: string;
-    schema?: BlockSchema;
-  }>;
-}
+type ComponentDef = ComponentDefinition;
 
 interface SectionDef {
   name: string;
@@ -127,14 +137,17 @@ interface ComponentListDisplayContext {
 }
 
 interface EditorRenderState {
+  document?: VisualDocument;
   documentExtension: '.hvy' | '.thvy' | '.phvy' | '.md';
   documentMeta: Record<string, unknown>;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   imageAttachmentReductionStatus?: { state: 'reducing' | 'reduced' | 'unchanged' | 'error'; message: string } | null;
   documentSections: VisualSection[];
   showAdvancedEditor: boolean;
+  showComponentEncryptionControls?: boolean;
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  activeEditorBlockSnapshots: Array<{ sectionKey: string; blockId: string; block: VisualBlock }>;
   aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
   aiEditorHostSectionKey?: string | null;
   componentPlacement: ComponentPlacementState | null;
@@ -151,6 +164,7 @@ interface EditorRenderState {
   } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
+  searchRevealedAncestors: Record<string, boolean>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
   crossDocumentLinksEnabled?: boolean;
@@ -201,10 +215,16 @@ interface EditorRenderDeps {
 }
 
 export interface EditorRenderer {
-  renderSectionEditorTree: (sections: VisualSection[]) => string;
+  renderSectionEditorTree: (sections: VisualSection[], windowOptions?: EditorRenderTreeWindowOptions) => string;
+  renderEditorSection: (section: VisualSection, rootSections: VisualSection[], isSubsection?: boolean, windowOptions?: EditorRenderTreeWindowOptions) => string;
+  renderTopLevelSectionInsertGutter: (section: VisualSection, acceptsImageDrop: boolean) => string;
+  recordEditorSectionHeight: (sectionKey: string, height: number) => void;
+  recordEditorBlockHeight: (sectionKey: string, blockId: string, height: number) => void;
   renderSidebarEditorSections: (sections: VisualSection[]) => string;
   renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked?: boolean) => string;
+  renderEditorNestedBlocks: ComponentRenderHelpers['renderEditorNestedBlocks'];
+  renderEditorGridBlocks: ComponentRenderHelpers['renderEditorGridBlocks'];
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderRichToolbar: (
@@ -214,6 +234,7 @@ export interface EditorRenderer {
       field?: string;
       gridItemId?: string;
       rowIndex?: number;
+      includeDismiss?: boolean;
       includeAlign?: boolean;
       includeFillIn?: boolean;
       align?: Align;
@@ -229,6 +250,9 @@ export interface EditorRenderer {
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
+  let encryptedEditorDepth = 0;
+  const editorRenderTreeHeightLedger = createRenderTreeHeightLedger();
+  let activeEditorRenderTreeWindowOptions: EditorRenderTreeWindowOptions | null = null;
   function isPdfEditorDocument(): boolean {
     return state.documentExtension === '.phvy';
   }
@@ -249,7 +273,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const surfaceAttrs = renderResponsiveSurfaceAttrs('');
     return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="editor-tree-body editor-sidebar-tree-body">
       ${sidebarSections.length === 0 ? '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button, or add one below.</div>' : ''}
-      ${sidebarSections.map((section) => renderEditorSection(section, sections)).join('')}
+      ${sidebarSections.map((section, index) => `${renderTopLevelSectionInsertGutter(section, index > 0)}${renderEditorSection(section, sections)}`).join('')}
       ${renderTopLevelSectionAddGhost('sidebar')}
     </div></div>`;
   }
@@ -283,9 +307,27 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     });
   }
 
-  function renderSectionEditorTree(sections: VisualSection[]): string {
-    const mainSections = sections.filter((s) => s.location !== 'sidebar' && !isHiddenEditorOnlySection(s, state.documentMeta, state.showAdvancedEditor));
-    const sectionCards = mainSections.map((section) => renderEditorSection(section, sections)).join('');
+  function renderSectionEditorTree(sections: VisualSection[], windowOptions?: EditorRenderTreeWindowOptions): string {
+    const mainSections = sections.filter((s) =>
+      s.location !== 'sidebar'
+      && (!isHiddenEditorOnlySection(s, state.documentMeta, state.showAdvancedEditor) || hasOpenEditorInSectionTree(s))
+    );
+    const sectionCards = editorRenderTreeHeightLedger.plan(
+      mainSections.map(createEditorSectionRenderTreeNode),
+      windowOptions,
+      EDITOR_SECTION_TREE_LAYOUT
+    ).map((entry, index) => {
+      const section = entry.node.item as VisualSection;
+      const card = entry.shouldRender || hasOpenEditorInSectionTree(section)
+        ? renderEditorSection(
+          section,
+          sections,
+          false,
+          createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop, 90)
+        )
+        : renderEditorSectionPlaceholder(section, entry.estimatedHeight, false);
+      return `${renderTopLevelSectionInsertGutter(section, index > 0)}${card}`;
+    }).join('');
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
     const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
@@ -302,7 +344,59 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${renderTopLevelSectionAddGhost('main')}
         </div>
       </div>
+      <div class="editor-document-tail" aria-hidden="true"></div>
     `;
+  }
+
+  function renderTopLevelSectionInsertGutter(section: VisualSection, acceptsImageDrop: boolean): string {
+    if (state.mobileAdjustmentMode) {
+      return '';
+    }
+    const visibleTitle = deps.formatSectionTitle(section.title);
+    const imageDropAttrs = acceptsImageDrop
+      ? ` data-image-section-drop-gap="true" data-before-section-key="${deps.escapeAttr(section.key)}" data-section-location="${deps.escapeAttr(section.location)}"`
+      : '';
+    return `<div class="top-level-section-insert-gutter${acceptsImageDrop ? ' image-section-drop-gap' : ''}"${imageDropAttrs}>
+      <button
+        type="button"
+        class="top-level-section-insert-button"
+        data-action="insert-top-level-section-before"
+        data-section-key="${deps.escapeAttr(section.key)}"
+        data-section-location="${deps.escapeAttr(section.location)}"
+        aria-label="Insert section before ${deps.escapeAttr(visibleTitle)}"
+        title="Insert section here"
+      >${plusIcon()}</button>
+    </div>`;
+  }
+
+  function recordEditorSectionHeight(sectionKey: string, height: number): void {
+    const section = deps.findSectionByKey(state.documentSections, sectionKey);
+    if (section) {
+      editorRenderTreeHeightLedger.record(createEditorSectionRenderTreeNode(section), height);
+    }
+  }
+
+  function recordEditorBlockHeight(sectionKey: string, blockId: string, height: number): void {
+    const section = deps.findSectionByKey(state.documentSections, sectionKey);
+    let block: VisualBlock | null = null;
+    if (section) {
+      visitBlocksInList(section.blocks, (candidate) => {
+        if (!block && candidate.id === blockId) {
+          block = candidate;
+        }
+      });
+    }
+    if (block) {
+      editorRenderTreeHeightLedger.record(createEditorBlockRenderTreeNode(block), height);
+    }
+  }
+
+  function renderEditorSectionPlaceholder(
+    section: VisualSection,
+    estimatedHeight: number,
+    isSubsection: boolean
+  ): string {
+    return `<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor" data-section-key="${deps.escapeAttr(section.key)}" data-hvy-virtual-subsection="${isSubsection ? 'true' : 'false'}" style="min-height: ${deps.escapeAttr(String(estimatedHeight))}px; margin: 0 0 0.55rem;" aria-hidden="true"></div>`;
   }
 
   function renderTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
@@ -331,7 +425,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return renderHeadingStyleElement(state.documentMeta, getHeadingStyleSurfaceClass(state.documentMeta));
   }
 
-  function renderEditorSection(section: VisualSection, rootSections: VisualSection[], isSubsection = false): string {
+  function renderEditorSection(
+    section: VisualSection,
+    rootSections: VisualSection[],
+    isSubsection = false,
+    windowOptions?: EditorRenderTreeWindowOptions
+  ): string {
     const visibleTitle = deps.formatSectionTitle(section.title);
     const isUntitled = deps.isDefaultUntitledSectionTitle(section.title);
     const sectionMove = getSectionMoveAvailability(section.key, rootSections);
@@ -349,7 +448,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         section.key
       )}">${deps.escapeHtml(visibleTitle)}</button>`;
     const hasActiveBlockInSelfOrDescendants = (s: VisualSection): boolean => {
-      if (state.activeEditorBlock?.sectionKey === s.key) return true;
+      if (state.activeEditorBlockSnapshots.some((active) => active.sectionKey === s.key)) return true;
       return s.children.some(hasActiveBlockInSelfOrDescendants);
     };
     const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
@@ -357,12 +456,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : '';
     const addComponentGhost = state.componentPlacement || state.mobileAdjustmentMode
       ? ''
-      : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
+      : `<div class="ghost-section-card add-ghost compact-add-component-ghost" data-section-insertion="true" data-section-before-kind="end">
                   ${renderComponentPicker({
         id: `section:${section.key}`,
         action: 'add-block',
         sectionKey: section.key,
         label: 'Section component type',
+        extraAttrs: {
+          'data-section-insertion': 'true',
+          'data-section-before-kind': 'end',
+        },
         ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
       })}
               </div>`;
@@ -387,14 +490,21 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : ''
       }
             ${isSubsection || isPdfEditorDocument() ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
-            <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
-        section.key
-      )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
+            ${renderDeleteControl({
+        className: 'editor-section-remove-button',
+        label: `Remove ${visibleTitle} section`,
+        title: 'Delete section',
+        attributes: {
+          'data-action': 'remove-section',
+          'data-section-key': section.key,
+          'data-tooltip': 'Delete section',
+        },
+      })}
           </div>
         </div>
 
         <div class="editor-blocks">
-          ${renderEditorSectionItems(section, rootSections)}
+          ${renderEditorSectionItems(section, rootSections, windowOptions)}
           ${state.mobileAdjustmentMode || section.lock
         ? ''
         : isNamedEmptySection
@@ -418,40 +528,303 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderEditorSectionItems(section: VisualSection, rootSections: VisualSection[]): string {
-    const items = deps.buildSectionRenderSequence(section);
-    const output: string[] = [];
-    let renderedFirstBlockPlacement = false;
-    const canPlaceInSection = !section.lock;
-    for (const item of items) {
-      if (item.kind === 'block') {
-        if (isHiddenEditorOnlyScriptingBlock(item.block)) {
-          continue;
-        }
-        if (isAnchoredButtonInSection(section, item.block)) {
-          continue;
-        }
-        if (!renderedFirstBlockPlacement) {
-          if (canPlaceInSection) {
-            output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'before', targetBlockId: item.block.id }));
+  function renderEditorSectionItems(
+    section: VisualSection,
+    rootSections: VisualSection[],
+    windowOptions?: EditorRenderTreeWindowOptions
+  ): string {
+    const items = deps.buildSectionRenderSequence(section).filter((item) => item.kind === 'block'
+      ? !isHiddenEditorOnlyScriptingBlock(item.block, section.key)
+        && (!isAnchoredButtonInSection(section, item.block) || deps.isActiveEditorBlock(section.key, item.block.id))
+      : !isHiddenEditorOnlySection(item.child, state.documentMeta, state.showAdvancedEditor)
+        || hasOpenEditorInSectionTree(item.child)
+    );
+    if (windowOptions && !state.componentPlacement && !state.mobileAdjustmentMode) {
+      const activeBlockIds = state.activeEditorBlockSnapshots
+        .filter((active) => active.sectionKey === section.key)
+        .map((active) => active.blockId);
+      const forceNodeKeys = new Set<string>();
+      items.forEach((item) => {
+        if (item.kind === 'child') {
+          if (hasOpenEditorInSectionTree(item.child) || deps.isActiveEditorSectionTitle(item.child.key)) {
+            forceNodeKeys.add(item.child.key);
           }
-          renderedFirstBlockPlacement = true;
+          return;
         }
+        if (activeBlockIds.some((blockId) => item.block.id === blockId || isDescendantActive(item.block, blockId))) {
+          forceNodeKeys.add(item.block.id);
+        }
+      });
+      const effectiveWindowOptions: EditorRenderTreeWindowOptions = {
+        ...windowOptions,
+        forceNodeKeys,
+      };
+      const nodes = items.map((item) => item.kind === 'block'
+        ? createEditorBlockRenderTreeNode(item.block)
+        : createEditorSectionRenderTreeNode(item.child)
+      );
+      return renderEditorSectionItemPlan(
+        section,
+        rootSections,
+        editorRenderTreeHeightLedger.plan(
+          nodes,
+          effectiveWindowOptions,
+          items.some((item) => item.kind === 'child') ? EDITOR_SECTION_TREE_LAYOUT : EDITOR_BLOCK_TREE_LAYOUT
+        ),
+        effectiveWindowOptions
+      );
+    }
+    const output: string[] = [];
+    const canPlaceInSection = !section.lock;
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index]!;
+      const previous = items[index - 1];
+      const boundary = item.kind === 'block'
+        ? { beforeKind: 'block' as const, beforeId: item.block.id }
+        : { beforeKind: 'child' as const, beforeId: item.child.key };
+      if (state.componentPlacement && canPlaceInSection) {
+        output.push(renderComponentPlacementTarget({
+          container: 'section',
+          sectionKey: section.key,
+          placement: index === 0 ? 'before' : previous?.kind === 'block' ? 'after' : 'before',
+          ...(previous?.kind === 'block' ? { targetBlockId: previous.block.id } : item.kind === 'block' ? { targetBlockId: item.block.id } : {}),
+          sectionBoundary: boundary,
+        }));
+      } else if (canPlaceInSection && previous?.kind === 'child' && item.kind === 'child') {
+        output.push(renderSectionSequenceAddGhost(section.key, boundary));
+      }
+      if (item.kind === 'block') {
         output.push(renderEditorBlock(section.key, item.block, rootSections, section.lock));
-        if (canPlaceInSection) {
-          output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'after', targetBlockId: item.block.id }));
-        }
       } else {
-        if (isHiddenEditorOnlySection(item.child, state.documentMeta, state.showAdvancedEditor)) {
-          continue;
-        }
         output.push(renderEditorSection(item.child, rootSections, true));
       }
     }
-    if (!renderedFirstBlockPlacement && canPlaceInSection) {
-      output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'end' }));
+    if (state.componentPlacement && canPlaceInSection) {
+      const previous = items.at(-1);
+      output.push(renderComponentPlacementTarget({
+        container: 'section',
+        sectionKey: section.key,
+        placement: previous?.kind === 'block' ? 'after' : 'end',
+        ...(previous?.kind === 'block' ? { targetBlockId: previous.block.id } : {}),
+        sectionBoundary: { beforeKind: 'end', beforeId: '' },
+      }));
     }
     return output.join('');
+  }
+
+  function renderSectionSequenceAddGhost(
+    sectionKey: string,
+    boundary: { beforeKind: 'block' | 'child'; beforeId: string },
+  ): string {
+    return `<div class="ghost-section-card add-ghost compact-add-component-ghost section-sequence-add-ghost" data-section-insertion="true" data-section-before-kind="${boundary.beforeKind}" data-section-before-id="${deps.escapeAttr(boundary.beforeId)}">
+      ${renderComponentPicker({
+        id: `section-boundary:${sectionKey}:${boundary.beforeId}`,
+        action: 'add-block',
+        sectionKey,
+        label: 'Insert component between subsections',
+        extraAttrs: {
+          'data-section-insertion': 'true',
+          'data-section-before-kind': boundary.beforeKind,
+          'data-section-before-id': boundary.beforeId,
+        },
+        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
+      })}
+    </div>`;
+  }
+
+  function renderEditorSectionItemPlan(
+    section: VisualSection,
+    rootSections: VisualSection[],
+    entries: Array<RenderTreeWindowEntry<EditorRenderTreeItem>>,
+    windowOptions: EditorRenderTreeWindowOptions
+  ): string {
+    const output: string[] = [];
+    for (let index = 0; index < entries.length;) {
+      const entry = entries[index];
+      if (!entry) break;
+      if (entry.node.kind === 'section') {
+        const child = entry.node.item as VisualSection;
+        const previous = entries[index - 1];
+        if (!section.lock && previous?.node.kind === 'section') {
+          output.push(renderSectionSequenceAddGhost(section.key, { beforeKind: 'child', beforeId: child.key }));
+        }
+        output.push(entry.shouldRender || hasOpenEditorInSectionTree(child)
+          ? renderEditorSection(
+            child,
+            rootSections,
+            true,
+            createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop, 90)
+          )
+          : renderEditorSectionPlaceholder(child, entry.estimatedHeight, true)
+        );
+        index += 1;
+        continue;
+      }
+      if (entry.shouldRender) {
+        output.push(withEditorRenderTreeWindow(entry, windowOptions, () => (
+          renderEditorBlock(section.key, entry.node.item as VisualBlock, rootSections, section.lock)
+        )));
+        index += 1;
+        continue;
+      }
+      const chunk: Array<RenderTreeWindowEntry<EditorRenderTreeItem>> = [];
+      while (index + chunk.length < entries.length && chunk.length < 20) {
+        const candidate = entries[index + chunk.length];
+        if (!candidate || candidate.node.kind !== 'block' || candidate.shouldRender) break;
+        chunk.push(candidate);
+      }
+      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
+      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" data-parent-locked="${section.lock ? 'true' : 'false'}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      index += Math.max(1, chunk.length);
+    }
+    return output.join('');
+  }
+
+  function renderEditorBlockPlan(
+    sectionKey: string,
+    rootSections: VisualSection[],
+    parentLocked: boolean,
+    entries: Array<RenderTreeWindowEntry<EditorRenderTreeItem>>,
+    windowOptions?: EditorRenderTreeWindowOptions,
+    placement?: {
+      container: 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
+      parentBlockId: string;
+    }
+  ): string {
+    const output: string[] = [];
+    if (placement && !parentLocked && entries.length > 0) {
+      output.push(renderComponentPlacementTarget({
+        container: placement.container,
+        sectionKey,
+        parentBlockId: placement.parentBlockId,
+        placement: 'before',
+        targetBlockId: (entries[0]?.node.item as VisualBlock | undefined)?.id,
+      }));
+    }
+    for (let index = 0; index < entries.length;) {
+      const entry = entries[index];
+      if (!entry) break;
+      if (entry.shouldRender) {
+        output.push(withEditorRenderTreeWindow(entry, windowOptions, () => (
+          renderEditorBlock(sectionKey, entry.node.item as VisualBlock, rootSections, parentLocked)
+        )));
+        if (placement && !parentLocked) {
+          output.push(renderComponentPlacementTarget({
+            container: placement.container,
+            sectionKey,
+            parentBlockId: placement.parentBlockId,
+            placement: 'after',
+            targetBlockId: (entry.node.item as VisualBlock).id,
+          }));
+        }
+        index += 1;
+        continue;
+      }
+      const chunk: Array<RenderTreeWindowEntry<EditorRenderTreeItem>> = [];
+      while (index + chunk.length < entries.length && chunk.length < 20) {
+        const candidate = entries[index + chunk.length];
+        if (!candidate || candidate.shouldRender) break;
+        chunk.push(candidate);
+      }
+      if (chunk.length === 0) {
+        index += 1;
+        continue;
+      }
+      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
+      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor-block-range" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-ids="${deps.escapeAttr(blockIds)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      index += chunk.length;
+    }
+    if (placement && !parentLocked && entries.length === 0) {
+      output.push(renderComponentPlacementTarget({
+        container: placement.container,
+        sectionKey,
+        parentBlockId: placement.parentBlockId,
+        placement: 'end',
+      }));
+    }
+    return output.join('');
+  }
+
+  function withEditorRenderTreeWindow(
+    entry: RenderTreeWindowEntry<EditorRenderTreeItem>,
+    windowOptions: EditorRenderTreeWindowOptions | undefined,
+    render: () => string
+  ): string {
+    const previous = activeEditorRenderTreeWindowOptions;
+    activeEditorRenderTreeWindowOptions = createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop) ?? null;
+    try {
+      return render();
+    } finally {
+      activeEditorRenderTreeWindowOptions = previous;
+    }
+  }
+
+  function renderEditorNestedBlocks(
+    sectionKey: string,
+    blocks: VisualBlock[],
+    options: {
+      container: 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
+      parentBlockId: string;
+      locked: boolean;
+    }
+  ): string {
+    const nestedWindowOptions = activeEditorRenderTreeWindowOptions && !state.componentPlacement && !state.mobileAdjustmentMode
+      ? {
+        ...activeEditorRenderTreeWindowOptions,
+        layoutOffsetTop: (activeEditorRenderTreeWindowOptions.layoutOffsetTop ?? 0) + 80,
+        forceNodeKeys: new Set(
+          state.activeEditorBlockSnapshots
+            .filter((active) => active.sectionKey === sectionKey)
+            .map((active) => active.blockId)
+        ),
+      }
+      : undefined;
+    return renderEditorBlockPlan(
+      sectionKey,
+      state.documentSections,
+      options.locked,
+      editorRenderTreeHeightLedger.plan(
+        blocks.map(createEditorBlockRenderTreeNode),
+        nestedWindowOptions,
+        EDITOR_BLOCK_TREE_LAYOUT
+      ),
+      nestedWindowOptions,
+      { container: options.container, parentBlockId: options.parentBlockId }
+    );
+  }
+
+  function renderEditorGridBlocks(
+    sectionKey: string,
+    blocks: VisualBlock[],
+    columns: number,
+    parentLocked: boolean
+  ): Array<{ block: VisualBlock; html: string }> {
+    const nestedWindowOptions = activeEditorRenderTreeWindowOptions && !state.componentPlacement && !state.mobileAdjustmentMode
+      ? {
+        ...activeEditorRenderTreeWindowOptions,
+        layoutOffsetTop: (activeEditorRenderTreeWindowOptions.layoutOffsetTop ?? 0) + 80,
+        layoutColumns: columns,
+        forceNodeKeys: new Set(
+          state.activeEditorBlockSnapshots
+            .filter((active) => active.sectionKey === sectionKey)
+            .map((active) => active.blockId)
+        ),
+      }
+      : undefined;
+    return editorRenderTreeHeightLedger.plan(
+      blocks.map(createEditorBlockRenderTreeNode),
+      nestedWindowOptions,
+      EDITOR_BLOCK_TREE_LAYOUT
+    ).map((entry) => ({
+      block: entry.node.item as VisualBlock,
+      html: entry.shouldRender
+        ? withEditorRenderTreeWindow(entry, nestedWindowOptions, () => (
+          renderEditorBlock(sectionKey, entry.node.item as VisualBlock, state.documentSections, parentLocked)
+        ))
+        : `<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr((entry.node.item as VisualBlock).id)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" style="min-height: ${Math.ceil(entry.estimatedHeight)}px;" aria-hidden="true"></div>`,
+    }));
   }
 
   function renderComponentPlacementTarget(options: Parameters<ComponentRenderHelpers['renderComponentPlacementTarget']>[0]): string {
@@ -464,7 +837,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
       options.sectionKey
     )}" data-placement-container="${options.container}" data-placement="${options.placement}"${options.targetBlockId ? ` data-target-block-id="${deps.escapeAttr(options.targetBlockId)}"` : ''
-      }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''
+      }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''}${options.sectionBoundary ? ` data-section-insertion="true" data-section-before-kind="${options.sectionBoundary.beforeKind}"${options.sectionBoundary.beforeId ? ` data-section-before-id="${deps.escapeAttr(options.sectionBoundary.beforeId)}"` : ''}` : ''
       }>
       <span>${deps.escapeHtml(label)}</span>
     </button>`;
@@ -521,7 +894,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
-    if (isHiddenEditorOnlyScriptingBlock(block)) {
+    if (isHiddenEditorOnlyScriptingBlock(block, sectionKey)) {
       return '';
     }
     const component = block.schema.component || 'text';
@@ -533,14 +906,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isActive = isActiveFrame || isActiveDescendant || isAiSectionEditBlock || isAiHostDescendant;
 
     if (block.schema.kind === 'encrypted' && block.schema.encryptedBlock && !isActive) {
-      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
+      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? [], parentLocked);
     }
 
     if (!isActive) {
-      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
+      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? [], parentLocked);
     }
 
-    const contentEditor = renderBlockContentEditor(sectionKey, block);
+    const contentEditor = addCoreEditorControlClasses(renderBlockContentEditor(sectionKey, block));
+    const componentHeaderControls = addCoreEditorControlClasses(renderBlockHeaderControls(sectionKey, block));
+    const minimumEditorWidth = getComponentEditorMinimumWidth(block);
     const activationPath = getActivationPathIds(sectionKey, rootSections ?? []);
     const activationPathIndex = activationPath.indexOf(block.id);
     const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey
@@ -557,6 +932,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
     const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
     const editingReusableDefinition = state.editingReusableDefinition === true;
+    const isStandaloneComponentTemplateRoot = editingReusableDefinition && rootSections?.length === 0;
     const structurallyLocked = !editingReusableDefinition && (parentLocked || (isDirectSectionBlock && owningSection?.lock === true));
     const blockMove = isActiveFrame
       ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
@@ -565,10 +941,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const showActiveBlockDoneRow = isActiveFrame && !editingReusableDefinition;
-    const encryptionAction = state.showAdvancedEditor && isActiveFrame && !editingReusableDefinition
+    const encryptionAction = state.showAdvancedEditor && state.showComponentEncryptionControls !== false && isActiveFrame && !editingReusableDefinition && encryptedEditorDepth === 0
       ? block.schema.kind === 'encrypted'
-        ? `<button type="button" class="ghost" data-action="decrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Decrypt</button>`
-        : `<button type="button" class="ghost" data-action="encrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypt</button>`
+        ? `<button type="button" class="secondary" data-action="open-encryption-modal" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypted</button>`
+        : `<button type="button" class="ghost" data-action="open-encryption-modal" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypt</button>`
       : '';
     const placementActions = canRemove
       ? isPlacementSource
@@ -581,7 +957,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}">Make Template</button>`;
-    const componentMetaActions = state.showAdvancedEditor && isActive
+    const componentMetaActions = state.showAdvancedEditor && isActive && !isStandaloneComponentTemplateRoot
       ? `<div class="editor-block-context-actions" aria-label="Component options">
           ${makeTemplateAction}
           <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
@@ -590,21 +966,32 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>`
       : '';
     const removeButton = canRemove
-      ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
-        sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component">${closeIcon()}</button>`
+      ? renderDeleteControl({
+        className: 'editor-block-remove-button',
+        label: `Remove ${componentLabel}`,
+        title: 'Delete component',
+        attributes: {
+          'data-action': 'remove-block',
+          'data-section-key': sectionKey,
+          'data-block-id': block.id,
+        },
+      })
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
-    const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
+    const insertAboveGhost = !isStandaloneComponentTemplateRoot && canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
       ? renderActiveComponentInsertGhost(sectionKey, block, 'before')
       : '';
-    const insertBelowGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
+    const directSectionSequence = isDirectSectionBlock && owningSection ? deps.buildSectionRenderSequence(owningSection) : [];
+    const directSequenceIndex = directSectionSequence.findIndex((item) => item.kind === 'block' && item.block === block);
+    const usesSectionEndGhost = directSequenceIndex >= 0 && directSequenceIndex === directSectionSequence.length - 1;
+    const insertBelowGhost = !isStandaloneComponentTemplateRoot && canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
+      && !usesSectionEndGhost
       ? renderActiveComponentInsertGhost(sectionKey, block, 'after')
       : '';
 
     return `
       ${insertAboveGhost}
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"${activationStyle}${activationAttrs}${passiveHeightAttr}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-hvy-virtual-item="editor-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-parent-locked="${parentLocked ? 'true' : 'false'}"${activationStyle}${activationAttrs}${passiveHeightAttr}>
         ${componentMetaActions}
         ${frameRemoveButton}
         <div class="editor-block-head">
@@ -613,6 +1000,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               ${blockMove.canMoveUp ? `<button type="button" class="order-arrow-button" data-action="move-block-up" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block up">▲</button>` : ''}
               ${blockMove.canMoveDown ? `<button type="button" class="order-arrow-button" data-action="move-block-down" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block down">▼</button>` : ''}
             </div>
+            ${componentHeaderControls ? `<div class="component-editor-header-controls">${componentHeaderControls}</div>` : ''}
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
@@ -621,11 +1009,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
 
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
-          ${contentEditor}
+          <div class="component-editor-width-gate" data-hvy-component-editor-gate="true" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-component-label="${deps.escapeAttr(componentLabel)}" style="--hvy-component-editor-minimum-width: ${deps.escapeAttr(minimumEditorWidth)};">
+            <span class="component-editor-minimum-ruler" aria-hidden="true"></span>
+            <button type="button" class="component-editor-compact-button" data-hvy-component-editor-action="open" aria-label="Edit ${deps.escapeAttr(componentLabel)}">${wrenchIcon()}<span>Edit</span></button>
+            <div class="component-editor-inline-content">
+              ${contentEditor}
+            </div>
+          </div>
           ${anchorAttrs.overlay}
         </div>
         ${showActiveBlockDoneRow
-        ? `<div class="editor-block-done-row">
+        ? `<div class="editor-block-done-row${component === 'text' ? ' editor-block-text-done-row' : ''}">
                 <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
           sectionKey
         )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
@@ -668,7 +1062,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderActiveComponentInsertGhost(sectionKey: string, block: VisualBlock, placement: 'before' | 'after'): string {
-    return `<div class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}">
+    const section = deps.findSectionByKey(state.documentSections, sectionKey);
+    const sequence = section ? deps.buildSectionRenderSequence(section) : [];
+    const blockIndex = section?.blocks.some((candidate) => candidate === block)
+      ? sequence.findIndex((item) => item.kind === 'block' && item.block === block)
+      : -1;
+    const next = blockIndex >= 0 ? sequence[blockIndex + (placement === 'after' ? 1 : 0)] : null;
+    const sectionBoundary = blockIndex < 0
+      ? null
+      : next?.kind === 'block'
+        ? { beforeKind: 'block', beforeId: next.block.id }
+        : next?.kind === 'child'
+          ? { beforeKind: 'child', beforeId: next.child.key }
+          : { beforeKind: 'end', beforeId: '' };
+    const sectionBoundaryAttrs = sectionBoundary
+      ? ` data-section-insertion="true" data-section-before-kind="${sectionBoundary.beforeKind}"${sectionBoundary.beforeId ? ` data-section-before-id="${deps.escapeAttr(sectionBoundary.beforeId)}"` : ''}`
+      : '';
+    return `<div class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}"${sectionBoundaryAttrs}>
       <span class="active-component-insert-label">Insert ${placement === 'before' ? 'Above' : 'Below'}</span>
       ${renderComponentPicker({
       id: `block:${block.id}:${placement}`,
@@ -678,14 +1088,24 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       extraAttrs: {
         'data-insert-placement': placement,
         'data-target-block-id': block.id,
+        ...(sectionBoundary ? {
+          'data-section-insertion': 'true',
+          'data-section-before-kind': sectionBoundary.beforeKind,
+          ...(sectionBoundary.beforeId ? { 'data-section-before-id': sectionBoundary.beforeId } : {}),
+        } : {}),
       },
       ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
     })}
     </div>`;
   }
 
-  function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {
-    if (isHiddenEditorOnlyScriptingBlock(block)) {
+  function renderPassiveEditorBlock(
+    sectionKey: string,
+    block: VisualBlock,
+    rootSections: VisualSection[],
+    parentLocked = false
+  ): string {
+    if (isHiddenEditorOnlyScriptingBlock(block, sectionKey)) {
       return '';
     }
     const section = deps.findSectionByKey(rootSections, sectionKey);
@@ -697,12 +1117,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (block.schema.kind === 'encrypted' && !block.schema.encryptedBlock && !state.showAdvancedEditor) {
       return '';
     }
+    const passiveContent = renderPassiveEditorBlockContent(sectionKey, section, block, rootSections);
+    const renderedContent = state.editingReusableDefinition
+      ? renderTemplateValueTokens(passiveContent)
+      : passiveContent;
     return `
-      <div class="editor-block-passive hvy-link-observer-surface" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
+      <div class="editor-block-passive hvy-link-observer-surface" data-hvy-virtual-item="editor-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" data-block-id="${deps.escapeAttr(
       block.id
     )}">
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
-          ${renderPassiveEditorBlockContent(sectionKey, section, block, rootSections)}
+          ${renderedContent}
           ${anchorAttrs.overlay}
         </div>
       </div>
@@ -723,11 +1147,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return section.blocks.some((candidate) => candidate !== block && candidate.schema.id.trim() === targetId);
   }
 
-  function isHiddenEditorOnlyScriptingBlock(block: VisualBlock): boolean {
+  function isHiddenEditorOnlyScriptingBlock(block: VisualBlock, sectionKey: string): boolean {
     return !state.showAdvancedEditor
+      && !deps.isActiveEditorBlock(sectionKey, block.id)
       && block.schema.editorOnly
       && deps.resolveBaseComponent(block.schema.component) === 'plugin'
       && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+  }
+
+  function hasOpenEditorInSectionTree(section: VisualSection): boolean {
+    return state.activeEditorBlockSnapshots.some((active) => active.sectionKey === section.key)
+      || section.children.some(hasOpenEditorInSectionTree);
   }
 
   function renderButtonAnchorAttrs(
@@ -740,6 +1170,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const buttons = componentId && section
       ? section.blocks.filter((candidate) =>
         deps.resolveBaseComponent(candidate.schema.component) === 'button'
+        && !deps.isActiveEditorBlock(sectionKey, candidate.id)
         && candidate.schema.buttonPositionTargetId.trim() === componentId
       )
       : [];
@@ -830,25 +1261,34 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'container') {
       deps.ensureContainerBlocks(block);
-      const body = renderPassiveContainerBlocks(sectionKey, block, rootSections);
+      const body = renderPassiveContainerBlocks(sectionKey, block);
+      const imageDropAttrs = `data-image-drop-block-container="container" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`;
       return body
-        ? `<div class="reader-container-body">${body}</div>`
-        : '<div class="container-inner-blocks is-empty is-passive-empty"><div class="container-empty-placeholder">Empty container</div></div>';
+        ? `<div class="reader-container-body" ${imageDropAttrs}>${body}</div>`
+        : `<div class="container-inner-blocks is-empty is-passive-empty" ${imageDropAttrs}><div class="container-empty-placeholder">Empty container</div></div>`;
     }
 
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
-      const expandableStateKey = `${sectionKey}:${block.id}`;
-      const expanded = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+      // Editing surfaces follow the document: the editor's own toggle writes
+      // expandableExpanded, while readerExpandableState is ephemeral viewer session state
+      // that must not decide what the editor shows. Search reveal is the exception, since
+      // a search runs on the surface you are already looking at.
+      const expanded = state.searchRevealedAncestors[`${sectionKey}:${block.id}`] === true
+        || block.schema.expandableExpanded;
       const alwaysShowStub = block.schema.expandableAlwaysShowStub;
       const stubPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
       const contentPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));
-      const stubHtml = block.schema.expandableStubBlocks.children
-        .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-        .join('');
-      const contentHtml = block.schema.expandableContentBlocks.children
-        .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-        .join('');
+      const stubHtml = renderEditorNestedBlocks(sectionKey, block.schema.expandableStubBlocks.children, {
+        container: 'expandable-stub',
+        parentBlockId: block.id,
+        locked: true,
+      });
+      const contentHtml = renderEditorNestedBlocks(sectionKey, block.schema.expandableContentBlocks.children, {
+        container: 'expandable-content',
+        parentBlockId: block.id,
+        locked: true,
+      });
       const hasStubContent = stubHtml.trim().length > 0;
       const hasExpandedContent = contentHtml.trim().length > 0;
       const stubBody = hasStubContent ? stubHtml : '<div class="expandable-passive-empty-ghost">Empty stub</div>';
@@ -886,9 +1326,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (base === 'component-list') {
       deps.ensureComponentListBlocks(block);
       if (state.mobileAdjustmentMode) {
-        return `<div class="reader-component-list">${(block.schema.componentListBlocks ?? [])
-          .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-          .join('')}</div>`;
+        return `<div class="reader-component-list">${renderEditorNestedBlocks(sectionKey, block.schema.componentListBlocks ?? [], {
+          container: 'component-list',
+          parentBlockId: block.id,
+          locked: true,
+        })}</div>`;
       }
       const actionLabel = block.schema.lock ? getComponentListEditLabel(block) : getComponentListAddLabel(block);
       const actionAttr = block.schema.lock ? '' : ` data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
@@ -901,25 +1343,37 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       if (!hasComponentListItems(block)) {
         const existingContent = block.schema.componentListBlocks.length > 0
           ? state.currentView === 'ai'
-            ? `<div class="reader-component-list">${block.schema.componentListBlocks
-              .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-              .join('')}</div>`
-            : deps.renderReaderBlock(section, block)
+            ? `<div class="reader-component-list">${renderEditorNestedBlocks(sectionKey, block.schema.componentListBlocks, {
+              container: 'component-list',
+              parentBlockId: block.id,
+              locked: true,
+            })}</div>`
+            : deps.renderReaderBlock(section, block, { ignoreReaderSessionState: true })
           : '';
         return `${existingContent}<div class="ghost-section-card add-ghost component-list-add-ghost passive-empty-list-ghost"${actionAttr}>
           <div class="ghost-plus-small">${plusIcon()}</div>
           <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
         </div>`;
       }
-      const listContent = `<div class="reader-component-list">${(block.schema.componentListBlocks ?? [])
-        .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-        .join('')}</div>`;
+      const listContent = `<div class="reader-component-list">${renderEditorNestedBlocks(sectionKey, block.schema.componentListBlocks ?? [], {
+        container: 'component-list',
+        parentBlockId: block.id,
+        locked: true,
+      })}</div>`;
       return `${listContent}${addControl}`;
     }
 
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);
       const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
+      const renderedGridBlocks = new Map(
+        renderEditorGridBlocks(
+          sectionKey,
+          block.schema.gridItems.map((item) => item.block),
+          columns,
+          block.schema.lock
+        ).map((entry) => [entry.block, entry.html])
+      );
       const leadingPlacementTarget = state.componentPlacement && !block.schema.lock && block.schema.gridItems[0]
         ? renderComponentPlacementTarget({
           container: 'grid',
@@ -933,9 +1387,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         .map((item, index) => {
           const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
           const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
-          const cellStyle = [
-            `grid-column: ${gridColumn};`,
-          ].filter(Boolean).join(' ');
+          // Keep document cell CSS off passive editor scaffolding because
+          // placement controls share these cells. Reader rendering owns that CSS.
+          const cellStyle = `grid-column: ${gridColumn};`;
           const beforePlacementTarget = index === 0 ? leadingPlacementTarget : '';
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({
@@ -946,11 +1400,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               targetGridItemId: item.id,
             })
             : '';
-          return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
-            sectionKey,
-            item.block,
-            rootSections
-          )}${trailingPlacementTarget}</div>`;
+          return `<div class="reader-grid-cell is-passive-grid-cell" data-grid-item-id="${deps.escapeAttr(item.id)}" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderedGridBlocks.get(item.block) ?? ''}${trailingPlacementTarget}</div>`;
         })
         .join('');
       return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${cells}</div>`;
@@ -969,6 +1419,21 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="editor-passive-empty-text">Button: ${deps.escapeHtml(block.schema.buttonLabel || 'Generate')}${deps.escapeHtml(targetSummary)}</div>`;
     }
 
+    if (base === 'location-marker') {
+      return renderLocationMarkerPreview(block, deps.getComponentRenderHelpers());
+    }
+
+    if (base === 'image' && !block.schema.imageFile.trim()) {
+      return `<div class="image-reader">
+        <div class="image-empty image-empty-editable muted">
+          <span>No image</span>
+          <button type="button" class="ghost image-empty-edit-button" data-action="activate-block" data-section-key="${deps.escapeAttr(
+            sectionKey
+          )}" data-block-id="${deps.escapeAttr(block.id)}">Edit</button>
+        </div>
+      </div>`;
+    }
+
     if (base === 'text' && block.text.trim().length === 0) {
       const hint = block.schema.placeholder || 'Empty text...';
       const content = block.schema.placeholder
@@ -978,7 +1443,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}"${alignStyle}>${content}</div>`;
     }
 
-    return deps.renderReaderBlock(section, block, { suppressAiEditorDelegation: true });
+    return deps.renderReaderBlock(section, block, { suppressAiEditorDelegation: true, ignoreReaderSessionState: true });
   }
 
   function renderRichToolbar(
@@ -988,6 +1453,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       field?: string;
       gridItemId?: string;
       rowIndex?: number;
+      includeDismiss?: boolean;
       includeAlign?: boolean;
       includeFillIn?: boolean;
       align?: Align;
@@ -1017,15 +1483,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const textLineStyleControls = renderTextLineStyleToolbar(textLineStyles, richButtonAttrs, sectionKey, blockId);
     return `
       <div class="rich-toolbar">
+        ${options?.includeDismiss === false ? '' : renderTextToolbarDismissButton()}
         <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
           <button type="button" class="${selectedClass(blockStyle === 'paragraph')}" data-rich-action="paragraph" ${richButtonAttrs} title="Normal text">Text</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-1')}" data-rich-action="heading-1" ${richButtonAttrs} title="Heading 1">H1</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-2')}" data-rich-action="heading-2" ${richButtonAttrs} title="Heading 2">H2</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-3')}" data-rich-action="heading-3" ${richButtonAttrs} title="Heading 3">H3</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-4')}" data-rich-action="heading-4" ${richButtonAttrs} title="Heading 4">H4</button>
+          ${alignControls}
         </div>
         <div class="toolbar-segment format-buttons" role="group" aria-label="Text formatting">
-          ${alignControls}
           <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (${hotkeyModifier}+B)"><strong>B</strong></button>
           <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (${hotkeyModifier}+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="underline" ${richButtonAttrs} aria-label="Underline" title="Underline (${hotkeyModifier}+U)"><span class="toolbar-icon underline-icon" aria-hidden="true">U</span></button>
@@ -1035,7 +1502,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'ordered-list')}" data-rich-action="ordered-list" ${richButtonAttrs} aria-label="Numbered List" title="Numbered List"><span class="toolbar-icon ordered-list-icon" aria-hidden="true"></span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
-          <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+          <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)" disabled><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
         </div>
         ${textLineStyleControls}
       </div>
@@ -1281,6 +1748,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
+        <label>
+          <span>Sidebar Max Width</span>
+          <input data-field="meta-sidebar-max-width" placeholder="40rem" value="${deps.escapeAttr(String(state.documentMeta.sidebar_max_width ?? ''))}" />
+        </label>
+        <label>
+          <span>Paragraph Spacing</span>
+          <input data-field="meta-paragraph-spacing" placeholder="0.45rem" value="${deps.escapeAttr(getDocumentParagraphSpacing(state.documentMeta))}" />
+        </label>
+        <label>
+          <span>Database Table Max Column Width</span>
+          <input data-field="meta-database-table-max-column-width" placeholder="40rem" value="${deps.escapeAttr(String(state.documentMeta.database_table_max_column_width ?? ''))}" />
+        </label>
         ${pdfPageControls}
         <div class="meta-image-reduction-row">
           <span>Reduce new image sizes to fit:</span>
@@ -1364,7 +1843,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         <div class="meta-panel-head">
           <strong>Component Templates</strong>
-          <button type="button" class="ghost" data-action="add-component-def">Add Template</button>
+          <button type="button" class="ghost" data-action="add-component-def">New Component Template</button>
         </div>
         <div class="component-defs">
           ${defs.length === 0
@@ -1373,76 +1852,33 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           .map(
             (def, index) => {
               const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-              const detailsKey = templateDefinitionDetailsKey('component', index);
-              return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
-                <summary class="template-def-summary">
+              return `<div class="component-def template-def-row" data-template-kind="component" data-def-index="${index}">
+                <div class="template-def-summary">
                   <span class="template-def-summary-text">
                     <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
                     <span>${deps.escapeHtml(def.baseType)}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                   </span>
                   <span class="template-def-summary-actions">
                     <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
-                    <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                    ${renderDeleteControl({
+                      className: 'template-def-remove-button',
+                      label: `Remove ${def.name || 'Untitled Template'}`,
+                      title: 'Delete component template',
+                      attributes: {
+                        'data-action': 'remove-component-def',
+                        'data-def-index': String(index),
+                      },
+                    })}
                   </span>
-                </summary>
-                <div class="template-def-body">
-                  <label>
-                    <span>Name</span>
-                    <input data-field="def-name" data-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
-                  </label>
-                  <div class="template-meta-display">
-                    <span>Base Type</span>
-                    <strong>${deps.escapeHtml(def.baseType)}</strong>
-                  </div>
-                  <label>
-                    <span>Default Tags</span>
-                    ${renderTagEditor(
-                'def-tags',
-                def.tags ?? '',
-                {
-                  defIndex: index,
-                  placeholder: 'Add a default tag',
-                },
-                { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
-              )}
-                  </label>
-                  <label>
-                    <span>Description</span>
-                    <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
-                  </label>
-                  ${deps.resolveBaseComponent(def.baseType) === 'xref-card'
-                  ? `<label>
-                    <span>Target Tag Filter</span>
-                    <input data-field="def-xref-target-tag-filter" data-def-index="${index}" placeholder="tag-name" value="${deps.escapeAttr(def.template?.schema.xrefTargetTagFilter ?? def.schema?.xrefTargetTagFilter ?? '')}" />
-                  </label>`
-                  : ''
-                }
-                  <div class="meta-panel-head">
-                    <strong>Flavors</strong>
-                  </div>
-                  ${flavors.length === 0
-                  ? '<div class="muted">No flavors. Import uses the main component template.</div>'
-                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
-                    ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
-                      <label>
-                        <span>Flavor Name</span>
-                        <input data-field="def-flavor-name" data-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
-                      </label>
-                      <label>
-                        <span>Flavor Description</span>
-                        <textarea rows="2" data-field="def-flavor-description" data-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
-                      </label>
-                  <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
-                    </div>`).join('')}`}
-                  <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
                 </div>
-              </details>`;
+              </div>`;
             }
           )
           .join('')}
         </div>
         <div class="meta-panel-head">
           <strong>Section Templates</strong>
+          <button type="button" class="ghost" data-action="add-section-def">New Section Template</button>
         </div>
         <div class="component-defs">
           ${sectionDefs.length === 0
@@ -1498,6 +1934,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
         </div>
       </section>
+      ${state.documentExtension === '.hvy' && state.document ? renderDocumentAttachmentManager(state.document, deps) : ''}
     `;
   }
 
@@ -1677,9 +2114,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderPluginEditor(sectionKey, block, helpers);
     }
     if (component === 'button') {
-      return state.showAdvancedEditor
+      return state.showAdvancedEditor || block.schema.buttonPositionTargetId.trim().length > 0
         ? renderButtonAdvancedEditor(sectionKey, block)
         : renderButtonEditor(sectionKey, block, helpers);
+    }
+    if (component === 'location-marker') {
+      return renderLocationMarkerEditor(sectionKey, block, helpers);
     }
     if (component === 'container') {
       return renderContainerEditor(sectionKey, block, helpers);
@@ -1711,14 +2151,29 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (component === 'carousel') {
       return renderCarouselEditor(sectionKey, block, helpers);
     }
+    if (component === 'code') {
+      return renderCodeEditor(sectionKey, block, helpers);
+    }
     return renderTextEditor(sectionKey, block, helpers);
+  }
+
+  function renderBlockHeaderControls(sectionKey: string, block: VisualBlock): string {
+    const component = deps.resolveBaseComponent(block.schema.component);
+    return component === 'grid'
+      ? renderGridHeaderControls(sectionKey, block, deps.getComponentRenderHelpers())
+      : '';
   }
 
   function renderEncryptedComponentEditor(sectionKey: string, block: VisualBlock): string {
     if (block.schema.encryptedBlock) {
-      return `<div class="encrypted-component-editor">
-        ${renderEditorBlock(sectionKey, block.schema.encryptedBlock, state.documentSections)}
-      </div>`;
+      encryptedEditorDepth += 1;
+      try {
+        return `<div class="encrypted-component-editor">
+          ${renderEditorBlock(sectionKey, block.schema.encryptedBlock, state.documentSections)}
+        </div>`;
+      } finally {
+        encryptedEditorDepth -= 1;
+      }
     }
     const keyId = block.schema.keyId.trim() || '(missing)';
     const attachmentId = block.schema.encryptedAttachmentId.trim() || `encrypted:${keyId}`;
@@ -1732,10 +2187,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
     const component = deps.resolveBaseComponent(block.schema.component);
+    const listItemComponent = block.schema.componentListComponent || 'text';
+    const componentDefs = component === 'component-list' ? deps.getComponentDefs() : [];
+    const listItemDefIndex = componentDefs.findIndex((definition) => definition.name === listItemComponent);
+    const listItemDefinition = listItemDefIndex >= 0 ? componentDefs[listItemDefIndex] : null;
+    const componentHelpers = component === 'component-list' ? deps.getComponentRenderHelpers() : null;
     const listDisplayContext = getComponentListDisplayContext(sectionKey, block.id);
     const isScriptingPlugin = component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID;
     const scriptingLibraries = Array.isArray(block.schema.pluginConfig?.libraries) ? block.schema.pluginConfig.libraries : [];
     const gridStackWidth = component === 'grid' ? coerceGridStackWidth(block.schema.gridStackWidth) : DEFAULT_GRID_STACK_WIDTH;
+    const gridStackWidthDescriptionId = `grid-stack-width-description-${sectionKey}-${block.id}`;
     const textMetaFields = component === 'text'
       ? `<label class="schema-meta-checkbox">
           <input
@@ -1757,6 +2218,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               data-section-key="${deps.escapeAttr(sectionKey)}"
               data-block-id="${deps.escapeAttr(block.id)}"
               data-field="block-grid-stack-width"
+              aria-describedby="${deps.escapeAttr(gridStackWidthDescriptionId)}"
               placeholder="${DEFAULT_GRID_STACK_WIDTH}"
               value="${deps.escapeAttr(gridStackWidth === DEFAULT_GRID_STACK_WIDTH || gridStackWidth === 'never' ? '' : gridStackWidth)}"
               ${gridStackWidth === 'never' ? 'disabled' : ''}
@@ -1772,6 +2234,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               ${gridStackWidth === 'never' ? 'checked' : ''}
             />
           </label>
+          <p class="grid-stack-width-description" id="${deps.escapeAttr(gridStackWidthDescriptionId)}">The minimum width before grid elements are displayed vertically.</p>
         </div>`
       : '';
     const scriptingVersionField =
@@ -1883,17 +2346,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         ${textMetaFields}
         ${gridMetaFields}
-        <label>
-          <div>Visible When Function Body</div>
-          <div>Controls when this block is visible. Returns boolean.</div>
-          <textarea
-            rows="5"
-            spellcheck="false"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-visible-script"
-          >${deps.escapeHtml(block.schema.visibleScript)}</textarea>
-        </label>
+        ${renderVisibilityScriptDisclosure(
+          'block-visible-script',
+          block.schema.visibleScript,
+          `data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`,
+          'Controls when this component is visible. The script must return a boolean.'
+        )}
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
         ${component === 'container'
         ? `<label>
@@ -1911,7 +2369,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : ''
       }
         ${component === 'component-list'
-        ? `<label>
+        ? `<section class="component-list-item-meta" aria-label="List item configuration">
+          <label>
+            <span>List Item Type</span>
+            <select
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-component-list-component"
+              ${block.schema.componentListBlocks.length > 0 ? 'disabled' : ''}
+            >${componentHelpers?.renderComponentOptions(listItemComponent) ?? ''}</select>
+          </label>
+          ${block.schema.componentListBlocks.length > 0
+            ? '<p class="component-list-type-note">Remove all list items before changing the item type.</p>'
+            : ''}
+          <label>
           <span>List Item Label</span>
           <input
             data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -1921,6 +2392,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.componentListItemLabel)}"
           />
         </label>
+        ${listItemDefinition
+          ? `<div class="component-list-shared-sort-values">
+            <p class="component-list-shared-note">Shared by every list using <strong>${deps.escapeHtml(listItemDefinition.name)}</strong>.</p>
+            ${renderComponentSortValueDefinitions(listItemDefinition, listItemDefIndex)}
+          </div>`
+          : `<p class="component-list-shared-note">Typed sort values require a reusable component item type.</p>`}
+        </section>
         <label class="checkbox-label">
           <input
             type="checkbox"
@@ -2011,12 +2489,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <span>Output Character Limit</span>
         <input type="number" min="1" step="1" ${attr} data-field="block-button-output-char-limit" value="${deps.escapeAttr(String(block.schema.buttonOutputCharLimit))}" />
       </label>
-      <label>
-        <div>Visible When Function Body</div>
-        <div>Controls when the button is visible.</div>
-        <div>Returns boolean</div>
-        <textarea rows="5" spellcheck="false" ${attr} data-field="block-button-visible-script">${deps.escapeHtml(block.schema.buttonVisibleScript)}</textarea>
-      </label>
+      ${renderVisibilityScriptDisclosure(
+        'block-button-visible-script',
+        block.schema.buttonVisibleScript,
+        attr,
+        'Controls when the button is visible. The script must return a boolean.'
+      )}
       <label>
         <div>Context Builder Function Body</div>
         <div>This is provided to the LLM</div>
@@ -2050,11 +2528,145 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     </div>`;
   }
 
+  function renderVisibilityScriptDisclosure(
+    field: 'block-visible-script' | 'block-button-visible-script',
+    value: string,
+    attributes: string,
+    description: string
+  ): string {
+    return `<details class="meta-expandable-field visibility-script-field">
+      <summary>
+        <span>Visibility Script</span>
+        ${value.trim() ? '<span class="muted">Configured</span>' : ''}
+      </summary>
+      <label>
+        <span>${deps.escapeHtml(description)}</span>
+        <textarea
+          rows="5"
+          spellcheck="false"
+          ${attributes}
+          data-field="${field}"
+        >${deps.escapeHtml(value)}</textarea>
+      </label>
+    </details>`;
+  }
+
   function renderComponentListDisplayFields(sectionKey: string, block: VisualBlock, context: ComponentListDisplayContext): string {
     return `<section class="component-list-display-editor" aria-label="Component list display">
       <strong>Component List Display</strong>
       ${renderDisplayKeyEditor('Sort Keys', 'sort', sectionKey, block, context.sortKeys, block.schema.sortKeys)}
       ${renderDisplayKeyEditor('Grouping Keys', 'group', sectionKey, block, context.groupKeys, block.schema.groupKeys)}
+    </section>`;
+  }
+
+  function renderComponentSortValueDefinitions(definition: ComponentDefinition, defIndex: number): string {
+    const entries = Object.entries(definition.sortValueDefs ?? {});
+    return `<section class="component-sort-value-editor" aria-label="Sort Values">
+      <div class="meta-panel-head">
+        <strong>Sort Values</strong>
+        <button type="button" class="ghost component-sort-value-action" data-action="add-component-sort-value" data-def-index="${defIndex}">
+          ${plusIcon()} Add Sort Value
+        </button>
+      </div>
+      ${entries.length === 0
+        ? '<p class="muted component-sort-value-empty">No sort values defined.</p>'
+        : entries.map(([name, sortDefinition], sortValueIndex) => {
+          const options = sortDefinition.type === 'enum' ? sortDefinition.options ?? [] : [];
+          const openKey = componentSortValueDetailsKey(defIndex, name);
+          return `<details
+            class="component-sort-value-card component-sort-value-details"
+            data-def-index="${defIndex}"
+            data-sort-value-name="${deps.escapeAttr(name)}"
+            data-sort-value-index="${sortValueIndex}"
+            ${state.openTemplateDefinitionKeys.includes(openKey) ? 'open' : ''}
+          >
+            <summary class="component-sort-value-summary">
+              <span class="component-sort-value-summary-text">
+                <strong>${deps.escapeHtml(name)}</strong>
+                <span>${sortDefinition.type === 'datetime' ? 'Date & Time' : sortDefinition.type[0].toUpperCase() + sortDefinition.type.slice(1)}${sortDefinition.type === 'enum' ? ` · ${options.length} option${options.length === 1 ? '' : 's'}` : ''}</span>
+              </span>
+              <span class="component-sort-value-summary-icon" aria-hidden="true">⌄</span>
+            </summary>
+            <div class="component-sort-value-card-body">
+              <div class="component-sort-value-fields">
+              <label>
+                <span>Name</span>
+                <input
+                  data-field="def-sort-value-name"
+                  data-def-index="${defIndex}"
+                  data-sort-value-name="${deps.escapeAttr(name)}"
+                  value="${deps.escapeAttr(name)}"
+                />
+              </label>
+              <label>
+                <span>Type</span>
+                <select
+                  data-field="def-sort-value-type"
+                  data-def-index="${defIndex}"
+                  data-sort-value-name="${deps.escapeAttr(name)}"
+                >
+                  ${(['text', 'number', 'date', 'datetime', 'enum'] as const).map((type) =>
+                    `<option value="${type}"${sortDefinition.type === type ? ' selected' : ''}>${type === 'datetime' ? 'Date & Time' : type[0].toUpperCase() + type.slice(1)}</option>`
+                  ).join('')}
+                </select>
+              </label>
+              <button
+                type="button"
+                class="danger remove-x component-sort-value-remove"
+                data-action="remove-component-sort-value"
+                data-def-index="${defIndex}"
+                data-sort-value-name="${deps.escapeAttr(name)}"
+                aria-label="Remove ${deps.escapeAttr(name)} sort value"
+              >${closeIcon()}</button>
+              </div>
+            ${sortDefinition.type === 'date'
+              ? `<label>
+                <span>Date Format</span>
+                <select data-field="def-sort-value-format" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}">
+                  ${(['YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY'] as const).map((format) =>
+                    `<option value="${format}"${sortDefinition.format === format ? ' selected' : ''}>${format}</option>`
+                  ).join('')}
+                </select>
+              </label>`
+              : ''}
+            ${sortDefinition.type === 'enum'
+              ? `<div class="component-enum-option-editor">
+                <div class="component-enum-option-head">
+                  <strong>Options</strong>
+                  <button
+                    type="button"
+                    class="ghost component-sort-value-action"
+                    data-action="add-component-enum-option"
+                    data-def-index="${defIndex}"
+                    data-sort-value-name="${deps.escapeAttr(name)}"
+                  >${plusIcon()} Add Option</button>
+                </div>
+                ${options.length === 0
+                  ? '<p class="muted component-sort-value-empty">No enum options defined.</p>'
+                  : options.map((option, optionIndex) => `<div class="component-enum-option-row">
+                    <label>
+                      <span>Label</span>
+                      <input data-field="def-enum-option-label" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}" data-option-index="${optionIndex}" value="${deps.escapeAttr(option.label)}" />
+                    </label>
+                    <label>
+                      <span>Value</span>
+                      <input data-field="def-enum-option-value" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}" data-option-index="${optionIndex}" value="${deps.escapeAttr(String(option.value))}" />
+                    </label>
+                    <button
+                      type="button"
+                      class="danger remove-x"
+                      data-action="remove-component-enum-option"
+                      data-def-index="${defIndex}"
+                      data-sort-value-name="${deps.escapeAttr(name)}"
+                      data-option-index="${optionIndex}"
+                      aria-label="Remove ${deps.escapeAttr(option.label)} option"
+                    >${closeIcon()}</button>
+                  </div>`).join('')}
+              </div>`
+              : ''}
+            </div>
+          </details>`;
+        }).join('')}
     </section>`;
   }
 
@@ -2154,27 +2766,38 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return listBlock ? buildComponentListDisplayContext(listBlock) : null;
   }
 
-  function renderTextFragment(content: string): string {
+  function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
     const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
-    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized, {
+    const linkedHtml = addExternalLinkTargets(markdownToReaderHtml(normalized, {
+      answerGroups,
       textLineStyles: getTextLineStylesFromMeta(state.documentMeta),
       textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
+      preserveSortValueAnnotations: state.currentView === 'editor',
       crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
-    }), state.crossDocumentLinksEnabled === true), deps.escapeHtml));
+    }), state.crossDocumentLinksEnabled === true);
+    const attachmentHtml = state.document
+      ? renderUserFileAttachmentLinksInHtml(linkedHtml, state.document)
+      : linkedHtml;
+    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(attachmentHtml, deps.escapeHtml));
   }
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock, sectionKey = ''): string {
     if (componentName === 'code') {
       return renderSyntaxHighlightedCode(content, block.schema.codeLanguage || 'text');
     }
+    // Radio groups can span components, so membership comes from the document index.
+    const answerGroups = componentName === 'text'
+      ? getBlockAnswerGroups(getInlineAnswerGroupIndex(state.documentSections), sectionKey, block.id)
+      : undefined;
     if (componentName === 'text' && block.schema.fillIn && hasTextFillInMarker(content)) {
       if (state.currentView === 'viewer') {
-        return renderTextFragment(removeTextFillInMarkers(content));
+        return renderTextFragment(removeTextFillInMarkers(content), answerGroups);
       }
       const parts = splitTextFillIns(content);
       const tokenPrefix = 'HVY_FILL_IN_VALUE_TOKEN_';
       let html = renderTextFragment(
-        parts.map((part, index) => (index < parts.length - 1 ? `${part}${tokenPrefix}${index}` : part)).join('')
+        parts.map((part, index) => (index < parts.length - 1 ? `${part}${tokenPrefix}${index}` : part)).join(''),
+        answerGroups
       );
       for (let index = 0; index < parts.length - 1; index += 1) {
         html = html.replace(
@@ -2193,42 +2816,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
       return `<div class="text-fill-in-editor text-fill-in-reader-editor" data-fill-parts="${deps.escapeAttr(JSON.stringify(parts))}">${html}</div>`;
     }
-    return renderTextFragment(content);
+    return renderTextFragment(content, answerGroups);
   }
 
-  function renderPassiveContainerBlocks(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {
-    const blocks = block.schema.containerBlocks;
-    const output: string[] = [];
-    if (!block.schema.lock && blocks[0]) {
-      output.push(renderComponentPlacementTarget({
-        container: 'container',
-        sectionKey,
-        parentBlockId: block.id,
-        placement: 'before',
-        targetBlockId: blocks[0].id,
-      }));
-    }
-    for (const innerBlock of blocks) {
-      output.push(renderPassiveEditorBlock(sectionKey, innerBlock, rootSections));
-      if (!block.schema.lock) {
-        output.push(renderComponentPlacementTarget({
-          container: 'container',
-          sectionKey,
-          parentBlockId: block.id,
-          placement: 'after',
-          targetBlockId: innerBlock.id,
-        }));
-      }
-    }
-    if (!block.schema.lock && blocks.length === 0) {
-      output.push(renderComponentPlacementTarget({
-        container: 'container',
-        sectionKey,
-        parentBlockId: block.id,
-        placement: 'end',
-      }));
-    }
-    return output.join('');
+  function renderPassiveContainerBlocks(sectionKey: string, block: VisualBlock): string {
+    return renderEditorNestedBlocks(sectionKey, block.schema.containerBlocks, {
+      container: 'container',
+      parentBlockId: block.id,
+      locked: block.schema.lock,
+    });
   }
 
   function renderSyntaxHighlightedCode(content: string, languageName: string, options?: { badge?: string }): string {
@@ -2248,9 +2844,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   return {
     renderSectionEditorTree,
+    renderEditorSection,
+    renderTopLevelSectionInsertGutter,
+    recordEditorSectionHeight,
+    recordEditorBlockHeight,
     renderSidebarEditorSections,
     renderSidebarHelpBalloon,
     renderEditorBlock: (sectionKey, block, rootSections, parentLocked) => renderEditorBlock(sectionKey, block, rootSections, parentLocked),
+    renderEditorNestedBlocks,
+    renderEditorGridBlocks,
     renderPassiveEditorBlock: (sectionKey, block, rootSections) => renderPassiveEditorBlock(sectionKey, block, rootSections ?? []),
     renderBlockContentEditor: (sectionKey, block) => renderBlockContentEditor(sectionKey, block),
     renderRichToolbar,
@@ -2260,6 +2862,26 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderBlockMetaFields,
     renderComponentPlacementTarget,
   };
+}
+
+function addCoreEditorControlClasses(markup: string): string {
+  // Plugins render an empty mount placeholder here and attach their own DOM later,
+  // so only controls emitted by core editor renderers receive these ownership classes.
+  return markup.replace(/<(input|select|textarea)\b[^>]*>/g, (tag, elementName: string) => {
+    const controlClass = elementName === 'select'
+      ? 'hvy-editor-select-control'
+      : 'hvy-editor-field-control';
+    const classAttribute = tag.match(/\bclass=(['"])(.*?)\1/);
+    if (!classAttribute) {
+      return tag.replace(/^<([a-z]+)/, `<$1 class="${controlClass}"`);
+    }
+    const currentClasses = classAttribute[2].split(/\s+/);
+    if (currentClasses.includes(controlClass)) {
+      return tag;
+    }
+    const nextClassAttribute = `class=${classAttribute[1]}${classAttribute[2]} ${controlClass}${classAttribute[1]}`;
+    return tag.replace(classAttribute[0], nextClassAttribute);
+  });
 }
 
 function highlightCode(code: string, language: string, escapeHtml: (value: string) => string): string {
@@ -2383,6 +3005,10 @@ function findBlockLocation(
 
 export function templateDefinitionDetailsKey(kind: 'component' | 'section', index: number): string {
   return `${kind}:${index}`;
+}
+
+export function componentSortValueDetailsKey(defIndex: number, name: string): string {
+  return `component-sort-value:${defIndex}:${name}`;
 }
 
 function renderHeadingLevelOption(value: 'h1' | 'h2' | 'h3', selected: string, escapeAttr: (value: string) => string): string {

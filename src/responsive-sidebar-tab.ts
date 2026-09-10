@@ -39,6 +39,14 @@ export function bindResponsiveSidebarShells(app: HTMLElement): void {
 export function updateResponsiveSidebarShellState(shell: HTMLElement, measuredWidth = shell.getBoundingClientRect().width): void {
   const compact = isResponsiveSidebarShellCompact(shell, measuredWidth);
   shell.classList.toggle('hvy-compact-sidebar-shell', compact);
+  const viewerDocument = shell.querySelector<HTMLElement>('.viewer-document-scroll');
+  if (viewerDocument) {
+    const phoneOrTabletPreview = shell.classList.contains('hvy-preview-frame-phone')
+      || shell.classList.contains('hvy-preview-frame-tablet');
+    const sizedPreview = phoneOrTabletPreview || shell.classList.contains('hvy-preview-frame-desktop');
+    viewerDocument.classList.toggle('viewer-document-preview', compact || sizedPreview);
+    viewerDocument.classList.toggle('viewer-document-compact', compact || phoneOrTabletPreview);
+  }
   if (!compact) {
     shell.classList.remove('is-sidebar-tab-visible');
     shell.classList.remove('is-sidebar-tab-hidden');

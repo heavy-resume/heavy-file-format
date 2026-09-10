@@ -7,10 +7,44 @@ import { buildChatResponseRichTextCopyPayload } from '../../chat/chat-response-d
 import { prepareEmbeddingChatContext } from '../../chat/embedding-context';
 import { advanceDocumentEditCliSimStep, copyChatMessageToHvySection, runDocumentEditCliSimStep, type DocumentEditCliSimRequest } from '../../chat/chat-session';
 import type { AppActionHandler } from './types';
+import { appendTextAtSelection, removePendingChatAttachment } from '../../chat/chat-attachments';
+import { saveSessionState } from '../../state-persistence';
 
 const clearChatHistory: AppActionHandler = () => {
   clearChatConversation(state.chat);
   getRenderApp()();
+};
+
+const removeChatAttachment: AppActionHandler = ({ app, actionButton }) => {
+  removePendingChatAttachment(state.chat, actionButton.dataset.attachmentId ?? '');
+  actionButton.closest('[data-chat-attachment-id]')?.remove();
+  const list = app.querySelector<HTMLElement>('.chat-composer-attachments');
+  if (list && !list.querySelector('[data-chat-attachment-id]')) {
+    list.hidden = true;
+  }
+  saveSessionState(state);
+  app.querySelector<HTMLTextAreaElement>('[data-field="chat-input"]')?.focus();
+};
+
+const restoreChatAttachment: AppActionHandler = ({ app, actionButton }) => {
+  const attachment = removePendingChatAttachment(state.chat, actionButton.dataset.attachmentId ?? '');
+  const prompt = app.querySelector<HTMLTextAreaElement>('[data-field="chat-input"]');
+  if (!attachment || !prompt) {
+    getRenderApp()();
+    return;
+  }
+  const restored = appendTextAtSelection(prompt, attachment.text);
+  prompt.value = restored.value;
+  prompt.setSelectionRange(restored.selection, restored.selection);
+  state.chat.draft = restored.value;
+  state.chat.error = null;
+  actionButton.closest('[data-chat-attachment-id]')?.remove();
+  const list = app.querySelector<HTMLElement>('.chat-composer-attachments');
+  if (list && !list.querySelector('[data-chat-attachment-id]')) {
+    list.hidden = true;
+  }
+  saveSessionState(state);
+  prompt.focus();
 };
 
 const copyChatResponseToHvy: AppActionHandler = ({ actionButton }) => {
@@ -286,6 +320,8 @@ function formatEmbeddingBuildStatus(
 
 export const chatActions: Record<string, AppActionHandler> = {
   'clear-chat-history': clearChatHistory,
+  'remove-chat-attachment': removeChatAttachment,
+  'restore-chat-attachment': restoreChatAttachment,
   'copy-chat-response-to-hvy': copyChatResponseToHvy,
   'copy-chat-response-text': copyChatResponseText,
   'cancel-chat-request': cancelChatRequest,

@@ -1,0 +1,479 @@
+import { expect, test } from '@playwright/test';
+
+test('before, image edits, after: the editor viewport stays mounted and keeps its scroll anchor', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"scroll-repro"}-->
+#! Scroll repro
+
+${Array.from({ length: 24 }, (_, index) => ` <!--hvy:text {}-->
+  Spacer ${index + 1}: ${'Long editor content '.repeat(8)}
+`).join('\n')}
+ <!--hvy:image {}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click({ timeout: 1000 });
+
+  const editorTree = page.locator('#editorTree');
+  const image = page.locator('.editor-block-passive', { has: page.locator('.image-reader') });
+  await image.scrollIntoViewIfNeeded({ timeout: 1000 });
+  await editorTree.evaluate((element) => {
+    element.dataset.expectedViewportIdentity = 'image-scroll-regression';
+  });
+  const beforeActivationRenderCount = await page.evaluate(async () => (await import('/src/state.ts')).renderCount);
+
+  await image.click({ timeout: 1000 });
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .image-editor')).toBeVisible({ timeout: 1000 });
+  await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).state.pendingEditorActivation), { timeout: 1000 })
+    .toBeNull();
+  const beforeUpload = await editorTree.evaluate((element) => ({
+    scrollTop: element.scrollTop,
+    identity: element.dataset.expectedViewportIdentity,
+  }));
+
+  await page.locator('[data-field="image-upload"]').setInputFiles({
+    name: 'pixel.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+  });
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .image-block-img')).toBeVisible({ timeout: 1000 });
+  await expect(page.getByRole('button', { name: 'Alt Text' })).toBeVisible();
+  const afterUpload = await editorTree.evaluate((element) => ({
+    scrollTop: element.scrollTop,
+    identity: element.dataset.expectedViewportIdentity,
+  }));
+
+  await page.locator('.editor-block[data-active-editor-block="true"]').hover({ timeout: 1000 });
+  await page.mouse.wheel(0, 350);
+  await expect.poll(async () => editorTree.evaluate((element) => element.scrollTop), { timeout: 1000 })
+    .toBeGreaterThan(afterUpload.scrollTop);
+  const doneButton = page.getByRole('button', { name: 'Done' });
+  await doneButton.scrollIntoViewIfNeeded({ timeout: 1000 });
+  const beforeDoneScrollTop = await editorTree.evaluate((element) => element.scrollTop);
+  await doneButton.click({ timeout: 1000 });
+  await expect(image).toBeVisible({ timeout: 1000 });
+  const afterDone = await editorTree.evaluate((element) => ({
+    scrollTop: element.scrollTop,
+    identity: element.dataset.expectedViewportIdentity,
+  }));
+  const afterDoneRenderCount = await page.evaluate(async () => (await import('/src/state.ts')).renderCount);
+
+  expect(beforeUpload.identity).toBe('image-scroll-regression');
+  expect(afterUpload.identity).toBe('image-scroll-regression');
+  expect(afterDone.identity).toBe('image-scroll-regression');
+  expect(Math.abs(afterUpload.scrollTop - beforeUpload.scrollTop)).toBeLessThanOrEqual(2);
+  expect(Math.abs(afterDone.scrollTop - beforeDoneScrollTop)).toBeLessThanOrEqual(2);
+  expect(afterDoneRenderCount).toBe(beforeActivationRenderCount);
+});
+
+test('before, text above a loaded image, after: activating the text keeps its viewport anchor', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+${Array.from({ length: 10 }, (_item, index) => `<!--hvy: {"id":"lead-section-${index + 1}"}-->
+#! Lead Section ${index + 1}
+
+ <!--hvy:text {}-->
+  ${'Synthetic section content. '.repeat(24)}
+`).join('\n')}
+<!--hvy: {"id":"activation-target"}-->
+#! Activation Target
+
+${Array.from({ length: 14 }, (_item, index) => ` <!--hvy:text {}-->
+  Synthetic lead-in ${index + 1}: ${'Generic content. '.repeat(12)}
+`).join('\n')}
+ <!--hvy:text {"id":"editable-above-image"}-->
+  Editable text immediately above the image.
+
+ <!--hvy:image {"id":"loaded-image","imageFile":"synthetic-landscape.svg","imageAlt":"Synthetic landscape"}-->
+
+ <!--hvy:text {}-->
+  Content immediately below the image.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click({ timeout: 1000 });
+  await page.evaluate(async () => {
+    const [{ state, getRefreshEditorSection }, { setImageAttachment }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/attachments.ts'),
+    ]);
+    setImageAttachment(
+      state.document,
+      'synthetic-landscape.svg',
+      'image/svg+xml',
+      new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#789"/></svg>')
+    );
+    const targetSection = state.document.sections.find((section) => section.customId === 'activation-target');
+    if (!targetSection) throw new Error('Synthetic target section missing.');
+    getRefreshEditorSection()(targetSection.key);
+  });
+
+  const editorTree = page.locator('#editorTree');
+  const passiveText = page.locator('.editor-block-passive', { hasText: 'Editable text immediately above the image.' });
+  await editorTree.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await editorTree.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  await passiveText.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  await expect(page.getByRole('img', { name: 'Synthetic landscape' })).toBeVisible({ timeout: 1000 });
+  const beforeActivationTop = await passiveText.locator('.reader-block').evaluate((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const textNode = walker.nextNode();
+    if (!textNode) throw new Error('Passive text anchor missing.');
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    return range.getBoundingClientRect().top;
+  });
+
+  await passiveText.click({ timeout: 1000 });
+
+  const activeText = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await expect(activeText).toBeFocused({ timeout: 1000 });
+  const afterActivationTop = await activeText.locator('p').evaluate((element) => {
+    const textNode = element.firstChild;
+    if (!textNode) throw new Error('Active text anchor missing.');
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    return range.getBoundingClientRect().top;
+  });
+  await activeText.type('x', { timeout: 1000 });
+  await expect(activeText).toBeFocused({ timeout: 1000 });
+  const afterTypingTop = await activeText.locator('p').evaluate((element) => {
+    const textNode = element.firstChild;
+    if (!textNode) throw new Error('Typed text anchor missing.');
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    return range.getBoundingClientRect().top;
+  });
+
+  expect(Math.abs(afterTypingTop - afterActivationTop)).toBeLessThanOrEqual(2);
+  expect(Math.abs(afterActivationTop - beforeActivationTop)).toBeLessThanOrEqual(2);
+});
+
+test('before, deferred image hydration, after: following content keeps its viewport anchor', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="syntheticMount" style="width: 30rem; height: 36rem;"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed.ts');
+    const testWindow = window as Window & { resolveSyntheticImage?: () => void };
+    let resolveImage: ((value: Blob) => void) | null = null;
+    const imageUrl = new Promise<Blob>((resolve) => { resolveImage = resolve; });
+    testWindow.resolveSyntheticImage = () => resolveImage?.(new Blob([
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#789"/></svg>',
+    ], { type: 'image/svg+xml' }));
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#syntheticMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout-shift"}-->
+#! Layout Shift
+
+ <!--hvy:text {}-->
+  Generic content above the image.
+
+ <!--hvy:image {"imageFile":"deferred-landscape.svg","imageAlt":"Deferred landscape"}-->
+
+ <!--hvy:text {}-->
+  Generic content below the image.
+`), '.hvy'),
+      mode: 'editor',
+      attachmentStore: {
+        list: () => [{
+          id: 'image:deferred-landscape.svg',
+          meta: { mediaType: 'image/svg+xml', pixelWidth: 1200, pixelHeight: 800 },
+          length: 128,
+        }],
+        recall: () => null,
+        store: () => undefined,
+        remove: () => undefined,
+        resolveUrl: () => imageUrl,
+      },
+    });
+  });
+
+  const followingContent = page.getByText('Generic content below the image.', { exact: true });
+  const image = page.getByRole('img', { name: 'Deferred landscape' });
+  const reservedImageSize = await image.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  });
+  const beforeHydrationTop = await followingContent.evaluate((element) => element.getBoundingClientRect().top);
+
+  await page.evaluate(() => (window as Window & { resolveSyntheticImage?: () => void }).resolveSyntheticImage?.());
+
+  await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalHeight), { timeout: 1000 })
+    .toBeGreaterThan(0);
+  const afterHydrationTop = await followingContent.evaluate((element) => element.getBoundingClientRect().top);
+  expect(Math.abs(reservedImageSize.width / reservedImageSize.height - 1.5)).toBeLessThanOrEqual(0.01);
+  expect(Math.abs(afterHydrationTop - beforeHydrationTop)).toBeLessThanOrEqual(2);
+});
+
+test('before, a grid image has an explicit height, after: intrinsic dimensions preserve its aspect ratio', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="gridImageMount" style="width: 60rem;"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed.ts');
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#gridImageMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"grid-image"}-->
+#! Grid image
+
+ <!--hvy:grid {"gridStackWidth":"never"}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:image {"css":"height: 100px; display: block;","imageFile":"landscape.svg","imageAlt":"Grid landscape"}-->
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {}-->
+    Beside the image.
+`), '.hvy'),
+      mode: 'viewer',
+      controls: false,
+      attachmentStore: {
+        list: () => [{
+          id: 'image:landscape.svg',
+          meta: { mediaType: 'image/svg+xml', pixelWidth: 1200, pixelHeight: 800 },
+          length: 128,
+        }],
+        recall: () => null,
+        store: () => undefined,
+        remove: () => undefined,
+        resolveUrl: () => new Blob([
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#789"/></svg>',
+        ], { type: 'image/svg+xml' }),
+      },
+    });
+  });
+
+  const image = page.getByRole('img', { name: 'Grid landscape' });
+  const renderedSize = await image.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  });
+
+  expect(renderedSize.height).toBe(100);
+  expect(renderedSize.width).toBe(150);
+});
+
+test('before, a hosted image without dimension metadata loads, after: closing its editor keeps calculable image geometry', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="dimensionlessImageMount" style="width: 30rem; height: 36rem;"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed.ts');
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#dimensionlessImageMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"dimensionless-hosted-image"}-->
+#! Dimensionless Hosted Image
+
+ <!--hvy:image {"id":"hosted-image","imageFile":"hosted-landscape.svg","imageAlt":"Hosted landscape"}-->
+`), '.hvy'),
+      mode: 'editor',
+      attachmentStore: {
+        list: () => [{
+          id: 'image:hosted-landscape.svg',
+          meta: { mediaType: 'image/svg+xml' },
+          length: 128,
+        }],
+        recall: () => null,
+        store: () => undefined,
+        remove: () => undefined,
+        resolveUrl: () => new Blob([
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#789"/></svg>',
+        ], { type: 'image/svg+xml' }),
+      },
+    });
+  });
+
+  const image = page.getByRole('img', { name: 'Hosted landscape' });
+  await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalHeight), { timeout: 1000 })
+    .toBe(800);
+  await expect(image).toHaveAttribute('width', '1200');
+  await expect(image).toHaveAttribute('height', '800');
+  await image.evaluate((element) => {
+    (window as Window & { preparedHostedImage?: HTMLImageElement }).preparedHostedImage = element;
+  });
+
+  await image.click({ timeout: 1000 });
+  const activeImage = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.image-editor') });
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+  await activeImage.getByRole('button', { name: 'Done', exact: true }).click({ timeout: 1000 });
+
+  const passiveImage = page.locator('.editor-block-passive').getByRole('img', { name: 'Hosted landscape' });
+  await expect(passiveImage).toHaveAttribute('width', '1200');
+  await expect(passiveImage).toHaveAttribute('height', '800');
+  expect(await passiveImage.evaluate(
+    (element) => (window as Window & { preparedHostedImage?: HTMLImageElement }).preparedHostedImage === element
+  )).toBe(true);
+  const expectedResult = await passiveImage.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return bounds.width / bounds.height;
+  });
+  expect(Math.abs(expectedResult - 1.5)).toBeLessThanOrEqual(0.01);
+});
+
+test('before, an image and table are open, after: closing the table keeps its viewport anchor', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"mixed-editor-target"}-->
+#! Mixed Editor Target
+
+ <!--hvy:image {"id":"synthetic-neighbor-image","imageFile":"synthetic-table-neighbor.svg","imageAlt":"Synthetic table neighbor"}-->
+
+ <!--hvy:table {"id":"synthetic-neighbor-table","tableColumns":["Label","Value"]}-->
+  | Label | Value |
+  | --- | --- |
+${Array.from({ length: 8 }, (_item, index) => `  | Generic row ${index + 1} | Generic value ${index + 1} |`).join('\n')}
+
+${Array.from({ length: 10 }, (_item, index) => `<!--hvy: {"id":"trailing-section-${index + 1}"}-->
+#! Trailing Section ${index + 1}
+
+ <!--hvy:text {}-->
+  ${'Synthetic trailing content. '.repeat(24)}
+`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click({ timeout: 1000 });
+  await page.evaluate(async () => {
+    const [{ state, getRefreshEditorSection }, { setImageAttachment }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/attachments.ts'),
+    ]);
+    setImageAttachment(
+      state.document,
+      'synthetic-table-neighbor.svg',
+      'image/svg+xml',
+      new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"></svg>')
+    );
+    const targetSection = state.document.sections.find((section) => section.customId === 'mixed-editor-target');
+    if (!targetSection) throw new Error('Synthetic target section missing.');
+    getRefreshEditorSection()(targetSection.key);
+  });
+
+  const imageElement = page.getByRole('img', { name: 'Synthetic table neighbor' });
+  await expect.poll(() => imageElement.evaluate((element: HTMLImageElement) => element.naturalHeight), { timeout: 1000 })
+    .toBeGreaterThan(0);
+  const image = page.locator('.editor-block-passive', { has: imageElement });
+  await expect(image).toBeVisible({ timeout: 1000 });
+  await image.click({ timeout: 1000 });
+  const activeImage = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.image-editor') });
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+
+  const passiveTable = page.locator('.editor-block-passive', { hasText: 'Generic row 1' });
+  await passiveTable.evaluate((element) => {
+    const editor = element.closest('.editor-tree');
+    if (!(editor instanceof HTMLElement)) throw new Error('Editor scroll surface missing.');
+    editor.scrollTop += element.getBoundingClientRect().top - (editor.getBoundingClientRect().bottom - 45);
+    editor.dispatchEvent(new Event('scroll'));
+  });
+  await passiveTable.click({ timeout: 1000 });
+  const activeTable = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.table-editor') });
+  const firstCell = activeTable.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
+  await firstCell.click({ timeout: 1000 });
+  await expect(firstCell).toBeFocused({ timeout: 1000 });
+  await firstCell.type('x', { timeout: 1000 });
+  await expect(firstCell).toBeFocused({ timeout: 1000 });
+
+  await activeTable.hover({ timeout: 1000 });
+  await page.mouse.wheel(0, 300);
+  await page.mouse.wheel(0, -300);
+  const beforeCloseScrollTop = await page.locator('#editorTree').evaluate((element) => element.scrollTop);
+  await activeTable.getByRole('button', { name: 'Done', exact: true }).dispatchEvent('click');
+  await expect(passiveTable).toBeVisible({ timeout: 1000 });
+
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+  await expect.poll(
+    () => page.locator('#editorTree').evaluate(
+      (element, expectedScrollTop) => Math.abs(element.scrollTop - expectedScrollTop),
+      beforeCloseScrollTop
+    ),
+    { timeout: 1000 }
+  ).toBeLessThanOrEqual(2);
+});
+
+test('before, an image and nested list item are open, after: moving the item keeps the viewport position', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"nested-move-target"}-->
+#! Nested Move Target
+
+ <!--hvy:image {"id":"nested-move-image","imageAlt":"Nested move neighbor"}-->
+
+ <!--hvy:component-list {"id":"nested-move-list","componentListComponent":"text","componentListItemLabel":"entry"}-->
+
+${Array.from({ length: 10 }, (_item, index) => `  <!--hvy:component-list:${index} {}-->
+
+   <!--hvy:text {"id":"nested-move-entry-${index + 1}"}-->
+    Nested move entry ${index + 1} ${'generic content '.repeat(20)}
+`).join('\n')}
+${Array.from({ length: 6 }, (_item, index) => `<!--hvy: {"id":"nested-move-tail-${index + 1}"}-->
+#! Nested Move Tail ${index + 1}
+
+ <!--hvy:text {}-->
+  ${'Generic trailing content. '.repeat(28)}
+`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click({ timeout: 1000 });
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click({ timeout: 1000 });
+  const activeImage = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.image-editor') });
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+
+  const target = page.locator('.editor-block-passive', { hasText: 'Nested move entry 10' }).last();
+  await target.scrollIntoViewIfNeeded({ timeout: 1000 });
+  await target.click({ timeout: 1000 });
+  const activeItem = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Nested move entry 10' }).last();
+  await expect(activeItem).toBeVisible({ timeout: 1000 });
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.pendingEditorActivation;
+  }), { timeout: 1000 }).toBeNull();
+
+  const beforeMoveScrollTop = await page.locator('#editorTree').evaluate((element) => element.scrollTop);
+  await activeItem.getByRole('button', { name: 'Move block up' }).dispatchEvent('click');
+
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+  await expect.poll(
+    () => page.locator('#editorTree').evaluate(
+      (element, expectedScrollTop) => Math.abs(element.scrollTop - expectedScrollTop),
+      beforeMoveScrollTop
+    ),
+    { timeout: 1000 }
+  ).toBeLessThanOrEqual(2);
+});

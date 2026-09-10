@@ -20,6 +20,10 @@ export const openAiDescriptionProvider: HvyDescriptionProvider = async (request)
       model: DEFAULT_DESCRIPTION_MODEL,
     },
     mode: 'qa',
+    // A description is a sub-8-word label; reasoning buys nothing here. Only the
+    // OpenAI-compatible path honours this, which is also the only path that
+    // currently defaults to spending reasoning on it.
+    openAiReasoningEffort: 'none',
     debugLabel: 'description-generation',
     context: buildDescriptionPrompt(request),
     responseInstructions: 'Return only the description text.',

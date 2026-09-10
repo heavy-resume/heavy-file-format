@@ -8,7 +8,7 @@ import { refreshSearchFilterButton, setSearchExcludeTags } from '../../search/ac
 import { createEmptySectionWithMeta } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { revertReusableComponent } from '../../reusable';
-import { templateDefinitionDetailsKey } from '../../editor/render';
+import { componentSortValueDetailsKey, templateDefinitionDetailsKey } from '../../editor/render';
 import { stringify as stringifyYaml } from 'yaml';
 import type { AppActionHandler } from './types';
 
@@ -31,15 +31,56 @@ const tagStateHelpers = {
 const addComponentDef: AppActionHandler = () => {
   recordHistory();
   const defs = getComponentDefs();
+  const name = getUniqueDefinitionName('component', defs.map((definition) => definition.name));
   defs.push({
-    name: `component-${defs.length + 1}`,
+    name,
     baseType: 'text',
     tags: '',
     description: '',
   });
   state.document.meta.component_defs = defs;
+  state.reusableDefinitionEditModal = {
+    kind: 'component',
+    index: defs.length - 1,
+    error: null,
+    activeFlavorIndex: null,
+    originalRaw: '',
+    isNew: true,
+    historyBeforeDraft: { history: [...state.history], future: [...state.future] },
+  };
   getRenderApp()();
 };
+
+const addSectionDef: AppActionHandler = () => {
+  recordHistory();
+  const defs = getSectionDefs();
+  const name = getUniqueDefinitionName('section', defs.map((definition) => definition.name));
+  const template = createEmptySectionWithMeta(1, 'text', false, state.document.meta);
+  template.title = name;
+  defs.push({ name, template });
+  state.document.meta.section_defs = defs;
+  state.reusableDefinitionEditModal = {
+    kind: 'section',
+    index: defs.length - 1,
+    error: null,
+    activeFlavorIndex: null,
+    originalRaw: '',
+    isNew: true,
+    historyBeforeDraft: { history: [...state.history], future: [...state.future] },
+  };
+  getRenderApp()();
+};
+
+function getUniqueDefinitionName(prefix: string, names: string[]): string {
+  const used = new Set(names);
+  let index = used.size + 1;
+  let name = `${prefix}-${index}`;
+  while (used.has(name)) {
+    index += 1;
+    name = `${prefix}-${index}`;
+  }
+  return name;
+}
 
 const removeComponentDef: AppActionHandler = ({ actionButton }) => {
   recordHistory();
@@ -70,6 +111,83 @@ const removeComponentDefFlavor: AppActionHandler = ({ actionButton }) => {
   recordHistory(`def:${defIndex}:flavor:${flavorIndex}:remove`);
   def.flavors.splice(flavorIndex, 1);
   keepTemplateDefinitionOpen('component', defIndex);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
+const addComponentSortValue: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const defs = getComponentDefs();
+  const def = Number.isNaN(defIndex) ? null : defs[defIndex];
+  if (!def) {
+    return;
+  }
+  const sortValueDefs = def.sortValueDefs ?? {};
+  let suffix = Object.keys(sortValueDefs).length + 1;
+  let name = `Sort Value ${suffix}`;
+  while (sortValueDefs[name]) {
+    suffix += 1;
+    name = `Sort Value ${suffix}`;
+  }
+  recordHistory(`def:${defIndex}:sort-value:add`);
+  sortValueDefs[name] = { type: 'text' };
+  def.sortValueDefs = sortValueDefs;
+  keepTemplateDefinitionOpen('component', defIndex);
+  keepComponentSortValueOpen(defIndex, name);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
+const removeComponentSortValue: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const name = actionButton.dataset.sortValueName ?? '';
+  const defs = getComponentDefs();
+  const def = Number.isNaN(defIndex) ? null : defs[defIndex];
+  if (!def?.sortValueDefs?.[name]) {
+    return;
+  }
+  recordHistory(`def:${defIndex}:sort-value:${name}:remove`);
+  delete def.sortValueDefs[name];
+  if (Object.keys(def.sortValueDefs).length === 0) {
+    delete def.sortValueDefs;
+  }
+  keepTemplateDefinitionOpen('component', defIndex);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
+const addComponentEnumOption: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const name = actionButton.dataset.sortValueName ?? '';
+  const defs = getComponentDefs();
+  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.sortValueDefs?.[name];
+  if (!definition || definition.type !== 'enum') {
+    return;
+  }
+  const options = definition.options ?? [];
+  const optionNumber = options.length + 1;
+  recordHistory(`def:${defIndex}:sort-value:${name}:option:add`);
+  options.push({ label: `Option ${optionNumber}`, value: `option-${optionNumber}` });
+  definition.options = options;
+  keepTemplateDefinitionOpen('component', defIndex);
+  keepComponentSortValueOpen(defIndex, name);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
+const removeComponentEnumOption: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const optionIndex = Number.parseInt(actionButton.dataset.optionIndex ?? '', 10);
+  const name = actionButton.dataset.sortValueName ?? '';
+  const defs = getComponentDefs();
+  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.sortValueDefs?.[name];
+  if (!definition || definition.type !== 'enum' || !definition.options?.[optionIndex]) {
+    return;
+  }
+  recordHistory(`def:${defIndex}:sort-value:${name}:option:${optionIndex}:remove`);
+  definition.options.splice(optionIndex, 1);
+  keepTemplateDefinitionOpen('component', defIndex);
+  keepComponentSortValueOpen(defIndex, name);
   state.document.meta.component_defs = defs;
   getRenderApp()();
 };
@@ -111,6 +229,13 @@ function keepTemplateDefinitionOpen(kind: 'component' | 'section', index: number
   }
 }
 
+function keepComponentSortValueOpen(defIndex: number, name: string): void {
+  const key = componentSortValueDetailsKey(defIndex, name);
+  if (!state.openTemplateDefinitionKeys.includes(key)) {
+    state.openTemplateDefinitionKeys = [...state.openTemplateDefinitionKeys, key];
+  }
+}
+
 const openReusableDefinitionEditor: AppActionHandler = ({ actionButton }) => {
   const kind = actionButton.dataset.templateKind;
   const index = Number.parseInt(actionButton.dataset.defIndex ?? actionButton.dataset.sectionDefIndex ?? '', 10);
@@ -121,12 +246,16 @@ const openReusableDefinitionEditor: AppActionHandler = ({ actionButton }) => {
   if (!definition) {
     return;
   }
+  recordHistory(`edit-${kind}-template:${definition.name}`);
+  const raw = stringifyYaml(definition).trimEnd();
   state.reusableDefinitionEditModal = {
     kind,
     index,
-    mode: 'edit',
-    rawDraft: stringifyYaml(definition).trimEnd(),
     error: null,
+    activeFlavorIndex: null,
+    originalRaw: raw,
+    isNew: false,
+    historyBeforeDraft: { history: [...state.history], future: [...state.future] },
   };
   getRenderApp()();
 };
@@ -216,8 +345,13 @@ const addTemplateField: AppActionHandler = ({ actionButton }) => {
 
 export const reusableActions: Record<string, AppActionHandler> = {
   'add-component-def': addComponentDef,
+  'add-section-def': addSectionDef,
   'remove-component-def': removeComponentDef,
   'remove-component-def-flavor': removeComponentDefFlavor,
+  'add-component-sort-value': addComponentSortValue,
+  'remove-component-sort-value': removeComponentSortValue,
+  'add-component-enum-option': addComponentEnumOption,
+  'remove-component-enum-option': removeComponentEnumOption,
   'remove-section-def': removeSectionDef,
   'remove-section-def-flavor': removeSectionDefFlavor,
   'open-reusable-definition-editor': openReusableDefinitionEditor,

@@ -19,17 +19,33 @@ class TestInputElement {
   dataset: Record<string, string> = {};
   value = '';
   checked = false;
+  closest = () => null;
 }
 
-function createHelpers(): ComponentRenderHelpers {
+function createHelpers(advanced = false): ComponentRenderHelpers {
   return {
     escapeAttr: (value) => value,
     escapeHtml: (value) => value,
     markdownToEditorHtml: (markdown) => markdown,
     renderRichToolbar: () => '',
     renderEditorBlock: (_sectionKey, block) => `<div data-rendered="${block.schema.component}"></div>`,
+    renderEditorNestedBlocks(sectionKey, blocks, options) {
+      return blocks.map((block) => this.renderEditorBlock(sectionKey, block, options.locked)).join('');
+    },
+    renderEditorGridBlocks(sectionKey, blocks, _columns, parentLocked) {
+      return blocks.map((block) => ({
+        block,
+        html: this.renderEditorBlock(sectionKey, block, parentLocked),
+      }));
+    },
     renderPassiveEditorBlock: () => '',
     renderReaderBlock: () => '',
+    renderReaderGridBlocks(section, blocks, _columns, options) {
+      return blocks.map((block) => ({
+        block,
+        html: this.renderReaderBlock(section, block, options),
+      }));
+    },
     renderReaderBlocks: () => '',
     renderReaderListBlocks: () => '',
     orderReaderBlocks: (blocks) => blocks,
@@ -51,7 +67,7 @@ function createHelpers(): ComponentRenderHelpers {
     getComponentListReaderViewId: () => '',
     getReaderContainerExpanded: (_key, fallback) => fallback,
     isExpandableEditorPanelOpen: () => false,
-    isAdvancedEditorMode: () => false,
+    isAdvancedEditorMode: () => advanced,
     isMobileAdjustmentMode: () => false,
   };
 }
@@ -97,7 +113,7 @@ beforeEach(() => {
   initState(createTestState(createDocument()));
 });
 
-test('grid editor renders a newly added blank text item without reading other component fields', () => {
+test('expected result: grid editor renders a newly added blank text item without a redundant type selector', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({
     id: 'grid-item',
@@ -106,27 +122,77 @@ test('grid editor renders a newly added blank text item without reading other co
 
   const expectedResult = renderGridEditor('section-summary', grid, createHelpers());
 
-  expect(expectedResult).toContain('data-field="block-grid-item-component"');
+  expect(expectedResult).not.toContain('data-field="block-grid-item-component"');
   expect(expectedResult).toContain('data-rendered="text"');
 });
 
-test('grid editor renders default stack width as blank and never as a disabled checkbox state', () => {
+test('expected result: advanced grid cell meta stores CSS without applying it to editor rows', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'photo',
+    css: 'display: none; max-md:order: -1;',
+    block: createEmptyBlock('image'),
+  });
+
+  const expectedResult = renderGridEditor('section-summary', grid, createHelpers(true));
+
+  expect(expectedResult).toContain('class="grid-cell-meta-button" aria-label="Cell Meta"');
+  expect(expectedResult).toContain('data-field="block-grid-item-id"');
+  expect(expectedResult).toContain('value="photo"');
+  expect(expectedResult).toContain('data-field="block-grid-item-css"');
+  expect(expectedResult).toContain('display: none; max-md:order: -1;');
+  expect(expectedResult).toContain('<div class="grid-field-row">');
+  expect(expectedResult).not.toContain('@container hvy-surface');
+  expect(expectedResult).not.toContain('class="grid-field-row grid-item-responsive-');
+  expect(expectedResult).not.toContain('class="grid-field-row" style=');
+});
+
+test('expected result: grid cell meta does not present a generated id as authored metadata', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'generated-grid-item',
+    idGenerated: true,
+    block: createEmptyBlock('text'),
+  });
+
+  const expectedResult = renderGridEditor('section-summary', grid, createHelpers(true));
+
+  expect(expectedResult).toContain('data-field="block-grid-item-id"');
+  expect(expectedResult).toContain('placeholder="grid-cell-id" value=""');
+});
+
+test('grid cell meta only renders in advanced mode', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'grid-item',
+    css: 'padding: 1rem;',
+    block: createEmptyBlock('text'),
+  });
+
+  const basicResult = renderGridEditor('section-summary', grid, createHelpers());
+  const advancedResult = renderGridEditor('section-summary', grid, createHelpers(true));
+
+  expect(basicResult).not.toContain('grid-cell-meta-button');
+  expect(basicResult).not.toContain('data-field="block-grid-item-css"');
+  expect(advancedResult).toContain('grid-cell-meta-button');
+  expect(advancedResult).toContain('data-field="block-grid-item-css"');
+});
+
+test('grid editor keeps stack width controls in component meta', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
 
   const defaultResult = renderGridEditor('section-summary', grid, createHelpers());
 
-  expect(defaultResult).toContain('data-field="block-grid-stack-width" value=""');
-  expect(defaultResult).toContain('data-field="block-grid-stack-never"');
-  expect(defaultResult).toContain('<span>Never</span>');
-  expect(defaultResult).not.toContain('Never Stack');
-  expect(defaultResult).not.toContain('data-field="block-grid-stack-width" value="" disabled');
+  expect(defaultResult).not.toContain('Stack Width');
+  expect(defaultResult).not.toContain('data-field="block-grid-stack-width"');
+  expect(defaultResult).not.toContain('data-field="block-grid-stack-never"');
 
   grid.schema.gridStackWidth = 'never';
 
   const neverResult = renderGridEditor('section-summary', grid, createHelpers());
 
-  expect(neverResult).toContain('data-field="block-grid-stack-width" value="" disabled');
-  expect(neverResult).toContain('data-field="block-grid-stack-never" checked');
+  expect(neverResult).not.toContain('data-field="block-grid-stack-width"');
+  expect(neverResult).not.toContain('data-field="block-grid-stack-never"');
 });
 
 test('text editor omits inline style for default-left alignment', () => {
@@ -184,27 +250,45 @@ test('expected result: table enum sort selector renders a trailing caret anchor'
   expect(expectedResult).toContain('</select>&#8203;');
 });
 
-test('grid blank item component switch creates a complete schema for the selected component', () => {
+test('expected result: grid cell id input creates authored slot metadata', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({
-    id: 'grid-item',
+    id: 'generated-grid-item',
+    idGenerated: true,
     block: createEmptyBlock('text'),
   });
-  const expectedBlockId = grid.schema.gridItems[0]!.block.id;
-  const select = new TestSelectElement() as unknown as HTMLSelectElement;
-  select.dataset.field = 'block-grid-item-component';
-  select.dataset.sectionKey = 'section-summary';
-  select.dataset.blockId = 'grid-block';
-  select.dataset.gridItemId = 'grid-item';
-  select.value = 'image';
+  const input = new TestInputElement() as unknown as HTMLInputElement;
+  input.dataset.field = 'block-grid-item-id';
+  input.dataset.sectionKey = 'section-summary';
+  input.dataset.blockId = 'grid-block';
+  input.dataset.gridItemId = 'generated-grid-item';
+  input.value = 'Support Argument';
 
-  handleBlockFieldInput(select);
+  handleBlockFieldInput(input);
 
-  const expectedResult = grid.schema.gridItems[0]!.block;
-  expect(expectedResult.id).toBe(expectedBlockId);
-  expect(expectedResult.schema.kind).toBe('image');
-  expect(expectedResult.schema.component).toBe('image');
-  expect(expectedResult.schema.imageFile).toBe('');
+  expect(grid.schema.gridItems[0]!.id).toBe('support-argument');
+  expect(grid.schema.gridItems[0]!.idGenerated).toBe(false);
+  expect(input.dataset.gridItemId).toBe('support-argument');
+});
+
+test('expected result: clearing grid cell id restores omitted generated metadata', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'support-argument',
+    idGenerated: false,
+    block: createEmptyBlock('text'),
+  });
+  const input = new TestInputElement() as unknown as HTMLInputElement;
+  input.dataset.field = 'block-grid-item-id';
+  input.dataset.sectionKey = 'section-summary';
+  input.dataset.blockId = 'grid-block';
+  input.dataset.gridItemId = 'support-argument';
+  input.value = '';
+
+  handleBlockFieldInput(input);
+
+  expect(grid.schema.gridItems[0]!.id).toBe('support-argument');
+  expect(grid.schema.gridItems[0]!.idGenerated).toBe(true);
 });
 
 test('grid stack width input can be cleared to use the default without rewriting the field', () => {
@@ -291,6 +375,49 @@ test('grid reader renders grid cells without slot alignment metadata', () => {
 
   expect(expectedResult).toContain('grid-column: 2 / span 1;');
   expect(expectedResult).not.toContain('text-align: right;');
+});
+
+test('expected result: grid CSS overrides the generated equal-width column template', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.css = 'margin: 0.5rem 0; grid-template-columns: 10rem minmax(0, 1fr);';
+  grid.schema.gridItems.push({
+    id: 'left-item',
+    block: createEmptyBlock('text'),
+  });
+  grid.schema.gridItems.push({
+    id: 'right-item',
+    block: createEmptyBlock('text'),
+  });
+
+  const expectedResult = renderGridReader(state.document.sections[0]!, grid, {
+    ...createHelpers(),
+    renderReaderBlock: (_section, block) => `<p>${block.id}</p>`,
+  });
+
+  expect(expectedResult).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+  expect(expectedResult).toContain('margin: 0.5rem 0;grid-template-columns: 10rem minmax(0, 1fr)');
+  expect(expectedResult.indexOf('repeat(2, minmax(0, 1fr))')).toBeLessThan(
+    expectedResult.indexOf('10rem minmax(0, 1fr)')
+  );
+});
+
+test('expected result: grid reader applies slot CSS and surface-responsive order to the cell', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'photo',
+    css: 'padding: 1rem; max-md:order: 1;',
+    block: createEmptyBlock('image'),
+  });
+
+  const expectedResult = renderGridReader(state.document.sections[0]!, grid, {
+    ...createHelpers(),
+    renderReaderBlock: () => '<img alt="Profile">',
+  });
+
+  expect(expectedResult).toContain('data-grid-item-id="photo"');
+  expect(expectedResult).toContain('padding: 1rem');
+  expect(expectedResult).toContain('@container hvy-surface (inline-size < 48rem)');
+  expect(expectedResult).toContain('order: 1;');
 });
 
 test('grid reader uses default stack behavior without generated CSS', () => {

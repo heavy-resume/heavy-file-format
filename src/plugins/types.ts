@@ -4,6 +4,7 @@ import type { TextCaptionPayload } from '../editor/types';
 import type { TextComponentPayload } from '../text-component';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
+import type { ReusableTemplateVariable } from '../reusable-template-values';
 
 // A plugin owns the DOM element it returns. The host treats it as opaque.
 // Plugins style themselves using the standard CSS theme variables; nothing is
@@ -56,8 +57,65 @@ export interface HvyPluginTextEditorInstance {
   unmount(): void;
 }
 
+export interface HvyPluginComponentTemplateFlavorInfo {
+  name: string;
+  description?: string;
+}
+
+export interface HvyPluginComponentTemplateInfo {
+  name: string;
+  baseType: string;
+  description?: string;
+  tags?: string;
+  flavors: HvyPluginComponentTemplateFlavorInfo[];
+}
+
+export interface HvyPluginComponentTemplateSelection {
+  template: string;
+  flavor?: string;
+}
+
+export interface HvyPluginComponentTemplateRenderOptions extends HvyPluginComponentTemplateSelection {
+  values: Record<string, string>;
+  /** Components keyed by location-marker name. Each inserted occurrence is cloned. */
+  locations?: Record<string, VisualBlock>;
+}
+
+export interface HvyPluginComponentTemplateRenderInstance {
+  element: HTMLElement;
+  getBlock(): VisualBlock;
+  update(options: HvyPluginComponentTemplateRenderOptions): void;
+  refresh(): void;
+  unmount(): void;
+}
+
+export interface HvyPluginComponentTemplateValuesOptions extends HvyPluginComponentTemplateSelection {
+  values?: Record<string, string>;
+  onChange(values: Record<string, string>): void;
+}
+
+export interface HvyPluginComponentTemplateValuesInstance {
+  element: HTMLElement;
+  getValues(): Record<string, string>;
+  setValues(values: Record<string, string>): void;
+  setSelection(selection: HvyPluginComponentTemplateSelection): void;
+  focus(variable?: string): void;
+  unmount(): void;
+}
+
+export interface HvyPluginComponentTemplatesApi {
+  list(): HvyPluginComponentTemplateInfo[];
+  variables(selection: HvyPluginComponentTemplateSelection): ReusableTemplateVariable[];
+  locations(selection: HvyPluginComponentTemplateSelection): string[];
+  materialize(options: HvyPluginComponentTemplateRenderOptions): VisualBlock;
+  render(options: HvyPluginComponentTemplateRenderOptions): HvyPluginComponentTemplateRenderInstance;
+  mountValues(options: HvyPluginComponentTemplateValuesOptions): HvyPluginComponentTemplateValuesInstance;
+}
+
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
+  view: 'editor' | 'viewer' | 'ai';
+  hostRoot: HTMLElement;
   editor: HvyPluginEditorContext;
   sectionKey: string;
   block: VisualBlock;
@@ -92,6 +150,9 @@ export interface HvyPluginContext {
   };
   textEditor: {
     mount(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance;
+  };
+  templates: {
+    components: HvyPluginComponentTemplatesApi;
   };
   sortValues: {
     get(key: string): SortKeyValue | undefined;
@@ -171,6 +232,40 @@ export interface HvyPluginPdfCapability {
   renderStatic(ctx: HvyPluginPdfStaticRenderContext): Promise<HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined> | HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined;
 }
 
+export interface HvyPluginVisualDescriptionContext {
+  block: VisualBlock;
+  rawDocument: VisualDocument;
+}
+
+export interface HvyPluginVisualDescriptionCapability {
+  // Describe user-visible rendered output that is not otherwise represented by
+  // ordinary HVY block text. The host uses this for search indexing and
+  // agent-facing CLI display, not as authored or editable document content.
+  // This capability is synchronous so document indexes and CLI walks remain
+  // deterministic snapshots of the current in-memory document.
+  describe(ctx: HvyPluginVisualDescriptionContext): string | null | undefined;
+}
+
+export interface HvyPluginScriptingContext {
+  pluginId: string;
+  rawDocument: VisualDocument;
+  // Call after directly mutating rawDocument so the scripting runtime performs
+  // its normal sort-value synchronization and render refresh.
+  markMutated(): void;
+}
+
+export type HvyPluginScriptingMethod = (
+  args: JsonObject,
+  ctx: HvyPluginScriptingContext
+) => unknown | Promise<unknown>;
+
+export interface HvyPluginScriptingCapability {
+  // Methods are exposed through doc.plugins.call(pluginId, method, args).
+  // Sandboxed Python scripts may call only synchronous methods. Trusted power
+  // scripts may await either synchronous or asynchronous methods.
+  methods: Record<string, HvyPluginScriptingMethod>;
+}
+
 export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
 
 export interface HvyDocumentHookContext {
@@ -193,11 +288,25 @@ export interface HvyPluginHooks {
 }
 
 export interface HvyPlugin {
-  // Stable identifier serialized into the document as block.schema.plugin.
-  // Convention: namespace-qualified, e.g. 'hvy.db-table'.
+  // Stable namespace-qualified identifier serialized as block.schema.plugin.
   id: string;
+  // Optional author-defined collision guard. It is an opaque string of at most
+  // 64 characters and remains stable if the plugin id changes.
+  uuid?: string;
+  // Exact semantic version of this implementation.
+  version: string;
+  // HVY host plugin API version required by this implementation.
+  hvyApiVersion: string;
   // Human-readable name shown in the plugin selector.
   displayName: string;
+  // Minimum inline size required by this plugin's editor. When less space is
+  // available, the host offers the editor in its scrollable component modal.
+  // Accepts CSS length units (for example, "24rem" or "420px").
+  minimumEditorWidth?: string;
+  // Conditional registrations expose metadata without loading executable
+  // plugin code. The host calls load only after per-file authorization.
+  authorization?: 'required';
+  load?: () => Promise<HvyPlugin>;
   // Optional capability list for renderable plugin components.
   components?: HvyPluginComponentDefinition[];
   // Optional output generators used by authoring UI such as reusable template forms.
@@ -213,6 +322,14 @@ export interface HvyPlugin {
   // invokes this at export time and replaces the plugin block with the returned
   // PDF-compatible HVY blocks in the export clone.
   pdf?: HvyPluginPdfCapability;
+  // Optional searchable description of what the plugin renders for this block.
+  // Agent-facing consumers label it as rendered output so it is not confused
+  // with literal serialized HVY text.
+  visualDescription?: HvyPluginVisualDescriptionCapability;
+  // Optional callable API for document scripting. Sandboxed scripts require
+  // the plugin declaration to include the "scripting" permission. Authorized
+  // power scripts may call APIs from any installed plugin.
+  scripting?: HvyPluginScriptingCapability;
   // Optional guidance included in the AI document outline for plugin blocks.
   // Keep this short and action-oriented; it helps the document-edit loop know
   // which serialized fields to patch when users report plugin-rendered errors.
@@ -229,5 +346,11 @@ export interface HvyPlugin {
   };
 }
 
+// Host integrations created before plugin version negotiation may omit these
+// fields. Registration normalizes them to the legacy compatibility defaults;
+// package manifests and loaded package implementations remain strict.
+export type HvyPluginInput = Omit<HvyPlugin, 'version' | 'hvyApiVersion'> &
+  Partial<Pick<HvyPlugin, 'version' | 'hvyApiVersion'>>;
+
 /** @deprecated Use HvyPlugin. */
-export type HvyPluginRegistration = HvyPlugin;
+export type HvyPluginRegistration = HvyPluginInput;

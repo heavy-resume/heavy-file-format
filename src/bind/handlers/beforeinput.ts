@@ -1,4 +1,6 @@
-import { handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste } from './_imports';
+import { getRefreshChatSurface, handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste, redoStateAsync, rememberHistoryEditorContextBeforeInput, saveSessionState, state, undoStateAsync } from './_imports';
+import { CHAT_PASTE_ATTACHMENT_THRESHOLD, createPastedChatAttachment } from '../../chat/chat-attachments';
+import { isDocumentUndoTarget } from './shortcuts';
 
 export function bindBeforeinput(app: HTMLElement): void {
   app.addEventListener('copy', (event) => {
@@ -11,6 +13,33 @@ export function bindBeforeinput(app: HTMLElement): void {
   });
 
   app.addEventListener('paste', (event) => {
+    const target = event.target;
+    if (
+      target instanceof HTMLTextAreaElement
+      && target.dataset.field === 'chat-input'
+      && state.currentView !== 'viewer'
+    ) {
+      const pastedText = event.clipboardData?.getData('text/plain') ?? '';
+      if (pastedText.length >= CHAT_PASTE_ATTACHMENT_THRESHOLD) {
+        event.preventDefault();
+        const selectionStart = target.selectionStart ?? target.value.length;
+        const selectionEnd = target.selectionEnd ?? selectionStart;
+        const attachment = createPastedChatAttachment(state.chat, pastedText);
+        state.chat.attachments.push(attachment);
+        state.chat.pendingAttachmentIds.push(attachment.id);
+        state.chat.error = null;
+        saveSessionState(state);
+        getRefreshChatSurface()();
+        window.setTimeout(() => {
+          const prompt = app.querySelector<HTMLTextAreaElement>('[data-field="chat-input"]');
+          if (prompt) {
+            prompt.focus();
+            prompt.setSelectionRange(selectionStart, selectionEnd);
+          }
+        }, 0);
+      }
+      return;
+    }
     const editable = getRichEditable(event.target as HTMLElement);
     if (!editable || !consumePendingPlainPaste(editable)) {
       return;
@@ -24,13 +53,31 @@ export function bindBeforeinput(app: HTMLElement): void {
   });
 
   app.addEventListener('beforeinput', (event) => {
+    const inputEvent = event as InputEvent;
+    if (
+      (inputEvent.inputType === 'historyUndo' || inputEvent.inputType === 'historyRedo')
+      && isDocumentUndoTarget(event.target)
+    ) {
+      event.preventDefault();
+      const historyRoot = event.target instanceof HTMLElement
+        ? event.target.closest<HTMLElement>('.hvy-document')
+        : app;
+      if (inputEvent.inputType === 'historyUndo') {
+        void undoStateAsync(historyRoot);
+      } else {
+        void redoStateAsync(historyRoot);
+      }
+      return;
+    }
+    if (isDocumentUndoTarget(event.target)) {
+      rememberHistoryEditorContextBeforeInput(event.target);
+    }
     const editable = getRichEditable(event.target as HTMLElement);
 
     if (!editable) {
       return;
     }
 
-    const inputEvent = event as InputEvent;
     if (!handleRichEditorBeforeInput(inputEvent, editable)) {
       return;
     }

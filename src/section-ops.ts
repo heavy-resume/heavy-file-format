@@ -68,7 +68,16 @@ function findReusableSectionTemplateByKey(sectionKey: string): VisualSection | n
       const name = sectionKey.slice(REUSABLE_SECTION_DEF_PREFIX.length);
       return defs.find((def) => def.name === name || def.key === name)?.template ?? null;
     }
-    return defs.find((def) => def.template?.key === sectionKey)?.template ?? null;
+    for (const def of defs) {
+      if (def.template?.key === sectionKey) {
+        return def.template;
+      }
+      const flavor = def.flavors?.find((candidate) => candidate.template?.key === sectionKey);
+      if (flavor) {
+        return flavor.template;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -315,6 +324,58 @@ export function findBlockContainerById(
   return findBlockContainerInList(section.blocks, blockId, null);
 }
 
+export function replaceBlockById(
+  sections: VisualSection[],
+  sectionKey: string,
+  blockId: string,
+  replacement: VisualBlock
+): boolean {
+  const section = findSectionByKey(sections, sectionKey);
+  return section ? replaceBlockInList(section.blocks, blockId, replacement, new Set<VisualBlock>()) : false;
+}
+
+function replaceBlockInList(
+  blocks: VisualBlock[],
+  blockId: string,
+  replacement: VisualBlock,
+  seen: Set<VisualBlock>
+): boolean {
+  const index = blocks.findIndex((block) => block.id === blockId);
+  if (index >= 0) {
+    blocks[index] = replacement;
+    return true;
+  }
+  for (const block of blocks) {
+    if (seen.has(block)) continue;
+    seen.add(block);
+    if (
+      replaceBlockInList(block.schema.containerBlocks ?? [], blockId, replacement, seen)
+      || replaceBlockInList(block.schema.componentListBlocks ?? [], blockId, replacement, seen)
+      || replaceBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId, replacement, seen)
+      || replaceBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId, replacement, seen)
+    ) {
+      return true;
+    }
+    for (const item of block.schema.gridItems ?? []) {
+      if (item.block.id === blockId) {
+        item.block = replacement;
+        return true;
+      }
+      if (replaceBlockInList([item.block], blockId, replacement, seen)) {
+        return true;
+      }
+    }
+    if (block.schema.encryptedBlock?.id === blockId) {
+      block.schema.encryptedBlock = replacement;
+      return true;
+    }
+    if (block.schema.encryptedBlock && replaceBlockInList([block.schema.encryptedBlock], blockId, replacement, seen)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function findBlockContainerInList(
   blocks: VisualBlock[],
   blockId: string,
@@ -415,6 +476,64 @@ export function buildSectionRenderSequence(
   }
   childrenAt(null).forEach((child) => items.push({ kind: 'child', child }));
   return items;
+}
+
+export type SectionInsertionBoundary =
+  | { beforeKind: 'block'; beforeId: string }
+  | { beforeKind: 'child'; beforeId: string }
+  | { beforeKind: 'end'; beforeId: '' };
+
+export function getSectionInsertionBoundary(
+  section: VisualSection,
+  visualIndex: number
+): SectionInsertionBoundary {
+  const next = buildSectionRenderSequence(section)[visualIndex];
+  if (!next) return { beforeKind: 'end', beforeId: '' };
+  return next.kind === 'block'
+    ? { beforeKind: 'block', beforeId: next.block.id }
+    : { beforeKind: 'child', beforeId: next.child.key };
+}
+
+export function insertBlockAtSectionInsertionBoundary(
+  section: VisualSection,
+  block: VisualBlock,
+  boundary: SectionInsertionBoundary
+): boolean {
+  const sequence = buildSectionRenderSequence(section);
+  const insertIndex = boundary.beforeKind === 'end'
+    ? sequence.length
+    : sequence.findIndex((item) => boundary.beforeKind === item.kind && (
+      item.kind === 'block' ? item.block.id === boundary.beforeId : item.child.key === boundary.beforeId
+    ));
+  if (insertIndex < 0) return false;
+  sequence.splice(insertIndex, 0, { kind: 'block', block });
+  applySectionRenderSequence(section, sequence);
+  return true;
+}
+
+export function removeBlockFromSectionRenderSequence(section: VisualSection, blockId: string): boolean {
+  const sequence = buildSectionRenderSequence(section);
+  const removeIndex = sequence.findIndex((item) => item.kind === 'block' && item.block.id === blockId);
+  if (removeIndex < 0) return false;
+  sequence.splice(removeIndex, 1);
+  applySectionRenderSequence(section, sequence);
+  return true;
+}
+
+function applySectionRenderSequence(
+  section: VisualSection,
+  sequence: Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }>,
+): void {
+  section.blocks = sequence.flatMap((item) => item.kind === 'block' ? [item.block] : []);
+  section.children = sequence.flatMap((item) => item.kind === 'child' ? [item.child] : []);
+  let precedingBlockId = '';
+  for (const item of sequence) {
+    if (item.kind === 'block') {
+      precedingBlockId = item.block.id;
+    } else {
+      item.child.renderAfterBlockId = precedingBlockId;
+    }
+  }
 }
 
 /** Move a section-level block up or down in the visual sequence, swapping with

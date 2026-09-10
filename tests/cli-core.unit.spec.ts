@@ -107,6 +107,23 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('stable entries include pipe-delimited descriptions.');
 });
 
+test('expected result: CLI session read-only files reuse normal virtual file commands', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession({
+    readOnlyFiles: {
+      '/chat-attachments/pasted-text-1.txt': 'First fact\nSecond fact\nThird fact',
+    },
+  });
+
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('chat-attachments');
+  expect((await executeHvyCliCommand(document, session, 'wc -l /chat-attachments/pasted-text-1.txt')).output).toContain('3');
+  expect((await executeHvyCliCommand(document, session, 'sed -n 2,3p /chat-attachments/pasted-text-1.txt')).output).toBe('Second fact\nThird fact');
+  expect((await executeHvyCliCommand(document, session, 'rg "Second" /chat-attachments')).output).toContain('Second fact');
+  await expect(
+    executeHvyCliCommand(document, session, 'echo changed > /chat-attachments/pasted-text-1.txt')
+  ).rejects.toThrow('read-only');
+});
+
 test('cli ls expands virtual path globs', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -1059,14 +1076,41 @@ hvy_version: 0.1
   const listing = await executeHvyCliCommand(document, session, 'ls /body/quality/chores');
   expect(listing.output).toContain('file table.txt [ro]');
   expect(listing.output).toContain('file tableColumns.json [w]');
+  expect(listing.output).toContain('file tableColumnProperties.json [w]');
   expect(listing.output).toContain('file tableRows.json [w]');
 
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Chore | Owner\nDishes | Mom\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumns.json')).output).toBe('[\n  "Chore",\n  "Owner"\n]\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumnProperties.json')).output).toBe(`{
+  "Chore": {
+    "width": "auto",
+    "wrap": false,
+    "truncate": true,
+    "align": "left",
+    "headerAlign": "center"
+  },
+  "Owner": {
+    "width": "auto",
+    "wrap": false,
+    "truncate": true,
+    "align": "left",
+    "headerAlign": "center"
+  }
+}\n`);
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableRows.json')).output).toBe('[\n  {\n    "cells": [\n      "Dishes",\n      "Mom"\n    ]\n  }\n]\n');
 
+  expect((await executeHvyCliCommand(document, session, 'echo \'{"Chore":{"width":"auto","wrap":false,"truncate":true,"align":"left","headerAlign":"center"},"Owner":{"width":"auto","wrap":false,"truncate":true,"align":"left","headerAlign":"center"}}\' > /body/quality/chores/tableColumnProperties.json')).output).toBe(
+    '/body/quality/chores/tableColumnProperties.json: written'
+  );
+  expect(document.sections[0]?.blocks[0]?.schema.tableColumnProperties).toEqual({});
+  expect(serializeDocument(document)).not.toContain('tableColumnProperties');
+
   await expect(executeHvyCliCommand(document, session, 'echo "Chore | Owner" > /body/quality/chores/table.txt')).rejects.toThrow(
-    'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead'
+    'table.txt is a read-only preview for static table components. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json instead'
+  );
+
+  expect((await executeHvyCliCommand(document, session, 'echo \'{"Chore":{"width":"10rem","wrap":true}}\' > /body/quality/chores/tableColumnProperties.json')).output).toBe(
+    '/body/quality/chores/tableColumnProperties.json: written'
   );
 
   expect((await executeHvyCliCommand(document, session, 'echo \'["Task","Done"]\' > /body/quality/chores/tableColumns.json')).output).toBe(
@@ -1077,7 +1121,17 @@ hvy_version: 0.1
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Task | Done\nTrash | No\nDishes | Yes\n');
   expect(serializeDocument(document)).toContain('"tableColumns":["Task","Done"]');
-  expect(serializeDocument(document)).toContain('"tableRows":[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]');
+  expect(serializeDocument(document)).toContain('"tableColumnProperties":{"Task":{"width":"10rem","wrap":true}}');
+  expect(serializeDocument(document)).toContain('| Trash | No |');
+  expect(serializeDocument(document)).toContain('| Dishes | Yes |');
+  await executeHvyCliCommand(document, session, 'echo \'{"id":"chores","tableShowHeader":false}\' > /body/quality/chores/table.json');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumnProperties.json')).output).toContain('"Task"');
+
+  await executeHvyCliCommand(document, session, 'echo \'{"Missing":{"width":"10rem"}}\' > /body/quality/chores/tableColumnProperties.json');
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain(
+    'table column properties key "Missing" does not exactly match a table column'
+  );
+  await executeHvyCliCommand(document, session, 'echo \'{}\' > /body/quality/chores/tableColumnProperties.json');
 
   await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list.txt')).rejects.toThrow(
     'component-list.txt is a read-only preview until list items exist. component-list.json defines the item type and children-order.json controls item order.'
@@ -1414,6 +1468,24 @@ test('cli warns when scratchpad writes exceed the note limit', async () => {
   expect((await executeHvyCliCommand(document, session, 'echo "short" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
 });
 
+test('cli applies per-session scratchpad warning and maximum sizes', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession({
+    scratchpadWarningChars: 100,
+    scratchpadMaxChars: 200,
+  });
+
+  // BEFORE
+  expect(session.scratchpadLimits).toEqual({ warningChars: 100, maxChars: 200 });
+
+  // TOOL CALL
+  const warning = await executeHvyCliCommand(document, session, `echo "${'x'.repeat(250)}" > scratchpad.txt`);
+
+  // AFTER
+  expect(session.scratchpadContent).toHaveLength(200);
+  expect(warning.output).toContain('scratchpad.txt is 200 characters, which is over the 100 character working limit.');
+});
+
 test('cli exposes resume component-list items by stable section paths', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
@@ -1724,6 +1796,36 @@ test('cli supports shell-style || command chaining', async () => {
 
   const skipped = await executeHvyCliCommand(document, session, 'cat /body/summary/intro/text.txt || echo "fallback"');
   expect(skipped.output).toBe('Hello world');
+});
+
+test('cli supports shell-style semicolon command chaining', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const chained = await executeHvyCliCommand(
+    document,
+    session,
+    'cat /missing.txt; sed s/world/there/ /body/summary/intro/text.txt; echo "answer; complete"'
+  );
+
+  expect(chained.mutated).toBe(true);
+  expect(chained.output).toBe('/body/summary/intro/text.txt: updated\nanswer; complete');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
+});
+
+test('cli preserves escaped semicolons as find -exec terminators', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'find /body -type f -name text.txt -exec sed -i s/world/there/ {} \\; ; cat /body/summary/intro/text.txt'
+  );
+
+  expect(result.mutated).toBe(true);
+  expect(result.output).toContain('Hello there');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
 });
 
 test('cli supports find -exec with sed -i -E for shell-like batch edits', async () => {
@@ -2301,6 +2403,22 @@ Software Engineering
   expect(result.output).toContain('description: Featured top skills/tools grid.');
 });
 
+test('expected result: CLI advertises embedding builds and explains when no provider is configured', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  // BEFORE
+  const help = await executeHvyCliCommand(document, session, 'hvy --help');
+
+  // TOOL CALL
+  const expectedResult = await executeHvyCliCommand(document, session, 'hvy embeddings build');
+
+  // AFTER
+  expect(help.output).toContain('hvy embeddings build');
+  expect(expectedResult.output).toContain('no embedding provider is configured');
+  expect(expectedResult.mutated).toBe(false);
+});
+
 test('hvy search includes descriptions and supports json output', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -2427,7 +2545,7 @@ test('hvy insert section applies reusable section template variables', async () 
   expect(expectedResult).toContain('# Awards');
   expect((await executeHvyCliCommand(document, session, `cat ${created.output}/component-list-2/component-list.json`)).output).toContain('"componentListComponent": "resume-section-row"');
   expect(expectedResult).toContain('"tableColumns":["ITEM","SUMMARY"]');
-  expect(expectedResult).toContain('"tableRows":[{"cells":["Best Paper","2024"]}]');
+  expect(expectedResult).toContain('| Best Paper | 2024 |');
   expect(expectedResult).toContain('Presented at the annual conference.');
   expect(expectedResult).toContain('Delete this starter row if it is not needed.');
   expect((await executeHvyCliCommand(document, session, `cat ${created.output}/section.json`)).output).toContain('"templateKey": "tabular-resume-section"');
@@ -2648,6 +2766,29 @@ test('hvy lint accepts spec-defined importPreplan metadata', async () => {
   expect(result.output).not.toContain('importPreplan');
 });
 
+test('hvy lint accepts document typography and rejects invalid paragraph spacing', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+typography:
+  paragraphSpacing: 0.6rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toBe('No lint issues.');
+
+  document.meta.typography = { paragraphSpacing: '-1rem' };
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain(
+    'typography.paragraphSpacing must be a non-negative CSS length such as "0.45rem".'
+  );
+});
+
 test('hvy lint accepts application metadata with two object levels', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -2736,7 +2877,7 @@ test('cli commands can create a chore chart with tables and form plugins', async
   const serialized = serializeDocument(document);
   expect(serialized).toContain('<!--hvy:plugin {"id":"assign-chore-form","plugin":"hvy.form"');
   expect(serialized).toContain('<!--hvy:plugin {"id":"weekly-leaders","plugin":"hvy.db-table"');
-  expect(serialized).toContain('"tableRows":[{"cells":["Dishes","","","Child"]}');
+  expect(serialized).toContain('| Dishes |  |  | Child |');
 });
 
 test('raw plugin creation rejects command aliases and accepts canonical plugin ids', async () => {
@@ -2806,6 +2947,7 @@ test('hvy plugin db-table help shows canonical creation and operations', async (
   expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
+  expect(help).toContain('hvy plugin db-table presentation COMPONENT_PATH [JSON]');
   expect(help).toContain('pluginConfig.table must be a table/view name, not SQL.');
   expect(help).toContain('hvy plugin db-table tables && hvy plugin db-table schema');
   expect(help).toContain('Do not grep for CREATE TABLE');
@@ -2827,6 +2969,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('hvy plugin db-table tables');
   expect(help).toContain('hvy plugin db-table schema [TABLE_OR_VIEW]');
+  expect(help).toContain('hvy plugin db-table presentation COMPONENT_PATH [JSON]');
   expect(help).not.toContain('Try `man hvy plugin`');
 });
 
@@ -3022,6 +3165,46 @@ test('db-table cli can execute modifying SQL and query rows', async () => {
 
   expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table tables')).output).toContain('chores');
   expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table schema chores')).output).toContain('title');
+});
+
+test('db-table cli exposes effective presentation JSON and stores only overrides', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 plugin db-table /quality chores-table');
+  await executeHvyCliCommand(document, session, 'echo \'{"id":"chores-table","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"chores"}}\' > /quality/chores-table/plugin.json');
+
+  const before = JSON.parse((await executeHvyCliCommand(
+    document,
+    session,
+    'hvy plugin db-table presentation /quality/chores-table'
+  )).output);
+  expect(before).toEqual({
+    id: { label: 'Id', visibility: 'compact', width: '5rem', wrap: false, foreignDisplayColumn: '' },
+    title: { label: 'Title', visibility: 'visible', width: '12rem', wrap: false, foreignDisplayColumn: '' },
+  });
+
+  const write = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy plugin db-table presentation /quality/chores-table \'{"id":{"label":"Id","visibility":"compact","width":"5rem","wrap":false,"foreignDisplayColumn":""},"title":{"label":"Chore","visibility":"visible","width":"18rem","wrap":true,"foreignDisplayColumn":""}}\''
+  );
+
+  expect(write.output).toContain('Updated db-table column presentation');
+  expect(document.sections[0]?.blocks[0]?.schema.pluginConfig.columns).toEqual({
+    title: { label: 'Chore', width: '18rem', wrap: true },
+  });
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('"columns":{"title":{"label":"Chore","width":"18rem","wrap":true}}');
+  expect(serialized).not.toContain('"width":"5rem"');
+  expect(serialized).not.toContain('"visibility":"compact"');
 });
 
 test('hvy lint reports db-table query errors with component location', async () => {

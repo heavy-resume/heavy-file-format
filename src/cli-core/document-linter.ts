@@ -12,6 +12,7 @@ import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSys
 import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
 import { validateDocumentMetadata } from '../document-metadata';
+import { isDocumentParagraphSpacing } from '../document-typography';
 
 const SUPPORTED_HVY_VERSION = '0.1';
 const KNOWN_HEADER_METADATA_KEYS = new Set([
@@ -25,6 +26,9 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'importPreplan',
   'sidebar_label',
   'reader_max_width',
+  'sidebar_max_width',
+  'database_table_max_column_width',
+  'typography',
   'pdf_page',
   'image_attachment_max_dimensions',
   'theme',
@@ -112,6 +116,12 @@ async function lintComponentFile(document: VisualDocument, fs: HvyVirtualFileSys
   const body = readFile(fs, textPath);
   const config = readJsonFile(fs, jsonPath);
   if (component === 'table') {
+    const tableColumns = readJsonFileValue(fs, `${directory}/tableColumns.json`);
+    if (Array.isArray(tableColumns)) config.tableColumns = tableColumns;
+    const tableColumnProperties = readJsonFileValue(fs, `${directory}/tableColumnProperties.json`);
+    if (tableColumnProperties && typeof tableColumnProperties === 'object' && !Array.isArray(tableColumnProperties)) {
+      config.tableColumnProperties = tableColumnProperties as JsonObject;
+    }
     const tableRows = readJsonFileValue(fs, `${directory}/tableRows.json`);
     if (Array.isArray(tableRows)) {
       config.tableRows = tableRows.map((row) => {
@@ -287,6 +297,17 @@ function lintCoreComponent(params: { path: string; component: string; baseCompon
     }
   }
   if (params.baseComponent === 'table') {
+    const columns = Array.isArray(params.config.tableColumns)
+      ? params.config.tableColumns.filter((column): column is string => typeof column === 'string')
+      : [];
+    const properties = params.config.tableColumnProperties;
+    if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
+      Object.keys(properties).forEach((column) => {
+        if (!columns.includes(column)) {
+          issues.push(createLintIssue(params, `orphan-table-column-properties-${column}`, `table column properties key ${JSON.stringify(column)} does not exactly match a table column.`));
+        }
+      });
+    }
     const rows = Array.isArray(params.config.tableRows) ? params.config.tableRows : [];
     rows.forEach((row, index) => {
       const cells = row && typeof row === 'object' && !Array.isArray(row) && Array.isArray((row as { cells?: unknown }).cells)
@@ -337,6 +358,24 @@ function lintHeaderCssValues(document: VisualDocument): HvyCliLintIssue[] {
       if (style && typeof style === 'object' && !Array.isArray(style)) {
         pushHeaderCssJsonIssue(issues, `heading_styles.${styleName}.css`, (style as JsonObject).css);
       }
+    }
+  }
+  const typography = document.meta.typography;
+  if (typeof typography !== 'undefined') {
+    if (!typography || typeof typography !== 'object' || Array.isArray(typography)) {
+      issues.push({
+        key: '/header.yaml:typography:type',
+        path: '/header.yaml',
+        component: 'header',
+        message: 'typography must be an object with a paragraphSpacing CSS length.',
+      });
+    } else if (!isDocumentParagraphSpacing((typography as JsonObject).paragraphSpacing)) {
+      issues.push({
+        key: '/header.yaml:typography.paragraphSpacing:type',
+        path: '/header.yaml',
+        component: 'header',
+        message: 'typography.paragraphSpacing must be a non-negative CSS length such as "0.45rem".',
+      });
     }
   }
   const pdfPage = document.meta.pdf_page;

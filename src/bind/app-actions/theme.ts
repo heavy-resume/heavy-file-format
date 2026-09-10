@@ -1,6 +1,6 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
-import { getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, THEME_COLOR_NAMES } from '../../theme';
+import { getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor } from '../../theme';
 import { getPaletteById } from '../../palettes/palette-registry';
 import { savePaletteOverrideId } from '../../palettes/palette-preferences';
 import { setThemeModalFilter } from '../../theme-modal-filter';
@@ -46,12 +46,6 @@ const themeApplyPalette: AppActionHandler = ({ actionButton }) => {
   const paletteId = actionButton.dataset.paletteId ?? '';
   const palette = getPaletteById(paletteId);
   if (!palette) return;
-  recordHistory(`meta:theme-palette:${palette.id}`);
-  const theme = getThemeConfig();
-  for (const name of THEME_COLOR_NAMES) {
-    delete theme.colors[name];
-  }
-  writeThemeConfig(theme);
   state.paletteOverrideId = palette.id;
   savePaletteOverrideId(palette.id);
   applyTheme();
@@ -59,7 +53,6 @@ const themeApplyPalette: AppActionHandler = ({ actionButton }) => {
 };
 
 const themeClearPaletteOverride: AppActionHandler = () => {
-  recordHistory('meta:theme-palette:clear');
   state.paletteOverrideId = null;
   savePaletteOverrideId(null);
   applyTheme();

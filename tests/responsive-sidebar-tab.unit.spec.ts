@@ -7,7 +7,7 @@ import {
   updateResponsiveSidebarShellState,
 } from '../src/responsive-sidebar-tab';
 
-function createShell(classes: string[] = []): HTMLElement {
+function createShell(classes: string[] = [], viewerDocument: HTMLElement | null = null): HTMLElement {
   const values = new Set(classes);
   return {
     classList: {
@@ -25,7 +25,7 @@ function createShell(classes: string[] = []): HTMLElement {
     },
     getBoundingClientRect: () => ({ width: 960 }),
     isConnected: true,
-    querySelector: () => null,
+    querySelector: (selector: string) => selector === '.viewer-document-scroll' ? viewerDocument : null,
   } as unknown as HTMLElement;
 }
 
@@ -89,6 +89,21 @@ test('responsive sidebar shell keeps preview frames compact independent of width
   const shell = createShell(['hvy-preview-frame-phone']);
 
   expect(isResponsiveSidebarShellCompact(shell, 960)).toBe(true);
+});
+
+test('responsive sidebar shell writes compact layout state onto the named viewer document class', () => {
+  const viewerDocument = createShell();
+  const shell = createShell(['viewer-shell'], viewerDocument);
+
+  updateResponsiveSidebarShellState(shell, 390);
+
+  expect(viewerDocument.classList.contains('viewer-document-preview')).toBe(true);
+  expect(viewerDocument.classList.contains('viewer-document-compact')).toBe(true);
+
+  updateResponsiveSidebarShellState(shell, 960);
+
+  expect(viewerDocument.classList.contains('viewer-document-preview')).toBe(false);
+  expect(viewerDocument.classList.contains('viewer-document-compact')).toBe(false);
 });
 
 test('responsive sidebar tab can reveal after an idle scroll event', () => {

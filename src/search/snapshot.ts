@@ -12,6 +12,7 @@ import type {
   SearchCategory,
   SearchState,
 } from './types';
+import { expandSearchMatchResults } from './match-navigation';
 import { createDefaultSearchState } from './state';
 
 const SEARCH_CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
@@ -137,7 +138,7 @@ export function searchSnapshotToState(input?: HvySearchSnapshotInput | null): Se
     submittedExcludeTags: snapshot.excludeTags,
     activeResultId: snapshot.activeResultId ?? null,
     results: snapshot.results,
-    navigationResultIds: snapshot.results.map((result) => result.id),
+    navigationResultIds: expandSearchMatchResults(snapshot.results).map((result) => result.id),
   };
 }
 

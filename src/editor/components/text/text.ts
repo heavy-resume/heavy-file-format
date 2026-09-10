@@ -1,11 +1,14 @@
 import './text.css';
+import './text-answer-mode.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
 import { state } from '../../../state';
-import { getComponentSortValueDefs, getSortValueDefsForBlock, replaceSortValueAnnotations } from '../../../sort-values';
+import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../../../inline-answer-groups';
+import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
-import { getReusableNameFromSectionKey } from '../../../component-defs';
 import { findReusableOwner } from '../../../reusable';
+import { getComponentDefs, getSectionDefs } from '../../../component-defs';
+import { extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../../../reusable-template-values';
 
 const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
@@ -75,9 +78,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
       </div>
     `;
   }
-  const editorHtml = fillInParts.length > 1
-    ? renderRichTextWithFillIns(sectionKey, block, helpers, fillInParts)
-    : renderMarkdownEditorHtmlWithSortValues(block.text, sectionKey, block, helpers, codeLanguageInputAttrs);
+  const editorHtml = renderTextRichEditorContent(sectionKey, block, helpers, fillInParts);
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
   const sortValueDefs = getSortValueDefsForEditorBlock(sectionKey, block);
   const useAsSelectionControl = mobileAdjustment
@@ -90,6 +91,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   <div class="text-editor-shell">
     ${richToolbar ? `<div class="text-editor-toolbar-bounds"><div class="text-editor-toolbar-slot">${richToolbar}</div></div><div class="text-editor-toolbar-spacer"></div>` : ''}
     ${useAsSelectionControl}
+    ${mobileAdjustment ? '' : renderInlineAnswerModeSwitch(sectionKey, block.id, helpers)}
     <div
       class="rich-editor${mobileAdjustment ? ' mobile-adjustment-editor' : ''}"
       contenteditable="true"
@@ -104,12 +106,159 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
 `;
 };
 
+export function renderTextRichEditorContent(
+  sectionKey: string,
+  block: Parameters<ComponentEditorRenderer>[1],
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : []
+): string {
+  const html = fillInParts.length > 1
+    ? renderRichTextWithFillIns(sectionKey, block, helpers, fillInParts)
+    : renderMarkdownEditorHtmlWithSortValues(block.text, sectionKey, block, helpers, {
+      'data-section-key': sectionKey,
+      'data-block-id': block.id,
+    });
+  if (!state.reusableDefinitionEditModal) {
+    return html;
+  }
+  return renderTemplateValueTokens(html, { editable: true });
+}
+
+export function renderTemplateValueTokens(html: string, options: { editable?: boolean } = {}): string {
+  if (typeof document === 'undefined') return html;
+  const variables = new Map(getActiveBuilderTemplateVariables().map((variable) => [variable.name, variable]));
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+  const pattern = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block|isempty)\s*)?%}/g;
+  textNodes.forEach((node) => {
+    if (node.parentElement?.closest('.template-value-token')) return;
+    const source = node.data;
+    const matches = [...source.matchAll(pattern)];
+    if (matches.length === 0) return;
+    const fragment = document.createDocumentFragment();
+    let offset = 0;
+    matches.forEach((match) => {
+      fragment.append(source.slice(offset, match.index));
+      const marker = document.createElement('span');
+      marker.className = 'template-value-token';
+      marker.contentEditable = 'false';
+      marker.tabIndex = -1;
+      marker.dataset.templateValueToken = match[1] ?? '';
+      const variable = variables.get(match[1] ?? '');
+      const tokenType = match[2] === 'isempty' ? 'empty check' : variable?.type === 'block' ? 'multi-line' : 'text';
+      marker.dataset.templateValueDisplay = `${variable?.label ?? match[1] ?? 'Value'} · ${tokenType}`;
+      marker.setAttribute('aria-label', marker.dataset.templateValueDisplay);
+      const sourceToken = document.createElement('span');
+      sourceToken.className = 'template-value-token-source';
+      sourceToken.textContent = match[0];
+      marker.append(sourceToken);
+      fragment.append(marker);
+      if (options.editable) {
+        fragment.append(document.createTextNode('\u200b'));
+      }
+      offset = (match.index ?? 0) + match[0].length;
+    });
+    fragment.append(source.slice(offset));
+    node.replaceWith(fragment);
+  });
+  return template.innerHTML;
+}
+
+function renderInlineAnswerModeSwitch(
+  sectionKey: string,
+  blockId: string,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  const attrs = `data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"`;
+  return `<div class="hvy-choice-mode-switch" role="dialog" aria-label="Selected answer block type" ${attrs} hidden>
+    <p class="choice-mode-title">Answer type</p>
+    <button
+      type="button"
+      class="choice-mode-option"
+      ${attrs}
+      data-field="inline-answer-type"
+      data-answer-type="checkbox"
+      title="Allow multiple answers"
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="m5.25 8 1.8 1.8 3.8-4"/></svg>
+      <span>Checkbox</span>
+    </button>
+    <div class="choice-mode-groups" role="group" aria-label="Radio groups"></div>
+    <button
+      type="button"
+      class="choice-mode-option choice-mode-new-group"
+      ${attrs}
+      data-field="inline-answer-new-group"
+      title="Create a new radio group"
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9"/><path d="M3.5 8h9"/></svg>
+      <span>radio group</span>
+    </button>
+    <form class="choice-mode-name-form" data-field="inline-answer-group-name" ${attrs} hidden>
+      <label class="choice-mode-name-label" for="hvy-answer-group-name-${helpers.escapeAttr(blockId)}">Group name</label>
+      <input
+        class="choice-mode-name-input"
+        id="hvy-answer-group-name-${helpers.escapeAttr(blockId)}"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <div class="choice-mode-name-actions">
+        <button type="submit" class="secondary choice-mode-name-confirm">Confirm</button>
+        <button type="button" class="ghost choice-mode-name-cancel">Cancel</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+export function renderInlineAnswerGroupOption(
+  groupName: string,
+  selected: boolean,
+  escapeHtmlValue: (value: string) => string
+): string {
+  return `<button
+    type="button"
+    class="choice-mode-option choice-mode-group-option${selected ? ' is-selected' : ''}"
+    data-field="inline-answer-type"
+    data-answer-type="radio"
+    data-answer-group-name="${escapeHtmlValue(groupName)}"
+    aria-pressed="${selected ? 'true' : 'false'}"
+    title="Put these answers in the ${escapeHtmlValue(groupName)} radio group"
+  >
+    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.25" class="choice-mode-icon-fill"/></svg>
+    <span>${escapeHtmlValue(groupName)}</span>
+  </button>`;
+}
+
 function renderUseAsSelectionControl(
   sectionKey: string,
   blockId: string,
   sortValueDefs: Record<string, SortValueDefinition>,
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
+  const templateValueOption = state.reusableDefinitionEditModal
+    ? `<button
+        type="button"
+        class="ghost text-use-as-menu-item"
+        data-rich-action="template-value"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(blockId)}"
+        role="menuitem"
+      >Create template value</button>`
+    : '';
+  const templateVariables = getActiveBuilderTemplateVariables();
+  const existingTemplateValueOptions = templateVariables.map((variable) => `<button
+    type="button"
+    class="ghost text-use-as-menu-item"
+    data-rich-action="template-value"
+    data-template-variable-name="${helpers.escapeAttr(variable.name)}"
+    data-section-key="${helpers.escapeAttr(sectionKey)}"
+    data-block-id="${helpers.escapeAttr(blockId)}"
+    role="menuitem"
+  >Reuse “${helpers.escapeHtml(variable.label)}”</button>`).join('');
   const sortOptions = Object.entries(sortValueDefs)
     .filter(([key]) => key.trim().length > 0)
     .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
@@ -141,9 +290,21 @@ function renderUseAsSelectionControl(
         data-block-id="${helpers.escapeAttr(blockId)}"
         role="menuitem"
       >Fill-in</button>
+      ${templateValueOption}
+      ${existingTemplateValueOptions}
       ${sortOptions ? `<div class="text-use-as-menu-divider" role="separator"></div>${sortOptions}` : ''}
     </div>
   </div>`;
+}
+
+function getActiveBuilderTemplateVariables() {
+  const modal = state.reusableDefinitionEditModal;
+  const definition = modal?.kind === 'component' ? getComponentDefs()[modal.index] : modal ? getSectionDefs()[modal.index] : null;
+  const flavor = modal?.activeFlavorIndex == null ? null : definition?.flavors?.[modal.activeFlavorIndex] ?? null;
+  if (!modal || !definition) return [];
+  return modal.kind === 'component'
+    ? flavor ? extractReusableTemplateVariablesFromFlavor(flavor as never, definition.templateVariables) : extractReusableTemplateVariablesFromDefinition(definition as never)
+    : flavor ? extractReusableTemplateVariablesFromSectionFlavor(flavor as never, definition.templateVariables) : extractReusableTemplateVariablesFromSectionDefinition(definition as never);
 }
 
 function renderRichTextWithFillIns(
@@ -184,8 +345,9 @@ function renderMarkdownEditorHtmlWithSortValues(
   codeLanguageInputAttrs?: Record<string, string>
 ): string {
   const defs = getSortValueDefsForEditorBlock(sectionKey, block);
+  const answerGroups = getBlockAnswerGroups(getInlineAnswerGroupIndex(state.document.sections), sectionKey, block.id);
   if (Object.keys(defs).length === 0) {
-    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs);
+    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs, answerGroups);
   }
   const replacements: string[] = [];
   const source = replaceSortValueAnnotations(markdown, (annotation) => {
@@ -193,7 +355,7 @@ function renderMarkdownEditorHtmlWithSortValues(
     replacements.push(renderSortValueEditorControl(annotation.key, annotation.text, defs[annotation.key], sectionKey, block.id, helpers));
     return token;
   });
-  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs);
+  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs, answerGroups);
   replacements.forEach((replacement, index) => {
     html = html.replace(`HVY_SORT_VALUE_TOKEN_${index}`, replacement);
   });
@@ -205,15 +367,12 @@ function getSortValueDefsForEditorBlock(sectionKey: string, block: Parameters<Co
     if (!state?.document) {
       return {};
     }
-    if (getReusableNameFromSectionKey(sectionKey)) {
-      const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
-      if (Object.keys(direct).length > 0) {
-        return direct;
-      }
-      const owner = findReusableOwner(sectionKey, block.id);
-      return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
+    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
+    if (Object.keys(direct).length > 0) {
+      return direct;
     }
-    return getSortValueDefsForBlock(state.document, block);
+    const owner = findReusableOwner(sectionKey, block.id);
+    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
   } catch {
     return {};
   }
@@ -255,8 +414,8 @@ function isFillInEditorMode(sectionKey: string, blockId: string): boolean {
     && state.activeTextEditorMode.mode === 'fill-in';
 }
 
-export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) =>
-  block.schema.showCopy
+export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) => {
+  const rendered = block.schema.showCopy
     ? `${helpers.renderComponentFragment('text', block.text, block, section.key)}
       <button
         type="button"
@@ -268,3 +427,5 @@ export const renderTextReader: ComponentReaderRenderer = (section, block, helper
         title="Copy text"
       ><span class="text-copy-icon" aria-hidden="true"></span></button>`
     : helpers.renderComponentFragment('text', block.text, block, section.key);
+  return state.reusableDefinitionEditModal ? renderTemplateValueTokens(rendered) : rendered;
+};

@@ -13,7 +13,7 @@ theme:
 
  <!--hvy:text {}-->
   # Introduction
-  
+
   Give your HVY document advanced functionality with scripting.
   
   The intended use for most people is to have AI write code for you instead of writing it yourself. Simply ask the AI to
@@ -87,12 +87,17 @@ theme:
    component or section.
    - `handle.get_ancestor_record(excluded_tags="")` — find the nearest ancestor
    reusable record component.
-   - `handle.first_table_cell(index=0)` — read the first cell at `index` from a
-   nested table.
-   - `handle.remove_children_by_tag(tag, slot="expandable-content")` — remove
+  - `handle.first_table_cell(index=0)` — read the first cell at `index` from a
+    nested table.
+  - `handle.set_sort_value(key, value)` — update every matching annotated sort
+    value within the component. This changes the annotation that owns the
+    derived sort key instead of writing the derived `sortKeys` cache directly.
+  - `handle.remove_children_by_tag(tag, slot="expandable-content")` — remove
    tagged child components from a child slot.
    - `handle.append_child(component, config=None, text="", slot="expandable-content")`
    — append a child component and return its handle.
+  - `handle.expand()` — expand the component and its containing reader blocks for
+   the current session without changing its serialized default expansion state.
   
   Header tools:
   
@@ -100,6 +105,14 @@ theme:
   
   `edit_component`, `view_rendered_component`, `query_db_table`, `execute_sql`, and other async tools are not exposed
   through `doc.tool`.
+
+  Installed plugins may expose synchronous methods through
+  `doc.plugins.call(plugin_id, method, args)`. The document's plugin declaration
+  must include the `scripting` permission. Asynchronous methods, including
+  network-backed calls, require an authorized `hvy.power-scripting` block.
+  Callback functions may be nested inside `args`. A synchronous plugin method
+  may retain and invoke them later; callback errors and step limits are reported
+  by this script block, and callbacks stop when the document or mount is gone.
 <!--hvy: {"id":"execution-model","lock":false,"expanded":false,"highlight":false}-->
 #! Execution model
 
@@ -154,6 +167,20 @@ theme:
   ```python
   doc.header.set("last_script_run", doc.time.now_local())
   ```
+
+  Enable the checked `random` library with `pluginConfig.libraries: ["random"]` to select or reorder values:
+
+  ```python
+  import random
+
+  featured = random.choice(items)
+  preview = random.sample(items, min(3, len(items)))
+  random.shuffle(items)
+  ```
+
+  The checked subset supports `random()`, `shuffle()`, `choice()`, `randrange()`, `randint()`, `uniform()`, `sample()`,
+  and `choices()`. Random state, byte generation, cryptographic helpers, and specialized probability distributions are
+  not exposed.
 
   Enable the checked `datetime` library with `pluginConfig.libraries: ["datetime"]`, then perform timezone-naive date
   arithmetic with familiar Python syntax:

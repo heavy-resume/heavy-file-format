@@ -1,13 +1,15 @@
 import './table.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { TableRow } from '../../types';
-import { closeIcon, plusIcon } from '../../../icons';
+import { closeIcon, plusIcon, settingsIcon } from '../../../icons';
 import { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from '../../../markdown';
-import { getComponentSortValueDefs, getSortValueDefsForBlock, replaceSortValueAnnotations } from '../../../sort-values';
+import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { state } from '../../../state';
-import { getReusableNameFromSectionKey } from '../../../component-defs';
 import { findReusableOwner } from '../../../reusable';
+import { sanitizeInlineCss } from '../../../css-sanitizer';
+import { getTableColumnProperties } from '../../../table-ops';
+import { renderTableGrabberInsertMenu } from './table-grabber-insert-menu';
 
 let readerTableStripeIndex = 0;
 
@@ -50,15 +52,12 @@ function getSortValueDefsForTableBlock(sectionKey: string, block: Parameters<Com
     if (!state?.document) {
       return {};
     }
-    if (getReusableNameFromSectionKey(sectionKey)) {
-      const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
-      if (Object.keys(direct).length > 0) {
-        return direct;
-      }
-      const owner = findReusableOwner(sectionKey, block.id);
-      return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
+    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
+    if (Object.keys(direct).length > 0) {
+      return direct;
     }
-    return getSortValueDefsForBlock(state.document, block);
+    const owner = findReusableOwner(sectionKey, block.id);
+    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
   } catch {
     return {};
   }
@@ -90,6 +89,61 @@ function renderTableInlineToolbar(
   return '';
 }
 
+function tableColumnClassNames(block: Parameters<ComponentEditorRenderer>[1], column: string, header: boolean): string {
+  const properties = getTableColumnProperties(block.schema, column);
+  return [
+    properties.width !== 'auto' ? 'table-column-fixed' : '',
+    properties.wrap ? 'table-column-wrap' : '',
+    !properties.truncate ? 'table-column-no-truncate' : '',
+    header ? `table-column-header-align-${properties.headerAlign}` : `table-column-align-${properties.align}`,
+  ].filter(Boolean).join(' ');
+}
+
+function renderTableColumn(
+  block: Parameters<ComponentEditorRenderer>[1],
+  column: string,
+  columnIndex: number,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  const width = getTableColumnProperties(block.schema, column).width;
+  const style = width === 'auto' ? '' : sanitizeInlineCss(`width: ${width};`);
+  return `<col data-table-column-index="${columnIndex}" data-table-column-name="${helpers.escapeAttr(column)}"${style ? ` style="${helpers.escapeAttr(style)}"` : ''}>`;
+}
+
+function renderAlignmentOptions(selected: string): string {
+  return ['left', 'center', 'right']
+    .map((value) => `<option value="${value}"${value === selected ? ' selected' : ''}>${value[0].toUpperCase()}${value.slice(1)}</option>`)
+    .join('');
+}
+
+function renderTableColumnSettings(
+  sectionKey: string,
+  block: Parameters<ComponentEditorRenderer>[1],
+  column: string,
+  columnIndex: number,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  const properties = getTableColumnProperties(block.schema, column);
+  const data = `data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}"`;
+  return `<details class="table-column-settings" data-escape-closes="true">
+    <summary class="ghost table-column-settings-trigger" title="Column formatting" aria-label="Column formatting">${settingsIcon()}</summary>
+    <div class="table-column-settings-panel">
+      <label><span>Width</span><input type="text" data-field="table-column-width" ${data} value="${helpers.escapeAttr(properties.width)}" placeholder="auto"></label>
+      <div class="table-column-overflow-setting">
+        <span>Overflow:</span>
+        <div class="table-column-overflow-options" role="group" aria-label="Overflow">
+          <label><input type="checkbox" data-field="table-column-wrap" ${data}${properties.wrap ? ' checked' : ''}><span>Wrap</span></label>
+          <label><input type="checkbox" data-field="table-column-truncate" ${data}${properties.truncate ? ' checked' : ''}><span>Truncate</span></label>
+        </div>
+      </div>
+      <label><span>Cells</span><select data-field="table-column-align" ${data}>${renderAlignmentOptions(properties.align)}</select></label>
+      <label><span>Header</span><select data-field="table-column-header-align" ${data}>${renderAlignmentOptions(properties.headerAlign)}</select></label>
+      <button type="button" class="ghost table-column-auto-button" data-action="auto-fit-table-column" ${data}>Fit to contents</button>
+      <button type="button" class="ghost table-column-auto-button" data-action="reset-table-column-width" ${data}>Automatic width</button>
+    </div>
+  </details>`;
+}
+
 function renderTableRowEditor(
   sectionKey: string,
   block: Parameters<ComponentEditorRenderer>[1],
@@ -102,18 +156,9 @@ function renderTableRowEditor(
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
   const isEmptyRow = safeColumns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
   return `
-    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-row-index="${rowIndex}">
+    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${blockId}-row-${rowIndex}`)}">
       <td class="table-row-utility">
-        <button
-          type="button"
-          class="table-drag-handle"
-          draggable="true"
-          data-drag-handle="table-row"
-          data-section-key="${helpers.escapeAttr(sectionKey)}"
-          data-block-id="${helpers.escapeAttr(blockId)}"
-          data-row-index="${rowIndex}"
-          title="Drag to reorder row"
-        >::</button>
+        ${renderTableGrabberInsertMenu({ kind: 'row', sectionKey, blockId, index: rowIndex, escapeAttr: helpers.escapeAttr })}
       </td>
       ${safeColumns
         .map(
@@ -121,7 +166,7 @@ function renderTableRowEditor(
             const rawPlaceholder = safeColumns[cellIndex] || 'Cell value';
             const placeholder = renderAltAnnotationsAsFullText(rawPlaceholder);
             const compactPlaceholder = renderAltAnnotationsAsMobileText(rawPlaceholder);
-            return `<td>
+            return `<td class="${tableColumnClassNames(block, safeColumns[cellIndex], false)}" data-table-column-index="${cellIndex}">
             <div class="table-inline-edit-shell">
               <div
                 class="inline-editable table-inline-text"
@@ -197,25 +242,28 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
       </label>
       <div class="table-editor-frame">
         <table class="table-editor-grid" style="--hvy-table-editor-columns: ${Math.max(columns.length, 1)};">
+          <colgroup>
+            <col class="table-utility-column">
+            ${columns.map((column, columnIndex) => renderTableColumn(block, column, columnIndex, helpers)).join('')}
+            <col class="table-add-column-column">
+          </colgroup>
           <thead>
             <tr>
               <th class="table-utility-cell"></th>
               ${columns
                 .map(
                   (column, columnIndex) => `
-                    <th data-table-column-drop="true" data-column-index="${columnIndex}">
+                    <th class="${tableColumnClassNames(block, column, true)}" data-table-column-drop="true" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" data-table-column-index="${columnIndex}">
                       <div class="table-column-head">
-                        <button
-                          type="button"
-                          class="table-drag-handle"
-                          draggable="true"
-                          ${block.schema.lock ? 'disabled' : ''}
-                          data-drag-handle="table-column"
-                          data-section-key="${helpers.escapeAttr(sectionKey)}"
-                          data-block-id="${helpers.escapeAttr(block.id)}"
-                          data-column-index="${columnIndex}"
-                          title="Drag to reorder column"
-                        >::</button>
+                        ${renderTableGrabberInsertMenu({
+                          kind: 'column',
+                          sectionKey,
+                          blockId: block.id,
+                          index: columnIndex,
+                          disabled: block.schema.lock,
+                          escapeAttr: helpers.escapeAttr,
+                        })}
+                        ${renderTableColumnSettings(sectionKey, block, column, columnIndex, helpers)}
                         <div class="table-inline-edit-shell">
                           <div
                             class="inline-editable table-inline-text table-column-name"
@@ -237,6 +285,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                               )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">${closeIcon()}</button>`
                         }
                       </div>
+                      <span class="table-column-resize-handle" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Drag to resize; double-click to fit contents" aria-hidden="true"></span>
                     </th>`
                 )
                 .join('')}
@@ -257,7 +306,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
               <td colspan="${columns.length + 2}">
                 <button type="button" class="ghost" data-action="add-table-row" data-section-key="${helpers.escapeAttr(
                   sectionKey
-                )}" data-block-id="${helpers.escapeAttr(block.id)}">${plusIcon()} Add Row</button>
+                )}" data-block-id="${helpers.escapeAttr(block.id)}">${plusIcon()} Row</button>
               </td>
             </tr>
           </tbody>
@@ -273,34 +322,35 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
   }
   const columns = helpers.getTableColumns(block.schema);
   return `<div class="reader-table-frame"><table class="reader-table">
+    <colgroup>${columns.map((column, columnIndex) => renderTableColumn(block, column, columnIndex, helpers)).join('')}</colgroup>
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column) => `<th title="${helpers.escapeAttr(renderAltAnnotationsAsFullText(column))}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
+      <tr>${columns.map((column, columnIndex) => `<th class="${tableColumnClassNames(block, column, true)}" data-table-column-index="${columnIndex}" title="${helpers.escapeAttr(renderAltAnnotationsAsFullText(column))}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }
     <tbody>
       ${block.schema.tableRows
         .map(
-          (row) => {
+          (row, rowIndex) => {
             const isEmptyRow = columns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
             return `
-            <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}${isEmptyRow ? ' table-main-row-empty' : ''}">
+            <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}${isEmptyRow ? ' table-main-row-empty' : ''}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${block.id}-row-${rowIndex}`)}">
               ${columns.map((_column, cellIndex) => {
                 const rawValue = row.cells[cellIndex] ?? '';
                 const value = helpers.escapeHtml(rawValue);
                 const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
                 if (value) {
-                  return `<td title="${title}">${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`;
+                  return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}" title="${title}">${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`;
                 }
                 if (!isEmptyRow) {
-                  return '<td></td>';
+                  return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}"></td>`;
                 }
                 const rawPlaceholder = columns[cellIndex] || 'Cell value';
                 const placeholder = helpers.escapeAttr(renderAltAnnotationsAsFullText(rawPlaceholder));
                 const compactPlaceholder = helpers.escapeAttr(renderAltAnnotationsAsMobileText(rawPlaceholder));
-                return `<td data-placeholder="${placeholder}" data-placeholder-compact="${compactPlaceholder}"></td>`;
+                return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}" data-placeholder="${placeholder}" data-placeholder-compact="${compactPlaceholder}"></td>`;
               }).join('')}
             </tr>
             `;

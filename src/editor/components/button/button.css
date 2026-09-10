@@ -1,4 +1,4 @@
-.hvy-button-component {
+.hvy-document .hvy-button-component {
   --hvy-button-content-padding: 0.35rem 0.7rem;
   --hvy-button-font-size: 0.82rem;
 
@@ -14,7 +14,7 @@
   backdrop-filter: blur(6px);
 }
 
-.hvy-button-component-button {
+.hvy-document .hvy-button-component-button {
   border: 1px solid transparent;
   border-radius: 999px;
   padding: var(--hvy-button-content-padding);
@@ -27,7 +27,7 @@
   cursor: pointer;
 }
 
-.hvy-button-component-button:hover:not(:disabled) {
+.hvy-document .hvy-button-component-button:hover:not(:disabled) {
   color: var(--hvy-button-hover-text, var(--hvy-button-text, #ffffff));
   background: var(--hvy-button-hover-bg, var(--hvy-button-bg, #2d6a8a));
   box-shadow:
@@ -35,13 +35,13 @@
     0 8px 18px var(--hvy-shadow-md, rgba(15, 23, 42, 0.2));
 }
 
-.hvy-button-component-button:disabled {
+.hvy-document .hvy-button-component-button:disabled {
   cursor: wait;
   box-shadow: none;
   opacity: 1;
 }
 
-.hvy-button-status {
+.hvy-document .hvy-button-status {
   display: none;
   border-radius: 999px;
   padding: var(--hvy-button-content-padding);
@@ -52,11 +52,11 @@
   white-space: nowrap;
 }
 
-.hvy-button-status.is-error {
+.hvy-document .hvy-button-status.is-error {
   color: #b42318;
 }
 
-.hvy-button-component[data-busy-state="busy"] {
+.hvy-document .hvy-button-component[data-busy-state="busy"] {
   border-color: color-mix(in srgb, var(--hvy-button-bg, #2d6a8a) 62%, var(--hvy-border-translucent, rgba(206, 217, 226, 0.92)) 38%);
   background: color-mix(in srgb, var(--hvy-button-bg, #2d6a8a) 16%, var(--hvy-surface, #ffffff) 84%);
   box-shadow:
@@ -65,7 +65,7 @@
   cursor: wait;
 }
 
-.hvy-button-component[data-busy-state="busy"] .hvy-button-component-button {
+.hvy-document .hvy-button-component[data-busy-state="busy"] .hvy-button-component-button {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -81,7 +81,7 @@
   animation: hvy-button-busy-sheen 1.05s linear infinite;
 }
 
-.hvy-button-component[data-busy-state="busy"] .hvy-button-component-button::before {
+.hvy-document .hvy-button-component[data-busy-state="busy"] .hvy-button-component-button::before {
   content: '';
   width: 0.72em;
   height: 0.72em;
@@ -91,7 +91,7 @@
   animation: hvy-button-busy-spin 0.75s linear infinite;
 }
 
-.hvy-button-status.is-error {
+.hvy-document .hvy-button-status.is-error {
   display: inline-flex;
   align-items: center;
 }
@@ -112,7 +112,7 @@
   }
 }
 
-.hvy-button-overlay-layer {
+.hvy-document .hvy-button-overlay-layer {
   position: absolute;
   inset: 0;
   z-index: 8;
@@ -120,17 +120,17 @@
   overflow: visible;
 }
 
-.hvy-button-overlay-layer .hvy-button-component,
-.hvy-button-overlay-layer .hvy-button-component-button,
-.hvy-button-overlay-layer .hvy-button-status {
+.hvy-document .hvy-button-overlay-layer .hvy-button-component,
+.hvy-document .hvy-button-overlay-layer .hvy-button-component-button,
+.hvy-document .hvy-button-overlay-layer .hvy-button-status {
   pointer-events: auto;
 }
 
-.hvy-button-position-anchor {
+.hvy-document .hvy-button-position-anchor {
   position: relative;
 }
 
-.hvy-button-component[data-visible-state="pending"],
-.hvy-button-component[data-visible-state="hidden"] {
+.hvy-document .hvy-button-component[data-visible-state="pending"],
+.hvy-document .hvy-button-component[data-visible-state="hidden"] {
   display: none;
 }

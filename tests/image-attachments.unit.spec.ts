@@ -7,8 +7,23 @@ import {
   isAllowedImageAttachmentMediaType,
   type ImageAttachmentResizeAdapter,
 } from '../src/image-attachments';
+import { addImageIntrinsicDimensions, getImageIntrinsicDimensions } from '../src/image-intrinsic-dimensions';
 
 describe('image attachment resizing', () => {
+  test('before, image bytes, after: intrinsic dimensions are available before decode', () => {
+    const before = new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"></svg>'
+    );
+
+    const expectedResult = addImageIntrinsicDimensions(
+      'image:synthetic.svg',
+      { mediaType: 'image/svg+xml' },
+      before
+    );
+
+    expect(getImageIntrinsicDimensions(expectedResult)).toEqual({ width: 1200, height: 800 });
+  });
+
   test('expected result: default max dimensions cap large uploads', () => {
     expect(resolveImageAttachmentMaxDimensions(undefined)).toEqual({ width: 2048, height: 2048 });
   });

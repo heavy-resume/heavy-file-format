@@ -6,10 +6,13 @@ import { resetPluginDocumentHookState, runPluginDocumentHooks } from '../src/plu
 import { setHostPlugins } from '../src/plugins/registry';
 import type { HvyPlugin } from '../src/plugins/types';
 import type { AppState } from '../src/types';
+import { recordDatabaseTablesChanged } from '../src/database-change-tracker';
 
 function createHookPlugin(id: string, hooks: NonNullable<HvyPlugin['hooks']>): HvyPlugin {
   return {
     id,
+    version: '1.0.0',
+    hvyApiVersion: '0.1',
     displayName: id,
     create: () => ({ element: document.createElement('div') }),
     hooks,
@@ -71,6 +74,23 @@ test('documentLoad runs for new document identity and documentChange runs for sa
   expect(expectedResult).toEqual(['load:load', 'before edit', 'change:edit', 'load:load']);
 });
 
+test('database table revisions participate in the document change lifecycle', async () => {
+  const expectedResult: string[] = [];
+  setHostPlugins([
+    createHookPlugin('database-lifecycle-plugin', {
+      documentLoad: { run: () => { expectedResult.push('load'); } },
+      documentChange: { run: () => { expectedResult.push('change'); } },
+    }),
+  ]);
+  bootstrap();
+  await runPluginDocumentHooks('load');
+
+  recordDatabaseTablesChanged(state.document, ['contacts']);
+  await runPluginDocumentHooks('edit');
+
+  expect(expectedResult).toEqual(['load', 'change']);
+});
+
 test('document edits made during a hook do not enqueue a follow-up hook pass', async () => {
   const expectedResult: string[] = [];
   setHostPlugins([
@@ -116,14 +136,16 @@ test('document edits made by hooks update the lifecycle signature', async () => 
   ]);
   bootstrap();
 
-  await runPluginDocumentHooks('load');
+  const loadResult = await runPluginDocumentHooks('load');
   const section = state.document.sections[0];
   if (!section) throw new Error('Expected section');
   section.title = 'Changed before hook';
-  await runPluginDocumentHooks('edit');
+  const changeResult = await runPluginDocumentHooks('edit');
   await runPluginDocumentHooks('unknown');
 
   expect(expectedResult).toEqual(['load', 'change']);
+  expect(loadResult).toEqual({ ran: true, documentChanged: false });
+  expect(changeResult).toEqual({ ran: true, documentChanged: true });
 });
 
 test('document hook context includes the current document view', async () => {

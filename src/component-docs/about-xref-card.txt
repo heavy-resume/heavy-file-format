@@ -2,7 +2,7 @@
 For user facing labels these are simply called "Reference" not "Xref"
 Visible cross-reference card linking to another component or section.
 xrefTitle is required and is the visible card title.
-xrefDetail is optional supporting text shown on the card.
+xrefDetail is optional supporting text shown on the card. Set it to an empty string to show no supporting text; empty detail does not inherit from the target.
 xrefTarget is the target id without #. If omitted, the card is preserved but disabled/non-navigable.
 xrefTargetTagFilter optionally filters editor target pickers to tagged targets; reusable xref-card components can set it by default.
 Use xref-cards instead of plain links when referencing another HVY item.

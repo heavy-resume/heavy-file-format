@@ -3,14 +3,15 @@ import { state } from './state';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
-import { getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
+import { getRefreshReaderBlock, getRefreshReaderPanels, getRefreshReaderSection, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
 import { saveSessionState } from './state-persistence';
 import { createDefaultSearchState } from './search/state';
-import { restoreVirtualizedSection } from './section-virtualizer';
+import { restoreVirtualizedBlock, restoreVirtualizedSection } from './section-virtualizer';
 import type { VisualDocument } from './types';
 import { resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
+import { setCurrentSearchMatch } from './search/current-match';
 
 const READER_SECTION_EXPANDED_STATE_PREFIX = 'reader-section-expanded:';
 
@@ -27,8 +28,11 @@ function setReaderSectionExpanded(section: VisualSection, expanded: boolean): vo
   state.readerContainerState[key] = expanded;
 }
 
-export function getReaderSectionExpandedOverride(section: VisualSection): boolean | undefined {
-  return state.readerContainerState[`${READER_SECTION_EXPANDED_STATE_PREFIX}${section.key}`];
+export function getReaderSectionExpandedOverride(
+  section: VisualSection,
+  readerContainerState: Record<string, boolean> = state.readerContainerState,
+): boolean | undefined {
+  return readerContainerState[`${READER_SECTION_EXPANDED_STATE_PREFIX}${section.key}`];
 }
 
 /**
@@ -87,7 +91,7 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
 }
 
 export function navigateToReaderTarget(
-  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string },
+  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string; matchOrdinal?: number },
   app: HTMLElement
 ): void {
   const targetId = target.targetId?.trim() ?? '';
@@ -169,13 +173,32 @@ export function getReaderTargetIds(app: HTMLElement): string[] {
 
 function requestTargetHighlight(
   app: HTMLElement,
-  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string },
+  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string; matchOrdinal?: number },
   context: { sectionFound: boolean; blockFound: boolean; sectionKey?: string },
   attempt = 0
 ): void {
   const run = () => {
     if (context.sectionKey) {
-      restoreVirtualizedSection(app, context.sectionKey);
+      const placeholder = app.querySelector<HTMLElement>(
+        `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader"][data-section-key="${CSS.escape(context.sectionKey)}"]`
+      );
+      if (placeholder && !getRefreshReaderSection()(app, context.sectionKey, { runVisibilityScripts: false })) {
+        restoreVirtualizedSection(app, context.sectionKey);
+      }
+      if (target.blockId) {
+        const directBlockPlaceholder = app.querySelector<HTMLElement>(
+          `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block"][data-section-key="${CSS.escape(context.sectionKey)}"][data-block-id="${CSS.escape(target.blockId)}"]`
+        );
+        const rangeBlockPlaceholder = Array.from(app.querySelectorAll<HTMLElement>(
+          `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block-range"][data-section-key="${CSS.escape(context.sectionKey)}"]`
+        )).find((candidate) => candidate.dataset.blockIds?.split(' ').includes(target.blockId ?? ''));
+        const refreshedDirectBlock = directBlockPlaceholder
+          ? getRefreshReaderBlock()(app, context.sectionKey, target.blockId, { runVisibilityScripts: false })
+          : false;
+        if ((directBlockPlaceholder || rangeBlockPlaceholder) && !refreshedDirectBlock) {
+          restoreVirtualizedBlock(app, context.sectionKey, target.blockId);
+        }
+      }
     }
     const element = findReaderTargetElement(app, target);
     if (!element) {
@@ -196,19 +219,24 @@ function requestTargetHighlight(
 
     alignSidebarToResolvedTarget(app, element);
     const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(target.matchText?.trim());
-    const marker = findSearchMarkerInTarget(element, target.matchText);
+    const marker = findSearchMarkerInTarget(element, target.matchText, target.matchOrdinal);
     if (wantsSearchMarker && !marker && attempt < 8) {
       requestTargetHighlight(app, target, context, attempt + 1);
       return;
     }
 
     const scrollTarget = marker ?? element;
-    element.classList.add('is-temp-highlighted');
+    setCurrentSearchMatch(app, marker);
+    if (!marker) {
+      element.classList.add('is-temp-highlighted');
+    }
     revealReaderAncestors(scrollTarget);
     scrollReaderTargetIntoView(scrollTarget);
-    window.setTimeout(() => {
-      element.classList.remove('is-temp-highlighted');
-    }, 1400);
+    if (!marker) {
+      window.setTimeout(() => {
+        element.classList.remove('is-temp-highlighted');
+      }, 1400);
+    }
   };
   if (attempt === 0) {
     window.requestAnimationFrame(() => {
@@ -341,16 +369,17 @@ function getReaderSurfaces(app: HTMLElement): HTMLElement[] {
   ].filter((surface): surface is HTMLElement => Boolean(surface));
 }
 
-function findSearchMarkerInTarget(element: HTMLElement, matchText?: string): HTMLElement | null {
+function findSearchMarkerInTarget(element: HTMLElement, matchText?: string, matchOrdinal = 0): HTMLElement | null {
   const markers = [...element.querySelectorAll<HTMLElement>('.search-match-marker')];
   if (markers.length === 0) {
     return null;
   }
   const normalized = matchText?.trim().toLocaleLowerCase();
   if (!normalized) {
-    return markers[0] ?? null;
+    return markers[matchOrdinal] ?? markers[0] ?? null;
   }
-  return markers.find((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized) ?? markers[0] ?? null;
+  const matchingMarkers = markers.filter((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized);
+  return matchingMarkers[matchOrdinal] ?? matchingMarkers[0] ?? markers[0] ?? null;
 }
 
 interface ExpandResult {
@@ -498,6 +527,10 @@ function emptyExpandResult(): ExpandResult {
 }
 
 export function closeModal(): void {
+  if (state.reusableDefinitionEditModal?.flavorManager) {
+    state.reusableDefinitionEditModal.flavorManager = null;
+    return;
+  }
   if (state.reusableDefinitionEditModal && state.componentMetaModal) {
     state.componentMetaModal = null;
     return;
@@ -506,19 +539,20 @@ export function closeModal(): void {
     state.modalSectionKey = null;
     return;
   }
-  const sqliteRowComponentModal = state.sqliteRowComponentModal;
+  const dbTableRowComponentModal = state.dbTableRowComponentModal;
   if (
-    sqliteRowComponentModal
-    && state.activeEditorBlock?.sectionKey === sqliteRowComponentModal.sectionKey
-    && sqliteRowComponentModal.blocks.some((block) => findBlockInSectionById(block, state.activeEditorBlock?.blockId ?? ''))
+    dbTableRowComponentModal
+    && state.activeEditorBlock?.sectionKey === dbTableRowComponentModal.sectionKey
+    && dbTableRowComponentModal.blocks.some((block) => findBlockInSectionById(block, state.activeEditorBlock?.blockId ?? ''))
   ) {
-    state.activeEditorBlock = sqliteRowComponentModal.previousActiveEditorBlock;
+    state.activeEditorBlock = dbTableRowComponentModal.previousActiveEditorBlock;
   }
   state.captionTextModal = null;
   state.modalSectionKey = null;
   state.newDocumentModalOpen = false;
   state.componentMetaModal = null;
-  state.sqliteRowComponentModal = null;
+  state.encryptionModal = null;
+  state.dbTableRowComponentModal = null;
   state.dbTableQueryModal = null;
   state.pdfExportPlanModal = null;
   state.pdfTemplateImportModal = null;
@@ -536,10 +570,13 @@ export function closeModalIfTarget(sectionKey: string): void {
   if (state.componentMetaModal?.sectionKey === sectionKey) {
     state.componentMetaModal = null;
   }
+  if (state.encryptionModal?.sectionKey === sectionKey) {
+    state.encryptionModal = null;
+  }
   if (state.captionTextModal?.target.sectionKey === sectionKey) {
     state.captionTextModal = null;
   }
-  if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
+  if (state.dbTableRowComponentModal?.sectionKey === sectionKey) {
     closeModal();
   }
   if (state.dbTableQueryModal?.sectionKey === sectionKey) {
@@ -568,6 +605,11 @@ function findBlockInSectionById(block: import('./editor/types').VisualBlock, blo
 
 export function resetTransientUiState(): void {
   state.activeEditorBlock = null;
+  state.activeTextEditorMode = null;
+  state.activeEditorBlockPath = [];
+  state.activeEditorBlockSnapshot = null;
+  state.activeEditorBlockSnapshots = [];
+  state.activeEditorNewBlockIds.clear();
   state.aiEditorHostBlock = null;
   state.aiEditorHostSectionKey = null;
   state.componentPlacement = null;
@@ -580,7 +622,8 @@ export function resetTransientUiState(): void {
   state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
   state.componentMetaModal = null;
-  state.sqliteRowComponentModal = null;
+  state.encryptionModal = null;
+  state.dbTableRowComponentModal = null;
   state.dbTableQueryModal = null;
   state.themeModalOpen = false;
   state.tempHighlights = new Set<string>();
@@ -591,6 +634,7 @@ export function resetTransientUiState(): void {
   state.gridAddComponentByBlock = {};
   state.readerExpandableState = {};
   state.readerContainerState = {};
+  state.searchRevealedAncestors = {};
   state.readerDeferredSectionBodies = {};
   state.readerView = {};
   state.readerViewActivatedTargets = new Set<string>();

@@ -1,13 +1,23 @@
-import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, createKeyboardInsertedTableRow, syncReusableTemplateForBlock } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleInlineAnswerArrowNavigation, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, createKeyboardInsertedTableRow, syncReusableTemplateForBlock } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
 import { handleEscapeKey } from './escape';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
+import { promoteTextToolbarHotkeyAction } from '../../editor/components/text/text-toolbar-layout';
 
 export function bindKeydown(app: HTMLElement): void {
   let pendingSortSelectExit: { select: HTMLSelectElement; richTarget: HTMLElement } | null = null;
   let lastFocusedSortSelect: { select: HTMLSelectElement; richTarget: HTMLElement } | null = null;
+
+  app.addEventListener('keydown', (event) => {
+    if (!['ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) return;
+    const richTarget = getRichTarget(event.target as HTMLElement);
+    if (!richTarget || !handleInlineAnswerArrowNavigation(event, richTarget)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    refreshRichToolbarState(richTarget);
+  }, { capture: true });
 
   app.addEventListener('focusin', (event) => {
     const target = event.target;
@@ -51,6 +61,23 @@ export function bindKeydown(app: HTMLElement): void {
     }
     const richTarget = getRichTarget(target);
     if (!richTarget) {
+      return;
+    }
+    if ((event.key === 'Backspace' || event.key === 'Delete') && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const caretNode = app.ownerDocument.createTextNode('\u200b');
+      target.replaceWith(caretNode);
+      const range = app.ownerDocument.createRange();
+      range.setStart(caretNode, 0);
+      range.collapse(true);
+      const selection = app.ownerDocument.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      richTarget.focus({ preventScroll: true });
+      richTarget.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+      lastFocusedSortSelect = null;
+      pendingSortSelectExit = null;
       return;
     }
     if (event.key === 'ArrowRight' && handleRichEditorKeydown(event, richTarget)) {
@@ -175,6 +202,15 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
 
+    if (
+      target.matches('.expandable-collapsed-preview-button[data-action="toggle-expandable-editor-panel"]')
+      && (event.key === 'Enter' || event.key === ' ')
+    ) {
+      event.preventDefault();
+      target.click();
+      return;
+    }
+
     if (target instanceof HTMLElement && target.dataset.field === 'text-fill-in-value' && event.key === 'Enter') {
       event.preventDefault();
       if (event.metaKey || event.ctrlKey) {
@@ -216,24 +252,28 @@ export function bindKeydown(app: HTMLElement): void {
     if (key === 'b') {
       event.preventDefault();
       applyRichAction('bold', richTarget);
+      promoteTextToolbarHotkeyAction('bold', richTarget);
       return;
     }
 
     if (key === 'i') {
       event.preventDefault();
       applyRichAction('italic', richTarget);
+      promoteTextToolbarHotkeyAction('italic', richTarget);
       return;
     }
 
     if (key === 'u') {
       event.preventDefault();
       applyRichAction('underline', richTarget);
+      promoteTextToolbarHotkeyAction('underline', richTarget);
       return;
     }
 
     if (key === 'k') {
       event.preventDefault();
       openLinkInlineModal(app, richTarget);
+      promoteTextToolbarHotkeyAction('link', richTarget);
     }
   });
 }

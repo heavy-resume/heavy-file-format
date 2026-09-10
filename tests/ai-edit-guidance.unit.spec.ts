@@ -20,10 +20,11 @@ hvy_version: 0.1
   }
   const guidance = getAiEditComponentGuidance(block);
 
-  expect(guidance).toContain('edit tableColumns.json and tableRows.json for static table data');
+  expect(guidance).toContain('edit tableColumns.json and tableRows.json for static table data, and tableColumnProperties.json for presentation');
   expect(guidance).toContain('table.txt is only a read-only preview');
   expect(guidance).toContain('tableColumns.json is a JSON array of strings');
   expect(guidance).toContain('tableRows.json is a JSON array of row objects');
+  expect(guidance).toContain('tableColumnProperties.json is a sparse JSON object keyed by the exact column string');
   expect(guidance).toContain('Do not write YAML, Markdown tables, or pipe-delimited rows into table.txt');
   expect(guidance).not.toContain('Do not use GitHub-flavored Markdown table syntax or pipe-delimited pseudo-tables as a shortcut');
 });

@@ -13,12 +13,14 @@ import {
 } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
+import { applyPersistedAnswerSelection } from './persisted-answer-selection';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
+import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
 import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, getRefreshReaderSection, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
@@ -72,6 +74,7 @@ export function bindReaderUi(app: HTMLElement): void {
   bindResponsiveSidebarShells(app);
   scheduleSidebarHelpAutoClose(app);
   bindReaderAppControls(app);
+  bindStaticTableReaderInteractions(app, [...readerDocuments, ...readerSidebarSections]);
 
   const toggleComponentListReverse = (reverseList: HTMLElement): void => {
     const sectionKey = reverseList.dataset.sectionKey;
@@ -410,13 +413,32 @@ export function bindReaderUi(app: HTMLElement): void {
     }
   };
 
+  const handlePersistedAnswerChange = (event: Event): void => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.dataset.field !== 'inline-persisted-answer') {
+      return;
+    }
+    const touched = applyPersistedAnswerSelection(input);
+    if (touched.length === 0) {
+      return;
+    }
+    const refreshedEveryBlock = touched.every((target) =>
+      getRefreshReaderBlock()(app, target.sectionKey, target.blockId, { runVisibilityScripts: false })
+    );
+    if (!refreshedEveryBlock) {
+      getRefreshReaderPanels()({ runVisibilityScripts: false });
+    }
+  };
+
   readerDocuments.forEach((readerDocument) => {
     readerDocument.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
     readerDocument.addEventListener('click', handleReaderAreaClick);
+    readerDocument.addEventListener('change', handlePersistedAnswerChange);
   });
   readerSidebarSections.forEach((sidebarSections) => {
     sidebarSections.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
     sidebarSections.addEventListener('click', handleReaderAreaClick);
+    sidebarSections.addEventListener('change', handlePersistedAnswerChange);
   });
   app.querySelector<HTMLElement>('.viewer-sidebar-help-balloon')?.addEventListener('click', () => {
     dismissSidebarHelpBalloon(app, 'viewer');

@@ -1,14 +1,37 @@
 import './grid.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
-import type { GridItem, VisualBlock } from '../../types';
+import type { GridItem } from '../../types';
 import { closeIcon } from '../../../icons';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../../../grid-ops';
+import { state } from '../../../state';
+import { compileSurfaceResponsiveCss } from '../../../surface-responsive-css';
+import { arrowDownIcon, arrowUpIcon } from '../../../icons';
+
+export const renderGridHeaderControls: ComponentEditorRenderer = (sectionKey, block, helpers) => `
+  <div class="grid-columns-header-field" role="group" aria-label="Grid Columns">
+    <span>Grid Columns</span>
+    <div class="grid-columns-stepper">
+      <input class="grid-columns-input" aria-label="Grid Columns" type="number" min="1" max="6" inputmode="numeric" data-section-key="${helpers.escapeAttr(
+        sectionKey
+      )}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="block-grid-columns" value="${helpers.escapeAttr(
+        String(block.schema.gridColumns)
+      )}" />
+      <div class="grid-columns-step-buttons">
+        <button type="button" class="grid-columns-step-button" data-action="adjust-grid-columns" data-section-key="${helpers.escapeAttr(
+          sectionKey
+        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-columns-delta="1" aria-label="Increase grid columns"${block.schema.gridColumns >= 6 ? ' disabled' : ''}>${arrowUpIcon()}</button>
+        <button type="button" class="grid-columns-step-button" data-action="adjust-grid-columns" data-section-key="${helpers.escapeAttr(
+          sectionKey
+        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-columns-delta="-1" aria-label="Decrease grid columns"${block.schema.gridColumns <= 1 ? ' disabled' : ''}>${arrowDownIcon()}</button>
+      </div>
+    </div>
+  </div>
+`;
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
+  const advanced = helpers.isAdvancedEditorMode();
   const stackWidth = coerceGridStackWidth(block.schema.gridStackWidth);
-  const stackWidthInputValue = getGridStackWidthInputValue(stackWidth);
-  const stackNever = stackWidth === 'never';
   const stackClass = getGridStackClass(block.id, stackWidth);
   const layoutClasses = [
     'grid-fields',
@@ -25,6 +48,14 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
     targetGridItemId: block.schema.gridItems[0]?.id,
   });
   const placementMode = firstPlacementTarget.length > 0;
+  const renderedGridBlocks = new Map(
+    helpers.renderEditorGridBlocks(
+      sectionKey,
+      block.schema.gridItems.map((item) => item.block),
+      1,
+      locked
+    ).map((entry) => [entry.block, entry.html])
+  );
   const addGridGhost = locked || placementMode
     ? ''
     : `<div class="ghost-section-card add-ghost grid-add-ghost">
@@ -37,39 +68,12 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
         })}
       </div>`;
   return `
-  <div class="editor-grid schema-grid">
-    <label>
-      <span>Grid Columns</span>
-      <input class="grid-columns-input" type="number" min="1" max="6" data-section-key="${helpers.escapeAttr(
-        sectionKey
-      )}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="block-grid-columns" value="${helpers.escapeAttr(
-        String(block.schema.gridColumns)
-      )}" />
-    </label>
-    <div class="grid-stack-width-field">
-      <label>
-        <span>Stack Width</span>
-        <input class="grid-stack-width-input" type="text" inputmode="text" spellcheck="false" placeholder="${DEFAULT_GRID_STACK_WIDTH}" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="block-grid-stack-width" value="${helpers.escapeAttr(
-          stackWidthInputValue
-        )}" ${stackNever ? 'disabled' : ''} />
-      </label>
-      <label class="checkbox-label grid-stack-never-toggle">
-        <span>Never</span>
-        <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-          block.id
-        )}" data-field="block-grid-stack-never" ${stackNever ? 'checked' : ''} />
-      </label>
-    </div>
-  </div>
   ${stackCss}
-  <div class="${helpers.escapeAttr(layoutClasses)}" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
+  <div class="${helpers.escapeAttr(layoutClasses)}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
     ${[
       block.schema.gridItems.length === 0 ? firstPlacementTarget : '',
       ...block.schema.gridItems.map(
         (item, index) => {
-          const canChangeComponent = isBlankDefaultGridItem(item.block);
           const beforePlacementTarget = index === 0 ? firstPlacementTarget : '';
           const afterPlacementTarget = helpers.renderComponentPlacementTarget({
             container: 'grid',
@@ -78,6 +82,9 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             placement: 'after',
             targetGridItemId: item.id,
           });
+          const cellMeta = advanced ? renderGridCellMeta(sectionKey, block.id, item, helpers) : '';
+          // Cell CSS belongs to the rendered document. Applying it to this
+          // authoring row can hide or reorder the controls away from source order.
           return `<div class="grid-field-row">
           ${beforePlacementTarget}
           <div class="grid-field-head">
@@ -91,25 +98,17 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                 )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}" aria-label="Move grid item down">▼</button>
               </div>
             </div>
-            <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
-              sectionKey
-            )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(
-              item.id
-            )}" aria-label="Remove grid component" title="Delete component">${closeIcon()}</button>
-          </div>
-          <div class="grid-item-controls">
-            ${
-              canChangeComponent
-                ? `<select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-                    block.id
-                  )}" data-field="block-grid-item-component" data-grid-item-id="${helpers.escapeAttr(item.id)}">
-                    ${helpers.renderComponentOptions(item.block.schema.component)}
-                  </select>`
-                : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
-            }
+            <div class="grid-field-head-actions">
+              ${cellMeta}
+              <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
+                sectionKey
+              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(
+                item.id
+              )}" aria-label="Remove grid component" title="Delete component">${closeIcon()}</button>
+            </div>
           </div>
           <div class="grid-item-editor-shell">
-            ${helpers.renderEditorBlock(sectionKey, item.block, locked)}
+            ${renderedGridBlocks.get(item.block) ?? ''}
           </div>
           ${afterPlacementTarget}
         </div>
@@ -122,19 +121,48 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
 `;
 };
 
-function isBlankDefaultGridItem(block: VisualBlock): boolean {
-  if ((block.schema.component || 'text') !== 'text') {
-    return false;
-  }
-  if (block.schema.kind !== 'text') {
-    return false;
-  }
-  return block.text.trim().length === 0
-    && block.schema.placeholder.trim().length === 0
-    && !block.schema.fillIn;
+function renderGridCellMeta(
+  sectionKey: string,
+  blockId: string,
+  item: GridItem,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  return `<details class="grid-cell-meta">
+    <summary class="grid-cell-meta-button" aria-label="Cell Meta">Meta</summary>
+    <div class="grid-cell-meta-body">
+      <div class="grid-cell-meta-title">Cell Meta</div>
+      <label class="grid-cell-id-field">
+        <span>ID</span>
+        <input data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+          blockId
+        )}" data-field="block-grid-item-id" data-grid-item-id="${helpers.escapeAttr(item.id)}" placeholder="grid-cell-id" value="${helpers.escapeAttr(
+          item.idGenerated ? '' : item.id
+        )}" />
+      </label>
+      <label class="grid-cell-css-field">
+        <span>CSS</span>
+        <textarea rows="3" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+          blockId
+        )}" data-field="block-grid-item-css" data-grid-item-id="${helpers.escapeAttr(item.id)}" spellcheck="false">${helpers.escapeHtml(
+          item.css ?? ''
+        )}</textarea>
+      </label>
+    </div>
+  </details>`;
 }
 
-export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
+export interface GridReaderLayout {
+  beforeHtml: string;
+  className: string;
+  defaultStyle: string;
+  body: string;
+}
+
+export function buildGridReaderLayout(
+  _section: Parameters<ComponentReaderRenderer>[0],
+  block: Parameters<ComponentReaderRenderer>[1],
+  helpers: Parameters<ComponentReaderRenderer>[2]
+): GridReaderLayout | null {
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
   const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
   const stackWidth = coerceGridStackWidth(block.schema.gridStackWidth);
@@ -147,10 +175,15 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
   ].filter(Boolean).join(' ');
   const stackCss = renderGridStackCss(stackClass, stackWidth, helpers);
   const itemsByBlock = new Map(block.schema.gridItems.map((item) => [item.block, item]));
-  const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
-    .map((orderedBlock) => {
-      const item = itemsByBlock.get(orderedBlock);
-      return item ? { item, html: helpers.renderReaderBlock(_section, orderedBlock, { trimVerticalEdgeMargin: true }) } : null;
+  const visibleCells = helpers.renderReaderGridBlocks(
+    _section,
+    block.schema.gridItems.map((item) => item.block),
+    columns,
+    { trimVerticalEdgeMargin: true }
+  )
+    .map((rendered) => {
+      const item = itemsByBlock.get(rendered.block);
+      return item ? { item, html: rendered.html } : null;
     })
     .filter((item): item is { item: GridItem; html: string } => item !== null)
     .filter((item) => item.html.trim().length > 0);
@@ -158,16 +191,35 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
     .map((item, index) => {
       const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
+      const responsiveClass = getGridItemResponsiveClass(block.id, item.item.id);
+      const responsiveCss = compileSurfaceResponsiveCss(item.item.css, `.${responsiveClass}`, state.document.meta);
       const cellStyle = [
         `grid-column: ${gridColumn};`,
+        responsiveCss.inlineCss,
       ].filter(Boolean).join(' ');
-      return `<div class="reader-grid-cell" style="${helpers.escapeAttr(cellStyle)}">${item.html}</div>`;
+      return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div class="reader-grid-cell ${helpers.escapeAttr(responsiveClass)}" data-grid-item-id="${helpers.escapeAttr(item.item.id)}" style="${helpers.escapeAttr(cellStyle)}">${item.html}</div>`;
     })
     .join('');
   if (!cells.trim()) {
+    return null;
+  }
+  return {
+    beforeHtml: stackCss,
+    className: layoutClasses,
+    defaultStyle: gridStyle,
+    body: cells,
+  };
+}
+
+export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
+  const layout = buildGridReaderLayout(_section, block, helpers);
+  if (!layout) {
     return '';
   }
-  return `${stackCss}<div class="${helpers.escapeAttr(layoutClasses)}" style="${helpers.escapeAttr(gridStyle)}">${cells}</div>`;
+  const responsiveClass = `grid-block-responsive-${hashGridStackKey(block.id)}`;
+  const responsiveCss = compileSurfaceResponsiveCss(block.schema.css, `.${responsiveClass}`, state.document.meta);
+  const style = [layout.defaultStyle, responsiveCss.inlineCss].filter(Boolean).join(' ');
+  return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}${layout.beforeHtml}<div class="${helpers.escapeAttr(`${layout.className} ${responsiveClass}`)}" style="${helpers.escapeAttr(style)}">${layout.body}</div>`;
 };
 
 function renderGridStackCss(className: string, stackWidth: string, helpers: Parameters<ComponentReaderRenderer>[2]): string {
@@ -181,8 +233,8 @@ function getGridStackClass(blockId: string, stackWidth: string): string {
   return `grid-stack-${hashGridStackKey(`${blockId}:${stackWidth}`)}`;
 }
 
-function getGridStackWidthInputValue(stackWidth: string): string {
-  return stackWidth === DEFAULT_GRID_STACK_WIDTH || stackWidth === 'never' ? '' : stackWidth;
+function getGridItemResponsiveClass(blockId: string, itemId: string): string {
+  return `grid-item-responsive-${hashGridStackKey(`${blockId}:${itemId}`)}`;
 }
 
 function hashGridStackKey(value: string): string {

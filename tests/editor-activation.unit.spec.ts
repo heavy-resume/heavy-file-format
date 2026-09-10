@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, expect, test } from 'vitest';
 
-import { cancelEditorBlockEdit, deactivateEditorBlock, markActiveEditorBlockAsNew, setActiveEditorBlock } from '../src/block-ops';
+import { cancelEditorBlockEdit, deactivateEditorBlock, isActiveEditorBlock, markActiveEditorBlockAsNew, setActiveEditorBlock } from '../src/block-ops';
 import { createEmptyBlock } from '../src/document-factory';
 import { deserializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
@@ -93,6 +93,30 @@ test('deactivating top-level active block clears editor focus', () => {
   expect(result).toBe('closed');
   expect(state.activeEditorBlock).toBeNull();
   expect(state.activeEditorBlockPath).toEqual([]);
+});
+
+test('opening a sibling keeps the previous component editor open', () => {
+  const section = state.document.sections[0]!;
+  const first = createEmptyBlock('text');
+  const second = createEmptyBlock('text');
+  first.text = 'First original';
+  second.text = 'Second original';
+  section.blocks.push(first, second);
+
+  setActiveEditorBlock(section.key, first.id);
+  first.text = 'First draft';
+  setActiveEditorBlock(section.key, second.id);
+
+  expect(isActiveEditorBlock(section.key, first.id)).toBe(true);
+  expect(isActiveEditorBlock(section.key, second.id)).toBe(true);
+  expect(state.activeEditorBlock).toEqual({ sectionKey: section.key, blockId: second.id });
+
+  cancelEditorBlockEdit(section.key, first.id);
+
+  expect(first.text).toBe('First original');
+  expect(isActiveEditorBlock(section.key, first.id)).toBe(false);
+  expect(isActiveEditorBlock(section.key, second.id)).toBe(true);
+  expect(state.activeEditorBlock).toEqual({ sectionKey: section.key, blockId: second.id });
 });
 
 test('canceling nested active block closes that frame and keeps its parent active', () => {

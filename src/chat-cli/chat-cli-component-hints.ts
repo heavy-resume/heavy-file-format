@@ -84,7 +84,7 @@ function componentSpecificHintLines(componentName: string): string[] {
 
 function formatEditHint(componentDir: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
   if (componentName === 'table') {
-    return `tableColumns.json and tableRows.json hold static table data; ${componentName}.json holds display config; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a preview.`;
+    return `tableColumns.json and tableRows.json hold static table data; tableColumnProperties.json holds sparse width, wrap, truncation, and alignment settings keyed by exact column name; ${componentName}.json holds other display config; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a preview.`;
   }
   if (componentName === 'component-list') {
     return `component-list.json defines the list item type; children-order.json controls list item order; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a preview of existing leaf item text.`;

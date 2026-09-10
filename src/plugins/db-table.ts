@@ -1,29 +1,25 @@
-import type { ComponentRenderHelpers } from '../editor/component-helpers';
-import type { VisualBlock, VisualSection } from '../editor/types';
+import type { VisualBlock } from '../editor/types';
 import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
+import type { JsonObject } from '../hvy/types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
-import { validateDbTableObjectName } from './db-table-identifiers';
 import { validateAttachedComponentHvy } from './db-table-fragment';
 import { formatQueryResultTable } from './db-table-format';
-import type { ScriptingDbApi } from './scripting/runtime';
-import { closeIcon, plusIcon } from '../icons';
+import type { ScriptingDatabaseTableHandle, ScriptingDbApi } from './scripting/runtime';
+import { recordDatabaseTablesChanged, type DatabaseChangeSnapshot } from '../database-change-tracker';
 import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory } from '../history';
 import {
   clampDbTableOffset,
   clearDbTableViewState,
-  DB_TABLE_ESTIMATED_ROW_HEIGHT,
   DB_TABLE_MAX_QUERY_ROWS,
   DB_TABLE_WINDOW_SIZE,
   getDbTableQueryDynamicWindow,
   getDbTableQueryLimit,
-  getDbTableViewState,
   getDocumentDbTableNames,
   getPluginConfigValue,
 } from './db-table-model';
-
-import './db-table.css';
+import { formatEffectiveDbTableColumns, parseSparseDbTableColumns, readDbTableConfig } from './db-table/db-table-config';
 
 const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
 
@@ -53,7 +49,7 @@ interface SqlJsStatic {
 }
 type InitSqlJs = (config: { locateFile: () => string }) => Promise<SqlJsStatic>;
 
-interface SqliteTableSnapshot {
+interface DbTableSnapshot {
   objectType: 'table' | 'view';
   columns: string[];
   rowIds: number[];
@@ -115,430 +111,42 @@ export {
   toggleDbTableSort,
 } from './db-table-model';
 
-export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock, helpers: ComponentRenderHelpers): string {
-  const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table');
-  ensureSqliteRuntime();
-
-  const content = renderDbTablePluginContent(sectionKey, block, helpers, tableName, false);
-  const query = block.text.trim();
-
-  return `
-    <span class="db-table-info">
-      <label class="db-table-name">
-        <span>Table</span>
-        <input
-          data-section-key="${helpers.escapeAttr(sectionKey)}"
-          data-block-id="${helpers.escapeAttr(block.id)}"
-          data-field="block-plugin-db-table"
-          value="${helpers.escapeAttr(tableName)}"
-          placeholder="table_name_goes_here"
-        />
-      </label>
-      <span>
-        <button
-          type="button"
-          class="ghost db-table-query-button${query.length > 0 ? ' db-table-query-button-active' : ''}"
-          data-action="db-table-open-query-editor"
-          data-section-key="${helpers.escapeAttr(sectionKey)}"
-          data-block-id="${helpers.escapeAttr(block.id)}"
-        >Edit Query</button>
-      </span>
-    </span>
-    ${content}
-  `;
+export async function getEffectiveDbTableColumnPresentation(
+  document: VisualDocument,
+  block: VisualBlock
+): Promise<JsonObject> {
+  const config = readDbTableConfig(block.schema.pluginConfig);
+  const { loadDbTableSourcePage } = await import('./db-table/db-table-data');
+  const page = await loadDbTableSourcePage(document, config, {
+    query: block.text,
+    offset: 0,
+    sortColumn: null,
+    sortDirection: null,
+  });
+  return formatEffectiveDbTableColumns(config, page.columns);
 }
 
-export function renderDbTablePluginReader(section: VisualSection, block: VisualBlock, helpers: ComponentRenderHelpers): string {
-  const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table');
-  ensureSqliteRuntime();
-  return renderDbTablePluginContent(section.key, block, helpers, tableName, true);
-}
-
-function renderDbTablePluginContent(
-  sectionKey: string,
+export async function setEffectiveDbTableColumnPresentation(
+  document: VisualDocument,
   block: VisualBlock,
-  helpers: ComponentRenderHelpers,
-  tableName: string,
-  readOnly: boolean
-): string {
-  const runtime = getSqliteRuntime();
-  if (tableName.trim().length === 0) {
-    return '<div class="plugin-placeholder">Choose a table name to start working with this DB table.</div>';
-  }
-  const tableNameError = validateDbTableObjectName(tableName);
-  if (tableNameError) {
-    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(tableNameError)}</div>`;
-  }
-
-  if (runtime.loadError) {
-    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(runtime.loadError)}</div>`;
-  }
-
-  if (runtime.loading || !runtime.db) {
-    return '<div class="plugin-placeholder">Loading database table…</div>';
-  }
-
-  try {
-    const objectType = getDbObjectType(runtime.db, tableName);
-    if (!objectType) {
-      if (readOnly) {
-        return `<div class="plugin-placeholder">DB table error: table or view "${helpers.escapeHtml(tableName)}" does not exist.</div>`;
-      }
-      return renderMissingTablePrompt(sectionKey, block.id, tableName, helpers);
-    }
-    const viewState = getDbTableViewState(sectionKey, block.id);
-    const snapshot = readTableSnapshot(runtime.db, tableName, {
-      objectType,
-      query: block.text,
-      offset: viewState.offset,
-      dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
-      queryLimit: getDbTableQueryLimit(block.schema.pluginConfig),
-      sortColumn: viewState.sortColumn,
-      sortDirection: viewState.sortDirection,
-    });
-    if (readOnly) {
-      return renderReadOnlyTable(sectionKey, block.id, tableName, snapshot, helpers);
-    }
-    return renderEditableTable(sectionKey, block.id, tableName, snapshot, helpers);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown database error.';
-    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(message)}</div>`;
-  }
+  value: JsonObject
+): Promise<void> {
+  const config = readDbTableConfig(block.schema.pluginConfig);
+  const { loadDbTableSourcePage } = await import('./db-table/db-table-data');
+  const page = await loadDbTableSourcePage(document, config, {
+    query: block.text,
+    offset: 0,
+    sortColumn: null,
+    sortDirection: null,
+  });
+  const columns = parseSparseDbTableColumns(config, value, page.columns);
+  const pluginConfig = { ...block.schema.pluginConfig };
+  if (Object.keys(columns).length > 0) pluginConfig.columns = columns;
+  else delete pluginConfig.columns;
+  block.schema.pluginConfig = pluginConfig;
 }
 
-function renderMissingTablePrompt(
-  sectionKey: string,
-  blockId: string,
-  tableName: string,
-  helpers: ComponentRenderHelpers
-): string {
-  return `
-    <div class="plugin-placeholder db-table-missing">
-      <span>Table or view "${helpers.escapeHtml(tableName)}" does not exist.</span>
-      <button
-        type="button"
-        class="secondary"
-        data-action="db-table-create-table"
-        data-section-key="${helpers.escapeAttr(sectionKey)}"
-        data-block-id="${helpers.escapeAttr(blockId)}"
-        data-table-name="${helpers.escapeAttr(tableName)}"
-      >Create Table</button>
-    </div>
-  `;
-}
-
-function renderEditableTable(
-  sectionKey: string,
-  blockId: string,
-  tableName: string,
-  snapshot: SqliteTableSnapshot,
-  helpers: ComponentRenderHelpers
-): string {
-  const queryActive = snapshot.queryActive;
-  const readOnlySource = queryActive || snapshot.objectType === 'view';
-  const tableDisabledAttr = readOnlySource ? ' disabled' : '';
-  const topSpacerHeight = snapshot.offset * DB_TABLE_ESTIMATED_ROW_HEIGHT;
-  const remainingRows = Math.max(snapshot.totalRows - (snapshot.offset + snapshot.rows.length), 0);
-  const bottomSpacerHeight = remainingRows * DB_TABLE_ESTIMATED_ROW_HEIGHT;
-  const hasRows = snapshot.rows.length > 0;
-  const renderedRows = hasRows
-    ? snapshot.rows.map(
-        (row, rowIndex) => `
-          <tr class="table-row-editor table-row-editor-main">
-            <td class="table-row-utility sqlite-plugin-row-number">${rowIndex + 1}</td>
-            ${snapshot.columns
-              .map(
-                (column, cellIndex) => `
-                  <td>
-                    <input
-                      class="sqlite-plugin-grid-input"
-                      data-field="sqlite-cell"
-                      data-section-key="${helpers.escapeAttr(sectionKey)}"
-                      data-block-id="${helpers.escapeAttr(blockId)}"
-                      data-table-name="${helpers.escapeAttr(tableName)}"
-                      data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
-                      data-column-name="${helpers.escapeAttr(column)}"
-                      value="${helpers.escapeAttr(row[cellIndex] ?? '')}"
-                      ${tableDisabledAttr}
-                    />
-                  </td>`
-              )
-              .join('')}
-                    <td class="table-row-utility table-row-remove-cell">
-                      <button
-                        type="button"
-                        class="ghost sqlite-row-component-button${snapshot.rowHasAttachedComponent[rowIndex] ? ' sqlite-row-component-button-attached' : ''}"
-                        data-action="sqlite-open-row-component-editor"
-                        data-section-key="${helpers.escapeAttr(sectionKey)}"
-                        data-block-id="${helpers.escapeAttr(blockId)}"
-                        data-table-name="${helpers.escapeAttr(tableName)}"
-                        data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"
-                        title="${snapshot.rowHasAttachedComponent[rowIndex] ? 'Edit attached component' : 'Attach component'}"
-                        ${tableDisabledAttr}
-                      >…</button>
-                    </td>
-                  </tr>`
-      ).join('')
-    : `
-      <tr class="table-row-editor table-row-editor-main sqlite-plugin-draft-row">
-        <td class="table-row-utility sqlite-plugin-row-number"></td>
-        ${snapshot.columns
-          .map(
-            (column) => `
-              <td>
-                <input
-                  class="sqlite-plugin-grid-input"
-                  data-field="sqlite-cell"
-                  data-section-key="${helpers.escapeAttr(sectionKey)}"
-                  data-block-id="${helpers.escapeAttr(blockId)}"
-                  data-table-name="${helpers.escapeAttr(tableName)}"
-                  data-rowid=""
-                  data-column-name="${helpers.escapeAttr(column)}"
-                  data-sqlite-draft-row="true"
-                  value=""
-                  ${tableDisabledAttr}
-                />
-              </td>`
-          )
-          .join('')}
-        <td class="table-row-utility table-row-remove-cell"></td>
-      </tr>`;
-
-  return `
-    <div class="table-editor sqlite-plugin-editor">
-      <div class="table-editor-head">
-        <strong>DB Table</strong>
-        <span>${
-          queryActive
-            ? snapshot.dynamicWindow
-              ? 'Query preview is read-only and is capped to fewer than 100 rows.'
-              : `Query preview is read-only. Rows limited to ${snapshot.queryLimit}.`
-            : snapshot.objectType === 'view'
-              ? 'This database view is read-only. Create or edit the source tables to change rows.'
-            : 'Rows and columns persist in the attached database file.'
-        }</span>
-      </div>
-      <div
-        class="table-editor-frame db-table-frame${queryActive ? ' db-table-frame-query-active' : ''}"
-        data-db-table-frame="true"
-        data-db-table-dynamic-window="${!queryActive || snapshot.dynamicWindow ? 'true' : 'false'}"
-        data-section-key="${helpers.escapeAttr(sectionKey)}"
-        data-block-id="${helpers.escapeAttr(blockId)}"
-      >
-        <table class="table-editor-grid sqlite-plugin-grid">
-          <thead>
-            <tr>
-              <th class="table-utility-cell"></th>
-              ${snapshot.columns
-                .map(
-                  (column) => `
-                    <th>
-                      <div class="db-table-header-cell">
-                        <input
-                          class="sqlite-plugin-grid-input sqlite-plugin-grid-header"
-                          data-field="sqlite-column-name"
-                          data-section-key="${helpers.escapeAttr(sectionKey)}"
-                          data-block-id="${helpers.escapeAttr(blockId)}"
-                          data-table-name="${helpers.escapeAttr(tableName)}"
-                          data-old-column-name="${helpers.escapeAttr(column)}"
-                          value="${helpers.escapeAttr(column)}"
-                          ${tableDisabledAttr}
-                        />
-                        <button
-                          type="button"
-                          class="ghost db-table-sort-button${snapshot.sortColumn === column ? ' db-table-sort-button-active' : ''}"
-                          data-action="db-table-toggle-sort"
-                          data-section-key="${helpers.escapeAttr(sectionKey)}"
-                          data-block-id="${helpers.escapeAttr(blockId)}"
-                          data-column-name="${helpers.escapeAttr(column)}"
-                          title="Sort by ${helpers.escapeAttr(column)}"
-                          ${queryActive ? 'disabled' : ''}
-                        >${snapshot.sortColumn === column ? (snapshot.sortDirection === 'desc' ? '↓' : '↑') : '↕'}</button>
-                        <button
-                          type="button"
-                          class="ghost db-table-delete-column-button"
-                          data-action="sqlite-drop-column"
-                          data-section-key="${helpers.escapeAttr(sectionKey)}"
-                          data-block-id="${helpers.escapeAttr(blockId)}"
-                          data-table-name="${helpers.escapeAttr(tableName)}"
-                          data-column-name="${helpers.escapeAttr(column)}"
-                          aria-label="Delete column ${helpers.escapeAttr(column)}"
-                          title="Delete column ${helpers.escapeAttr(column)}"
-                          ${readOnlySource || snapshot.columns.length <= 1 ? 'disabled' : ''}
-                        >${closeIcon()}</button>
-                      </div>
-                    </th>`
-                )
-                .join('')}
-              <th class="table-add-column-cell">
-                <button
-                  type="button"
-                  class="ghost table-add-button"
-                  data-action="sqlite-add-column"
-                  data-section-key="${helpers.escapeAttr(sectionKey)}"
-                  data-block-id="${helpers.escapeAttr(blockId)}"
-                  data-table-name="${helpers.escapeAttr(tableName)}"
-                  title="Add column"
-                  ${tableDisabledAttr}
-                >${plusIcon()}</button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            ${topSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length + 2}" style="height:${topSpacerHeight}px"></td></tr>` : ''}
-            ${renderedRows}
-            ${bottomSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length + 2}" style="height:${bottomSpacerHeight}px"></td></tr>` : ''}
-            <tr class="table-add-row-line">
-              <td colspan="${snapshot.columns.length + 2}">
-                <button
-                  type="button"
-                  class="ghost"
-                  data-action="sqlite-add-row"
-                  data-section-key="${helpers.escapeAttr(sectionKey)}"
-                  data-block-id="${helpers.escapeAttr(blockId)}"
-                  data-table-name="${helpers.escapeAttr(tableName)}"
-                  ${tableDisabledAttr}
-                >${plusIcon()} Add Row</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
-}
-
-function renderReadOnlyTable(
-  sectionKey: string,
-  blockId: string,
-  tableName: string,
-  snapshot: SqliteTableSnapshot,
-  helpers: ComponentRenderHelpers
-): string {
-  const topSpacerHeight = snapshot.offset * DB_TABLE_ESTIMATED_ROW_HEIGHT;
-  const remainingRows = Math.max(snapshot.totalRows - (snapshot.offset + snapshot.rows.length), 0);
-  const bottomSpacerHeight = remainingRows * DB_TABLE_ESTIMATED_ROW_HEIGHT;
-  return `<div
-    class="table-editor-frame db-table-frame db-table-frame-readonly${snapshot.queryActive ? ' db-table-frame-query-active' : ''}"
-    data-db-table-frame="true"
-    data-db-table-dynamic-window="${!snapshot.queryActive || snapshot.dynamicWindow ? 'true' : 'false'}"
-    data-section-key="${helpers.escapeAttr(sectionKey)}"
-    data-block-id="${helpers.escapeAttr(blockId)}"
-  ><table class="reader-table">
-    <thead>
-      <tr>${snapshot.columns.map((column) => `<th>${helpers.escapeHtml(column)}</th>`).join('')}</tr>
-    </thead>
-    <tbody>
-      ${topSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length}" style="height:${topSpacerHeight}px"></td></tr>` : ''}
-      ${snapshot.rows
-        .map(
-          (row, rowIndex) => `
-            <tr
-              class="table-main-row table-main-row-${rowIndex % 2 === 0 ? 'even' : 'odd'}${snapshot.rowHasAttachedComponent[rowIndex] ? ' sqlite-plugin-row-has-component' : ''}"
-              ${snapshot.rowHasAttachedComponent[rowIndex]
-                ? `data-action="sqlite-open-row-component-view" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-table-name="${helpers.escapeAttr(tableName)}" data-rowid="${helpers.escapeAttr(String(snapshot.rowIds[rowIndex] ?? ''))}"`
-                : ''
-              }
-            >
-              ${row
-                .map((cell) => {
-                  const value = helpers.escapeHtml(cell);
-                  return value ? `<td>${value}</td>` : '<td></td>';
-                })
-                .join('')}
-            </tr>`
-        )
-        .join('')}
-      ${bottomSpacerHeight > 0 ? `<tr class="db-table-spacer-row"><td colspan="${snapshot.columns.length}" style="height:${bottomSpacerHeight}px"></td></tr>` : ''}
-    </tbody>
-  </table></div>`;
-}
-
-export async function addDbTableRow(tableName: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  ensureWritableTableExists(db, tableName);
-  db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
-  await persistRuntimeDatabase();
-}
-
-export async function createDbTable(tableName: string): Promise<boolean> {
-  const trimmed = tableName.trim();
-  const tableNameError = validateDbTableObjectName(trimmed);
-  if (tableNameError) {
-    throw new Error(tableNameError);
-  }
-  const db = await getLoadedDatabase();
-  const created = ensureTableExists(db, trimmed);
-  if (created) {
-    await persistRuntimeDatabase();
-  }
-  return created;
-}
-
-export async function materializeDbTableDraftRow(tableName: string, columnName: string, value: string): Promise<number | null> {
-  if (value.length === 0) {
-    return null;
-  }
-
-  const db = await getLoadedDatabase();
-  ensureWritableTableExists(db, tableName);
-  db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
-  const rowIdResult = db.exec('SELECT last_insert_rowid()');
-  const rowId = Number(rowIdResult[0]?.values[0]?.[0] ?? 0);
-  if (!Number.isFinite(rowId) || rowId <= 0) {
-    throw new Error('Failed to create a database row.');
-  }
-  db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
-  await persistRuntimeDatabase();
-  return rowId;
-}
-
-export async function addDbTableColumn(tableName: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  ensureWritableTableExists(db, tableName);
-  const nextName = getNextColumnName(getTableColumns(db, tableName));
-  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(nextName)} TEXT`);
-  await persistRuntimeDatabase();
-}
-
-export async function renameDbTableColumn(tableName: string, oldName: string, nextName: string): Promise<void> {
-  const trimmedNext = nextName.trim();
-  if (trimmedNext.length === 0 || trimmedNext === oldName) {
-    return;
-  }
-
-  const db = await getLoadedDatabase();
-  requireWritableTable(db, tableName);
-  const columns = getTableColumns(db, tableName);
-  if (columns.includes(trimmedNext)) {
-    throw new Error(`Column "${trimmedNext}" already exists.`);
-  }
-  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} RENAME COLUMN ${quoteIdentifier(oldName)} TO ${quoteIdentifier(trimmedNext)}`);
-  await persistRuntimeDatabase();
-}
-
-export async function dropDbTableColumn(tableName: string, columnName: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  requireWritableTable(db, tableName);
-  const columns = getTableColumns(db, tableName);
-  if (!columns.includes(columnName)) {
-    return;
-  }
-  if (columns.length <= 1) {
-    throw new Error('Cannot delete the last remaining column.');
-  }
-  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`);
-  await persistRuntimeDatabase();
-}
-
-export async function updateDbTableCell(tableName: string, rowId: number, columnName: string, value: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  requireWritableTable(db, tableName);
-  db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
-  await persistRuntimeDatabase();
-}
-
-export async function getSqliteRowComponent(tableName: string, rowId: number): Promise<string | null> {
+export async function getDbTableRowComponent(tableName: string, rowId: number): Promise<string | null> {
   const db = await getLoadedDatabase();
   ensureRowComponentsTableExists(db);
   const statement = db.prepare(
@@ -557,7 +165,7 @@ export async function getSqliteRowComponent(tableName: string, rowId: number): P
   }
 }
 
-export async function setSqliteRowComponent(tableName: string, rowId: number, hvy: string): Promise<void> {
+export async function setDbTableRowComponent(tableName: string, rowId: number, hvy: string): Promise<void> {
   const db = await getLoadedDatabase();
   ensureRowComponentsTableExists(db);
   const trimmed = hvy.trim();
@@ -725,6 +333,13 @@ function resetRuntime(): void {
   clearDbTableViewState();
 }
 
+export function resetDbTableRuntimeForDocument(document: VisualDocument): void {
+  const runtime = getSqliteRuntime();
+  if (runtime.documentRef !== document) return;
+  resetRuntime();
+  runtime.documentRef = document;
+}
+
 function readTableSnapshot(
   db: SqlJsDatabase,
   tableName: string,
@@ -737,7 +352,7 @@ function readTableSnapshot(
     sortColumn: string | null;
     sortDirection: 'asc' | 'desc' | null;
   }
-): SqliteTableSnapshot {
+): DbTableSnapshot {
   const normalizedQuery = options.query.trim().replace(/;+\s*$/u, '');
   const queryActive = normalizedQuery.length > 0;
   const objectType = options.objectType ?? getDbObjectType(db, tableName);
@@ -828,33 +443,12 @@ function ensureTableExists(db: SqlJsDatabase, tableName: string): boolean {
   return true;
 }
 
-function ensureWritableTableExists(db: SqlJsDatabase, tableName: string): boolean {
-  const objectType = getDbObjectType(db, tableName);
-  if (objectType === 'view') {
-    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
-  }
-  if (objectType === 'table') {
-    return false;
-  }
-
-  const columns = getDefaultColumnsForTable(tableName);
-  db.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${columns.map((column) => `${quoteIdentifier(column)} TEXT`).join(', ')})`);
-  return true;
-}
-
 function requireExistingDbObject(db: SqlJsDatabase, tableName: string): 'table' | 'view' {
   const objectType = getDbObjectType(db, tableName);
   if (!objectType) {
     throw new Error(`DB object "${tableName}" does not exist. Create a table or view named "${tableName}" first.`);
   }
   return objectType;
-}
-
-function requireWritableTable(db: SqlJsDatabase, tableName: string): void {
-  const objectType = requireExistingDbObject(db, tableName);
-  if (objectType === 'view') {
-    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
-  }
 }
 
 function ensureRowComponentsTableExists(db: SqlJsDatabase): void {
@@ -911,16 +505,6 @@ function getDefaultColumnsForTable(tableName: string): string[] {
     return ['Company', 'URL', 'Status'];
   }
   return ['Column 1', 'Column 2', 'Column 3'];
-}
-
-function getNextColumnName(existingColumns: string[]): string {
-  let index = existingColumns.length + 1;
-  let candidate = `Column ${index}`;
-  while (existingColumns.includes(candidate)) {
-    index += 1;
-    candidate = `Column ${index}`;
-  }
-  return candidate;
 }
 
 function buildSortClause(sortColumn: string | null, sortDirection: 'asc' | 'desc' | null): string {
@@ -1157,7 +741,7 @@ export async function getDbTableRenderedText(document: VisualDocument, block: Vi
       ].join('\n');
     }
 
-    let snapshot: SqliteTableSnapshot;
+    let snapshot: DbTableSnapshot;
     try {
       snapshot = readTableSnapshot(db, tableName, {
         objectType,
@@ -1338,10 +922,12 @@ export interface ScriptingDbRuntime {
 
 export async function createScriptingDbRuntime(
   document: VisualDocument,
-  onMutation?: () => void
+  onMutation?: () => void,
+  databaseChanges: DatabaseChangeSnapshot = { revision: 0, tables: [], complete: true }
 ): Promise<ScriptingDbRuntime> {
   const db = await openDocumentDatabase(document);
   let databaseHistoryCheckpointRecorded = false;
+  const getTableNames = () => readScriptingDatabaseTableNames(db);
   const api: ScriptingDbApi = {
     query: (sql, params) => {
       const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
@@ -1375,10 +961,24 @@ export async function createScriptingDbRuntime(
       }
       db.run(trimmed, normalizeScriptingSqlParams(params));
       const rowsAffected = db.getRowsModified();
+      const affected = inferScriptingDatabaseMutationTables(db, trimmed);
       persistScriptingDatabase(document, db, !databaseHistoryCheckpointRecorded);
       databaseHistoryCheckpointRecorded = true;
+      recordDatabaseTablesChanged(document, affected.tables, affected.complete);
       onMutation?.();
       return `Executed: ${trimmed}\nRows affected: ${rowsAffected}`;
+    },
+    get_tables: () => getTableNames().map((name) => ({ name, removed: false })),
+    get_updated_tables: (tableName = '') => {
+      const filter = String(tableName ?? '').trim();
+      const currentNames = getTableNames();
+      const currentNameSet = new Set(currentNames);
+      const changedNames = databaseChanges.complete
+        ? databaseChanges.tables
+        : [...new Set([...currentNames, ...databaseChanges.tables])];
+      return changedNames
+        .filter((name) => !filter || name === filter)
+        .map<ScriptingDatabaseTableHandle>((name) => ({ name, removed: !currentNameSet.has(name) }));
     },
   };
   return {
@@ -1390,6 +990,49 @@ export async function createScriptingDbRuntime(
         // Ignore close failures for scripting databases.
       }
     },
+  };
+}
+
+function readScriptingDatabaseTableNames(db: SqlJsDatabase): string[] {
+  const result = db.exec(
+    "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+  )[0];
+  return (result?.values ?? []).map((row) => String(row[0] ?? '')).filter(Boolean);
+}
+
+function normalizeSqlIdentifier(token: string): string {
+  const segment = token.trim().split('.').at(-1) ?? '';
+  if ((segment.startsWith('"') && segment.endsWith('"')) || (segment.startsWith('`') && segment.endsWith('`'))) {
+    return segment.slice(1, -1).replace(segment[0] === '"' ? /""/g : /``/g, segment[0]);
+  }
+  if (segment.startsWith('[') && segment.endsWith(']')) return segment.slice(1, -1);
+  return segment.replace(/[^A-Za-z0-9_$-].*$/u, '');
+}
+
+export function inferScriptingDatabaseMutationTables(
+  db: Pick<SqlJsDatabase, 'exec'>,
+  sql: string
+): { tables: string[]; complete: boolean } {
+  const identifier = String.raw`(?:"(?:""|[^"])+"|\[(?:[^\]])+\]|` + '`(?:``|[^`])+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$-]*)(?:\s*\.\s*(?:"(?:""|[^"])+"|\[(?:[^\]])+\]|` + '`(?:``|[^`])+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$-]*))?`;
+  const patterns = [
+    new RegExp(String.raw`\b(?:INSERT(?:\s+OR\s+\w+)?|REPLACE)\s+INTO\s+(${identifier})`, 'giu'),
+    new RegExp(String.raw`\bUPDATE(?:\s+OR\s+\w+)?\s+(${identifier})`, 'giu'),
+    new RegExp(String.raw`\bDELETE\s+FROM\s+(${identifier})`, 'giu'),
+    new RegExp(String.raw`\b(?:CREATE|DROP|ALTER)\s+(?:TABLE|VIEW)\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?(${identifier})`, 'giu'),
+    new RegExp(String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${identifier}\s+ON\s+(${identifier})`, 'giu'),
+  ];
+  const tables = new Set<string>();
+  for (const pattern of patterns) {
+    for (const match of sql.matchAll(pattern)) {
+      const name = normalizeSqlIdentifier(match[1] ?? '');
+      if (name) tables.add(name);
+    }
+  }
+  const hasTriggers = (db.exec("SELECT 1 FROM sqlite_schema WHERE type = 'trigger' LIMIT 1")[0]?.values.length ?? 0) > 0;
+  const statementCount = sql.split(';').map((statement) => statement.trim()).filter(Boolean).length;
+  return {
+    tables: [...tables],
+    complete: tables.size > 0 && statementCount === 1 && !hasTriggers,
   };
 }
 
@@ -1422,7 +1065,7 @@ async function persistDocumentDatabase(document: VisualDocument, db: SqlJsDataba
   }
 }
 
-export function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {
+export function syncDbTableColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {
   const escapedTableName = CSS.escape(tableName);
   const escapedOldColumnName = CSS.escape(oldColumnName);
 

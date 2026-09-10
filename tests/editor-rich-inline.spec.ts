@@ -1,14 +1,34 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test('undo inside active rich text editor keeps focus on text changes', async ({ page }) => {
+async function expandInlineRichToolbar(page: Page): Promise<void> {
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  if (!await toolbar.evaluate((node) => node.classList.contains('is-text-toolbar-expanded'))) {
+    await toolbar.locator('[data-text-toolbar-expand]').last().click();
+  }
+}
+
+test('document undo restores one clustered rich text edit and keeps its editor active', async ({ page }) => {
   await page.goto('/');
 
-  await page.locator('[data-action="activate-block"]').first().click();
-  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
-  const editor = activeBlock.locator('.rich-editor').first();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"undo-cluster"}-->
+#! Undo Cluster
+
+ <!--hvy:text {"id":"body"}-->
+  Base text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Base text' }).click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  let editor = activeBlock.locator('.rich-editor[data-field="block-rich"]');
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Base text</p>';
-    const textNode = node.querySelector('p')?.firstChild;
+    const textNode = node.querySelector('p')?.firstChild ?? node.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
     range.setStart(textNode!, textNode!.textContent!.length);
@@ -16,16 +36,57 @@ test('undo inside active rich text editor keeps focus on text changes', async ({
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await page.keyboard.type(' added');
+  const expectedDocument = await page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  );
+  for (const key of ['Space', 'a', 'd', 'd', 'e', 'd']) {
+    await page.keyboard.press(key);
+  }
   await expect(editor).toContainText('Base text added');
+  const editedDocument = await page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  );
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect.poll(() => page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  )).toEqual(expectedDocument);
+
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  editor = activeBlock.locator('.rich-editor[data-field="block-rich"]');
   await expect(activeBlock).toHaveCount(1);
+  await expect(editor).toBeFocused();
   await expect(editor).toContainText('Base text');
   await expect(editor).not.toContainText('added');
+  expect(await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    if (!selection?.isCollapsed || selection.rangeCount === 0 || !node.contains(selection.focusNode)) {
+      return null;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.setStart(selection.focusNode!, selection.focusOffset);
+    return range.toString().trim();
+  })).toBe('');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Y');
+  await expect.poll(() => page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  )).toEqual(editedDocument);
+  editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor[data-field="block-rich"]');
+  await expect(editor).toBeFocused();
+  expect(await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    if (!selection?.isCollapsed || selection.rangeCount === 0 || !node.contains(selection.focusNode)) {
+      return null;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.setStart(selection.focusNode!, selection.focusOffset);
+    return range.toString().trim();
+  })).toBe('');
 });
 
 test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) => {
@@ -33,6 +94,7 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandInlineRichToolbar(page);
 
   const cases = [
     { button: 'Bold', tag: 'strong' },
@@ -208,10 +270,12 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
-  await page.locator('.image-caption-edit-button', { hasText: 'Edit caption' }).click();
+  await page.locator('.image-caption-trigger', { hasText: 'Caption text' }).click();
 
   const captionEditor = page.locator('.caption-text-modal .rich-editor');
   await expect(captionEditor).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Image Caption' }).getByRole('button', { name: 'Close Image Caption' })).toHaveCount(1);
+  await expect(page.getByRole('dialog', { name: 'Image Caption' }).getByRole('button', { name: 'Hide text controls' })).toHaveCount(0);
   await captionEditor.locator('p').evaluate((node) => {
     const range = document.createRange();
     range.selectNodeContents(node);
@@ -238,7 +302,7 @@ hvy_version: 0.1
   await captionModal.getByRole('button', { name: 'Underline' }).click();
   await expect(captionEditor.locator('u em, em u')).toHaveText('Caption text');
 
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close Image Caption' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   const rawEditor = page.locator('#rawEditor');
   await expect(rawEditor).toContainText('___');
@@ -416,6 +480,7 @@ test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ 
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandInlineRichToolbar(page);
   const boldButton = page.getByRole('button', { name: 'Bold' }).first();
   const italicButton = page.getByRole('button', { name: 'Italic' }).first();
   const underlineButton = page.getByRole('button', { name: 'Underline' }).first();
@@ -755,13 +820,22 @@ component_defs:
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
-  await page.locator('[data-action="activate-block"]', { hasText: 'Date:' }).last().dispatchEvent('click');
-  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  // The sort value sits in a text block inside the expandable's stub. Activating the list
+  // item renders the stub's pane toggle, opening the pane makes its children editable, and
+  // only then does activating the inner text produce a rich editor around the sort value.
+  await page.locator('.editor-block-passive', { hasText: 'Date:' }).last().click();
+  await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await page.locator('.editor-block-passive', { hasText: 'Date:' }).last().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]')
+    .filter({ has: page.locator('[data-field="block-rich"] [data-hvy-sort-value="true"]') }).last();
   const editedBlockId = await activeBlock.getAttribute('data-block-id');
   const sortValue = activeBlock.locator('[data-hvy-sort-value="true"]');
   await sortValue.evaluate((node) => {
     node.textContent = '02/30/2026';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    // The editor's input handler keys off the rich editor element, so dispatch from there.
+    (node.closest('[data-field="block-rich"]') ?? node).dispatchEvent(
+      new InputEvent('input', { bubbles: true, inputType: 'insertText' })
+    );
   });
   await activeBlock.getByRole('button', { name: 'Done' }).click();
 
@@ -772,7 +846,10 @@ component_defs:
 
   await sortValue.evaluate((node) => {
     node.textContent = '03/27/2026';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    // The editor's input handler keys off the rich editor element, so dispatch from there.
+    (node.closest('[data-field="block-rich"]') ?? node).dispatchEvent(
+      new InputEvent('input', { bubbles: true, inputType: 'insertText' })
+    );
   });
   await activeBlock.getByRole('button', { name: 'Done' }).click();
   await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);
@@ -815,6 +892,238 @@ component_defs:
 
   await expect(activeBlock.getByRole('alert')).toHaveCount(0);
   await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]').last()
+    .locator('[data-hvy-sort-value="true"]')).toHaveValue('Applied');
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.text;
+  })).toBe('Status: <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->');
+});
+
+test('enum sort value can be removed and reinserted from Use as', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Rejected"
+            value: "rejected"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"application-status"}-->
+  Status: <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  const editor = activeBlock.locator('.rich-editor');
+  await editor.locator('[data-field="sort-value-enum"]').focus();
+  await page.keyboard.press('Backspace');
+  await expect(editor.locator('[data-field="sort-value-enum"]')).toHaveCount(0);
+
+  await activeBlock.locator('.text-use-as-menu-item[data-sort-value-key="Status"]').evaluate((button) => {
+    (button as HTMLButtonElement).click();
+  });
+  const reinserted = editor.locator('[data-field="sort-value-enum"]');
+  await expect(reinserted).toHaveValue('Applied');
+  await reinserted.selectOption({ label: 'Rejected' });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]').last()
+    .locator('[data-field="sort-value-enum"]')).toHaveValue('Rejected');
+});
+
+test('clicking a passive enum activates and opens its editor dropdown', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLSelectElement.prototype, 'showPicker', {
+      configurable: true,
+      value() {
+        (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount =
+          ((window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0) + 1;
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Rejected"
+            value: "rejected"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"application-status"}-->
+  Status: <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive [data-hvy-sort-value="true"][data-sort-value-key="Status"]').click();
+
+  const select = page.locator('.editor-block[data-active-editor-block="true"] [data-field="sort-value-enum"]');
+  await expect(select).toBeFocused();
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0
+  )).toBe(1);
+});
+
+test('nested custom component enum opens as a dropdown in the text editor', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLSelectElement.prototype, 'showPicker', {
+      configurable: true,
+      value() {
+        (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount =
+          ((window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0) + 1;
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: sample-entry
+    baseType: expandable
+    sortValueDefs:
+      Outcome:
+        type: enum
+        options:
+          - label: "Active"
+            value: "active"
+          - label: "Closed"
+            value: "closed"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:sample-entry {"id":"sample","expandableAlwaysShowStub":true,"expandableExpanded":true}-->
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"outcome"}-->
+    Outcome: <!--hvy:sort-value {"key":"Outcome"}-->Active<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks.some((block) => block.id === 'sample') ?? false;
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive [data-sort-value-key="Outcome"]').click();
+
+  const expectedResult = page.locator(
+    '.editor-block[data-active-editor-block="true"] select[data-sort-value-key="Outcome"]'
+  );
+  await expect(expectedResult).toBeFocused();
+  await expect(expectedResult).toHaveValue('Active');
+  await expect(expectedResult).toHaveCSS('padding-top', '0.64px');
+  await expect(expectedResult).toHaveCSS('min-width', '72px');
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0
+  )).toBe(1);
+});
+
+test('changing an enum in AI mode updates a scripting-derived annotation before Done', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    tags: job-application
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Rejected"
+            value: "rejected"
+      Outcome:
+        type: text
+---
+
+<!--hvy: {"id":"automation"}-->
+#! Automation
+
+ <!--hvy:plugin {"id":"status-script","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  applications = doc.tool.get_updated_components("application-entry")
+  if not applications:
+      return
+  for application in applications:
+      sort_keys = application.get("sortKeys") or {}
+      outcome = "Rejected" if getattr(sort_keys, "Status", "") == "rejected" else "Active"
+      application.set_sort_value("Outcome", outcome)
+
+<!--hvy: {"id":"applications"}-->
+#! Applications
+
+ <!--hvy:component-list {"id":"entries","componentListComponent":"application-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:application-entry {"id":"application-1","tags":"job-application","sortKeys":{"Status":"applied","Outcome":"Active"},"expandableAlwaysShowStub":true,"expandableExpanded":true}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Example · **<!--hvy:sort-value {"key":"Outcome"}-->Active<!--/hvy:sort-value-->**
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"fillIn":true}-->
+      **Status:** <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+  const reader = page.locator('#aiReaderDocument');
+  await reader.locator('.reader-block-text', { hasText: 'Status:' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+
+  const statusSelect = page.locator(
+    '#aiReaderDocument .editor-block[data-active-editor-block="true"] [data-field="sort-value-enum"]'
+  );
+  await statusSelect.selectOption({ label: 'Rejected' });
+
+  await expect.poll(() => page.evaluate(async () => {
+      const { state } = await import('/src/state.ts');
+      return state.document.sections
+        .flatMap((section) => section.blocks)
+        .flatMap((block) => block.schema.componentListBlocks ?? [])
+        .find((block) => block.schema.id === 'application-1')
+        ?.schema.sortKeys.Outcome;
+  })).toBe('Rejected');
+  await expect(reader.locator('.reader-block-text', { hasText: 'Example · Rejected' })).toBeVisible();
+  await expect(page.locator(
+    '#aiReaderDocument .editor-block[data-active-editor-block="true"]'
+  )).toHaveCount(1);
 });
 
 test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {
@@ -1040,6 +1349,7 @@ test('code button wraps selected text as inline code and preserves angle bracket
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandInlineRichToolbar(page);
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Use &lt;tag&gt; now</p>';
@@ -1099,6 +1409,45 @@ test('link keyboard shortcut opens the link modal and applies links', async ({ p
 
   await expect(editor.locator('a[href="https://updated.example"]')).toContainText('Link me');
   await expect(editor.locator('a[href="https://example.com"]')).toHaveCount(0);
+});
+
+test('link button preserves a mailto subject containing spaces after rerender', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><a href="mailto:KCParks.SEPA@kingcounty.gov">KCParks.SEPA@kingcounty.gov</a></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const textNode = node.querySelector('a')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    (node as HTMLElement).focus();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Link' }).first().click();
+  const linkModal = page.locator('.link-inline-modal.is-open');
+  await linkModal.locator('#linkInlineInput').fill(
+    'mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky Park Disc Golf Course'
+  );
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    '[KCParks.SEPA@kingcounty.gov](mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course)'
+  );
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(editor.locator('a')).toHaveAttribute(
+    'href',
+    'mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course'
+  );
+  await expect(editor.locator('a')).toHaveText('KCParks.SEPA@kingcounty.gov');
 });
 
 test('link modal apply with an empty value removes the selected link', async ({ page }) => {
@@ -1267,6 +1616,53 @@ test('external rich paste strips text background and font presentation', async (
   expect(expectedResult.html).not.toContain('color: rgb(255, 0, 0)');
   expect(expectedResult.html).not.toContain('background-color');
   expect(expectedResult.html).not.toContain('background: lime');
+});
+
+test('external rich paste does not turn a rendered heading weight into bold markers', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      '<h2 style="margin: 0; font-weight: 700; line-height: 1.15; color: rgb(26, 37, 48); font-family: sans-serif;">Source H2</h2>'
+    );
+    transfer.setData('text/plain', 'Source H2');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      headingCount: node.querySelectorAll('h2').length,
+      html: node.innerHTML,
+      prevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    headingCount: 1,
+    html: '<p><h2>Source H2</h2>\n</p>',
+    prevented: true,
+    text: 'Source H2\n',
+  });
 });
 
 test('external rich paste normalizes gmail media wrappers before insertion', async ({ page }) => {
@@ -1531,6 +1927,39 @@ test('rich copy omits editor caret anchors from copied line', async ({ page }) =
   expect(expectedResult.after.targetText).toBe('Target Copied line');
 });
 
+test('rich copy omits paragraph style markers from external clipboard formats', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<div class="hvy-text-line-style" data-hvy-text-line-style="indented" style="padding-left: 1rem;"><span class="hvy-text-line-style-marker" contenteditable="false">^indented^</span><p>Copied line</p></div>';
+    const styledLine = node.querySelector<HTMLElement>('[data-hvy-text-line-style="indented"]')!;
+    const selection = window.getSelection();
+    const selectedRange = document.createRange();
+    selectedRange.selectNodeContents(styledLine);
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+    node.dispatchEvent(copyEvent);
+
+    return {
+      copyPrevented: copyEvent.defaultPrevented,
+      html: transfer.getData('text/html'),
+      plainText: transfer.getData('text/plain'),
+    };
+  });
+
+  expect(expectedResult.copyPrevented).toBe(true);
+  expect(expectedResult.plainText).toBe('Copied line');
+  expect(expectedResult.html).not.toContain('hvy-text-line-style-marker');
+  expect(expectedResult.html).not.toContain('^indented^');
+});
+
 test('native plain paste uses text instead of rich html', async ({ page }) => {
   await page.goto('/');
 
@@ -1765,4 +2194,167 @@ test('markdown editor auto-upgrades raw task markers', async ({ page }) => {
 
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(1);
   await expect(editor.locator('input[type="checkbox"]').first()).toBeChecked();
+});
+
+async function loadInlineFormattingParagraph(page: Page, markdown: string): Promise<void> {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"s"}-->
+#! S
+
+ <!--hvy:text {"id":"para"}-->
+  ${markdown}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive').first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor')).toBeVisible();
+}
+
+/** Selects `text` inside the active rich editor, spanning element boundaries if needed. */
+async function selectTextInActiveEditor(page: Page, text: string): Promise<void> {
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await expect.poll(() => editor.evaluate((node, target) => {
+    const start = (node.textContent ?? '').indexOf(target);
+    if (start < 0) throw new Error(`Selection text ${JSON.stringify(target)} is not in the editor.`);
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    let from: { node: Node; offset: number } | null = null;
+    let to: { node: Node; offset: number } | null = null;
+    let current = walker.nextNode();
+    while (current) {
+      const length = (current.textContent ?? '').length;
+      if (!from && seen + length > start) from = { node: current, offset: start - seen };
+      if (!to && seen + length >= start + target.length) to = { node: current, offset: start + target.length - seen };
+      seen += length;
+      current = walker.nextNode();
+    }
+    if (!from || !to) throw new Error('Could not resolve selection offsets.');
+    (node as HTMLElement).focus();
+    const range = document.createRange();
+    range.setStart(from.node, from.offset);
+    range.setEnd(to.node, to.offset);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    return window.getSelection()?.toString();
+  }, text)).toBe(text);
+}
+
+function paragraphMarkdown(page: Page): Promise<string | undefined> {
+  return page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks.find((block) => block.schema.id === 'para')?.text;
+  });
+}
+
+test('unformatting part of a bold run leaves the rest of the run bold', async ({ page }) => {
+  // BEFORE
+  await loadInlineFormattingParagraph(page, '**one two three**');
+  expect(await paragraphMarkdown(page)).toBe('**one two three**');
+
+  // TOOL CALL
+  await selectTextInActiveEditor(page, 'two');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  // AFTER
+  await expect.poll(() => paragraphMarkdown(page)).toBe('**one** two **three**');
+});
+
+test('unformatting the start or end of a run keeps the remainder formatted', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one two three**');
+  await selectTextInActiveEditor(page, 'one');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+  await expect.poll(() => paragraphMarkdown(page)).toBe('one **two three**');
+
+  await loadInlineFormattingParagraph(page, '_one two three_');
+  await selectTextInActiveEditor(page, 'three');
+  await page.getByRole('button', { name: 'Italic', exact: true }).first().click();
+  await expect.poll(() => paragraphMarkdown(page)).toBe('_one two_ three');
+});
+
+for (const { format, source, button, renderedSelector } of [
+  { format: 'bold', source: '**Something** There', button: 'Bold', renderedSelector: 'strong' },
+  { format: 'italics', source: '_Something_ There', button: 'Italic', renderedSelector: 'em' },
+  { format: 'underline', source: '___Something___ There', button: 'Underline', renderedSelector: 'u' },
+  { format: 'strikethrough', source: '~~Something~~ There', button: 'Strikethrough', renderedSelector: 'del' },
+  { format: 'inline code', source: '`Something` There', button: 'Code block', renderedSelector: 'code' },
+]) {
+  test(`partial ${format} removal survives reactivation before formatting later text`, async ({ page }) => {
+    // BEFORE
+    await loadInlineFormattingParagraph(page, source);
+
+    // TOOL CALL
+    await selectTextInActiveEditor(page, 'hi');
+    await expandInlineRichToolbar(page);
+    await page.getByRole('button', { name: button, exact: true }).first().click();
+    await page.getByRole('button', { name: 'Done' }).first().click();
+    await page.locator('.editor-block-passive').first().click();
+    await selectTextInActiveEditor(page, 'ere');
+    await expandInlineRichToolbar(page);
+    await page.getByRole('button', { name: button, exact: true }).first().click();
+    await page.getByRole('button', { name: 'Done' }).first().click();
+
+    // AFTER
+    const expectedResult = page.locator('.editor-block-passive').first();
+    await expect(expectedResult.locator(renderedSelector)).toHaveText(['Somet', 'ng', 'ere']);
+    await expect(expectedResult).toHaveText('Something There');
+  });
+}
+
+test('removing a link survives reactivation before linking later text', async ({ page }) => {
+  // BEFORE
+  await loadInlineFormattingParagraph(page, '[Something](https://example.test/original) There');
+
+  // TOOL CALL
+  await selectTextInActiveEditor(page, 'Something');
+  await page.getByRole('button', { name: 'Link', exact: true }).first().click();
+  let linkModal = page.locator('.link-inline-modal.is-open');
+  await linkModal.locator('#linkInlineInput').fill('');
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Done' }).first().click();
+  await page.locator('.editor-block-passive').first().click();
+  await selectTextInActiveEditor(page, 'ere');
+  await expandInlineRichToolbar(page);
+  await page.getByRole('button', { name: 'Link', exact: true }).first().click();
+  linkModal = page.locator('.link-inline-modal.is-open');
+  await linkModal.locator('#linkInlineInput').fill('https://example.test/later');
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Done' }).first().click();
+
+  // AFTER
+  const expectedResult = page.locator('.editor-block-passive').first();
+  await expect(expectedResult.locator('a')).toHaveText('ere');
+  await expect(expectedResult.locator('a')).toHaveAttribute('href', 'https://example.test/later');
+  await expect(expectedResult).toHaveText('Something There');
+});
+
+test('selecting a whole run still removes its formatting entirely', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one two three**');
+  await selectTextInActiveEditor(page, 'one two three');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  await expect.poll(() => paragraphMarkdown(page)).toBe('one two three');
+});
+
+test('a selection reaching past a run only unformats the part inside it', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one two** three four');
+  await selectTextInActiveEditor(page, 'two three');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  await expect.poll(() => paragraphMarkdown(page)).toBe('**one** two three four');
+});
+
+test('unformatting around nested emphasis preserves the nested markers', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one _two_ three**');
+  await selectTextInActiveEditor(page, 'two');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  await expect.poll(() => paragraphMarkdown(page)).toBe('**one** _two_ **three**');
 });

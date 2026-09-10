@@ -18,6 +18,44 @@ interface DbTableViewState {
 
 const dbTableViewState = new Map<string, DbTableViewState>();
 
+export interface DbTableRenderedVisualState {
+  columns: string[];
+  rows: string[][];
+  error: string;
+}
+
+const dbTableRenderedVisualStates = new WeakMap<object, DbTableRenderedVisualState>();
+
+export function clearDbTableRenderedVisualState(block: object): void {
+  dbTableRenderedVisualStates.delete(block);
+}
+
+export function setDbTableRenderedVisualState(
+  block: object,
+  state: { columns?: string[]; rows?: string[][]; error?: string }
+): void {
+  dbTableRenderedVisualStates.set(block, {
+    columns: state.columns?.map((column) => column) ?? [],
+    rows: state.rows?.map((row) => row.map((cell) => cell)) ?? [],
+    error: state.error?.trim() ?? '',
+  });
+}
+
+export function getDbTableRenderedVisualDescription(block: object): string {
+  const state = dbTableRenderedVisualStates.get(block);
+  if (!state) {
+    return '';
+  }
+  if (state.error) {
+    return `DB table error: ${state.error}`;
+  }
+  const lines = [
+    `Columns: ${state.columns.join(' | ') || '(none)'}`,
+    ...state.rows.map((row) => row.join(' | ')),
+  ];
+  return lines.join('\n');
+}
+
 export function getPluginConfigValue(config: Record<string, unknown>, key: string): string {
   const value = config[key];
   return typeof value === 'string' ? value : '';

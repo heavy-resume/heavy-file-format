@@ -15,6 +15,7 @@ import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, 
 import { isAiEditablePlaceholderTextBlock } from '../../ai-placeholder';
 import { logClickTrace } from '../click-trace';
 import { capturePaneScroll } from '../../scroll';
+import { resolveAppActionTarget } from './click-actions';
 
 interface RichToolbarSelection {
   range: Range;
@@ -30,6 +31,9 @@ export function bindClickDispatch(app: HTMLElement): void {
     logClickTrace(event, 'click-dispatch:capture:enter', {
       currentView: state.currentView,
     });
+    if (handlePassiveEditorEnumActivationClick(app, event)) {
+      return;
+    }
     handleAiReaderTextActivationClick(app, event);
   }, true);
 
@@ -128,7 +132,7 @@ export function bindClickDispatch(app: HTMLElement): void {
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const actionButton = target.closest<HTMLElement>('[data-action]');
+    const actionButton = resolveAppActionTarget(target);
     logClickTrace(event, 'click-dispatch:bubble:enter', {
       action: actionButton?.dataset.action ?? null,
       componentPlacement: Boolean(state.componentPlacement),
@@ -193,6 +197,7 @@ export function bindClickDispatch(app: HTMLElement): void {
           applyRichAction(action, editable, richButton.dataset.textLineStyleName, {
             sortValueKey: richButton.dataset.sortValueKey,
             sortValueType: richButton.dataset.sortValueType,
+            templateVariableName: richButton.dataset.templateVariableName,
           });
           closeUseAsMenus(app);
           clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
@@ -291,6 +296,67 @@ function closeUseAsMenus(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>('.text-editor-shell.is-use-as-open').forEach((shell) => {
     shell.classList.remove('is-use-as-open');
   });
+}
+
+function handlePassiveEditorEnumActivationClick(app: HTMLElement, event: MouseEvent): boolean {
+  if (state.currentView !== 'editor') {
+    return false;
+  }
+  const target = event.target as HTMLElement | null;
+  const enumValue = target?.closest<HTMLElement>('.editor-block-passive .hvy-sort-value-enum[data-hvy-sort-value="true"][data-sort-value-key]');
+  const passiveBlock = enumValue?.closest<HTMLElement>('.editor-block-passive[data-action="activate-block"]');
+  logClickTrace(event, 'click-dispatch:capture:passive-enum-candidate', {
+    enumValue,
+    passiveBlock,
+    enumPointerEvents: enumValue ? getComputedStyle(enumValue).pointerEvents : null,
+    activeEditorBlock: state.activeEditorBlock,
+  });
+  if (!enumValue || !passiveBlock) {
+    return false;
+  }
+  const sectionKey = passiveBlock.dataset.sectionKey ?? '';
+  const blockId = passiveBlock.dataset.blockId ?? '';
+  const key = enumValue.dataset.sortValueKey ?? '';
+  if (!sectionKey || !blockId || !key) {
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
+  setActiveEditorBlock(sectionKey, blockId, { textEditorMode: 'rich' });
+  if (state.pendingEditorActivation) {
+    state.pendingEditorActivation.suppressFocus = true;
+  }
+  getRenderApp()();
+  const activeBlock = [...app.querySelectorAll<HTMLElement>('.editor-block[data-active-editor-block="true"]')]
+    .find((candidate) => candidate.dataset.sectionKey === sectionKey && candidate.dataset.blockId === blockId);
+  const select = [...(activeBlock?.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]') ?? [])]
+    .find((candidate) => candidate.dataset.sortValueKey === key);
+  let pickerResult: 'not-rendered' | 'opened' | 'rejected' = select ? 'rejected' : 'not-rendered';
+  let pickerError: unknown = null;
+  if (select) {
+    select.focus({ preventScroll: true });
+    try {
+      select.showPicker();
+      pickerResult = 'opened';
+    } catch (error) {
+      pickerError = error;
+      // Focus leaves the enum keyboard-ready when the native picker cannot open.
+    }
+  }
+  logClickTrace(event, 'click-dispatch:capture:passive-enum-result', {
+    requestedSectionKey: sectionKey,
+    requestedBlockId: blockId,
+    requestedSortValueKey: key,
+    activeEditorBlock: state.activeEditorBlock,
+    activeBlock,
+    select,
+    pickerResult,
+    pickerError,
+    focusedElement: app.ownerDocument.activeElement,
+  });
+  return true;
 }
 
 function handleAiReaderTextActivationClick(app: HTMLElement, event: MouseEvent): void {
@@ -470,7 +536,13 @@ function isTableEditorActionButton(actionButton: HTMLElement): boolean {
   return (action === 'remove-table-row'
     || action === 'remove-table-column'
     || action === 'add-table-row'
-    || action === 'add-table-column')
+    || action === 'add-table-column'
+    || action === 'insert-table-row-before'
+    || action === 'insert-table-row-after'
+    || action === 'insert-table-column-before'
+    || action === 'insert-table-column-after'
+    || action === 'reset-table-column-width'
+    || action === 'auto-fit-table-column')
     && Boolean(actionButton.closest('.table-editor'));
 }
 
@@ -589,6 +661,7 @@ function shouldClearTemplateHideForAction(action: string): boolean {
   return !new Set([
     'focus-modal',
     'open-component-meta',
+    'open-encryption-modal',
     'start-component-move',
     'start-component-copy',
     'cancel-component-placement',
@@ -624,7 +697,7 @@ function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExi
     options.preserveExistingSelection &&
     range.collapsed &&
     existing &&
-    !existing.range.collapsed &&
+    (!existing.range.collapsed || (existing.anchor && !findLinkAnchorForRange(editable, range))) &&
     isRangeInside(editable, existing.range)
   ) {
     return existing;
@@ -733,7 +806,7 @@ function requiresRemoveConfirmation(action: string, actionButton: HTMLElement): 
     'remove-grid-item',
     'remove-table-row',
     'remove-table-column',
-    'sqlite-drop-column',
+    'db-table-drop-column',
     'image-delete-unused',
     'image-delete-current',
     'carousel-delete-image',

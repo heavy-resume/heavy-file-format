@@ -1,6 +1,6 @@
 import { state, getRenderApp } from '../../state';
-import { recordHistory, undoState, redoState } from '../../history';
-import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
+import { recordHistory, undoStateAsync, redoStateAsync } from '../../history';
+import { navigateToReaderTarget, setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
@@ -13,17 +13,26 @@ import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 import { moveScriptOnlySectionsAfterRegularSections, wouldMoveScriptOnlySectionsAfterRegularSections } from '../../section-ops';
 import { capturePaneScroll } from '../../scroll';
+import { clearSelectedRadioAnswers } from '../../inline-answer-groups';
+import { syncReusableTemplateForBlock } from '../../reusable';
 
-const undo: AppActionHandler = () => {
-  undoState();
+const undo: AppActionHandler = ({ app }) => {
+  void undoStateAsync(app);
 };
 
-const redo: AppActionHandler = () => {
-  redoState();
+const redo: AppActionHandler = ({ app }) => {
+  void redoStateAsync(app);
 };
 
-const switchView: AppActionHandler = ({ actionButton }) => {
+const switchView: AppActionHandler = ({ app, actionButton }) => {
   commitActiveTextFillIn('switch-view');
+  const activeEditorTarget = state.currentView === 'editor'
+    ? state.activeEditorBlock
+      ? { ...state.activeEditorBlock }
+      : state.activeEditorSectionTitleKey
+        ? { sectionKey: state.activeEditorSectionTitleKey }
+        : null
+    : null;
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
   const nextEditorMode = requestedView === 'cli'
@@ -42,6 +51,8 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     state.componentPlacement = null;
     if (state.currentView === 'editor') {
       runDocumentEditHooksAfterCommit();
+    } else if (view === 'editor') {
+      clearSelectedRadioAnswersInDocument();
     }
   }
   state.currentView = view;
@@ -53,6 +64,9 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     state.aiEditorHostSectionKey = null;
   }
   getRenderApp()();
+  if (activeEditorTarget && view !== 'editor') {
+    navigateToReaderTarget(activeEditorTarget, app);
+  }
   if (state.editorMode === 'cli') {
     restoreCliViewAfterRender();
   }
@@ -221,3 +235,27 @@ export const shellActions: Record<string, AppActionHandler> = {
   'request-context-component-changes': requestContextComponentChanges,
   'edit-context-component': editContextComponent,
 };
+
+/**
+ * Entering the editor drops radio selections made while reading. A radio cannot be
+ * deselected by clicking it, so without this an author has no way back to an unanswered
+ * document once any option has been picked.
+ */
+function clearSelectedRadioAnswersInDocument(): void {
+  const changed = clearSelectedRadioAnswers(
+    state.document.sections,
+    (sectionKey, blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      return block && block.schema.kind === 'text' ? block.text : null;
+    },
+    (sectionKey, blockId, text) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      if (!block) return;
+      block.text = text;
+      syncReusableTemplateForBlock(sectionKey, blockId);
+    }
+  );
+  if (changed.length > 0) {
+    recordHistory('clear-radio-answers');
+  }
+}

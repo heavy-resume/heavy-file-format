@@ -1,37 +1,37 @@
-.hvy-scripting {
+.hvy-document .hvy-scripting {
   display: block;
   width: 100%;
   position: relative;
 }
 
-.hvy-scripting-editor {
+.hvy-document .hvy-scripting-editor {
   display: flex;
   flex-direction: column;
   gap: 0;
   margin-top: 0.45rem;
 }
 
-.hvy-scripting-head {
+.hvy-document .hvy-scripting-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-.hvy-scripting-title {
+.hvy-document .hvy-scripting-title {
   font: 600 0.78rem/1.2 "JetBrains Mono", "Fira Code", monospace;
   color: var(--hvy-text-muted, #4b5563);
   text-transform: lowercase;
 }
 
-.hvy-scripting-head-actions {
+.hvy-document .hvy-scripting-head-actions {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
   margin-left: auto;
 }
 
-.hvy-scripting-editor-script-label {
+.hvy-document .hvy-scripting-editor-script-label {
   display: inline-flex;
   align-items: center;
   min-height: 1.55rem;
@@ -44,15 +44,15 @@
   white-space: nowrap;
 }
 
-.hvy-scripting-source-editor {
+.hvy-document .hvy-scripting-source-editor {
   display: grid;
   min-height: 12rem;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
-.hvy-scripting-source-editor > .hvy-scripting-highlight,
-.hvy-scripting-source-editor > .hvy-scripting-textarea {
+.hvy-document .hvy-scripting-source-editor > .hvy-scripting-highlight,
+.hvy-document .hvy-scripting-source-editor > .hvy-scripting-textarea {
   grid-area: 1 / 1;
   width: 100%;
   min-height: 12rem;
@@ -67,14 +67,14 @@
   tab-size: 4;
 }
 
-.hvy-scripting-source-editor > .hvy-scripting-highlight {
+.hvy-document .hvy-scripting-source-editor > .hvy-scripting-highlight {
   pointer-events: none;
   resize: none;
   background: var(--hvy-code-bg);
   color: var(--hvy-code-text);
 }
 
-.hvy-scripting-source-editor > .hvy-scripting-highlight > code {
+.hvy-document .hvy-scripting-source-editor > .hvy-scripting-highlight > code {
   display: block;
   min-width: max-content;
   padding: 0;
@@ -86,7 +86,7 @@
   will-change: transform;
 }
 
-.hvy-scripting-source-editor > .hvy-scripting-textarea {
+.hvy-document .hvy-scripting-source-editor > .hvy-scripting-textarea {
   position: relative;
   z-index: 1;
   background: transparent;
@@ -96,17 +96,17 @@
   overflow-x: hidden;
 }
 
-.hvy-scripting-source-editor > .hvy-scripting-textarea:focus {
+.hvy-document .hvy-scripting-source-editor > .hvy-scripting-textarea:focus {
   outline: none;
 }
 
-.hvy-scripting-source-editor > .hvy-scripting-textarea::selection {
+.hvy-document .hvy-scripting-source-editor > .hvy-scripting-textarea::selection {
   background: color-mix(in srgb, var(--hvy-accent-1) 58%, transparent);
   color: var(--hvy-accent-1-text);
   -webkit-text-fill-color: var(--hvy-accent-1-text);
 }
 
-.hvy-scripting-status {
+.hvy-document .hvy-scripting-status {
   font-size: 0.8rem;
   min-height: 1.2em;
   color: var(--hvy-text-muted, #6b7280);
@@ -115,17 +115,17 @@
   background: var(--hvy-code-bg, #f6f8fa);
 }
 
-.hvy-scripting-status-ok {
+.hvy-document .hvy-scripting-status-ok {
   color: var(--hvy-success, #047857);
 }
 
-.hvy-scripting-status-error {
+.hvy-document .hvy-scripting-status-error {
   color: var(--hvy-danger, #b91c1c);
   white-space: pre-wrap;
   font-family: var(--hvy-mono, ui-monospace, monospace);
 }
 
-.hvy-scripting-log-detail {
+.hvy-document .hvy-scripting-log-detail {
   display: none;
   margin: 0;
   max-height: 12rem;
@@ -138,11 +138,11 @@
   font: 12px/1.45 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.hvy-scripting-log-detail.is-visible {
+.hvy-document .hvy-scripting-log-detail.is-visible {
   display: block;
 }
 
-.hvy-scripting-help-modal,
+.hvy-document .hvy-scripting-help-modal,
 .hvy-document .hvy-scripting-help-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -150,18 +150,18 @@
   padding: 0.85rem;
 }
 
-.hvy-scripting-help-modal-body {
+.hvy-document .hvy-scripting-help-modal-body {
   min-height: 0;
   overflow: auto;
   padding-top: 0.75rem;
 }
 
-.hvy-scripting-reader-shell {
+.hvy-document .hvy-scripting-reader-shell {
   display: none;
   margin: 0.5rem 0;
 }
 
-.hvy-scripting-reader-shell.is-visible {
+.hvy-document .hvy-scripting-reader-shell.is-visible {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -171,7 +171,7 @@
   background: color-mix(in srgb, var(--hvy-danger) 8%, var(--hvy-code-bg));
 }
 
-.hvy-scripting-reader-summary {
+.hvy-document .hvy-scripting-reader-summary {
   padding: 0.75rem 0.9rem;
   border-bottom: 1px solid color-mix(in srgb, var(--hvy-danger) 45%, var(--hvy-border-input));
   background: color-mix(in srgb, var(--hvy-danger) 12%, var(--hvy-surface));
@@ -179,7 +179,7 @@
   font-size: 0.9rem;
 }
 
-.hvy-scripting-error-detail {
+.hvy-document .hvy-scripting-error-detail {
   margin: 0;
   padding: 0.9rem 1rem;
   overflow: auto;

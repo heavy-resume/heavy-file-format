@@ -1,9 +1,14 @@
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
-import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
+import type { AppState, ChatAttachment, ChatAttachmentReference, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 import { createDefaultSearchState } from './search/state';
 import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
 import { detectExtension } from './utils';
 import { ensureDocumentAttachmentStore } from './attachment-store';
+import {
+  loadSessionAttachmentTail,
+  removeSessionAttachmentTail,
+  storeSessionAttachmentTail,
+} from './session-attachment-tail-storage';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const CHAT_SESSION_STORAGE_SUFFIX = ':chat';
@@ -31,6 +36,8 @@ interface SessionStatePayload {
   chat: {
     settings: ChatSettings;
     draft: string;
+    attachments: ChatAttachment[];
+    pendingAttachmentIds: string[];
     messages: ChatMessage[];
     panelOpen: boolean;
   };
@@ -42,6 +49,8 @@ interface SessionStatePayload {
   };
   documentBase64?: string;
   documentTextBase64?: string;
+  documentTailStorage?: 'indexeddb';
+  documentAttachmentSource?: 'host';
   activeEditor?: SavedActiveEditorState;
 }
 
@@ -120,6 +129,38 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
   }
 }
 
+export async function loadSessionStateAsync(storageKey?: string | null): Promise<LoadedSessionState | null> {
+  const loaded = loadSessionState(storageKey);
+  if (!loaded || loaded.document) {
+    return loaded;
+  }
+  try {
+    const raw = window.sessionStorage?.getItem(getSessionStorageKey(storageKey));
+    const parsed = raw ? JSON.parse(raw) as Partial<SessionStatePayload> : null;
+    if (parsed?.documentTailStorage !== 'indexeddb' || typeof parsed.documentTextBase64 !== 'string') {
+      return loaded;
+    }
+    const tailBytes = await loadSessionAttachmentTail(getAttachmentTailStorageKey(storageKey));
+    if (!tailBytes) {
+      return loaded;
+    }
+    const textBytes = base64ToBytes(parsed.documentTextBase64);
+    const bytes = new Uint8Array(textBytes.length + tailBytes.length);
+    bytes.set(textBytes, 0);
+    bytes.set(tailBytes, textBytes.length);
+    loaded.document = deserializeDocumentBytes(bytes, detectExtension(loaded.filename));
+    const store = ensureDocumentAttachmentStore(loaded.document);
+    attachmentTailSessionCache.set(getAttachmentTailStorageKey(storageKey), {
+      signature: `${store.getVersion()}:${JSON.stringify(store.listDescriptors())}`,
+      base64: '',
+      storage: 'indexeddb',
+    });
+    return loaded;
+  } catch {
+    return loaded;
+  }
+}
+
 export function saveSessionState(state: AppState): void {
   if (state.sessionStorageKey === null) {
     return;
@@ -141,6 +182,8 @@ export function saveSessionState(state: AppState): void {
       chat: {
         settings: state.chat.settings,
         draft: state.chat.draft,
+        attachments: state.chat.attachments,
+        pendingAttachmentIds: state.chat.pendingAttachmentIds,
         messages: state.chat.messages,
         panelOpen: state.chat.panelOpen,
       },
@@ -163,6 +206,14 @@ export function saveSessionState(state: AppState): void {
     removeLegacySessionState();
   } catch (error) {
     console.warn('[hvy:session] failed to save state', error);
+  }
+}
+
+export async function saveSessionStateAsync(state: AppState): Promise<void> {
+  saveSessionState(state);
+  const pendingTailWrite = pendingAttachmentTailWrites.get(getAttachmentTailStorageKey(state.sessionStorageKey));
+  if (pendingTailWrite) {
+    await pendingTailWrite;
   }
 }
 
@@ -298,6 +349,8 @@ export function clearSessionState(storageKey?: string | null): void {
   }
   try {
     attachmentTailSessionCache.delete(getAttachmentTailStorageKey(storageKey));
+    pendingAttachmentTailWrites.delete(getAttachmentTailStorageKey(storageKey));
+    void removeSessionAttachmentTail(getAttachmentTailStorageKey(storageKey)).catch(() => {});
     window.sessionStorage?.removeItem(getSessionStorageKey(storageKey));
     window.sessionStorage?.removeItem(getChatSessionStorageKey(storageKey));
     window.sessionStorage?.removeItem(getAttachmentTailStorageKey(storageKey));
@@ -334,6 +387,8 @@ function createChatStatePayload(state: AppState): SessionStatePayload['chat'] {
   return {
     settings: state.chat.settings,
     draft: state.chat.draft,
+    attachments: state.chat.attachments,
+    pendingAttachmentIds: state.chat.pendingAttachmentIds,
     messages: state.chat.messages,
     panelOpen: state.chat.panelOpen,
   };
@@ -343,6 +398,12 @@ function normalizeSavedChatState(chat: Partial<SessionStatePayload['chat']> | un
   return {
     settings: normalizeChatSettings(chat?.settings),
     draft: typeof chat?.draft === 'string' ? chat.draft : '',
+    attachments: Array.isArray(chat?.attachments)
+      ? chat.attachments.map(normalizeChatAttachment).filter((attachment): attachment is ChatAttachment => Boolean(attachment))
+      : [],
+    pendingAttachmentIds: Array.isArray(chat?.pendingAttachmentIds)
+      ? chat.pendingAttachmentIds.filter((id): id is string => typeof id === 'string')
+      : [],
     messages: Array.isArray(chat?.messages)
       ? chat.messages.map(normalizeChatMessage).filter((message): message is ChatMessage => Boolean(message))
       : [],
@@ -367,7 +428,12 @@ function loadSavedChatState(parsed: Partial<SessionStatePayload>, storageKey?: s
   }
 }
 
-const attachmentTailSessionCache = new Map<string, { signature: string; base64: string }>();
+const attachmentTailSessionCache = new Map<string, {
+  signature: string;
+  base64: string;
+  storage: 'session' | 'indexeddb';
+}>();
+const pendingAttachmentTailWrites = new Map<string, Promise<void>>();
 
 function loadSavedDocument(
   parsed: Partial<SessionStatePayload>,
@@ -378,6 +444,12 @@ function loadSavedDocument(
     return deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), detectExtension(filename));
   }
   if (typeof parsed.documentTextBase64 !== 'string') {
+    return undefined;
+  }
+  if (parsed.documentAttachmentSource === 'host') {
+    return deserializeDocumentBytes(base64ToBytes(parsed.documentTextBase64), detectExtension(filename));
+  }
+  if (parsed.documentTailStorage === 'indexeddb') {
     return undefined;
   }
   const textBytes = base64ToBytes(parsed.documentTextBase64);
@@ -395,9 +467,19 @@ function loadSavedDocument(
 function persistDocumentPayload(payload: SessionStatePayload, state: AppState): void {
   const store = ensureDocumentAttachmentStore(state.document);
   const descriptors = store.listDescriptors();
+  if (state.attachmentHost) {
+    payload.documentTextBase64 = bytesToBase64(new TextEncoder().encode(serializeDocument(state.document)));
+    payload.documentAttachmentSource = 'host';
+    window.sessionStorage?.removeItem(getAttachmentTailStorageKey(state.sessionStorageKey));
+    attachmentTailSessionCache.delete(getAttachmentTailStorageKey(state.sessionStorageKey));
+    pendingAttachmentTailWrites.delete(getAttachmentTailStorageKey(state.sessionStorageKey));
+    void removeSessionAttachmentTail(getAttachmentTailStorageKey(state.sessionStorageKey)).catch(() => {});
+    return;
+  }
   if (descriptors.length === 0) {
     payload.documentBase64 = bytesToBase64(serializeDocumentBytes(state.document));
     window.sessionStorage?.removeItem(getAttachmentTailStorageKey(state.sessionStorageKey));
+    void removeSessionAttachmentTail(getAttachmentTailStorageKey(state.sessionStorageKey)).catch(() => {});
     return;
   }
 
@@ -405,8 +487,14 @@ function persistDocumentPayload(payload: SessionStatePayload, state: AppState): 
   const storageKey = getAttachmentTailStorageKey(state.sessionStorageKey);
   const signature = `${store.getVersion()}:${JSON.stringify(descriptors)}`;
   const cached = attachmentTailSessionCache.get(storageKey);
-  if (cached?.signature === signature && window.sessionStorage?.getItem(storageKey) !== null) {
-    return;
+  if (cached?.signature === signature) {
+    if (cached.storage === 'indexeddb') {
+      payload.documentTailStorage = 'indexeddb';
+      return;
+    }
+    if (window.sessionStorage?.getItem(storageKey) !== null) {
+      return;
+    }
   }
   const attachments = store.list();
   const tailLength = attachments.reduce((sum, attachment) => sum + attachment.bytes.length, 0);
@@ -417,8 +505,29 @@ function persistDocumentPayload(payload: SessionStatePayload, state: AppState): 
     offset += attachment.bytes.length;
   }
   const base64 = bytesToBase64(tailBytes);
-  attachmentTailSessionCache.set(storageKey, { signature, base64 });
-  setSessionStorageItem(storageKey, base64);
+  try {
+    setSessionStorageItem(storageKey, base64);
+    attachmentTailSessionCache.set(storageKey, { signature, base64, storage: 'session' });
+    pendingAttachmentTailWrites.delete(storageKey);
+    void removeSessionAttachmentTail(storageKey).catch(() => {});
+  } catch {
+    window.sessionStorage?.removeItem(storageKey);
+    payload.documentTailStorage = 'indexeddb';
+    attachmentTailSessionCache.set(storageKey, { signature, base64, storage: 'indexeddb' });
+    const pendingWrite = storeSessionAttachmentTail(storageKey, tailBytes).catch((error) => {
+      const cachedEntry = attachmentTailSessionCache.get(storageKey);
+      if (cachedEntry?.signature === signature && cachedEntry.storage === 'indexeddb') {
+        attachmentTailSessionCache.delete(storageKey);
+      }
+      throw error;
+    }).finally(() => {
+      if (pendingAttachmentTailWrites.get(storageKey) === pendingWrite) {
+        pendingAttachmentTailWrites.delete(storageKey);
+      }
+    });
+    pendingAttachmentTailWrites.set(storageKey, pendingWrite);
+    void pendingWrite.catch(() => {});
+  }
 }
 
 function setSessionStorageItem(key: string, value: string): void {
@@ -526,9 +635,11 @@ function isSelectedExample(value: unknown): value is SelectedExample {
     || value === 'guide'
     || value === 'crm'
     || value === 'study-tools'
+    || value === 'survey'
     || value === 'video-demo'
     || value === 'plugin-sort-values'
     || value === 'pdf-template'
+    || value === 'sepa-recreation'
     || value === 'meeting-minutes-template'
     || value === 'resume-template'
     || value === 'resume-example'
@@ -608,12 +719,48 @@ function normalizeChatMessage(value: unknown): ChatMessage | null {
     content: wasRunning && !message.content.trim()
       ? 'Interrupted by page reload.'
       : message.content,
+    ...(Array.isArray(message.attachments)
+      ? {
+          attachments: message.attachments
+            .map(normalizeChatAttachmentReference)
+            .filter((attachment): attachment is ChatAttachmentReference => Boolean(attachment)),
+        }
+      : {}),
     ...(typeof message.reasoning === 'string' ? { reasoning: message.reasoning } : {}),
     ...(isChatTokenUsage(message.tokenUsage) ? { tokenUsage: message.tokenUsage } : {}),
     ...(message.error || wasRunning ? { error: true } : {}),
     ...(message.progress && !wasRunning ? { progress: message.progress } : {}),
     ...(work ? { work: wasRunning ? { ...work, status: 'error' } : work } : {}),
   };
+}
+
+function normalizeChatAttachmentReference(value: unknown): ChatAttachmentReference | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const attachment = value as Partial<ChatAttachmentReference>;
+  if (
+    typeof attachment.id !== 'string'
+    || typeof attachment.name !== 'string'
+    || typeof attachment.characterCount !== 'number'
+    || typeof attachment.lineCount !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    id: attachment.id,
+    name: attachment.name,
+    characterCount: attachment.characterCount,
+    lineCount: attachment.lineCount,
+  };
+}
+
+function normalizeChatAttachment(value: unknown): ChatAttachment | null {
+  const reference = normalizeChatAttachmentReference(value);
+  if (!reference || typeof (value as Partial<ChatAttachment>).text !== 'string') {
+    return null;
+  }
+  return { ...reference, text: (value as ChatAttachment).text };
 }
 
 function normalizeCliSession(value: unknown): HvyCliSessionState {

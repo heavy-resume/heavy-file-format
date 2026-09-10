@@ -1,17 +1,15 @@
 /* Light mode defaults */
-:root,
 .hvy-document {
   color-scheme: light;
 }
 
 /* Dark mode defaults */
-:root.theme-dark,
 .hvy-document.theme-dark {
   color-scheme: dark;
 }
 
 /* Light mode colors */
-:root {
+.hvy-document {
   --hvy-bg: #f5f9ff;
   --hvy-bg-alt: #eef3fa;
   --hvy-surface: #ffffff;
@@ -95,7 +93,7 @@
 }
 
 /* Dark mode overrides */
-:root.theme-dark {
+.hvy-document.theme-dark {
   --hvy-bg: #0f1720;
   --hvy-bg-alt: #161b22;
   --hvy-surface: #17222d;

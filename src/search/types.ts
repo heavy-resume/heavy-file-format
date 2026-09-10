@@ -29,6 +29,7 @@ export interface HvySearchResult {
   locationLabel?: string;
   preview: string;
   matchedText: string;
+  matchOrdinal?: number;
   sourceField: string;
   contextLabel?: string;
   matches?: HvySearchMatch[];
@@ -43,6 +44,7 @@ export interface HvySearchMatch {
   label: string;
   preview: string;
   matchedText: string;
+  matchOrdinal?: number;
 }
 
 export type HvySearchProvider = (request: HvySearchRequest) => Promise<HvySearchResult[]> | HvySearchResult[];
@@ -108,6 +110,14 @@ export interface HvySemanticFilterRequest {
   windowLabel?: string;
   traceRunId?: string;
   signal?: AbortSignal;
+  attempt?: {
+    number: number;
+    total: number;
+  };
+  repair?: {
+    previousResponse: string;
+    instruction: string;
+  };
 }
 
 export interface HvySemanticFilterMatch {
@@ -116,7 +126,11 @@ export interface HvySemanticFilterMatch {
   score?: number;
 }
 
-export type HvySemanticFilterProvider = (request: HvySemanticFilterRequest) => Promise<HvySemanticFilterMatch[]> | HvySemanticFilterMatch[];
+export type HvySemanticFilterProviderResponse = HvySemanticFilterMatch[] | string;
+
+export type HvySemanticFilterProvider = (
+  request: HvySemanticFilterRequest
+) => Promise<HvySemanticFilterProviderResponse> | HvySemanticFilterProviderResponse;
 
 export interface HvyDocumentSearchDocument {
   documentId: string;
@@ -134,6 +148,7 @@ export interface HvyDocumentSearchRequest {
   categories?: SearchCategory[];
   searchProvider?: HvySearchProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
+  semanticFilterMaxAttempts?: number;
   embeddingProvider?: HvyEmbeddingProvider | null;
   embeddingModel?: string;
   embeddingDimensions?: number;

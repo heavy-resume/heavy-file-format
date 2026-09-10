@@ -104,6 +104,28 @@ test('PDF text rendering keeps soft-wrapped text line styles in one styled node'
   expect(expectedResult.stack).toBeUndefined();
 });
 
+test('PDF text rendering preserves markdown links as PDF annotations', () => {
+  const expectedResult = renderPdfTextBlock(
+    'Read the [reference](https://example.com).',
+    '',
+    {
+      visibility: 'show',
+      keepTogether: false,
+      keepWithNext: false,
+      allowSplit: true,
+      pageBreakBefore: false,
+      pageBreakAfter: false,
+      pdfStyle: {},
+    }
+  );
+
+  expect(expectedResult.text).toEqual([
+    'Read the ',
+    { text: 'reference', link: 'https://example.com' },
+    '.',
+  ]);
+});
+
 test('PDF doc definition applies component CSS margins to block wrappers', () => {
   const firstBlock = createEmptyBlock('text');
   firstBlock.schema.id = 'first';
@@ -132,6 +154,27 @@ test('PDF doc definition applies component CSS margins to block wrappers', () =>
 
   expect(firstNode?.margin).toEqual([3, 6, 0, 12]);
   expect(secondNode?.margin).toEqual([0, 0, 0, 24]);
+});
+
+test('PDF table rendering resolves escaped Markdown punctuation in cells', () => {
+  const table = createEmptyBlock('table');
+  table.schema.tableColumns = ['Location'];
+  table.schema.tableRows = [{ cells: ['Fairwood Greens (southeast)\\*'] }];
+  const section = createEmptySection(1, '');
+  section.blocks = [table];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Table Markdown' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const sectionNode = expectedResult.content[0] as HvyPdfMakeNodeObject;
+  const tableNode = sectionNode.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const cell = tableNode?.table?.body[1]?.[0] as HvyPdfMakeNodeObject | undefined;
+
+  expect(cell?.text).toEqual(['Fairwood Greens (southeast)', '*']);
 });
 
 test('PDF doc definition maps container CSS box styling to a flow box', () => {
@@ -494,6 +537,36 @@ test('PDF doc definition keeps image captions with CSS-sized images', () => {
     ],
     alignment: 'center',
     style: 'paragraph',
+    fontSize: 8,
+  }));
+});
+
+test('PDF doc definition applies image caption text CSS over the small caption default', () => {
+  const image = createEmptyBlock('image');
+  image.schema.imageFile = 'photo.png';
+  image.schema.imageAlt = 'Team photo';
+  image.schema.caption = createDefaultTextCaption('Team caption');
+  image.schema.caption.schema.css = 'margin: 0.5rem 0; font-size: 7pt;';
+  const section = createEmptySection(1, '');
+  section.blocks = [image];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Caption Size' },
+    extension: '.phvy',
+    attachments: [
+      { id: 'image:photo.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1, 2, 3]) },
+    ],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const sectionNode = expectedResult.content[0] as HvyPdfMakeNodeObject;
+  const imageStack = sectionNode.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const captionNode = imageStack?.stack?.[1] as HvyPdfMakeNodeObject | undefined;
+
+  expect(captionNode).toEqual(expect.objectContaining({
+    text: 'Team caption',
+    alignment: 'center',
+    fontSize: 7,
   }));
 });
 

@@ -5,6 +5,7 @@ import { notifyDocumentMayHaveChanged } from '../document-change';
 import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { refreshMountedPlugins } from './mount';
 import { getHostPlugins } from './registry';
+import { getDatabaseChangeRevision } from '../database-change-tracker';
 import type {
   HvyDocumentHookContext,
   HvyPlugin,
@@ -26,6 +27,11 @@ interface HookRuntimeState {
   lastHookSignature: string;
   hookRun: Promise<void>;
   hookRunDepth: number;
+}
+
+export interface PluginDocumentHookResult {
+  ran: boolean;
+  documentChanged: boolean;
 }
 
 const fallbackHookState: HookRuntimeState = {
@@ -122,12 +128,12 @@ export function resetPluginDocumentHookState(): void {
   hookState.hookRun = Promise.resolve();
 }
 
-export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason = 'unknown'): Promise<void> {
+export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason = 'unknown'): Promise<PluginDocumentHookResult> {
   const runtime = getActiveStateRuntime();
   const hookState = getHookState();
   const document = state.document;
   const signatureStartedAt = nowMs();
-  const signature = serializeDocument(document);
+  const signature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
   const signatureMs = elapsedMs(signatureStartedAt);
   const hookName: DocumentHookName | null = hookState.lastHookDocument !== document
     ? 'documentLoad'
@@ -144,7 +150,7 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       skipReason: 'nested-hook-run',
       signatureMs,
     });
-    return Promise.resolve();
+    return Promise.resolve({ ran: false, documentChanged: false });
   }
 
   if (!hookName) {
@@ -153,24 +159,27 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       skipReason: 'unchanged-document-signature',
       signatureMs,
     });
-    return hookState.hookRun;
+    return hookState.hookRun.then(() => ({ ran: false, documentChanged: false }));
   }
 
   const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason);
-  hookState.hookRun = hookState.hookRun.then(async () => {
+  const hookResult = hookState.hookRun.then(async (): Promise<PluginDocumentHookResult> => {
     const startedAt = nowMs();
     logPerfTrace('plugin-document-hooks:start', {
       hookName,
       changeReason,
       signatureMs,
     });
-    await runWithStateRuntimeAsync(runtime, async () => {
+    const result = await runWithStateRuntimeAsync(runtime, async (): Promise<PluginDocumentHookResult> => {
       await runHookHandlers(hookName, ctx);
       if (ctx.isCurrentDocument()) {
+        const nextSignature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
         hookState.lastHookDocument = document;
-        hookState.lastHookSignature = serializeDocument(document);
+        hookState.lastHookSignature = nextSignature;
         notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
+        return { ran: true, documentChanged: nextSignature !== signature };
       }
+      return { ran: true, documentChanged: true };
     });
     logPerfTrace('plugin-document-hooks:end', {
       hookName,
@@ -178,6 +187,8 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       elapsedMs: elapsedMs(startedAt),
       signatureMs,
     });
+    return result;
   });
-  return hookState.hookRun;
+  hookState.hookRun = hookResult.then(() => undefined);
+  return hookResult;
 }

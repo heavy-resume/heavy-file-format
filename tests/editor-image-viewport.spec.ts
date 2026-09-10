@@ -223,6 +223,59 @@ hvy_version: 0.1
   expect(Math.abs(afterHydrationTop - beforeHydrationTop)).toBeLessThanOrEqual(2);
 });
 
+test('before, a grid image has an explicit height, after: intrinsic dimensions preserve its aspect ratio', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="gridImageMount" style="width: 60rem;"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed.ts');
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#gridImageMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"grid-image"}-->
+#! Grid image
+
+ <!--hvy:grid {"gridStackWidth":"never"}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:image {"css":"height: 100px; display: block;","imageFile":"landscape.svg","imageAlt":"Grid landscape"}-->
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {}-->
+    Beside the image.
+`), '.hvy'),
+      mode: 'viewer',
+      controls: false,
+      attachmentStore: {
+        list: () => [{
+          id: 'image:landscape.svg',
+          meta: { mediaType: 'image/svg+xml', pixelWidth: 1200, pixelHeight: 800 },
+          length: 128,
+        }],
+        recall: () => null,
+        store: () => undefined,
+        remove: () => undefined,
+        resolveUrl: () => new Blob([
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#789"/></svg>',
+        ], { type: 'image/svg+xml' }),
+      },
+    });
+  });
+
+  const image = page.getByRole('img', { name: 'Grid landscape' });
+  const renderedSize = await image.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  });
+
+  expect(renderedSize.height).toBe(100);
+  expect(renderedSize.width).toBe(150);
+});
+
 test('before, a hosted image without dimension metadata loads, after: closing its editor keeps calculable image geometry', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');

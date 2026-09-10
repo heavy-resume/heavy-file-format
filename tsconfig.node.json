@@ -13,6 +13,8 @@
     "src/**/*.ts",
     "examples/plugins/**/*.ts",
     "proxy/**/*.ts",
+    "vite-built-in-plugins.ts",
+    "vite-chat-proxy-plugin.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "playwright.config.ts"

@@ -193,6 +193,7 @@ export function buildSemanticFilterCandidates(
   const targetRefs = buildSemanticTargetRefs(document);
   const sectionPaths = reverseVirtualDirectoryLookup(buildVirtualDirectorySectionLookup(document));
   const blockPaths = reverseVirtualDirectoryLookup(buildVirtualDirectoryBlockLookup(document));
+  const componentTargetRefCounts = countSemanticBlockTargetRefs(document, blockPaths, targetRefs.componentRefsByPath);
   let documentOrder = 0;
 
   const visitSection = (section: VisualSection, ancestors: string[]): void => {
@@ -243,7 +244,10 @@ export function buildSemanticFilterCandidates(
     const label = getBlockLabel(block) || nearestLocationLabel;
     const locationLabel = (block.schema.description ?? '').trim() || nearestLocationLabel;
     const targetPath = blockPaths.get(block);
-    const targetRef = (targetPath ? targetRefs.componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
+    const targetRef = getSemanticBlockTargetRef(block, targetPath, targetRefs.componentRefsByPath);
+    const candidateRef = targetPath && (componentTargetRefCounts.get(targetRef) ?? 0) > 1
+      ? targetPath
+      : targetRef;
     const summaryResult = truncateSummary(
       buildBlockSummary(document, block, baseComponent),
       maxCandidateSummaryChars,
@@ -251,7 +255,7 @@ export function buildSemanticFilterCandidates(
     );
     const contextLabel = contextTrail.filter((part) => part && part !== label).slice(-3).join(' / ');
     blockCandidates.push({
-      candidateId: `component:${targetRef}`,
+      candidateId: `component:${candidateRef}`,
       targetKind: 'block',
       parentCandidateId,
       sectionKey: section.key,
@@ -271,7 +275,7 @@ export function buildSemanticFilterCandidates(
     });
     const childTrail = appendContext(contextTrail, getBlockContextLabel(block));
     const childLocation = locationLabel || nearestLocationLabel;
-    const childParentCandidateId = `component:${targetRef}`;
+    const childParentCandidateId = `component:${candidateRef}`;
     for (const child of block.schema.containerBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation, childParentCandidateId);
     for (const child of block.schema.componentListBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation, childParentCandidateId);
     for (const child of block.schema.expandableStubBlocks?.children ?? []) {
@@ -291,6 +295,38 @@ export function buildSemanticFilterCandidates(
 
 function reverseVirtualDirectoryLookup<T extends object>(lookup: Map<string, T>): Map<T, string> {
   return new Map([...lookup].map(([path, value]) => [value, path]));
+}
+
+function countSemanticBlockTargetRefs(
+  document: VisualDocument,
+  blockPaths: Map<VisualBlock, string>,
+  componentRefsByPath: Map<string, string>
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  const visitBlock = (block: VisualBlock): void => {
+    const targetRef = getSemanticBlockTargetRef(block, blockPaths.get(block), componentRefsByPath);
+    counts.set(targetRef, (counts.get(targetRef) ?? 0) + 1);
+    for (const child of block.schema.containerBlocks ?? []) visitBlock(child);
+    for (const child of block.schema.componentListBlocks ?? []) visitBlock(child);
+    for (const child of block.schema.expandableStubBlocks?.children ?? []) visitBlock(child);
+    for (const child of block.schema.expandableContentBlocks?.children ?? []) visitBlock(child);
+    for (const item of block.schema.gridItems ?? []) visitBlock(item.block);
+  };
+  const visitSection = (section: VisualSection): void => {
+    if (section.isGhost) return;
+    for (const block of section.blocks) visitBlock(block);
+    for (const child of section.children) visitSection(child);
+  };
+  for (const section of document.sections) visitSection(section);
+  return counts;
+}
+
+function getSemanticBlockTargetRef(
+  block: VisualBlock,
+  targetPath: string | undefined,
+  componentRefsByPath: Map<string, string>
+): string {
+  return (targetPath ? componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
 }
 
 function buildSemanticTargetRefs(document: VisualDocument): { componentRefsByPath: Map<string, string> } {

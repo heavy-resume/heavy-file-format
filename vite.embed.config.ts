@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { createBrythonMinimalVfsPlugin } from './src/plugins/scripting/brython-minimal-vfs-plugin';
-import { createHvyBuiltInPluginsPlugin } from './vite.config';
+import { createHvyBuiltInPluginsPlugin } from './vite-built-in-plugins';
 
 export const HVY_EMBED_ENVIRONMENT_BOUNDARY = {
   envDir: false,
@@ -33,9 +33,6 @@ export default defineConfig(() => {
             }
             if (id.includes('virtual:hvy-built-in-plugins')) {
               return 'embed-builtins';
-            }
-            if (id.includes('/src/plugins/form.ts')) {
-              return 'form';
             }
             if (
               id.includes('/src/icons.ts') ||

@@ -943,6 +943,8 @@ hvy_version: 0.1
       root: document.querySelector('#root') as HTMLElement,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'viewer',
+      semanticFilterMaxWindowCandidates: 1,
+      semanticFilterMaxWindowCandidateChars: 50_000,
       semanticFilterProvider(request) {
         testWindow.testSemanticProviderCalls?.push({
           prompt: request.prompt,
@@ -972,6 +974,7 @@ hvy_version: 0.1
     };
     return {
       providerCall: testWindow.testSemanticProviderCalls?.[0],
+      providerCandidateCounts: testWindow.testSemanticProviderCalls?.map((call) => call.candidateCount),
       visibleText: document.querySelector('#readerDocument')?.textContent ?? '',
       paletteInsideRoot: (() => {
         const rootBox = document.querySelector('#root')?.getBoundingClientRect();
@@ -983,6 +986,7 @@ hvy_version: 0.1
 
   expect(result.providerCall?.prompt).toBe('show TypeScript work!');
   expect(result.providerCall?.candidateCount).toBeGreaterThan(0);
+  expect(result.providerCandidateCounts).toEqual([1, 1]);
   expect(result.visibleText).toContain('TypeScript tooling');
   expect(result.visibleText).not.toContain('Release notes');
   expect(result.paletteInsideRoot).toBe(true);

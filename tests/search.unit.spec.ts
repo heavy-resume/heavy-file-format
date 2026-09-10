@@ -1373,6 +1373,29 @@ hvy_version: 0.1
   expect(expectedResult.windows[0]!.candidates.every((candidate) => candidate.targetKind === 'block')).toBe(true);
 });
 
+test('semantic filter windows honor independent candidate count and character limits', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+${Array.from({ length: 7 }, (_, index) => `<!--hvy:text {"id":"skill-${index + 1}"}-->
+ Skill ${index + 1}.`).join('\n\n')}
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterWindows({
+    document,
+    prompt: 'Find skills',
+    maxWindowCandidates: 3,
+    maxWindowCandidateChars: 50_000,
+  });
+
+  expect(expectedResult.windows.map((window) => window.candidates.length)).toEqual([3, 3, 1]);
+  expect(expectedResult.windows.every((window) => window.candidateBudget.usedTotalCandidateChars <= 50_000)).toBe(true);
+});
+
 test('semantic filter window concurrency defaults to three and accepts an override', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

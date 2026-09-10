@@ -4,6 +4,7 @@ import type { HvyDescriptionProvider } from './descriptions/types';
 import { getActiveStateRuntime, type StateRuntime } from './state';
 import { DEFAULT_SEMANTIC_FILTER_CONCURRENCY, normalizeSemanticFilterConcurrency } from './search/semantic-filter-concurrency';
 import { DEFAULT_SEMANTIC_FILTER_MAX_ATTEMPTS, normalizeSemanticFilterMaxAttempts } from './search/semantic-filter-attempts';
+import { DEFAULT_MAX_WINDOW_CANDIDATE_CHARS, normalizeSemanticWindowLimit } from './search/semantic-candidates';
 
 export interface ReferenceAppFeatures {
   tables: boolean;
@@ -21,6 +22,8 @@ export interface ReferenceAppConfig {
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   semanticFilterConcurrency: number;
   semanticFilterMaxAttempts: number;
+  semanticFilterMaxWindowCandidateChars: number;
+  semanticFilterMaxWindowCandidates: number;
   descriptionProvider?: HvyDescriptionProvider | null;
 }
 
@@ -40,12 +43,16 @@ const defaultConfig: ReferenceAppConfig = {
   },
   semanticFilterConcurrency: DEFAULT_SEMANTIC_FILTER_CONCURRENCY,
   semanticFilterMaxAttempts: DEFAULT_SEMANTIC_FILTER_MAX_ATTEMPTS,
+  semanticFilterMaxWindowCandidateChars: DEFAULT_MAX_WINDOW_CANDIDATE_CHARS,
+  semanticFilterMaxWindowCandidates: Number.MAX_SAFE_INTEGER,
 };
 
 let runtimeOverride: Partial<ReferenceAppConfig> | null = null;
 const semanticFilterProviderByRuntime = new WeakMap<StateRuntime, HvySemanticFilterProvider | null>();
 const semanticFilterConcurrencyByRuntime = new WeakMap<StateRuntime, number>();
 const semanticFilterMaxAttemptsByRuntime = new WeakMap<StateRuntime, number>();
+const semanticFilterMaxWindowCandidateCharsByRuntime = new WeakMap<StateRuntime, number>();
+const semanticFilterMaxWindowCandidatesByRuntime = new WeakMap<StateRuntime, number>();
 
 export function setReferenceAppConfig(config: Partial<ReferenceAppConfig> | null): void {
   runtimeOverride = config;
@@ -80,6 +87,29 @@ export function setRuntimeSemanticFilterMaxAttempts(maxAttempts: number | null):
     } else {
       semanticFilterMaxAttemptsByRuntime.set(runtime, normalizeSemanticFilterMaxAttempts(maxAttempts));
     }
+  } catch {
+    // Runtime-scoped configuration is only available after state initialization.
+  }
+}
+
+export function setRuntimeSemanticFilterWindowLimits(limits: {
+  maxCandidateChars?: number | null;
+  maxCandidates?: number | null;
+}): void {
+  try {
+    const runtime = getActiveStateRuntime();
+    setRuntimeWindowLimit(
+      semanticFilterMaxWindowCandidateCharsByRuntime,
+      runtime,
+      limits.maxCandidateChars,
+      DEFAULT_MAX_WINDOW_CANDIDATE_CHARS,
+    );
+    setRuntimeWindowLimit(
+      semanticFilterMaxWindowCandidatesByRuntime,
+      runtime,
+      limits.maxCandidates,
+      Number.MAX_SAFE_INTEGER,
+    );
   } catch {
     // Runtime-scoped configuration is only available after state initialization.
   }
@@ -141,12 +171,45 @@ export function getReferenceAppConfig(): ReferenceAppConfig {
       globalConfig?.semanticFilterMaxAttempts ??
       defaultConfig.semanticFilterMaxAttempts,
     ),
+    semanticFilterMaxWindowCandidateChars: normalizeSemanticWindowLimit(
+      getRuntimeWindowLimit(semanticFilterMaxWindowCandidateCharsByRuntime) ??
+        runtimeOverride?.semanticFilterMaxWindowCandidateChars ??
+        globalConfig?.semanticFilterMaxWindowCandidateChars,
+      defaultConfig.semanticFilterMaxWindowCandidateChars,
+    ),
+    semanticFilterMaxWindowCandidates: normalizeSemanticWindowLimit(
+      getRuntimeWindowLimit(semanticFilterMaxWindowCandidatesByRuntime) ??
+        runtimeOverride?.semanticFilterMaxWindowCandidates ??
+        globalConfig?.semanticFilterMaxWindowCandidates,
+      defaultConfig.semanticFilterMaxWindowCandidates,
+    ),
     descriptionProvider:
       runtimeOverride?.descriptionProvider ??
       globalConfig?.descriptionProvider ??
       defaultConfig.descriptionProvider ??
       null,
   };
+}
+
+function getRuntimeWindowLimit(values: WeakMap<StateRuntime, number>): number | undefined {
+  try {
+    return values.get(getActiveStateRuntime());
+  } catch {
+    return undefined;
+  }
+}
+
+function setRuntimeWindowLimit(
+  values: WeakMap<StateRuntime, number>,
+  runtime: StateRuntime,
+  value: number | null | undefined,
+  fallback: number,
+): void {
+  if (value === null || value === undefined) {
+    values.delete(runtime);
+  } else {
+    values.set(runtime, normalizeSemanticWindowLimit(value, fallback));
+  }
 }
 
 function getRuntimeSemanticFilterConcurrency(): number | undefined {

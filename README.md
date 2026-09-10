@@ -1083,6 +1083,8 @@ HVY.mountHvyViewer({
   semanticFilterProvider,
   semanticFilterConcurrency: 3,
   semanticFilterMaxAttempts: semanticModels.length,
+  semanticFilterMaxWindowCandidates: 50,
+  semanticFilterMaxWindowCandidateChars: 50_000,
 });
 ```
 
@@ -1095,6 +1097,15 @@ semantic window and defaults to `1`. Every provider request includes
 `attempt.number` (one-based) and `attempt.total`, so hosts can select an ordered
 model ladder. The option is also available on
 `createDocumentFilterSnapshot(...)` and `searchDocuments(...)`.
+
+`semanticFilterMaxWindowCandidates` limits the number of candidate items sent
+in one provider call. It has no count limit by default. Use this when a provider
+imposes a per-request item limit, such as `50`.
+
+`semanticFilterMaxWindowCandidateChars` limits the combined candidate text sent
+in one provider call. It defaults to `10,000`. Both window limits must be
+positive integers and are also available as `maxWindowCandidates` and
+`maxWindowCandidateChars` on `createDocumentFilterSnapshot(...)`.
 
 The request includes structured `candidates` and a deterministic
 `instructionPrompt`. Providers can return the raw model response; HVY extracts

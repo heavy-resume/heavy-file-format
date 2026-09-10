@@ -111,7 +111,7 @@ import { addExternalLinkTargets, markdownToReaderHtml, normalizeMarkdownIndentat
 import { renderUserFileAttachmentLinksInHtml } from './document-attachment-links';
 import { bindUserFileAttachmentLinks } from './document-attachment-links';
 import { removeTextFillInMarkers } from './text-fill-in';
-import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider } from './reference-config';
+import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider, setRuntimeSemanticFilterWindowLimits } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
@@ -158,6 +158,8 @@ export interface HvyMountOptions {
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   semanticFilterConcurrency?: number;
   semanticFilterMaxAttempts?: number;
+  semanticFilterMaxWindowCandidateChars?: number;
+  semanticFilterMaxWindowCandidates?: number;
   linkObserver?: HvyLinkObserver | null;
   crossDocumentLinks?: boolean;
   controls?: boolean;
@@ -1221,6 +1223,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterMaxAttempts' in options) {
     setRuntimeSemanticFilterMaxAttempts(options.semanticFilterMaxAttempts ?? null);
   }
+  setRuntimeSemanticFilterWindowLimits({
+    maxCandidateChars: options.semanticFilterMaxWindowCandidateChars ?? null,
+    maxCandidates: options.semanticFilterMaxWindowCandidates ?? null,
+  });
   setEditorClipboardHost(options.editorClipboard ?? null);
   currentRoot = options.root;
   options.root.classList.add('hvy-document');

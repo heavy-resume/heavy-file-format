@@ -19,7 +19,7 @@ import type { VisualDocument } from '../types';
 
 const DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS = 800;
 const DEFAULT_MAX_TOTAL_CANDIDATE_CHARS = 80_000;
-const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 10_000;
+export const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 10_000;
 const UNLIMITED_CANDIDATE_SUMMARY_CHARS = Number.MAX_SAFE_INTEGER;
 const SEMANTIC_FILTER_CHUNK_OVERLAP_CHARS = 400;
 const RETRIEVAL_CHUNK_OVERLAP_CHARS = 200;
@@ -40,8 +40,9 @@ export interface HvySemanticFilterCandidateWindow {
   candidateBudget: HvySemanticFilterCandidateBudget;
 }
 
-interface BuildSemanticFilterWindowsOptions extends BuildSemanticFilterRequestOptions {
+export interface BuildSemanticFilterWindowsOptions extends BuildSemanticFilterRequestOptions {
   maxWindowCandidateChars?: number;
+  maxWindowCandidates?: number;
 }
 
 export function buildSemanticFilterRequest(options: BuildSemanticFilterRequestOptions): HvySemanticFilterRequest {
@@ -70,7 +71,11 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
 } {
   const maxCandidateSummaryChars = UNLIMITED_CANDIDATE_SUMMARY_CHARS;
   const maxTotalCandidateChars = options.maxTotalCandidateChars ?? DEFAULT_MAX_TOTAL_CANDIDATE_CHARS;
-  const maxWindowCandidateChars = options.maxWindowCandidateChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS;
+  const maxWindowCandidateChars = normalizeSemanticWindowLimit(
+    options.maxWindowCandidateChars,
+    DEFAULT_MAX_WINDOW_CANDIDATE_CHARS,
+  );
+  const maxWindowCandidates = normalizeSemanticWindowLimit(options.maxWindowCandidates, Number.MAX_SAFE_INTEGER);
   const candidates = buildSemanticFilterCandidates(options.document, { maxCandidateSummaryChars })
     .sort((left, right) => left.documentOrder - right.documentOrder);
   const candidateIdsWithDescendants = getCandidateIdsWithDescendants(candidates);
@@ -82,6 +87,7 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
   const windows = packSemanticCandidateWindows(windowCandidates, {
     maxCandidateSummaryChars,
     maxWindowCandidateChars,
+    maxWindowCandidates,
     overallCandidateBudget: candidateBudget,
   });
   return { candidates, candidateBudget, windows };
@@ -444,6 +450,7 @@ function packSemanticCandidateWindows(
   options: {
     maxCandidateSummaryChars: number;
     maxWindowCandidateChars: number;
+    maxWindowCandidates: number;
     overallCandidateBudget: HvySemanticFilterCandidateBudget;
   }
 ): HvySemanticFilterCandidateWindow[] {
@@ -468,7 +475,8 @@ function packSemanticCandidateWindows(
     const candidateChars = getSemanticCandidatePromptChars(candidate);
     const startsSectionWindow = candidate.targetKind === 'section' && current.length > 0;
     const exceedsWindow = current.length > 0 && currentChars + candidateChars > options.maxWindowCandidateChars;
-    if (startsSectionWindow || exceedsWindow) {
+    const exceedsCandidateCount = current.length >= options.maxWindowCandidates;
+    if (startsSectionWindow || exceedsWindow || exceedsCandidateCount) {
       flush();
     }
     current.push(candidate);
@@ -496,6 +504,12 @@ function packSemanticCandidateWindows(
       truncated: options.overallCandidateBudget.truncated,
     },
   }));
+}
+
+export function normalizeSemanticWindowLimit(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : fallback;
 }
 
 function getCandidateIdsWithDescendants(candidates: HvySemanticFilterCandidate[]): Set<string> {

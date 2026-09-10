@@ -92,7 +92,7 @@ import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingInd
 import { createHvyAgentTools } from './agent-tools';
 import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
 import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
-import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider } from './reference-config';
+import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider, setRuntimeSemanticFilterWindowLimits } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
@@ -187,6 +187,8 @@ export interface HvyMountOptions {
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   semanticFilterConcurrency?: number;
   semanticFilterMaxAttempts?: number;
+  semanticFilterMaxWindowCandidateChars?: number;
+  semanticFilterMaxWindowCandidates?: number;
   linkObserver?: HvyLinkObserver | null;
   crossDocumentLinks?: boolean;
   controls?: boolean;
@@ -1407,6 +1409,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterMaxAttempts' in options) {
     setRuntimeSemanticFilterMaxAttempts(options.semanticFilterMaxAttempts ?? null);
   }
+  setRuntimeSemanticFilterWindowLimits({
+    maxCandidateChars: options.semanticFilterMaxWindowCandidateChars ?? null,
+    maxCandidates: options.semanticFilterMaxWindowCandidates ?? null,
+  });
   bindRuntimeActivation(options.root, runtime);
   // Built-in plugins are opt-in per mount: some of them execute document-supplied
   // code, so a host that asks for nothing gets nothing.

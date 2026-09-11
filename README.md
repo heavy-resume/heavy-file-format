@@ -10,7 +10,7 @@ move beyond printing focused documents with specific, narrow use cases,
 and move towards a multipurpose document that can take advantage of the fact that AI
 makes coding much more accessible. Documents can also be structured for AI consumption,
 or reordered for user presentation,
-eliminating the need to guess about information boundaries for things like recall.
+eliminating the need to guess about information boundaries for things like document ingestion and recall.
 
 A HVY document consists of header with meta information, a body, and a tail. The meta information
 can include things such as document color schemes, component template definitions, formatting config,
@@ -54,7 +54,7 @@ If you're looking for "one of many related documents" functionality, you can che
 - Interactive resume / CV
 - Interactive survey
 - Generate study material
-- Soft applications without hosting (diet tracking, etc)
+- Create applications without hosting or sideloading (non-full screen, diet tracking, etc)
 - Arcade machine (game + high score tracking in a single file)
 - More!
 
@@ -65,15 +65,15 @@ If you're looking for "one of many related documents" functionality, you can che
 - WebMCP support
 - Extendable with plugins. Includes a core set of plugins.
 - Includes SQLite databases as well as static tables
-- Attach files, automatically shrink images
+- Attach files, automatically shrink images to conserve space
 - Encrypt documents, sections, and components, allowing one document to be shared across different
   access levels
 - Built with "use AI and reorganize it if you want" in mind
 
 ## Where to Use
-If you don't want to build locally, you can use the HVY at:
+If you don't want to build locally, you can use HVY at:
 - [heavyresume.com](https://heavyresume.com)
-- [HVY Galaxy (desktop application)](https://heavyresume.com/hvy-galaxy)
+- [HVY Galaxy (desktop application for Mac / Windows)](https://heavyresume.com/hvy-galaxy)
 - [HVY Editor (VS Code Extension)](https://marketplace.visualstudio.com/items?itemName=HeavyResume.hvy)
 
 # Development Information

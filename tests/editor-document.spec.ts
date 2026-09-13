@@ -1374,6 +1374,57 @@ test('reader block refresh preserves direct grid cell edge-margin trimming', asy
   expect(result).toEqual({ trimVerticalEdgeMargin: true });
 });
 
+test('reader block refresh preserves contained section boundary margin trimming', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <section class="reader-section">
+        <div class="reader-section-content">
+          <div class="reader-block" data-section-key="section-a" data-block-id="block-a" data-reader-trim-vertical-start-margin="true"></div>
+          <div class="reader-block" data-section-key="section-a" data-block-id="block-b" data-reader-trim-vertical-end-margin="true"></div>
+        </div>
+      </section>
+    </div>`;
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const { refreshReaderBlockDom } = await import(/* @vite-ignore */ '/src/reader/block-refresh.ts');
+    state.document.sections = [{
+      key: 'section-a',
+      blocks: [
+        { id: 'block-a', schema: {} },
+        { id: 'block-b', schema: {} },
+      ],
+    }];
+    const receivedOptions: unknown[] = [];
+    const readerRenderer = {
+      renderReaderBlock: (_section, block, options) => {
+        receivedOptions.push(options);
+        return `<div class="reader-block" data-section-key="section-a" data-block-id="${block.id}"></div>`;
+      },
+    };
+    refreshReaderBlockDom({
+      root: document.querySelector('#root')!,
+      sections: state.document.sections,
+      sectionKey: 'section-a',
+      blockId: 'block-a',
+      readerRenderer,
+    });
+    refreshReaderBlockDom({
+      root: document.querySelector('#root')!,
+      sections: state.document.sections,
+      sectionKey: 'section-a',
+      blockId: 'block-b',
+      readerRenderer,
+    });
+    return receivedOptions;
+  });
+
+  expect(result).toEqual([
+    { trimVerticalStartMargin: true, trimVerticalEndMargin: false },
+    { trimVerticalStartMargin: false, trimVerticalEndMargin: true },
+  ]);
+});
+
 test('lightweight embedded viewer keeps a named radio group exclusive across grid cells', async ({ page }) => {
   await page.goto('/');
 

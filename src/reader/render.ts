@@ -512,8 +512,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         continue;
       }
       if (entry.shouldRender) {
+        const renderOptions = section.contained
+          ? {
+            trimVerticalStartMargin: index === 0,
+            trimVerticalEndMargin: index === entries.length - 1,
+          }
+          : undefined;
         output.push(withReaderRenderTreeWindow(entry, effectiveWindowOptions, () => (
-          renderReaderBlock(section, entry.node.item as VisualBlock)
+          renderReaderBlock(section, entry.node.item as VisualBlock, renderOptions)
         )));
         index += 1;
         continue;
@@ -610,9 +616,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockStyle = base === 'image'
       ? ''
       : sanitizeReaderBlockCss(responsiveCss.inlineCss, options);
-    const refreshRenderContextAttrs = options.trimVerticalEdgeMargin
-      ? ' data-reader-trim-vertical-edge-margin="true"'
-      : '';
+    const refreshRenderContextAttrs = [
+      options.trimVerticalEdgeMargin ? ' data-reader-trim-vertical-edge-margin="true"' : '',
+      options.trimVerticalStartMargin ? ' data-reader-trim-vertical-start-margin="true"' : '',
+      options.trimVerticalEndMargin ? ' data-reader-trim-vertical-end-margin="true"' : '',
+    ].join('');
     const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
     const helpers = deps.getComponentRenderHelpers();
     type BlockShellPresentation = {
@@ -738,10 +746,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function sanitizeReaderBlockCss(css: string, options: ReaderBlockRenderOptions): string {
     const sanitized = sanitizeInlineCss(css);
-    if (!options.trimVerticalEdgeMargin) {
+    const trimStart = options.trimVerticalEdgeMargin || options.trimVerticalStartMargin;
+    const trimEnd = options.trimVerticalEdgeMargin || options.trimVerticalEndMargin;
+    if (!trimStart && !trimEnd) {
       return sanitized;
     }
-    return `${sanitized}${sanitized.trim().endsWith(';') || !sanitized.trim() ? '' : ';'} margin-top: 0; margin-bottom: 0;`;
+    const separator = sanitized.trim().endsWith(';') || !sanitized.trim() ? '' : ';';
+    return `${sanitized}${separator}${trimStart ? ' margin-top: 0;' : ''}${trimEnd ? ' margin-bottom: 0;' : ''}`;
   }
 
   function isAiEditorHostBlock(sectionKey: string, blockId: string): boolean {
@@ -889,10 +900,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderPreviewBlocks(section: VisualSection, blocks: VisualBlock[]): string {
-    return orderReaderBlocks(blocks)
+    const previewBlocks = orderReaderBlocks(blocks)
       .filter((block) => !isAnchoredReaderButton(section, block))
       .slice(0, 3)
-      .map((block) => renderReaderBlock(section, block))
+    return previewBlocks
+      .map((block, index) => renderReaderBlock(section, block, section.contained
+        ? {
+          trimVerticalStartMargin: index === 0,
+          trimVerticalEndMargin: index === previewBlocks.length - 1,
+        }
+        : undefined))
       .join('');
   }
 

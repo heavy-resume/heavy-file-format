@@ -86,6 +86,8 @@ export interface ComponentRenderHelpers {
 export interface ReaderBlockRenderOptions {
   suppressAiEditorDelegation?: boolean;
   trimVerticalEdgeMargin?: boolean;
+  trimVerticalStartMargin?: boolean;
+  trimVerticalEndMargin?: boolean;
   /**
    * Render expand/collapse from the document instead of the viewer's session state.
    * Reader expansion is ephemeral viewer state, so editing surfaces must show what the

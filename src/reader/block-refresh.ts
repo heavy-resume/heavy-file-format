@@ -124,7 +124,12 @@ export function refreshReaderBlockDom(options: ReaderBlockRefreshOptions): boole
   targets.forEach((target) => {
     const renderOptions = target.dataset.readerTrimVerticalEdgeMargin === 'true'
       ? { trimVerticalEdgeMargin: true }
-      : undefined;
+      : target.dataset.readerTrimVerticalStartMargin === 'true' || target.dataset.readerTrimVerticalEndMargin === 'true'
+        ? {
+          trimVerticalStartMargin: target.dataset.readerTrimVerticalStartMargin === 'true',
+          trimVerticalEndMargin: target.dataset.readerTrimVerticalEndMargin === 'true',
+        }
+        : undefined;
     const replacement = createReaderBlockElement(target.ownerDocument, options.readerRenderer, section, block, renderOptions);
     if (!replacement) {
       return;

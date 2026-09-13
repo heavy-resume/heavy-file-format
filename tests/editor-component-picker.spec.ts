@@ -157,6 +157,7 @@ test('viewer graph stays confined and expands inside phone preview', async ({ pa
 });
 
 test('component picker opens categories and adds selected component', async ({ page }) => {
+  test.setTimeout(5000);
   await page.goto('/');
   await page.waitForTimeout(300);
 
@@ -178,12 +179,12 @@ test('component picker opens categories and adds selected component', async ({ p
   await picker.locator('.component-picker-row-category', { hasText: 'Advanced' }).click();
   await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Table' })).toBeVisible();
   await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Reference' })).toBeVisible();
-  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+  await picker.locator('[data-picker-pane="advanced"] .component-picker-back').click();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Advanced' })).toBeVisible();
 
   await picker.locator('.component-picker-row-category', { hasText: 'Containers' }).click();
   await expect(picker.locator('[data-picker-pane="containers"] .component-picker-row-title', { hasText: 'Container' })).toBeVisible();
-  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+  await picker.locator('[data-picker-pane="containers"] .component-picker-back').click();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Text' })).toBeVisible();
   await expect(picker.locator('[data-picker-pane="containers"] .component-picker-row-title', { hasText: 'Container' })).toBeHidden();
   await rootPane.click({ position: { x: 112, y: 112 } });
@@ -193,16 +194,61 @@ test('component picker opens categories and adds selected component', async ({ p
   await picker.locator('.component-picker-row-category', { hasText: 'Images' }).click();
   await expect(picker.locator('[data-picker-pane="images"] .component-picker-row-title', { hasText: 'Image' })).toBeVisible();
   await expect(picker.locator('[data-picker-pane="images"] .component-picker-row-title', { hasText: 'Carousel' })).toBeVisible();
-  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+  await picker.locator('[data-picker-pane="images"] .component-picker-back').click();
 
   await picker.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
   await expect(picker.locator('[data-picker-pane="plugins"] .component-picker-row-title', { hasText: 'DB Table' })).toBeVisible();
   await expect(picker.locator('[data-picker-pane="plugins"] .component-picker-row-title', { hasText: 'Graph' })).toBeVisible();
-  await addComponent.getByRole('button', { name: 'Section component type' }).click();
+  await picker.locator('[data-picker-pane="plugins"] .component-picker-back').click();
 
   await picker.locator('.component-picker-row-direct[data-component="text"]').click();
 
   await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
+});
+
+test('component picker layers only its active plus above the radial pane', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(300);
+
+  const addComponent = page.locator('.compact-add-component-ghost').first();
+  const trigger = addComponent.getByRole('button', { name: 'Section component type' });
+  const picker = addComponent.locator('.component-picker-popover');
+  await trigger.click();
+
+  const triggerLayers = async (): Promise<{ activeAbove: boolean; otherCovered: number; otherOverlapping: number }> => picker.evaluate((popover) => {
+    const popoverRect = popover.getBoundingClientRect();
+    const overlapping = [...document.querySelectorAll<HTMLElement>('.component-picker-trigger')].filter((button) => {
+      const rect = button.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      return centerX >= popoverRect.left && centerX <= popoverRect.right
+        && centerY >= popoverRect.top && centerY <= popoverRect.bottom;
+    });
+    const activeTrigger = popover.parentElement?.querySelector<HTMLElement>(':scope > .component-picker-trigger');
+    return {
+      activeAbove: Boolean(activeTrigger && overlapping.includes(activeTrigger) && (() => {
+        const rect = activeTrigger.getBoundingClientRect();
+        const topElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return topElement === activeTrigger || Boolean(topElement && activeTrigger.contains(topElement));
+      })()),
+      otherOverlapping: overlapping.filter((button) => button !== activeTrigger).length,
+      otherCovered: overlapping.filter((button) => button !== activeTrigger).filter((button) => {
+        const rect = button.getBoundingClientRect();
+        const topElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return Boolean(topElement?.closest('.component-picker-popover'));
+      }).length,
+    };
+  });
+
+  const radialResult = await triggerLayers();
+  expect(radialResult.activeAbove).toBe(true);
+  expect(radialResult.otherOverlapping).toBeGreaterThan(0);
+  expect(radialResult.otherCovered).toBe(radialResult.otherOverlapping);
+  await picker.locator('.component-picker-row-category', { hasText: 'Advanced' }).click();
+  const menuResult = await triggerLayers();
+  expect(menuResult.activeAbove).toBe(false);
+  expect(menuResult.otherOverlapping).toBeGreaterThan(0);
+  expect(menuResult.otherCovered).toBe(menuResult.otherOverlapping);
 });
 
 test('component picker adds a selected plugin directly', async ({ page }) => {

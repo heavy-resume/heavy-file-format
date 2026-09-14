@@ -4,7 +4,7 @@ test.setTimeout(5_000);
 
 async function loadDbTableCrm(page: Page, contacts = ['Jane Smith']): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 plugins:
@@ -41,7 +41,11 @@ plugins:
     setActiveEditorBlock(section.key, block.id);
     getRenderApp()();
   }, contacts);
-  await expect(page.locator('.hvy-database-table-editor [data-db-table-field="cell"][data-column-name="contact"]').first()).toHaveValue('Jane Smith');
+  if (contacts.length > 0) {
+    await expect(page.locator('.hvy-database-table-editor [data-db-table-field="cell"][data-column-name="contact"]').first()).toHaveValue(contacts[0]);
+  } else {
+    await expect(page.locator('.hvy-database-table-editor .db-table-empty')).toHaveText('No rows yet.');
+  }
 }
 
 test('database-table edits relationships, stages required rows, and controls column visibility', async ({ page }) => {
@@ -152,11 +156,25 @@ test('database-table resizes columns and auto-fits data within the document maxi
   const contactHeader = plugin.locator('.db-table-column-name-input[data-column-name="contact"]').locator('xpath=ancestor::th');
   const resizeHandle = contactHeader.locator('.db-table-resize-handle');
   await page.evaluate(async () => {
-    const { state } = await import('/src/state.ts');
+    const { state, getRenderApp } = await import('/src/state.ts');
     state.document.meta.database_table_max_column_width = '30rem';
+    const block = state.document.sections[0]?.blocks[0];
+    if (!block) throw new Error('Expected the DB Table fixture block.');
+    block.schema.pluginConfig.columns = {
+      id: { visibility: 'compact', width: '20rem' },
+      contact: { width: '20rem' },
+      relationship_id: { label: 'Organization', width: '20rem', foreignDisplayColumn: 'organization' },
+    };
+    getRenderApp()();
   });
 
   // BEFORE
+  const tableFrame = plugin.locator('.db-table-table-frame');
+  const expectedScrollLeft = await tableFrame.evaluate((frame) => {
+    frame.scrollLeft = frame.scrollWidth;
+    return frame.scrollLeft;
+  });
+  expect(expectedScrollLeft).toBeGreaterThan(0);
   const initialWidth = (await contactHeader.boundingBox())?.width ?? 0;
   const handleBox = await resizeHandle.boundingBox();
   expect(handleBox).not.toBeNull();
@@ -172,6 +190,7 @@ test('database-table resizes columns and auto-fits data within the document maxi
     return String(state.document.sections[0]?.blocks[0]?.schema.pluginConfig.columns?.contact?.width ?? '');
   })).toMatch(/px$/u);
   expect((await contactHeader.boundingBox())?.width ?? 0).toBeGreaterThan(initialWidth);
+  expect(await tableFrame.evaluate((frame) => frame.scrollLeft)).toBe(expectedScrollLeft);
 
   await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
@@ -185,6 +204,22 @@ test('database-table resizes columns and auto-fits data within the document maxi
     const { state } = await import('/src/state.ts');
     return state.document.sections[0]?.blocks[0]?.schema.pluginConfig.columns?.contact?.width;
   })).toBe('160px');
+});
+
+test('database-table keeps an empty row-actions column compact', async ({ page }) => {
+  await loadDbTableCrm(page, []);
+  const plugin = page.locator('.hvy-database-table-editor');
+
+  // BEFORE
+  await expect(plugin.locator('.db-table-empty')).toHaveText('No rows yet.');
+
+  // TOOL CALL
+  const actionsWidth = await plugin.locator('.db-table-actions-heading').evaluate((heading) => (
+    heading.getBoundingClientRect().width
+  ));
+
+  // AFTER
+  expect(actionsWidth).toBeLessThan(40);
 });
 
 test('database-table uses queryLimit as the single page size without changing an authored SQL limit', async ({ page }) => {

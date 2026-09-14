@@ -1,10 +1,13 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { readFileSync, readdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build } from 'esbuild';
+
+const require = createRequire(import.meta.url);
 
 const args = process.argv.slice(2);
 const separatorIndex = args.indexOf('--');
@@ -93,7 +96,7 @@ const result = await build({
           namespace: 'raw-query',
         }));
         buildApi.onResolve({ filter: /\?url$/ }, (args) => ({
-          path: new URL(args.path.replace(/\?url$/, ''), pathToFileURL(`${args.resolveDir}/`)).pathname,
+          path: resolveAssetPath(args.path.replace(/\?url$/, ''), args.resolveDir),
           namespace: 'url-query',
         }));
         buildApi.onLoad({ filter: /.*/, namespace: 'raw-query' }, async (args) => ({
@@ -170,4 +173,11 @@ function globTextFiles(directory, pattern, importPrefix) {
 
 function readFileSyncText(path) {
   return readFileSync(path, 'utf8');
+}
+
+function resolveAssetPath(assetPath, resolveDirectory) {
+  if (!assetPath.startsWith('.') && !assetPath.startsWith('/')) {
+    return require.resolve(assetPath);
+  }
+  return new URL(assetPath, pathToFileURL(`${resolveDirectory}/`)).pathname;
 }

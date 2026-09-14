@@ -203,7 +203,7 @@ async function buildBundledRunner() {
             namespace: 'raw-query',
           }));
           buildApi.onResolve({ filter: /\?url$/ }, (resolveArgs) => ({
-            path: new URL(resolveArgs.path.replace(/\?url$/, ''), pathToFileURL(`${resolveArgs.resolveDir}/`)).pathname,
+            path: resolveAssetPath(resolveArgs.path.replace(/\?url$/, ''), resolveArgs.resolveDir),
             namespace: 'url-query',
           }));
           buildApi.onLoad({ filter: /.*/, namespace: 'raw-query' }, async (loadArgs) => ({
@@ -277,4 +277,11 @@ function globTextFiles(directory, pattern, importPrefix) {
       .filter((name) => pattern.test(name))
       .map((name) => [`${importPrefix}/${name}`, readFileSync(join(directory, name), 'utf8')]),
   );
+}
+
+function resolveAssetPath(assetPath, resolveDirectory) {
+  if (!assetPath.startsWith('.') && !assetPath.startsWith('/')) {
+    return require.resolve(assetPath);
+  }
+  return new URL(assetPath, pathToFileURL(`${resolveDirectory}/`)).pathname;
 }

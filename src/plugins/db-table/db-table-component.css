@@ -514,7 +514,8 @@
 .hvy-document .db-table-actions-column,
 .hvy-document .db-table-actions-heading,
 .hvy-document .db-table-row-actions {
-  width: 10.5rem;
+  width: 1%;
+  white-space: nowrap;
 }
 
 .hvy-document .db-table-row-actions {

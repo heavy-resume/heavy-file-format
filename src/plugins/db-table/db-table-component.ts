@@ -52,6 +52,7 @@ interface DbTableUiState {
   offset: number;
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc' | null;
+  tableScrollLeft: number;
   settingsOpen: boolean;
   draftActive: boolean;
   error: string;
@@ -68,6 +69,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     offset: 0,
     sortColumn: null,
     sortDirection: null,
+    tableScrollLeft: 0,
     settingsOpen: false,
     draftActive: false,
     error: '',
@@ -106,8 +108,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const config = (): DbTableConfig => readDbTableConfig(ctx.block.schema.pluginConfig);
 
   const renderCurrent = () => {
+    const previousFrame = root.querySelector<HTMLElement>('.db-table-table-frame');
+    if (previousFrame) ui.tableScrollLeft = previousFrame.scrollLeft;
     closeColumnEditor();
     root.innerHTML = renderDbTable(ctx, config(), snapshot, ui);
+    const nextFrame = root.querySelector<HTMLElement>('.db-table-table-frame');
+    if (nextFrame) nextFrame.scrollLeft = ui.tableScrollLeft;
   };
 
   const refresh = () => {
@@ -262,6 +268,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-table-column-name-input');
     if (input) openColumnEditor(input);
   });
+
+  root.addEventListener('scroll', (event) => {
+    const frame = (event.target as Element | null)?.closest<HTMLElement>('.db-table-table-frame');
+    if (frame) ui.tableScrollLeft = frame.scrollLeft;
+  }, true);
 
   root.addEventListener('focusout', () => {
     window.setTimeout(() => {

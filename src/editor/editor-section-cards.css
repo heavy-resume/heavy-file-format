@@ -503,4 +503,5 @@
   border-radius: 8px;
   padding: 0.35rem 0.4rem;
   background: var(--hvy-surface);
+  color: var(--hvy-text);
 }

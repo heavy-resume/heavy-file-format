@@ -716,8 +716,7 @@ function buildRecordEmbeddingText(record: HvyChatSearchIndexRecord): string {
     record.tags.join(' '),
     record.description,
     record.componentType,
-    record.targetId,
-    record.targetRef,
+    record.targetRef || record.targetId,
     record.targetPath,
     record.text,
   ].filter(Boolean).join('\n');

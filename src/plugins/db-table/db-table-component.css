@@ -139,6 +139,10 @@
   flex: 1 1 13rem;
 }
 
+.hvy-document .db-table-columns-button {
+  min-height: 2.3rem;
+}
+
 .hvy-document .db-table-columns-button.is-active {
   border-color: var(--hvy-accent, var(--reader-accent));
   background: color-mix(in srgb, var(--hvy-accent, var(--reader-accent)) 12%, var(--hvy-surface, var(--reader-panel)));
@@ -262,7 +266,6 @@
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  color: var(--hvy-danger, var(--reader-fg));
 }
 
 .hvy-document .db-table-delete-column .hvy-ui-icon,
@@ -304,15 +307,15 @@
   content: '';
   width: 0.25rem;
   height: 0.5rem;
-  border: solid var(--hvy-surface, var(--reader-panel));
+  border: solid var(--hvy-accent-1-text);
   border-width: 0 0.14rem 0.14rem 0;
   transform: rotate(45deg) scale(0);
   transition: transform 120ms ease;
 }
 
 .hvy-document .db-table-check input:checked {
-  border-color: var(--hvy-accent, var(--reader-accent));
-  background: var(--hvy-accent, var(--reader-accent));
+  border-color: var(--hvy-accent-1-alt);
+  background: var(--hvy-accent-1);
 }
 
 .hvy-document .db-table-check input:checked::after {

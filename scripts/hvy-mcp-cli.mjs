@@ -31,6 +31,22 @@ export async function applyHvyPatchOnFile(request) {
   return runner.applyHvyPatchOnFile(request);
 }
 
+export async function walkHvyFile(request) {
+  const runner = await loadBundledRunner();
+  if (typeof request?.filePath !== 'string') {
+    throw new Error('walkHvyFile requires filePath.');
+  }
+  return runner.walkHvyFile(request);
+}
+
+export async function buildHvyEmbeddingsOnFile(request) {
+  const runner = await loadBundledRunner();
+  if (typeof request?.filePath !== 'string' || !request?.embeddingProvider) {
+    throw new Error('buildHvyEmbeddingsOnFile requires filePath and embeddingProvider.');
+  }
+  return runner.buildHvyEmbeddingsOnFile(request);
+}
+
 function normalizeRequest(request) {
   const filePath = typeof request?.filePath === 'string' ? request.filePath : '';
   const cwd = typeof request?.cwd === 'string' && request.cwd ? request.cwd : '/';
@@ -54,7 +70,9 @@ async function buildBundledRunner() {
     import { extname } from 'node:path';
     import { createHvyCliSession, executeHvyCliCommand } from './src/cli-core/commands.ts';
     import { createHvyAgentTools } from './src/agent-tools.ts';
-    import { deserializeDocument, serializeDocument } from './src/serialization.ts';
+    import { materializePreparedEmbeddingAttachments } from './src/chat/embedding-context.ts';
+    import { walkHvyDocument } from './src/search/hvy-document-walk.ts';
+    import { deserializeDocument, deserializeDocumentBytesWithDiagnostics, serializeDocument, serializeDocumentBytes } from './src/serialization.ts';
 
     const HVY_TAIL_SENTINEL = '--HVY-TAIL--';
     const encoder = new TextEncoder();
@@ -98,15 +116,21 @@ async function buildBundledRunner() {
     }
 
     export async function searchHvyFile(request) {
-      const { document } = readDocument(request.filePath);
+      const document = readDocumentWithAttachments(request.filePath);
       return createHvyAgentTools({
         document,
-        embeddingProvider: request.embeddingProvider,
-        chatContext: request.chatContext,
+        embeddingProvider: request.embeddingProvider ? createEmbeddingProvider(request.embeddingProvider) : null,
+        chatContext: request.embeddingProvider ? {
+          mode: 'embedding-retrieval',
+          embeddingModel: request.embeddingModel,
+          embeddingDimensions: request.embeddingDimensions,
+          embeddingBatchSize: request.embeddingBatchSize,
+        } : null,
       }).search({
         query: request.query,
         limit: request.limit,
         cursor: request.cursor,
+        semantic: request.semantic,
       });
     }
 
@@ -117,6 +141,106 @@ async function buildBundledRunner() {
         writeFileSync(request.filePath, appendOpaqueTailBytes(serializeDocument(source.document), source.tailBytes));
       }
       return result;
+    }
+
+    export function walkHvyFile(request) {
+      const { document } = readDocument(request.filePath);
+      return walkHvyDocument({
+        document,
+        limit: request.limit,
+        cursor: request.cursor,
+      });
+    }
+
+    export async function buildHvyEmbeddingsOnFile(request) {
+      const extension = extname(request.filePath).toLowerCase();
+      if (extension !== '.hvy') {
+        throw new Error('buildHvyEmbeddingsOnFile supports .hvy documents.');
+      }
+      const bytes = readFileSync(request.filePath);
+      const document = deserializeDocumentBytesWithDiagnostics(bytes, '.hvy').document;
+      const embeddingProvider = createEmbeddingProvider(request.embeddingProvider);
+      const stats = await createHvyAgentTools({
+        document,
+        embeddingProvider,
+        chatContext: {
+          mode: 'embedding-retrieval',
+          embeddingModel: request.embeddingModel,
+          embeddingDimensions: request.embeddingDimensions,
+          embeddingBatchSize: request.embeddingBatchSize,
+          persistEmbeddingsToAttachments: true,
+        },
+      }).buildEmbeddings();
+      materializePreparedEmbeddingAttachments(document);
+      writeFileSync(request.filePath, serializeDocumentBytes(document));
+      return {
+        ...stats,
+        path: request.filePath,
+        model: request.embeddingModel,
+        ...(request.embeddingDimensions ? { dimensions: request.embeddingDimensions } : {}),
+      };
+    }
+
+    function createEmbeddingProvider(provider) {
+      return async (request) => {
+        const baseUrl = provider.baseUrl.replace(/\\/+$/, '');
+        const model = request.model.trim();
+        let url = \`${'${baseUrl}'}/embeddings\`;
+        let headers = {
+          'Content-Type': 'application/json',
+          ...(provider.apiKey?.trim() ? { Authorization: \`Bearer ${'${provider.apiKey.trim()}'}\` } : {}),
+        };
+        let body = {
+          model,
+          input: request.inputs.map((input) => input.text),
+          ...(request.dimensions !== undefined ? { dimensions: request.dimensions } : {}),
+        };
+        if (provider.provider === 'cohere') {
+          url = \`${'${baseUrl}'}/v2/embed\`;
+          body = {
+            model,
+            input_type: 'search_document',
+            embedding_types: ['float'],
+            inputs: request.inputs.map((input) => ({ content: [{ type: 'text', text: input.text }] })),
+          };
+        } else if (provider.provider === 'gemini') {
+          const modelPath = model.startsWith('models/') ? model : \`models/${'${model}'}\`;
+          url = \`${'${baseUrl}'}/${'${modelPath}'}:batchEmbedContents\`;
+          headers = {
+            'Content-Type': 'application/json',
+            ...(provider.apiKey?.trim() ? { 'x-goog-api-key': provider.apiKey.trim() } : {}),
+          };
+          body = {
+            requests: request.inputs.map((input) => ({
+              model: modelPath,
+              content: { parts: [{ text: input.text }] },
+              ...(request.dimensions !== undefined
+                ? { embedContentConfig: { outputDimensionality: request.dimensions } }
+                : {}),
+            })),
+          };
+        }
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: request.signal,
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          const message = payload?.error?.message || payload?.message || response.statusText;
+          throw new Error(\`Embedding request failed (${'${response.status}'}): ${'${message}'}\`);
+        }
+        const vectors = provider.provider === 'gemini'
+          ? payload?.embeddings?.map((embedding) => embedding.values ?? [])
+          : provider.provider === 'cohere'
+            ? (Array.isArray(payload?.embeddings) ? payload.embeddings : payload?.embeddings?.float)
+            : (Array.isArray(payload?.embeddings) ? payload.embeddings : payload?.data?.map((entry) => entry.embedding ?? []));
+        if (!Array.isArray(vectors) || vectors.length !== request.inputs.length) {
+          throw new Error('Embedding response did not include one vector per input.');
+        }
+        return request.inputs.map((input, index) => ({ id: input.id, vector: vectors[index] ?? [] }));
+      };
     }
 
     function readDocument(filePath) {
@@ -130,6 +254,15 @@ async function buildBundledRunner() {
         document: deserializeDocument(source.text, documentExtension),
         tailBytes: source.tailBytes,
       };
+    }
+
+    function readDocumentWithAttachments(filePath) {
+      const extension = extname(filePath).toLowerCase();
+      if (!['.hvy', '.thvy', '.phvy', '.md', '.markdown'].includes(extension)) {
+        throw new Error('Expected .hvy, .thvy, .phvy, .md, or .markdown input.');
+      }
+      const documentExtension = extension === '.markdown' ? '.md' : extension;
+      return deserializeDocumentBytesWithDiagnostics(readFileSync(filePath), documentExtension).document;
     }
 
     function splitEditableHvyBytes(bytes) {

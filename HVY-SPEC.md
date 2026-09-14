@@ -1771,7 +1771,10 @@ Tail directive fields:
 
 Rules:
 - Tail payloads are NOT part of Markdown parsing.
-- Tail payloads are only valid for `.hvy`, not `.thvy`.
+- Tail payloads are valid for `.hvy` and `.thvy`. A `.thvy` template may carry
+  the same database, image, plugin, and other attachment data as an `.hvy`
+  document; the template extension is an authoring convention, not a reduced
+  storage format.
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
 - User-file attachment names MUST be unique according to §3.1. Replacing a
   user file SHOULD preserve its `id` and `name` while updating its `filename`,
@@ -1801,8 +1804,8 @@ document order. Vector data SHOULD be stored as contiguous little-endian float32
 values. Clients MUST treat embedding-index attachments as stale unless the model
 profile and chunk hashes match the current document-derived retrieval records.
 Deleting an embedding-index attachment MUST NOT change the document's authored
-content or meaning. Template files (`.thvy`) MUST NOT use tail attachments for
-embedding caches.
+content or meaning. Template files (`.thvy`) MAY use these derived tail
+attachments under the same rules as `.hvy` documents.
 
 ### 7.7 DB table plugin contract
 
@@ -1891,6 +1894,11 @@ presentation. `queryDynamicWindow` has no meaning and MUST be ignored.
 - Column presentation is scoped to the plugin block. Multiple database-table blocks MAY
   present the same backing table with different labels, visibility, widths,
   wrapping, and foreign display columns.
+- When an editable client deletes a column from a directly targeted SQLite
+  view, it MUST leave the source tables unchanged and rebuild the view with a
+  projection containing the remaining view columns. Query-result columns from
+  non-empty plugin block text remain read-only and MUST NOT be treated as view
+  schema columns.
 - Editable clients SHOULD allow authors to resize visible columns by dragging a
   heading edge and auto-fit a column to its rendered heading and data by double
   clicking that edge. Resized widths are stored in the block's column
@@ -2341,7 +2349,7 @@ Normative behavior:
 Document is valid HVY if:
 - It is parseable Markdown text.
 - Any `hvy:*` JSON directive is syntactically valid JSON.
-- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy`.
+- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy` or `.thvy`.
 
 Additional validity for `.thvy`:
 - If `schema` is present, it is valid against the supported subset.

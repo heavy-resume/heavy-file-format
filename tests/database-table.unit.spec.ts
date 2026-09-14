@@ -371,6 +371,35 @@ test('database-table carries forward schema editing and removes row-attached HVY
   }
 });
 
+test('database-table deletes a view column by rebuilding its projection', async () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const setup = await createScriptingDbRuntime(document);
+  try {
+    // BEFORE
+    setup.api.execute('CREATE TABLE work_items (id INTEGER PRIMARY KEY, title TEXT NOT NULL, notes TEXT)');
+    setup.api.execute("INSERT INTO work_items (title, notes) VALUES ('Expected title', 'Expected notes')");
+    setup.api.execute('CREATE VIEW active_work AS SELECT * FROM work_items ORDER BY id');
+  } finally {
+    setup.dispose();
+  }
+
+  // TOOL CALL
+  await dropDbTableColumn(document, 'active_work', 'notes');
+
+  // AFTER
+  const inspection = await createScriptingDbRuntime(document);
+  try {
+    expect(inspection.api.query('PRAGMA table_info(active_work)').map((column) => column.name)).toEqual(['id', 'title']);
+    expect(inspection.api.query('SELECT * FROM active_work')[0]).toMatchObject({ id: 1, title: 'Expected title' });
+    expect(inspection.api.query('SELECT notes FROM work_items')[0]?.notes).toBe('Expected notes');
+    expect(String(inspection.api.query("SELECT sql FROM sqlite_schema WHERE type = 'view' AND name = 'active_work'")[0]?.sql)).toContain(
+      'SELECT "id", "title" FROM (SELECT * FROM work_items ORDER BY id)'
+    );
+  } finally {
+    inspection.dispose();
+  }
+});
+
 test('database-table migrates and removes presentation settings when physical columns change', () => {
   const config = readDbTableConfig({
     table: 'contacts',

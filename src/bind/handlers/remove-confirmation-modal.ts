@@ -1,6 +1,15 @@
 let pendingConfirmDeletion: (() => void) | null = null;
 
-export function openRemoveConfirmationModal(onConfirm: () => void, root: HTMLElement = document.body): void {
+export interface RemoveConfirmationOptions {
+  description?: string;
+  confirmLabel?: string;
+}
+
+export function openRemoveConfirmationModal(
+  onConfirm: () => void,
+  root: HTMLElement = document.body,
+  options: RemoveConfirmationOptions = {}
+): void {
   closeRemoveConfirmationModal(false);
   pendingConfirmDeletion = onConfirm;
   const modal = document.createElement('div');
@@ -11,12 +20,20 @@ export function openRemoveConfirmationModal(onConfirm: () => void, root: HTMLEle
       <div class="modal-head">
         <h3 id="removeConfirmationTitle">Confirm deletion?</h3>
       </div>
+      <p class="remove-confirmation-description" data-remove-confirmation-description hidden></p>
       <div class="modal-head-actions">
         <button type="button" class="ghost" data-remove-modal-action="cancel">Cancel</button>
         <button type="button" class="danger" data-remove-modal-action="confirm">Delete</button>
       </div>
     </section>
   `;
+  const description = modal.querySelector<HTMLElement>('[data-remove-confirmation-description]');
+  if (description && options.description?.trim()) {
+    description.textContent = options.description.trim();
+    description.hidden = false;
+  }
+  const confirm = modal.querySelector<HTMLButtonElement>('[data-remove-modal-action="confirm"]');
+  if (confirm && options.confirmLabel?.trim()) confirm.textContent = options.confirmLabel.trim();
   modal.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const removeModalAction = target.closest<HTMLElement>('[data-remove-modal-action]');

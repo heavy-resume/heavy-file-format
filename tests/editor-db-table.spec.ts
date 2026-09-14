@@ -55,8 +55,39 @@ test('db table editor deletes columns with confirmation', async ({ page }) => {
   expect(await columnNames(page)).toEqual(['Column 1', 'Column 2']);
 
   await deleteButtons.first().click();
-  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(dialog).toContainText('This will modify database table "job_applications" by deleting column "Column 1" and all data stored in that column.');
+  await dialog.getByRole('button', { name: 'Delete column', exact: true }).click();
 
   await expect(page.locator('.db-table-column-name-input')).toHaveCount(1);
   expect(await columnNames(page)).toEqual(['Column 2']);
+});
+
+test('db table column delete action uses the themed danger button colors', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('hvy-palette-override-v1', 'ufo');
+  });
+  await openCrmExample(page);
+  await openFirstDbTableEditor(page);
+  await page.getByRole('button', { name: 'Create Table' }).click();
+  await page.getByRole('button', { name: 'Columns' }).first().click();
+
+  const deleteColumn = page.locator('[data-db-table-action="delete-column"]').first();
+  await expect(deleteColumn).toHaveCSS('background-color', 'rgb(139, 0, 0)');
+  await expect(deleteColumn).toHaveCSS('color', 'rgb(255, 255, 255)');
+});
+
+test('db table Columns action is vertically centered with the table name input', async ({ page }) => {
+  await openCrmExample(page);
+  await openFirstDbTableEditor(page);
+
+  const tableName = page.locator('[data-db-table-field="table"]').first();
+  const columns = page.getByRole('button', { name: 'Columns' }).first();
+  const tableNameBox = await tableName.boundingBox();
+  const columnsBox = await columns.boundingBox();
+  expect(tableNameBox).not.toBeNull();
+  expect(columnsBox).not.toBeNull();
+  expect(Math.abs(
+    ((tableNameBox?.y ?? 0) + (tableNameBox?.height ?? 0) / 2)
+      - ((columnsBox?.y ?? 0) + (columnsBox?.height ?? 0) / 2)
+  )).toBeLessThanOrEqual(1);
 });

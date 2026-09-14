@@ -61,12 +61,14 @@
   }
 
   .hvy-document .danger {
-    background: var(--hvy-danger);
-    border-color: var(--hvy-danger);
+    color: var(--hvy-danger-button-text, var(--hvy-button-text));
+    background: var(--hvy-danger-button-bg, var(--hvy-danger));
+    border-color: var(--hvy-danger-button-bg, var(--hvy-danger));
   }
 
   .hvy-document .danger:not(:disabled):hover {
-    background: color-mix(in srgb, var(--hvy-danger) 86%, var(--hvy-surface) 14%);
+    color: var(--hvy-danger-button-text, var(--hvy-button-text));
+    background: color-mix(in srgb, var(--hvy-danger-button-bg, var(--hvy-danger)) 86%, var(--hvy-surface) 14%);
     border-color: var(--hvy-danger);
   }
 

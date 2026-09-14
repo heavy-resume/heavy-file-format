@@ -5499,6 +5499,30 @@ test('resume section templates hide already used non-repeatable sections', async
   expect(options).toEqual(['Blank', 'Awards', 'Tabular Resume Section']);
 });
 
+test('section template dropdown uses themed text when a light paper palette follows dark mode', async ({ page }) => {
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Resume Template');
+  await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const { applyTheme } = await import('/src/theme.ts');
+    state.paletteOverrideId = 'paper';
+    applyTheme();
+  });
+  await page.locator('#app').evaluate((root) => root.classList.add('theme-dark'));
+
+  const expectedResult = await page.locator('#app').evaluate((root) => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-text');
+    root.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+
+  await expect(page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"]')).toHaveCSS('color', expectedResult);
+});
+
 test('document meta exposes whether a section template allows multiple sections per document', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);

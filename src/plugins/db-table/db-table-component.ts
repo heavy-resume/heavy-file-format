@@ -259,14 +259,18 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (action === 'delete-column') {
       const columnName = button.dataset.columnName ?? '';
       if (!columnName) return;
+      const tableName = config().table;
+      const objectLabel = snapshot?.objectType === 'view' ? 'database view' : 'database table';
+      const description = snapshot?.objectType === 'view'
+        ? `This will modify ${objectLabel} "${tableName}" by rebuilding it without column "${columnName}". Its source table(s) will not be modified.`
+        : `This will modify ${objectLabel} "${tableName}" by deleting column "${columnName}" and all data stored in that column.`;
       openRemoveConfirmationModal(() => {
-        const tableName = config().table;
         void runDbTableMutation(ctx, 'Delete database column', irreversibleUndoMode(config()), async () => {
           await requireWriter(config()).dropColumn({ document: ctx.rawDocument, table: tableName }, columnName);
           ctx.setConfig(removeDbTableColumnConfig(config(), columnName));
         }).then(() => refreshDatabasePlugins())
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the column.'));
-      }, ctx.hostRoot);
+      }, ctx.hostRoot, { description, confirmLabel: 'Delete column' });
       return;
     }
     if (action === 'delete-row') {
@@ -525,6 +529,7 @@ function renderEditorToolbar(
 }
 
 function renderColumnSettings(config: DbTableConfig, snapshot: DbTableSourcePage): string {
+  const canDeleteSourceColumns = !snapshot.queryActive && getDbTableWriter(config) !== null;
   return `<section class="db-table-column-settings" aria-label="Column settings">
     <div class="db-table-settings-heading"><div><strong>Column management</strong><span>Database column changes affect the table. Presentation settings affect only this component.</span></div><button type="button" class="ghost db-table-settings-close" data-db-table-action="toggle-columns" aria-label="Close column settings">${closeIcon()}</button></div>
     <div class="db-table-settings-list">
@@ -556,7 +561,7 @@ function renderColumnSettings(config: DbTableConfig, snapshot: DbTableSourcePage
         ...column.foreignKey.displayColumnOptions.map((name) => ({ value: name, label: humanizeDbColumnName(name) })),
       ]
     )}</label>` : ''}
-          <button type="button" class="ghost db-table-delete-column" data-db-table-action="delete-column" data-column-name="${escapeAttr(column.name)}" aria-label="Delete database column ${escapeAttr(column.name)}" ${!snapshot.editable || snapshot.columns.length <= 1 ? 'disabled' : ''}>${closeIcon()}<span>Delete column</span></button>
+          <button type="button" class="danger db-table-delete-column" data-db-table-action="delete-column" data-column-name="${escapeAttr(column.name)}" aria-label="Delete database column ${escapeAttr(column.name)}" ${!canDeleteSourceColumns || snapshot.columns.length <= 1 ? 'disabled' : ''}>${closeIcon()}<span>Delete column</span></button>
         </div>`;
   }).join('')}
     </div>
@@ -576,20 +581,20 @@ function renderTable(ctx: HvyPluginContext, config: DbTableConfig, snapshot: DbT
   const showRowActions = editable || snapshot.rows.some((row) => row.hasAttachedComponent);
   return `<div class="db-table-table-shell">
     <div class="db-table-table-heading">
-      <div><strong>${escapeHtml(config.table)}</strong><span>${snapshot.queryActive ? 'Query result · read-only' : snapshot.objectType === 'view' ? 'Database view · read-only' : snapshot.editable ? 'Database table · editable' : 'Database table · read-only'}</span></div>
+      <div><strong>${escapeHtml(config.table)}</strong><span>${snapshot.queryActive ? 'Query result · read-only' : snapshot.objectType === 'view' ? 'Database view · rows read-only' : snapshot.editable ? 'Database table · editable' : 'Database table · read-only'}</span></div>
       ${snapshot.offset > 0 || snapshot.hasNextPage ? renderPager(snapshot) : ''}
     </div>
     <div class="db-table-table-frame">
       <table class="db-table-table${editable ? ' is-editable' : ''}">
         <colgroup>${visibleColumns.map((column) => renderColumnElement(config, column)).join('')}${showRowActions ? '<col class="db-table-actions-column">' : ''}</colgroup>
         <thead><tr>${visibleColumns.map((column, index) => renderHeader(
-          config,
-          column,
-          ui,
-          editable,
-          visibleColumns[index - 1]?.name ?? null,
-          index === visibleColumns.length - 1 && !showRowActions,
-        )).join('')}${showRowActions ? `<th class="db-table-actions-heading">${editable && visibleColumns.length > 0 ? renderResizeHandle(visibleColumns[visibleColumns.length - 1]!.name, 'leading') : ''}<span class="db-table-screen-reader">Actions</span></th>` : ''}</tr></thead>
+    config,
+    column,
+    ui,
+    editable,
+    visibleColumns[index - 1]?.name ?? null,
+    index === visibleColumns.length - 1 && !showRowActions,
+  )).join('')}${showRowActions ? `<th class="db-table-actions-heading">${editable && visibleColumns.length > 0 ? renderResizeHandle(visibleColumns[visibleColumns.length - 1]!.name, 'leading') : ''}<span class="db-table-screen-reader">Actions</span></th>` : ''}</tr></thead>
         <tbody>
           ${snapshot.rows.map((row) => `<tr class="${row.hasAttachedComponent ? 'has-attached-component' : ''}">${visibleColumns.map((column) => renderCell(config, column, row.values[column.name] ?? null, row.rowId, editable)).join('')}${showRowActions ? renderRowActions(ctx, config, row.rowId, row.hasAttachedComponent, editable) : ''}</tr>`).join('')}
           ${ui.draftActive && editable ? renderDraftRow(config, visibleColumns) : ''}

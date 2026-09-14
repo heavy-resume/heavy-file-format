@@ -489,6 +489,14 @@
   justify-content: center;
 }
 
+.hvy-document .remove-confirmation-description {
+  margin: 0.7rem 0 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .hvy-document .remove-confirmation-modal .modal-head-actions {
   justify-content: center;
   margin-top: 0.85rem;

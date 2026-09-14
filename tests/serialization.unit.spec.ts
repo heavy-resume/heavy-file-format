@@ -1646,6 +1646,21 @@ hvy_version: 0.1
   expect(Array.from(serializedBytes.slice(tailStart))).toEqual([1, 2, 3, 4, 10, 20, 30]);
 });
 
+test('round-trips tail attachments in a THVY template', () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.thvy');
+  document.attachments = [{
+    id: 'db',
+    meta: { plugin: 'hvy.db-table', mediaType: 'application/vnd.sqlite3' },
+    bytes: new Uint8Array([1, 2, 3, 4]),
+  }];
+
+  const expectedResult = deserializeDocumentBytes(serializeDocumentBytes(document), '.thvy');
+
+  expect(expectedResult.extension).toBe('.thvy');
+  expect(expectedResult.attachments[0]?.id).toBe('db');
+  expect(Array.from(expectedResult.attachments[0]?.bytes ?? [])).toEqual([1, 2, 3, 4]);
+});
+
 test('round-trips multiple tail attachments through serialize -> bytes -> deserialize', async () => {
   const { deserializeDocumentBytesWithDiagnostics } = await import('../src/serialization');
 

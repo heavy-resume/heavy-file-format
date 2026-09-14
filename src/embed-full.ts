@@ -129,6 +129,7 @@ import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { releasePdfPreviewRuntime, renderPdfPreviewPlaceholder, syncActivePdfPreview } from './pdf-preview/pdf-preview-controller';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { bindLazyImageHydration } from './editor/components/image/image';
+import { bindCarouselInteractions, initializeCarouselReaders } from './editor/components/carousel/carousel';
 import {
   buildImportPlanForDocument,
   importTextIntoDocument,
@@ -741,10 +742,12 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       void runButtonVisibilityScripts(scope);
     }),
   });
+  bindCarouselInteractions(root);
   bindLazyImageHydration(root);
   centerPendingEditorSection(root);
   observeRenderedLinks(root, currentLinkObserver);
@@ -900,6 +903,7 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       if (options.runVisibilityScripts !== false) {
         void runButtonVisibilityScripts(scope);
@@ -907,6 +911,7 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     }),
   });
   lazyMs = elapsedMs(lazyStartedAt);
+  initializeCarouselReaders(currentRoot);
   bindLazyImageHydration(currentRoot);
   syncTextToolbarLayout(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
@@ -944,6 +949,7 @@ function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: strin
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
@@ -975,6 +981,7 @@ function refreshReaderSection(root: ParentNode, sectionKey: string, options: { r
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
@@ -1007,6 +1014,7 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
@@ -1022,6 +1030,7 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
       afterRestore: (scope) => runWithStateRuntime(runtime, () => {
         reconcilePluginMounts(scope, { prune: false });
         syncTextToolbarLayout(scope);
+        initializeCarouselReaders(scope);
         bindLazyImageHydration(scope);
         if (options.runVisibilityScripts !== false) {
           void runButtonVisibilityScripts(scope);
@@ -1045,6 +1054,7 @@ function insertEditorTopLevelSection(sectionKey: string, location: SectionLocati
     afterInsert: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       void runButtonVisibilityScripts(element);
       observeRenderedLinks(element, currentLinkObserver);
@@ -1079,6 +1089,7 @@ function refreshEditorBlock(sectionKey: string, blockId: string, options: Editor
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));

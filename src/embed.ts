@@ -120,7 +120,7 @@ import type { UserFileAttachmentLimits } from './document-attachments';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
-import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { bindCarouselInteractions, initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { renderTextToolbarDismissButton, syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
@@ -664,6 +664,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       void runButtonVisibilityScriptsIfNeeded(scope);
     }),
@@ -747,6 +748,7 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       if (options.runVisibilityScripts !== false) {
         void runButtonVisibilityScriptsIfNeeded(scope);

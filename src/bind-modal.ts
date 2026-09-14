@@ -176,6 +176,7 @@ export function bindModal(app: HTMLElement): void {
       const flavorName = chooseSectionFlavorBtn.dataset.sectionTemplateFlavor ?? '';
       const location = state.sectionTemplateFlavorModal.location ?? 'main';
       closeModal();
+      modalRoot.remove();
       insertTopLevelSection(templateName, flavorName, location);
       return;
     }

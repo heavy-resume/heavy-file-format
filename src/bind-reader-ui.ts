@@ -1,10 +1,5 @@
+import { bindSharedControlEvents } from './bind/shared-control-events';
 import { findBlockByIds } from './block-ops';
-import { bindChangeControls } from './bind/handlers/change-controls';
-import { bindInputBlock } from './bind/handlers/input-block';
-import { bindInputMisc } from './bind/handlers/input-misc';
-import { bindKeydown } from './bind/handlers/keydown';
-import { bindScrollHandler } from './bind/handlers/scroll';
-import { bindSubmit } from './bind/handlers/submit';
 import {
   encodeComponentListRuntimeView,
   getComponentListDisplayState,
@@ -32,12 +27,7 @@ function bindReaderAppControls(app: HTMLElement): void {
     return;
   }
   readerAppControlsBound.add(app);
-  bindInputBlock(app);
-  bindInputMisc(app);
-  bindChangeControls(app);
-  bindSubmit(app);
-  bindKeydown(app);
-  bindScrollHandler(app);
+  bindSharedControlEvents(app);
 
   app.addEventListener('click', (event) => {
     if (!app.querySelector('#readerDocument')) {

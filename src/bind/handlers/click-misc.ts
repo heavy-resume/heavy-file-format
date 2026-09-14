@@ -270,13 +270,16 @@ function placeComponentPicker(picker: HTMLElement): void {
   picker.style.removeProperty('--component-picker-shift');
   picker.style.removeProperty('--component-picker-shift-y');
   const padding = 8;
-  const rect = popover.getBoundingClientRect();
   const scrollSurface = picker.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel, .modal-panel');
   const surfaceRect = scrollSurface?.getBoundingClientRect();
   const leftEdge = Math.max(padding, surfaceRect ? surfaceRect.left + padding : padding);
   const rightEdge = Math.min(window.innerWidth - padding, surfaceRect ? surfaceRect.right - padding : window.innerWidth - padding);
   const topEdge = Math.max(padding, surfaceRect ? surfaceRect.top + padding : padding);
   const bottomEdge = Math.min(window.innerHeight - padding, surfaceRect ? surfaceRect.bottom - padding : window.innerHeight - padding);
+  // Constrain the menu to its visible surface before measuring overflow. Shifting
+  // alone cannot fit a submenu wider than an embedded editor or phone preview.
+  picker.style.setProperty('--component-picker-available-width', `${Math.max(0, rightEdge - leftEdge)}px`);
+  const rect = popover.getBoundingClientRect();
   const overflowLeft = leftEdge - rect.left;
   const overflowRight = rect.right - rightEdge;
   const overflowTop = topEdge - rect.top;

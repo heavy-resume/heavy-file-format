@@ -130,6 +130,62 @@ content with continuation cursors, inspect a known HVY path, or query attached
 SQLite data. Only full-document mode inserts document content up front;
 retrieval modes add evidence as tool results when the agent requests it.
 
+Embedded mounts can switch document views without replacing their runtime:
+
+```js
+const mount = HVY.mountHvyViewer({ root, document });
+await mount.setMode('ai');
+await mount.setMode('editor');
+mount.setEditorMode('advanced');
+await mount.setMode('viewer');
+```
+
+`setMode(mode)` accepts `'ai'`, `'editor'`, and `'viewer'` (`HvyEmbedMode`) and
+returns a promise. Await it before using controls specific to the new view. A
+lightweight viewer loads the full editor bundle only on its first transition into
+AI or Editor, retaining the same runtime, document, dirty baseline, history,
+search, host services, and view-specific scroll state. Entering Editor carries the
+visible reader section/block into the editor layout, including virtualized content,
+rather than restoring an unrelated editor offset. Subsequent transitions
+reuse the full runtime. Calling it with the current view leaves the DOM intact.
+Calls during initial loading are applied in order; destroying a mount cancels
+pending transitions so they cannot recreate it.
+
+Transitions share the reference app's behavior: active edits are committed,
+entering Editor clears selected radio answers, and AI uses Basic editing when
+leaving Advanced. Crossing between Viewer and AI/Editor deliberately clears the
+chat conversation, draft, and attachments and aborts an active chat request.
+Editor ↔ AI retains chat. Other runtime state is retained subject to normal
+view-specific cleanup and layout changes.
+
+Hosts should call `await mount.setMode(mode)` and update their cached mode when
+only the document view changes, instead of destroying and remounting the editor.
+
+Embedded editors can switch editing modes without replacing their mount:
+
+```js
+const mount = HVY.mountHvy({ root, document, mode: 'editor' });
+mount.setEditorMode('advanced');
+mount.setEditorMode('basic');
+```
+
+`setEditorMode(mode)` accepts `'basic'`, `'advanced'`, and `'mobile-adjustment'`
+(`HvyEditorMode`). Calls made while the editor bundle loads are queued in order.
+Setting the current mode again is a no-op. This requires an editor mount; it does
+not switch the document between editor, viewer, and AI views. Raw and CLI views
+belong to the reference app's shell and are not embedded editor modes.
+
+Mode changes use the reference editor's transition logic and rerender within the
+existing runtime, retaining history, chat, search, sidebar state, and scroll
+position where the resulting layout permits. Normal transition behavior still
+applies: pending fill-ins are committed, entering Advanced can reorder script-only
+sections with undo history, and leaving Advanced closes document metadata.
+
+Hosts should treat an editor-mode change as an update to an existing mount: call
+`mount.setEditorMode(editorMode)` and update their cached mode instead of destroying
+and remounting the editor. The `showAdvancedEditor` mount option remains available
+for initial rendering.
+
 Embedded hosts can apply branding without changing the mounted document by
 passing `themeOverrides`. Values are applied after the selected built-in palette
 or the document's `theme.colors`, so a host can replace a few roles or provide a

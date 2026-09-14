@@ -1,5 +1,31 @@
 import { expect, test } from '@playwright/test';
 
+for (const flavor of ['tableform', 'linear']) {
+  test(`adding Projects ${flavor} closes the chooser and preserves the editor`, async ({ page }) => {
+    test.setTimeout(5_000);
+    await page.goto('/');
+    await page.locator('.document-menu').evaluate((menu) => {
+      if (menu instanceof HTMLDetailsElement) menu.open = true;
+    });
+    await page.getByRole('button', { name: 'Resume Template', exact: true }).click();
+    await page.getByRole('button', { name: 'Editor', exact: true }).click();
+    await page.getByRole('button', { name: 'Basic', exact: true }).click();
+    await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"]').selectOption('section-def:Projects');
+    await page.locator('[data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
+    await expect(page.locator('.section-template-flavor-modal')).toBeVisible();
+    await page.locator('#editorTree').evaluate((element) => { element.dataset.expectedResult = 'same-editor-tree'; });
+    const sectionCount = await page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)').count();
+
+    await page.locator(`[data-modal-action="choose-section-template-flavor"][data-section-template-flavor="${flavor}"]`).click();
+
+    await expect(page.locator('.section-template-flavor-modal')).toHaveCount(0);
+    const expectedResult = page.locator('#editorTree[data-expected-result="same-editor-tree"]');
+    await expect(expectedResult).toHaveCount(1);
+    await expect(expectedResult.locator('.editor-section-card:not(.editor-subsection-card)')).toHaveCount(sectionCount + 1);
+    await expect(expectedResult.locator('.editor-section-card:not(.editor-subsection-card)').last()).toContainText('Projects');
+  });
+}
+
 test('adding a section keeps the editor surface mounted and reveals the new section', async ({ page }) => {
   await page.goto('/');
   await page.locator('.document-menu').evaluate((menu) => {

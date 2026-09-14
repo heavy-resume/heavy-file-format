@@ -51,6 +51,8 @@
   );
   z-index: 9999;
   width: min(14rem, calc(100vw - 2rem), calc(100vh - 2rem));
+  max-width: var(--component-picker-available-width, calc(100vw - 2rem));
+  box-sizing: border-box;
   aspect-ratio: 1;
   max-height: calc(100vh - 2rem);
   border: 1px solid var(--hvy-border);

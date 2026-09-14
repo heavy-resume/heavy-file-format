@@ -1,3 +1,8 @@
+import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
+import { changeDocumentView } from './document-view';
+import type { HvyDocumentChangeApi } from './document-change';
+import type { HvyEditorMode } from './embed';
+import { changeEditorMode } from './editor-mode';
 import './default-theme.css';
 import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
@@ -235,6 +240,8 @@ export interface HvyMount {
   redo(): Promise<void>;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
+  setMode(mode: HvyEmbedMode): Promise<void>;
+  setEditorMode(mode: HvyEditorMode): void;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
   setThemeOverrides(overrides: HvyThemeOverrides | null): void;
@@ -748,24 +755,6 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   });
 }
 
-function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
-  root.addEventListener('click', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('dblclick', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('mousedown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('mouseup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('pointerdown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('pointerup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('contextmenu', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('input', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('change', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('keydown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('keyup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('focusin', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('submit', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('dragstart', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('dragover', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('drop', () => activateStateRuntime(runtime), { capture: true });
-}
 
 function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
   const bindGeneration = (embedUiBindGenerations.get(root) ?? 0) + 1;
@@ -1243,7 +1232,8 @@ function ensureEmbedRuntime(
   databaseSources: HvyDatabaseTableSource[],
   runtime: StateRuntime,
   root: HTMLElement,
-  getLinkObserver: () => HvyLinkObserver | null
+  getLinkObserver: () => HvyLinkObserver | null,
+  preserveRuntimeServices = false
 ): void {
   ensureRenderers();
   initCallbacks({
@@ -1314,13 +1304,15 @@ function ensureEmbedRuntime(
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer,
   });
-  setHostPlugins(plugins);
-  setHostDatabaseTableSources(databaseSources);
-  resetPluginDocumentHookState();
+  if (!preserveRuntimeServices) {
+    setHostPlugins(plugins);
+    setHostDatabaseTableSources(databaseSources);
+    resetPluginDocumentHookState();
+  }
   initColorModeSync();
 }
 
-export function mountHvy(options: HvyMountOptions): HvyMount {
+function createFullEmbedRuntime(options: HvyMountOptions): StateRuntime {
   hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
   const persistSessionState = options.persistSessionState === true;
   const sessionStorageKey = persistSessionState ? options.storageKey : null;
@@ -1380,45 +1372,60 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         ),
       })
     : null, runtime);
+  return runtime;
+}
+
+/** Internal promotion: reuse runtime services and the original dirty baseline. */
+export function promoteHvyRuntime(options: HvyMountOptions, runtime: StateRuntime, documentChangeApi: HvyDocumentChangeApi): HvyMount {
+  return attachFullEmbed(options, { runtime, documentChangeApi });
+}
+
+export function mountHvy(options: HvyMountOptions): HvyMount {
+  return attachFullEmbed(options);
+}
+
+function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRuntime; documentChangeApi: HvyDocumentChangeApi }): HvyMount {
+  const runtime = existing?.runtime ?? createFullEmbedRuntime(options);
+  const persistSessionState = options.persistSessionState === true;
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
-  setRuntimeThemeOverrides(options.themeOverrides);
+  if (!existing) setRuntimeThemeOverrides(options.themeOverrides);
   const sessionPersistence = persistSessionState ? bindSessionPersistence(runtime) : null;
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
   currentLinkObserver = linkObserver;
-  if ('paletteId' in options) {
+  if (!existing && 'paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
   }
-  if ('pdfStylePresets' in options) {
+  if (!existing && 'pdfStylePresets' in options) {
     state.pdfStylePresets = normalizePdfStylePresets(options.pdfStylePresets ?? null);
     state.pdfStylePresetId = null;
   }
-  if ('searchSnapshot' in options) {
+  if (!existing && 'searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
   setEditorClipboardHost(options.editorClipboard ?? null);
-  if ('semanticFilterProvider' in options) {
+  if (!existing && 'semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
-  if ('semanticFilterConcurrency' in options) {
+  if (!existing && 'semanticFilterConcurrency' in options) {
     setRuntimeSemanticFilterConcurrency(options.semanticFilterConcurrency ?? null);
   }
-  if ('semanticFilterMaxAttempts' in options) {
+  if (!existing && 'semanticFilterMaxAttempts' in options) {
     setRuntimeSemanticFilterMaxAttempts(options.semanticFilterMaxAttempts ?? null);
   }
-  setRuntimeSemanticFilterWindowLimits({
+  if (!existing) setRuntimeSemanticFilterWindowLimits({
     maxCandidateChars: options.semanticFilterMaxWindowCandidateChars ?? null,
     maxCandidates: options.semanticFilterMaxWindowCandidates ?? null,
   });
-  bindRuntimeActivation(options.root, runtime);
+  bindEmbedRuntimeActivation(options.root, runtime);
   // Built-in plugins are opt-in per mount: some of them execute document-supplied
   // code, so a host that asks for nothing gets nothing.
-  ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver);
-  const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
-  const webMcpRegistration = options.webMcp
+  ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver, Boolean(existing));
+  const documentChangeApi = existing?.documentChangeApi ?? createDocumentChangeApi(runtime, options.onDocumentChange);
+  const webMcpRegistration = !existing && options.webMcp
     ? registerHvyWebMcpTools(options.webMcp === true ? {} : options.webMcp, {
         getDocument: () => runtime.state.document,
         embeddingProvider: options.embeddingProvider,
@@ -1431,13 +1438,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         }),
       })
     : null;
-  runtime.callbacks.renderApp();
-  void runPluginDocumentHooks('load');
-  // Only re-render when there was actually something encrypted to reveal.
-  void decryptEncryptedComponents(state.document, options.encryption ?? null)
-    .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
+  if (!existing) {
+    runtime.callbacks.renderApp();
+    void runPluginDocumentHooks('load');
+    // Only re-render when there was actually something encrypted to reveal.
+    void decryptEncryptedComponents(state.document, options.encryption ?? null)
+      .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
+  }
+  let destroyed = false;
   return {
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       webMcpRegistration?.destroy();
       runWithStateRuntime(runtime, () => {
         releasePdfPreviewRuntime(runtime);
@@ -1541,6 +1553,27 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     importFromText(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => importFromText(importOptions));
+    },
+    async setMode(mode) {
+      if (destroyed) throw new Error('HVY mount has been destroyed.');
+      if (mode !== 'viewer' && mode !== 'editor' && mode !== 'ai') {
+        throw new Error(`Unsupported HVY mode: ${mode}`);
+      }
+      runWithStateRuntime(runtime, () => {
+        state.persistDocumentState = persistSessionState && mode !== 'viewer';
+        changeDocumentView(mode, options.root);
+      });
+    },
+    setEditorMode(mode) {
+      runWithStateRuntime(runtime, () => {
+        if (state.currentView !== 'editor') {
+          throw new Error('setEditorMode requires an editor mount.');
+        }
+        if (mode !== 'basic' && mode !== 'advanced' && mode !== 'mobile-adjustment') {
+          throw new Error(`Unsupported embedded editor mode: ${mode}`);
+        }
+        changeEditorMode(mode);
+      });
     },
     setLinkObserver(observer) {
       runWithStateRuntime(runtime, () => {

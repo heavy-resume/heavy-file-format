@@ -1,20 +1,15 @@
+import { changeDocumentView } from '../../document-view';
 import { state, getRenderApp } from '../../state';
-import { recordHistory, undoStateAsync, redoStateAsync } from '../../history';
-import { navigateToReaderTarget, setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
-import { serializeDocument } from '../../serialization';
-import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
+import { undoStateAsync, redoStateAsync } from '../../history';
+import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
+import { changeEditorMode } from '../../editor-mode';
+import { focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
 import { openAiEditPopover } from '../../ai-edit-popover';
-import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import { clearFilteringForTarget } from '../../search/actions';
-import { clearActiveEditorBlock, findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
+import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
-import { commitActiveTextFillIn } from '../../text-fill-in-commit';
-import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
-import { moveScriptOnlySectionsAfterRegularSections, wouldMoveScriptOnlySectionsAfterRegularSections } from '../../section-ops';
 import { capturePaneScroll } from '../../scroll';
-import { clearSelectedRadioAnswers } from '../../inline-answer-groups';
-import { syncReusableTemplateForBlock } from '../../reusable';
 
 const undo: AppActionHandler = ({ app }) => {
   void undoStateAsync(app);
@@ -25,59 +20,10 @@ const redo: AppActionHandler = ({ app }) => {
 };
 
 const switchView: AppActionHandler = ({ app, actionButton }) => {
-  commitActiveTextFillIn('switch-view');
-  const activeEditorTarget = state.currentView === 'editor'
-    ? state.activeEditorBlock
-      ? { ...state.activeEditorBlock }
-      : state.activeEditorSectionTitleKey
-        ? { sectionKey: state.activeEditorSectionTitleKey }
-        : null
-    : null;
   const requestedView = actionButton.dataset.view;
-  const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
-  const nextEditorMode = requestedView === 'cli'
-    ? 'cli'
-    : requestedView === 'editor' && state.editorMode === 'cli'
-    ? 'basic'
-    : state.editorMode;
-  const crossingChatModeBoundary = (state.currentView === 'viewer') !== (view === 'viewer');
-  const crossingEditorBoundary = (state.currentView === 'editor') !== (view === 'editor');
-  if (crossingChatModeBoundary) {
-    clearChatConversation(state.chat);
-  }
-  if (crossingEditorBoundary) {
-    commitActiveEditorSession();
-    state.pendingEditorActivation = null;
-    state.componentPlacement = null;
-    if (state.currentView === 'editor') {
-      runDocumentEditHooksAfterCommit();
-    } else if (view === 'editor') {
-      clearSelectedRadioAnswersInDocument();
-    }
-  }
-  state.currentView = view;
-  state.editorMode = view === 'ai' && nextEditorMode === 'advanced' ? 'basic' : nextEditorMode;
-  state.showAdvancedEditor = state.editorMode === 'advanced';
-  if (view !== 'ai') {
-    closeAiEditPopover();
-    state.aiEditorHostBlock = null;
-    state.aiEditorHostSectionKey = null;
-  }
-  getRenderApp()();
-  if (activeEditorTarget && view !== 'editor') {
-    navigateToReaderTarget(activeEditorTarget, app);
-  }
-  if (state.editorMode === 'cli') {
-    restoreCliViewAfterRender();
-  }
+  changeDocumentView(requestedView === 'viewer' || requestedView === 'ai' || requestedView === 'cli'
+    ? requestedView : 'editor', app);
 };
-
-function commitActiveEditorSession(): void {
-  clearActiveEditorBlock();
-  state.activeEditorSectionTitleKey = null;
-  state.clearSectionTitleOnFocusKey = null;
-  state.activeEditorBlockReturnScroll = null;
-}
 
 const closeAiEdit: AppActionHandler = () => {
   closeAiEditPopover();
@@ -85,8 +31,6 @@ const closeAiEdit: AppActionHandler = () => {
 };
 
 const setEditorMode: AppActionHandler = ({ actionButton }) => {
-  commitActiveTextFillIn('set-editor-mode');
-  const previousEditorMode = state.editorMode;
   const editorMode = actionButton.dataset.editorMode === 'cli'
     ? 'cli'
     : actionButton.dataset.editorMode === 'raw'
@@ -96,36 +40,8 @@ const setEditorMode: AppActionHandler = ({ actionButton }) => {
     : actionButton.dataset.editorMode === 'mobile-adjustment'
     ? 'mobile-adjustment'
     : 'basic';
-  state.editorMode = state.editorMode === 'mobile-adjustment' && editorMode === 'mobile-adjustment' ? 'basic' : editorMode;
-  state.showAdvancedEditor = state.editorMode === 'advanced';
-  if (previousEditorMode !== 'advanced' && state.editorMode === 'advanced') {
-    reorderScriptOnlySectionsForAdvancedMode();
-  }
-  if (state.editorMode === 'mobile-adjustment') {
-    state.componentPlacement = null;
-  }
-  if (state.editorMode === 'raw') {
-    state.rawEditorText = serializeDocument(state.document);
-    state.rawEditorError = null;
-    state.rawEditorDiagnostics = [];
-  }
-  if (!state.showAdvancedEditor) {
-    state.metaPanelOpen = false;
-  }
-  state.activeEditorSectionTitleKey = null;
-  getRenderApp()();
-  if (state.editorMode === 'cli') {
-    restoreCliViewAfterRender();
-  }
+  changeEditorMode(state.editorMode === 'mobile-adjustment' && editorMode === 'mobile-adjustment' ? 'basic' : editorMode);
 };
-
-function reorderScriptOnlySectionsForAdvancedMode(): void {
-  if (!wouldMoveScriptOnlySectionsAfterRegularSections(state.document.sections, state.document.meta)) {
-    return;
-  }
-  recordHistory();
-  moveScriptOnlySectionsAfterRegularSections(state.document.sections, state.document.meta);
-}
 
 const toggleDocumentMeta: AppActionHandler = () => {
   state.metaPanelOpen = !state.metaPanelOpen;
@@ -235,27 +151,3 @@ export const shellActions: Record<string, AppActionHandler> = {
   'request-context-component-changes': requestContextComponentChanges,
   'edit-context-component': editContextComponent,
 };
-
-/**
- * Entering the editor drops radio selections made while reading. A radio cannot be
- * deselected by clicking it, so without this an author has no way back to an unanswered
- * document once any option has been picked.
- */
-function clearSelectedRadioAnswersInDocument(): void {
-  const changed = clearSelectedRadioAnswers(
-    state.document.sections,
-    (sectionKey, blockId) => {
-      const block = findBlockByIds(sectionKey, blockId);
-      return block && block.schema.kind === 'text' ? block.text : null;
-    },
-    (sectionKey, blockId, text) => {
-      const block = findBlockByIds(sectionKey, blockId);
-      if (!block) return;
-      block.text = text;
-      syncReusableTemplateForBlock(sectionKey, blockId);
-    }
-  );
-  if (changed.length > 0) {
-    recordHistory('clear-radio-answers');
-  }
-}

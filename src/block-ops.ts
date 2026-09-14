@@ -1013,7 +1013,7 @@ function cloneVisualBlock(block: VisualBlock): VisualBlock {
   return JSON.parse(JSON.stringify(block)) as VisualBlock;
 }
 
-function openExpandableEditorPanelsToBlock(sectionKey: string, blockId: string): void {
+export function openExpandableEditorPanelsToBlock(sectionKey: string, blockId: string): void {
   const rootBlocks = getEditorRootBlocks(sectionKey);
   if (!rootBlocks) {
     return;

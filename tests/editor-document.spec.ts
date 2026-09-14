@@ -5754,7 +5754,7 @@ section_defs:
 test('adding a section template with multiple flavors asks which flavor to use', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 section_defs:
@@ -5800,6 +5800,7 @@ section_defs:
   await expect(page.getByRole('button', { name: /Cards/ })).toContainText('Use when the section has several independent cards.');
   await page.getByRole('button', { name: /Linear/ }).click();
 
+  await expect(page.locator('.section-template-flavor-modal')).toHaveCount(0);
   await expect(page.locator('.editor-section-card', { hasText: 'Feature Linear' })).toBeVisible();
   await expect(page.locator('.editor-section-card', { hasText: 'Feature Cards' })).toHaveCount(0);
 });

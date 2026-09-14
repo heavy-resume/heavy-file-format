@@ -251,6 +251,8 @@ export interface HvyMount {
   setChatState(chatState: HvyChatSessionState | null | undefined): void;
   getRecoveryState(): string | null;
   applyRecoveryState(payload: string | null | undefined): void;
+  isDocumentMetaOpen(): boolean;
+  closeDocumentMeta(): void;
   openDocumentMeta(): boolean;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
@@ -1625,6 +1627,15 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
     applyRecoveryState(payload) {
       runWithStateRuntime(runtime, () => {
         applyRecoveryStatePayload(state, payload);
+        runtime.callbacks.renderApp();
+      });
+    },
+    isDocumentMetaOpen() {
+      return state.currentView === 'editor' && state.showAdvancedEditor && state.metaPanelOpen;
+    },
+    closeDocumentMeta() {
+      runWithStateRuntime(runtime, () => {
+        state.metaPanelOpen = false;
         runtime.callbacks.renderApp();
       });
     },

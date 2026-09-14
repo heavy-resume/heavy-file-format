@@ -217,6 +217,8 @@ export interface HvyMount {
   setThemeOverrides(overrides: HvyThemeOverrides | null): void;
   setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
   getSearchSnapshot(): HvySearchSnapshot;
+  isDocumentMetaOpen(): boolean;
+  closeDocumentMeta(): void;
   openDocumentMeta(): void;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
@@ -1108,6 +1110,12 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     getSearchSnapshot() {
       return mounted?.getSearchSnapshot() ?? normalizeSearchSnapshotInput(queuedSearchSnapshot);
     },
+    isDocumentMetaOpen() {
+      return mounted?.isDocumentMetaOpen() ?? false;
+    },
+    closeDocumentMeta() {
+      withMount((mount) => mount.closeDocumentMeta());
+    },
     openDocumentMeta() {
       withMount((mount) => mount.openDocumentMeta());
     },
@@ -1456,6 +1464,12 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     getSearchSnapshot() {
       return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
+    },
+    isDocumentMetaOpen() {
+      return promoted?.isDocumentMetaOpen() ?? false;
+    },
+    closeDocumentMeta() {
+      promoted?.closeDocumentMeta();
     },
     openDocumentMeta() {
       void setMode('editor').then(() => promoted!.openDocumentMeta());

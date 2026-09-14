@@ -76,13 +76,14 @@ export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): Rea
     recordMeasurement('refreshReader.sidebar.render', sidebarRenderMs, { sections: options.sections.length });
     phaseStartedAt = nowMs();
     sidebarSections.innerHTML = sidebarHtml;
-    sidebarSections.scrollTop = scrollTop;
-    sidebarSections.scrollLeft = scrollLeft;
     restoreVisibilityStates(sidebarSections, previousVisibility);
     sidebarDomMs = elapsedMs(phaseStartedAt);
     recordMeasurement('refreshReader.sidebar.dom', sidebarDomMs, {});
     phaseStartedAt = nowMs();
     options.reconcilePluginMounts?.(sidebarSections);
+    // Plugin placeholders have no content height until their mounts are restored.
+    sidebarSections.scrollTop = scrollTop;
+    sidebarSections.scrollLeft = scrollLeft;
     void options.runButtonVisibilityScripts?.(sidebarSections);
     sidebarPostMs = elapsedMs(phaseStartedAt);
     recordMeasurement('refreshReader.sidebar.post', sidebarPostMs, {});
@@ -103,13 +104,14 @@ export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): Rea
     recordMeasurement('refreshReader.reader.render', readerRenderMs, { sections: options.sections.length });
     phaseStartedAt = nowMs();
     reader.innerHTML = readerHtml;
-    reader.scrollTop = scrollTop;
-    reader.scrollLeft = scrollLeft;
     restoreVisibilityStates(reader, previousVisibility);
     readerDomMs = elapsedMs(phaseStartedAt);
     recordMeasurement('refreshReader.reader.dom', readerDomMs, {});
     phaseStartedAt = nowMs();
     options.reconcilePluginMounts?.(reader);
+    // Restore against the populated surface so the browser does not clamp to zero.
+    reader.scrollTop = scrollTop;
+    reader.scrollLeft = scrollLeft;
     void options.runButtonVisibilityScripts?.(reader);
     readerPostMs = elapsedMs(phaseStartedAt);
     recordMeasurement('refreshReader.reader.post', readerPostMs, {});

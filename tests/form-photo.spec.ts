@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('photo field stages an attachment before submitScript reads its value', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 plugins:

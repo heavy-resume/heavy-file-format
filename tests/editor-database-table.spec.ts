@@ -154,7 +154,7 @@ test('database-table resizes columns and auto-fits data within the document maxi
   await loadDbTableCrm(page);
   const plugin = page.locator('.hvy-database-table-editor');
   const contactHeader = plugin.locator('.db-table-column-name-input[data-column-name="contact"]').locator('xpath=ancestor::th');
-  const resizeHandle = contactHeader.locator('.db-table-resize-handle');
+  const resizeHandle = plugin.locator('.db-table-resize-handle[data-column-name="contact"]');
   await page.evaluate(async () => {
     const { state, getRenderApp } = await import('/src/state.ts');
     state.document.meta.database_table_max_column_width = '30rem';
@@ -178,6 +178,19 @@ test('database-table resizes columns and auto-fits data within the document maxi
   const initialWidth = (await contactHeader.boundingBox())?.width ?? 0;
   const handleBox = await resizeHandle.boundingBox();
   expect(handleBox).not.toBeNull();
+  const headerBox = await contactHeader.boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(await page.evaluate(({ x, y }) => (
+    document.elementFromPoint(x, y)?.closest('.db-table-resize-handle') !== null
+  ), {
+    x: headerBox!.x + headerBox!.width,
+    y: headerBox!.y + headerBox!.height / 2,
+  })).toBe(true);
+  const editorTree = page.locator('.editor-shell .editor-tree');
+  await editorTree.evaluate((tree) => {
+    tree.scrollTop = 120;
+  });
+  const expectedEditorScrollTop = await editorTree.evaluate((tree) => tree.scrollTop);
 
   // TOOL CALL
   await resizeHandle.dispatchEvent('pointerdown', { button: 0, clientX: handleBox!.x, pointerId: 7 });
@@ -191,6 +204,8 @@ test('database-table resizes columns and auto-fits data within the document maxi
   })).toMatch(/px$/u);
   expect((await contactHeader.boundingBox())?.width ?? 0).toBeGreaterThan(initialWidth);
   expect(await tableFrame.evaluate((frame) => frame.scrollLeft)).toBe(expectedScrollLeft);
+  await page.waitForTimeout(50);
+  expect(await editorTree.evaluate((tree) => tree.scrollTop)).toBe(expectedEditorScrollTop);
 
   await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
@@ -204,6 +219,22 @@ test('database-table resizes columns and auto-fits data within the document maxi
     const { state } = await import('/src/state.ts');
     return state.document.sections[0]?.blocks[0]?.schema.pluginConfig.columns?.contact?.width;
   })).toBe('160px');
+});
+
+test('database-table passive editor rendering does not advertise editable column controls', async ({ page }) => {
+  await loadDbTableCrm(page);
+
+  // BEFORE
+  await page.getByRole('button', { name: 'Done' }).click();
+  const passiveTable = page.locator('.editor-block-passive .hvy-database-table-reader');
+  await expect(passiveTable).toBeVisible();
+
+  // TOOL CALL
+  const resizeHandles = passiveTable.locator('.db-table-resize-handle');
+
+  // AFTER
+  await expect(resizeHandles).toHaveCount(0);
+  await expect(passiveTable.locator('.db-table-column-name-input')).toHaveCount(0);
 });
 
 test('database-table keeps an empty row-actions column compact', async ({ page }) => {

@@ -45,6 +45,7 @@ import {
 import dbTableDocumentation from './about-db-table.txt?raw';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from '../../document-change';
 import { clampTableColumnWidth, measureTableColumnTextSamples, type TableColumnTextSample } from '../../table-column-sizing';
+import { captureElementScrollAnchor, restoreElementScrollAnchor, type ElementScrollAnchor } from '../../scroll';
 
 import './db-table-component.css';
 
@@ -82,6 +83,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let unsubscribeQueue = () => { };
   let stopColumnResize = () => { };
   let columnEditor: HTMLElement | null = null;
+  let resizeScrollAnchor: ElementScrollAnchor | null = null;
+
+  root.dataset.dbTablePluginRoot = 'true';
+  root.dataset.sectionKey = ctx.sectionKey;
+  root.dataset.blockId = ctx.block.id;
+
+  const captureResizeScrollAnchor = () => {
+    resizeScrollAnchor = captureElementScrollAnchor(
+      ctx.hostRoot,
+      root,
+      `[data-db-table-plugin-root="true"][data-section-key="${CSS.escape(ctx.sectionKey)}"][data-block-id="${CSS.escape(ctx.block.id)}"]`,
+    );
+  };
 
   const closeColumnEditor = () => {
     columnEditor?.remove();
@@ -114,6 +128,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     root.innerHTML = renderDbTable(ctx, config(), snapshot, ui);
     const nextFrame = root.querySelector<HTMLElement>('.db-table-table-frame');
     if (nextFrame) nextFrame.scrollLeft = ui.tableScrollLeft;
+    if (resizeScrollAnchor) {
+      restoreElementScrollAnchor(ctx.hostRoot, resizeScrollAnchor);
+      resizeScrollAnchor = null;
+    }
   };
 
   const refresh = () => {
@@ -302,6 +320,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     event.preventDefault();
     event.stopPropagation();
     stopColumnResize();
+    captureResizeScrollAnchor();
     const startX = event.clientX;
     const startWidth = header.getBoundingClientRect().width;
     const maximumWidth = resolveDbTableMaximumColumnWidth(root, ctx.header.get('database_table_max_column_width'));
@@ -335,6 +354,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (!handle || ctx.mode !== 'editor') return;
     event.preventDefault();
     event.stopPropagation();
+    captureResizeScrollAnchor();
     const columnName = handle.dataset.columnName ?? '';
     const width = measureDbTableColumnContent(root, columnName, ctx.header.get('database_table_max_column_width'));
     if (width !== null) ctx.setConfig(updateDbTableColumnConfig(config(), columnName, { width: `${width}px` }));
@@ -562,7 +582,14 @@ function renderTable(ctx: HvyPluginContext, config: DbTableConfig, snapshot: DbT
     <div class="db-table-table-frame">
       <table class="db-table-table${editable ? ' is-editable' : ''}">
         <colgroup>${visibleColumns.map((column) => renderColumnElement(config, column)).join('')}${showRowActions ? '<col class="db-table-actions-column">' : ''}</colgroup>
-        <thead><tr>${visibleColumns.map((column) => renderHeader(config, column, snapshot, ui)).join('')}${showRowActions ? '<th class="db-table-actions-heading"><span class="db-table-screen-reader">Actions</span></th>' : ''}</tr></thead>
+        <thead><tr>${visibleColumns.map((column, index) => renderHeader(
+          config,
+          column,
+          ui,
+          editable,
+          visibleColumns[index - 1]?.name ?? null,
+          index === visibleColumns.length - 1 && !showRowActions,
+        )).join('')}${showRowActions ? `<th class="db-table-actions-heading">${editable && visibleColumns.length > 0 ? renderResizeHandle(visibleColumns[visibleColumns.length - 1]!.name, 'leading') : ''}<span class="db-table-screen-reader">Actions</span></th>` : ''}</tr></thead>
         <tbody>
           ${snapshot.rows.map((row) => `<tr class="${row.hasAttachedComponent ? 'has-attached-component' : ''}">${visibleColumns.map((column) => renderCell(config, column, row.values[column.name] ?? null, row.rowId, editable)).join('')}${showRowActions ? renderRowActions(ctx, config, row.rowId, row.hasAttachedComponent, editable) : ''}</tr>`).join('')}
           ${ui.draftActive && editable ? renderDraftRow(config, visibleColumns) : ''}
@@ -602,15 +629,21 @@ function renderColumnElement(config: DbTableConfig, column: DbTableColumnSchema)
 function renderHeader(
   config: DbTableConfig,
   column: DbTableColumnSchema,
-  snapshot: DbTableSourcePage,
-  ui: DbTableUiState
+  ui: DbTableUiState,
+  editable: boolean,
+  previousColumnName: string | null,
+  lastColumn: boolean,
 ): string {
   const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
   const sortIcon = ui.sortColumn === column.name && ui.sortDirection === 'desc' ? arrowDownIcon() : arrowUpIcon();
-  const heading = snapshot.editable
+  const heading = editable
     ? `<input class="db-table-column-name-input" data-db-table-field="column-label" data-column-edit-mode="display" data-column-name="${escapeAttr(column.name)}" data-display-name="${escapeAttr(presentation.label)}" value="${escapeAttr(presentation.label)}" aria-label="Display name for ${escapeAttr(column.name)}" title="Edit display or DB column name">`
     : `<span>${escapeHtml(presentation.label)}</span>`;
-  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}"><div class="db-table-header-content">${heading}${snapshot.editable ? `<button type="button" class="ghost db-table-sort" data-db-table-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button><span class="db-table-resize-handle" data-column-name="${escapeAttr(column.name)}" title="Drag to resize; double-click to fit data" aria-hidden="true"></span>` : ''}</div></th>`;
+  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}">${editable && previousColumnName ? renderResizeHandle(previousColumnName, 'leading') : ''}<div class="db-table-header-content">${heading}${editable ? `<button type="button" class="ghost db-table-sort" data-db-table-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button>${lastColumn ? renderResizeHandle(column.name, 'trailing') : ''}` : ''}</div></th>`;
+}
+
+function renderResizeHandle(columnName: string, edge: 'leading' | 'trailing'): string {
+  return `<span class="db-table-resize-handle is-${edge}" data-column-name="${escapeAttr(columnName)}" title="Drag to resize; double-click to fit data" aria-hidden="true"></span>`;
 }
 
 function resolveDbTableMaximumColumnWidth(root: HTMLElement, configured: unknown): number {

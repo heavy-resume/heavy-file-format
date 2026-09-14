@@ -3,6 +3,7 @@ import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '.
 import type { DocumentAttachment, VisualDocument } from '../types';
 import type { JsonObject } from '../hvy/types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
+import { materializeDocumentAttachment } from '../attachment-store';
 import { DB_TABLE_PLUGIN_ID } from './registry';
 import { validateAttachedComponentHvy } from './db-table-fragment';
 import { formatQueryResultTable } from './db-table-format';
@@ -1038,7 +1039,12 @@ export function inferScriptingDatabaseMutationTables(
 
 async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {
   const SQL = await getSqlJs();
-  const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
+  const attachment = await materializeDocumentAttachment(
+    document,
+    DB_ATTACHMENT_ID,
+    document === state?.document ? state.attachmentHost : null,
+  );
+  const bytes = await getAttachmentDatabaseBytes(attachment);
   return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }
 

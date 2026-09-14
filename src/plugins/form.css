@@ -47,11 +47,22 @@
 .hvy-document .hvy-form-plugin textarea {
   width: 100%;
   font: inherit;
+  box-sizing: border-box;
   padding: 0.38rem 0.45rem;
   border: 1px solid var(--hvy-border-input);
   border-radius: 4px;
   color: var(--hvy-text);
   background: var(--hvy-surface);
+}
+
+.hvy-document .hvy-form-plugin input:not([type='checkbox']):not([type='radio']),
+.hvy-document .hvy-form-plugin select {
+  line-height: 1.4;
+  min-height: calc(1.4em + 0.76rem + 2px);
+}
+
+.hvy-document .hvy-form-plugin select {
+  height: calc(1.4em + 0.76rem + 2px);
 }
 
 .hvy-document label.hvy-form-checkbox-label {

@@ -130,4 +130,12 @@ test('core editor controls receive ownership classes without marking plugin cont
     !control.classList.contains('hvy-editor-field-control')
     && !control.classList.contains('hvy-editor-select-control')
   ))).toBe(true);
+
+  const labelInput = pluginBlock.locator('[data-form-field-prop="label"]');
+  const typeSelect = pluginBlock.locator('select[data-form-field-prop="type"]');
+  const [labelInputHeight, typeSelectHeight] = await Promise.all([
+    labelInput.evaluate((control) => control.getBoundingClientRect().height),
+    typeSelect.evaluate((control) => control.getBoundingClientRect().height),
+  ]);
+  expect(typeSelectHeight).toBe(labelInputHeight);
 });

@@ -1,3 +1,4 @@
+import { cliBlockMetadata } from './block-metadata-fields';
 import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment } from './template-directories';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
@@ -1010,78 +1011,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
 }
 
 function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject {
-  const baseComponent = resolveBaseComponentFromMeta(schema.component, meta);
-  const value: JsonObject = {
-    id: schema.id,
-    css: schema.css,
-    lock: schema.lock,
-    align: schema.align,
-    slot: schema.slot,
-    sortKeys: schema.sortKeys,
-    derivedSortKeyNames: schema.derivedSortKeyNames,
-    groupKeys: schema.groupKeys,
-    tags: schema.tags,
-    description: schema.description,
-    hideIfYes: schema.hideIfYes,
-    placeholder: schema.placeholder,
-    fillIn: schema.fillIn,
-  };
-  if (baseComponent === 'container') {
-    value.containerTitle = schema.containerTitle;
-    value.containerExpanded = schema.containerExpanded;
-    value.containerCollapsedPreviewRem = schema.containerCollapsedPreviewRem;
-  }
-  if (baseComponent === 'expandable') {
-    value.expandableAlwaysShowStub = schema.expandableAlwaysShowStub;
-    value.expandableExpanded = schema.expandableExpanded;
-    value.expandableStubCss = schema.expandableStubCss;
-    value.expandableContentCss = schema.expandableContentCss;
-    value.expandableStubDescription = schema.expandableStubDescription;
-    value.expandableContentDescription = schema.expandableContentDescription;
-  }
-  if (baseComponent === 'component-list') {
-    value.componentListComponent = schema.componentListComponent;
-    value.componentListItemLabel = schema.componentListItemLabel;
-    value.componentListDefaultSortKey = schema.componentListDefaultSortKey;
-    value.componentListDefaultSortDirection = schema.componentListDefaultSortDirection;
-    value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
-    value.componentListGroupsExpanded = schema.componentListGroupsExpanded;
-    value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
-  }
-  if (baseComponent === 'grid') {
-    value.gridColumns = schema.gridColumns;
-    value.gridStackWidth = schema.gridStackWidth;
-  }
-  if (baseComponent === 'xref-card') {
-    value.xrefTitle = schema.xrefTitle;
-    value.xrefDetail = schema.xrefDetail;
-    value.xrefTarget = schema.xrefTarget;
-    value.xrefTargetTagFilter = schema.xrefTargetTagFilter;
-  }
-  if (baseComponent === 'table') {
-    value.tableShowHeader = schema.tableShowHeader;
-  }
-  if (baseComponent === 'image') {
-    value.imageFile = schema.imageFile;
-    value.imageAlt = schema.imageAlt;
-    value.caption = schema.caption;
-    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
-  }
-  if (baseComponent === 'carousel') {
-    value.carouselImages = schema.carouselImages;
-    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
-    value.carouselDurationMs = schema.carouselDurationMs;
-    value.carouselPauseOnHover = schema.carouselPauseOnHover;
-    value.carouselShowControls = schema.carouselShowControls;
-    value.carouselShowIndicators = schema.carouselShowIndicators;
-    value.carouselShowFrame = schema.carouselShowFrame;
-  }
-  if (baseComponent === 'plugin') {
-    value.plugin = schema.plugin;
-    value.pluginConfig = schema.pluginConfig;
-    value.pluginSortValues = schema.pluginSortValues;
-  }
-  return value;
+  return cliBlockMetadata(schema, resolveBaseComponentFromMeta(schema.component, meta) as BuiltinComponentName);
 }
 
 function formatComponentAbout(meta: JsonObject, component: string): string {
@@ -1154,67 +1084,11 @@ function applyBlockSchemaJson(
       assertCssValueIsDeclarationString(value[field], `${component}.json ${field}`);
     }
   }
-  schema.component = component;
-  schema.id = defaults.id;
-  schema.css = defaults.css;
-  schema.lock = defaults.lock;
-  schema.align = defaults.align;
-  schema.slot = defaults.slot;
-  schema.sortKeys = defaults.sortKeys;
-  schema.derivedSortKeyNames = defaults.derivedSortKeyNames;
-  schema.groupKeys = defaults.groupKeys;
-  schema.tags = defaults.tags;
-  schema.description = defaults.description;
-  schema.hideIfYes = defaults.hideIfYes;
-  schema.placeholder = defaults.placeholder;
-  schema.fillIn = defaults.fillIn;
-  schema.xrefTitle = defaults.xrefTitle;
-  schema.xrefDetail = defaults.xrefDetail;
-  if (baseComponent === 'container') {
-    schema.containerTitle = defaults.containerTitle;
-    schema.containerExpanded = defaults.containerExpanded;
-    schema.containerCollapsedPreviewRem = defaults.containerCollapsedPreviewRem;
-  } else if (baseComponent === 'expandable') {
-    schema.expandableAlwaysShowStub = defaults.expandableAlwaysShowStub;
-    schema.expandableExpanded = defaults.expandableExpanded;
-    schema.expandableStubCss = defaults.expandableStubCss;
-    schema.expandableContentCss = defaults.expandableContentCss;
-    schema.expandableStubDescription = defaults.expandableStubDescription;
-    schema.expandableContentDescription = defaults.expandableContentDescription;
-  } else if (baseComponent === 'component-list') {
-    schema.componentListComponent = defaults.componentListComponent;
-    schema.componentListItemLabel = defaults.componentListItemLabel;
-    schema.componentListDefaultSortKey = defaults.componentListDefaultSortKey;
-    schema.componentListDefaultSortDirection = defaults.componentListDefaultSortDirection;
-    schema.componentListDefaultGroupKey = defaults.componentListDefaultGroupKey;
-    schema.componentListGroupsExpanded = defaults.componentListGroupsExpanded;
-    schema.componentListGroupCollapsedPreviewRem = defaults.componentListGroupCollapsedPreviewRem;
-  } else if (baseComponent === 'grid') {
-    schema.gridColumns = defaults.gridColumns;
-    schema.gridStackWidth = defaults.gridStackWidth;
-  } else if (baseComponent === 'xref-card') {
-    schema.xrefTarget = defaults.xrefTarget;
-    schema.xrefTargetTagFilter = defaults.xrefTargetTagFilter;
-  } else if (baseComponent === 'table') {
-    schema.tableShowHeader = defaults.tableShowHeader;
-  } else if (baseComponent === 'image') {
-    schema.imageFile = defaults.imageFile;
-    schema.imageAlt = defaults.imageAlt;
-    schema.caption = defaults.caption;
-    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
-  } else if (baseComponent === 'carousel') {
-    schema.carouselImages = defaults.carouselImages;
-    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
-    schema.carouselDurationMs = defaults.carouselDurationMs;
-    schema.carouselPauseOnHover = defaults.carouselPauseOnHover;
-    schema.carouselShowControls = defaults.carouselShowControls;
-    schema.carouselShowIndicators = defaults.carouselShowIndicators;
-    schema.carouselShowFrame = defaults.carouselShowFrame;
-  } else if (baseComponent === 'plugin') {
-    schema.plugin = defaults.plugin;
-    schema.pluginConfig = defaults.pluginConfig;
-    schema.pluginSortValues = defaults.pluginSortValues;
+  if (baseComponent === 'button' && typeof value.buttonCss === 'string') {
+    assertCssValueIsDeclarationString(value.buttonCss, `${component}.json buttonCss`);
   }
+  schema.component = component;
+  Object.assign(schema, cliBlockMetadata(defaults, baseComponent));
   if (typeof value.id === 'string') schema.id = value.id;
   if (typeof value.css === 'string') {
     assertCssValueIsDeclarationString(value.css, `${component}.json css`);
@@ -1229,6 +1103,8 @@ function applyBlockSchemaJson(
   if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
     schema.groupKeys = parseGroupKeys(value.groupKeys);
   }
+  if (typeof value.editorOnly === 'boolean') schema.editorOnly = value.editorOnly;
+  if (typeof value.visibleScript === 'string') schema.visibleScript = value.visibleScript;
   if (typeof value.lock === 'boolean') schema.lock = value.lock;
   if (value.align === 'left' || value.align === 'center' || value.align === 'right') schema.align = value.align;
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;
@@ -1237,6 +1113,17 @@ function applyBlockSchemaJson(
   if (typeof value.hideIfYes === 'string') schema.hideIfYes = value.hideIfYes;
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.fillIn === 'boolean') schema.fillIn = value.fillIn;
+  if (baseComponent === 'text' && typeof value.showCopy === 'boolean') schema.showCopy = value.showCopy;
+  if (baseComponent === 'code' && typeof value.codeLanguage === 'string') schema.codeLanguage = value.codeLanguage;
+  if (baseComponent === 'button') {
+    for (const field of ['buttonLabel', 'buttonVisibleScript', 'buttonSourceScript', 'buttonPrompt', 'buttonTargetScript', 'buttonPositionTargetId', 'buttonCss'] as const) {
+      if (typeof value[field] === 'string') schema[field] = value[field];
+    }
+    if (value.buttonAction === 'ai-generate') schema.buttonAction = value.buttonAction;
+    for (const field of ['buttonInputCharLimit', 'buttonOutputCharLimit'] as const) {
+      if (typeof value[field] === 'number' && Number.isFinite(value[field]) && value[field] > 0) schema[field] = value[field];
+    }
+  }
   if (typeof value.containerTitle === 'string') schema.containerTitle = value.containerTitle;
   if (typeof value.containerExpanded === 'boolean') schema.containerExpanded = value.containerExpanded;
   if (typeof value.containerCollapsedPreviewRem === 'number' && Number.isFinite(value.containerCollapsedPreviewRem) && value.containerCollapsedPreviewRem > 0) {

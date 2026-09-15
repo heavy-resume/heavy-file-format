@@ -901,9 +901,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const componentLabel = component === 'plugin' ? getPluginBlockHeaderLabel(block) : component === 'carousel' ? 'Carousel' : component;
     const isActiveFrame = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
-    const isAiSectionEditBlock = isAiHostedSectionBlock(sectionKey, block);
     const isAiHostDescendant = isAiHostedBlockDescendant(sectionKey, block, rootSections ?? []);
-    const isActive = isActiveFrame || isActiveDescendant || isAiSectionEditBlock || isAiHostDescendant;
+    const isActive = isActiveFrame || isActiveDescendant || isAiHostDescendant;
 
     if (block.schema.kind === 'encrypted' && block.schema.encryptedBlock && !isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? [], parentLocked);
@@ -1038,19 +1037,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return isActiveSelf && state.currentView !== 'ai' && !structurallyLocked && !state.componentPlacement && !state.mobileAdjustmentMode;
   }
 
-  function isAiHostedSectionBlock(sectionKey: string, block: VisualBlock): boolean {
-    return state.currentView === 'ai'
-      && state.aiEditorHostSectionKey === sectionKey
-      && deps.findSectionByKey(state.documentSections, sectionKey)?.blocks.some((candidate) => candidate === block) === true;
-  }
-
   function isAiHostedBlockDescendant(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): boolean {
     if (state.currentView !== 'ai') {
       return false;
-    }
-    if (state.aiEditorHostSectionKey === sectionKey) {
-      const section = deps.findSectionByKey(state.documentSections, sectionKey);
-      return section?.blocks.some((candidate) => candidate !== block && isDescendantActive(candidate, block.id)) === true;
     }
     const host = state.aiEditorHostBlock;
     if (!host || host.sectionKey !== sectionKey || host.blockId === block.id) {

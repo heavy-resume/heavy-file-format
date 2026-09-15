@@ -21,6 +21,9 @@ for (const flavor of ['linear', 'tableform']) {
         await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Publication' }).click();
         await page.locator('[data-template-variable="name"]').fill('Fake Publication');
         await page.locator('[data-modal-action="insert-reusable-template"]').click();
+        await expect(page.locator('#aiReaderDocument .editor-block', { hasText: 'List type:' })).toHaveCount(0);
+        await expect(page.locator(`#aiReaderDocument .reader-block[data-component="${flavor === 'linear' ? 'publication-linear-record' : 'publication-record'}"]`)).toHaveCount(1);
+        await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(addBeforeExit ? 1 : 0);
         if (addBeforeExit) await exitSectionEditor();
 
         await expect(page.locator('#aiReaderDocument .editor-block')).toHaveCount(0);

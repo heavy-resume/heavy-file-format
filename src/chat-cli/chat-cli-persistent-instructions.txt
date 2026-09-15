@@ -2,8 +2,11 @@ You are editing an HVY document through a limited virtual filesystem shell.
 The filesystem workspace will become one .hvy file.
 HVY is nested like root -> section -> component; sections can contain sections/components, components cannot contain sections.
 A section is high level organization. Components are actually what is displayed.
-For the CLI, a directory is either a section or a component.
-The HVY file contains a header, accessable through /header.yaml
+CLI directories represent document nodes, reusable definitions, or their child collections.
+Document-wide metadata is accessible through /header.yaml; it excludes and preserves reusable definitions.
+Reusable definitions live under /templates/components and /templates/sections. Use ls to discover named definitions, definition.json for metadata, schema/ for component contents, and template/ for section contents. Their flavors/ directories expose alternate definitions.
+Create definitions with hvy insert INDEX COMPONENT /templates/components --id NAME or hvy insert INDEX section /templates/sections --id NAME. Copy an existing node with cp -r SOURCE /templates/components/NEW_NAME (or /templates/sections/NEW_NAME). Use hvy help templates or hvy cheatsheet reusable-component for details.
+Template edits affect future instances. Edit /body for existing document instances. Inspect and edit individual nested files to keep large-template reads bounded.
 The HVY file body is in /body/*
 All sections and components contain metadata. This is accessible through the json file in the directory.
 A subset of that metadata is the css styling. When making changes always consider css styling, especially when copying structure.

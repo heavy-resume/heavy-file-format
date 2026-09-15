@@ -323,6 +323,9 @@ export function normalizeReusableComponentDefinitions(meta: JsonObject): void {
       if (raw.schema && typeof raw.schema === 'object' && !Array.isArray(raw.schema)) {
         normalized.schema = schemaFromUnknown({ ...(raw.schema as JsonObject), component: name || baseType }, new WeakSet<object>(), meta);
       }
+      if (typeof raw.text === 'string') {
+        normalized.template = parseVisualBlock({ text: raw.text, schema: normalized.schema ?? { component: name || baseType } }, new WeakSet<object>(), meta) as unknown as JsonObject;
+      }
       if (Array.isArray(raw.flavors)) {
         normalized.flavors = raw.flavors
           .filter((flavor) => flavor && typeof flavor === 'object')
@@ -335,6 +338,9 @@ export function normalizeReusableComponentDefinitions(meta: JsonObject): void {
             };
             if (rawFlavor.schema && typeof rawFlavor.schema === 'object' && !Array.isArray(rawFlavor.schema)) {
               normalizedFlavor.schema = schemaFromUnknown({ ...(rawFlavor.schema as JsonObject), component: name || baseType }, new WeakSet<object>(), meta);
+            }
+            if (typeof rawFlavor.text === 'string') {
+              normalizedFlavor.template = parseVisualBlock({ text: rawFlavor.text, schema: normalizedFlavor.schema ?? { component: name || baseType } }, new WeakSet<object>(), meta) as unknown as JsonObject;
             }
             return normalizedFlavor;
           })
@@ -786,12 +792,12 @@ export function cloneReusableBlockFromMeta(block: VisualBlock, documentMeta: Jso
   };
 }
 
-export function cloneReusableSection(section: VisualSection, targetLevel = section.level): VisualSection {
+export function cloneReusableSection(section: VisualSection, targetLevel = section.level, documentMeta?: JsonObject): VisualSection {
   const levelDelta = targetLevel - section.level;
-  return cloneReusableSectionWithDelta(section, levelDelta);
+  return cloneReusableSectionWithDelta(section, levelDelta, documentMeta);
 }
 
-function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: number): VisualSection {
+function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: number, documentMeta?: JsonObject): VisualSection {
   return {
     key: makeId('section'),
     customId: '',
@@ -812,8 +818,8 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     exclude_from_import: section.exclude_from_import === true,
     protect_from_import: section.protect_from_import === true,
     templateKey: section.templateKey,
-    blocks: section.blocks.map((block) => cloneReusableBlock(block)),
-    children: section.children.map((child) => cloneReusableSectionWithDelta(child, levelDelta)),
+    blocks: section.blocks.map((block) => documentMeta ? cloneReusableBlockFromMeta(block, documentMeta) : cloneReusableBlock(block)),
+    children: section.children.map((child) => cloneReusableSectionWithDelta(child, levelDelta, documentMeta)),
   };
 }
 
@@ -824,7 +830,7 @@ export function getReusableTemplate(def: ComponentDefinition): VisualBlock {
   const fallbackSchema = def.schema ? cloneReusableSchema(def.schema, def.name) : defaultBlockSchema(def.name, normalizeBuiltinComponent(resolveBaseComponent(def.name)));
   def.template = {
     id: makeId('block'),
-    text: '',
+    text: def.text ?? '',
     schema: fallbackSchema,
     schemaMode: true,
   };
@@ -858,7 +864,7 @@ function instantiateReusableBlockFromMeta(componentName: string, documentMeta: J
     : defaultBlockSchema(componentName, normalizeBuiltinComponent(resolveBaseComponentFromMeta(componentName, documentMeta)));
   const template = def.template ?? {
     id: makeId('block'),
-    text: '',
+    text: def.text ?? '',
     schema: fallbackSchema,
     schemaMode: true,
   };

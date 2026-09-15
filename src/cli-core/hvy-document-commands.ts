@@ -1,3 +1,4 @@
+import { insertTemplateDefinition, commitTemplateDirectory } from './template-directories';
 import { cloneReusableSection, defaultBlockSchema, getDefaultSectionContained, schemaFromUnknown } from '../document-factory';
 import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
@@ -36,6 +37,7 @@ import {
   buildHvyVirtualBlockSubtreeFileSystem,
   buildHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
+  findSectionForVirtualDirectory,
   findBlockInsertionTargetForVirtualDirectory,
   listDirectory,
   resolveVirtualPath,
@@ -114,6 +116,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
 
   const help: Record<string, string> = {
     '': [
+      formatCommandHelp('hvy help templates', 'Create and edit reusable definitions under /templates/components and /templates/sections. Document instances live under /body.'),
       formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component. Component templates with template variables require exact JSON values with --using-template. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a blank section.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs, such as blip-section. Section templates with variables require exact JSON values with --using-template.'),
@@ -133,7 +136,9 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       ...formatPluginQuickReference(),
       formatCommandHelp('Edit existing components', 'Use find to discover virtual files, cat to inspect them, and sed to update writable body/config files.'),
     ].join('\n'),
+    templates: templateCommandHelp(),
     insert: [
+      templateCommandHelp(),
       formatCommandHelp('hvy insert INDEX COMPONENT PARENT_PATH [ID|--id ID] [--using-template JSON] [--return-order-on-creation] [--return-structure-on-creation] [--return-about-txt-on-creation]', 'Insert a blank builtin or custom component to a section, component-list, grid, container, or expandable content path. Component templates with template variables require --using-template with exact JSON keys. Edit generated body/config files after creation. Component ids are optional; use --id only when you need a stable id. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Add a blank section under /body or under another section.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs. Templates with variables require --using-template with exact JSON keys. Non-repeatable templates can be inserted once.'),
@@ -185,6 +190,23 @@ export function hvyDocumentCommandHelp(topic = ''): string {
     'db-table': hvyDocumentCommandHelp('plugin db-table'),
   };
   return help[normalizedTopic] ?? help[''];
+}
+
+function templateCommandHelp(): string {
+  return [
+    'Reusable definitions live under /templates/components/NAME and /templates/sections/KEY. Instances live under /body.',
+    'Use ls for discovery; definition.json contains metadata without nested content. Component schema/ and section template/ reuse ordinary component/section files and nested editing commands.',
+    'hvy insert INDEX COMPONENT /templates/components --id NAME',
+    'hvy insert INDEX section /templates/sections --id NAME',
+    'cp -r SOURCE_COMPONENT /templates/components/NEW_NAME',
+    'cp -r SOURCE_SECTION /templates/sections/NEW_NAME',
+    'hvy remove /templates/components/NAME (or /templates/sections/KEY)',
+    'Each definition has flavors/. Insert a matching base component (or section) there with --id FLAVOR_NAME; inspect/edit/remove each flavor through its own directory.',
+    'Names are required and unique. Paths percent-encode names; copy paths from ls. Identity fields name/key/baseType cannot be changed through definition.json.',
+    'Edit children with hvy insert/remove, cp -r, mv, and children-order.json at their existing nested paths. Read the relevant file before editing it.',
+    'Definition edits affect future instances; existing /body instances keep their contents. /header.yaml excludes and preserves both definition collections.',
+    'For a complete workflow, run hvy cheatsheet reusable-component.',
+  ].join('\n');
 }
 
 function formatCheatsheet(name: string): string {
@@ -353,6 +375,17 @@ type HvyInsertIndex = number;
 
 function executeHvyInsertCommand(ctx: HvyDocumentCommandContext, indexArg = '', kind = '', args: string[]): HvyDocumentCommandResult {
   const index = parseInsertIndex(indexArg);
+  const parent = resolveVirtualPath(ctx.fs, ctx.cwd, args[0] ?? '');
+  if (parent === '/templates/components' || parent === '/templates/sections' || parent.endsWith('/flavors')) {
+    const rest = args.slice(1);
+    const name = rest.length === 2 && rest[0] === '--id' ? rest[1] : rest.length === 1 ? rest[0] : '';
+    if (!name || name.startsWith('--')) throw new Error('hvy insert: definitions require PARENT_PATH --id NAME (or positional NAME).');
+    if (kind !== 'section' && !isKnownComponent(ctx.document, kind)) throw new Error(`Unknown component: ${kind}`);
+    const node = kind === 'section' ? createSection('', name, 1, ctx.document.meta) : createBlockFromSchema(schemaFromUnknown({ component: kind }, new WeakSet<object>(), ctx.document.meta), '');
+    const path = insertTemplateDefinition(ctx.document, parent, name, index, node);
+    return { output: path, mutated: true, cwd: path };
+  }
+
   if (kind === 'section') {
     return addSection(ctx, args, index);
   }
@@ -397,6 +430,7 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyIn
   const section = createSection(id, decodeCliText(title), parent ? parent.level + 1 : 1, ctx.document.meta);
   if (parent) {
     insertChild(parent.children, section, index);
+    commitTemplateDirectory(ctx.document, resolveVirtualPath(ctx.fs, ctx.cwd, parentPath));
   } else {
     insertChild(ctx.document.sections, section, index);
   }
@@ -447,7 +481,7 @@ function addSectionFromTemplate(ctx: HvyDocumentCommandContext, args: string[], 
     throw new Error(`hvy insert section: section template "${key}" is non-repeatable and already used.`);
   }
   const parent = findSectionParent(ctx, parentPath);
-  const section = cloneReusableSection(definition.template, parent ? parent.level + 1 : 1);
+  const section = cloneReusableSection(definition.template, parent ? parent.level + 1 : 1, ctx.document.meta);
   section.customId = definition.template.customId;
   section.customIdGenerated = definition.template.customIdGenerated;
   if (templateValues) {
@@ -456,6 +490,7 @@ function addSectionFromTemplate(ctx: HvyDocumentCommandContext, args: string[], 
   section.templateKey = key;
   if (parent) {
     insertChild(parent.children, section, index);
+    commitTemplateDirectory(ctx.document, resolveVirtualPath(ctx.fs, ctx.cwd, parentPath));
   } else {
     insertChild(ctx.document.sections, section, index);
   }
@@ -542,6 +577,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
     throw new Error(`${params.commandName}: no component insertion target: ${params.parentPath}`);
   }
   target.insert(block, params.index ?? -1);
+  commitTemplateDirectory(ctx.document, resolvedParentPath);
   const path = `${resolvedParentPath.replace(/\/$/, '')}/${id}`;
   return {
     output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedParentPath, parentBlock, target.kind, {
@@ -626,9 +662,9 @@ function formatCreatedComponentDirectory(
   } = {},
   pathNaming?: HvyVirtualPathNamingState
 ): string {
-  const normalizedComponentPath = componentPath.startsWith('/body/') || componentPath.startsWith('/id/')
+  const normalizedComponentPath = componentPath.startsWith('/')
     ? componentPath
-    : `/body${componentPath.startsWith('/') ? componentPath : `/${componentPath}`}`;
+    : `/body/${componentPath}`;
   const fs = createdBlock && !options.returnStructureOnCreation
     ? buildHvyVirtualBlockSubtreeFileSystem(document, createdBlock, normalizedComponentPath, pathNaming)
     : buildHvyVirtualFileSystem(document, pathNaming);
@@ -788,7 +824,7 @@ function findSectionParent(ctx: HvyDocumentCommandContext, path: string): Visual
   if (resolved === '/' || resolved === '/body') {
     return null;
   }
-  const section = findSectionByResolvedPath(ctx.document.sections, resolved);
+  const section = findSectionForVirtualDirectory(ctx.document, resolved, ctx.pathNaming);
   if (section) {
     return section;
   }
@@ -803,28 +839,11 @@ function findSectionParent(ctx: HvyDocumentCommandContext, path: string): Visual
 
 function requireSection(ctx: HvyDocumentCommandContext, path: string, command: string): VisualSection {
   const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, path);
-  const section = findSectionByResolvedPath(ctx.document.sections, resolved);
+  const section = findSectionForVirtualDirectory(ctx.document, resolved, ctx.pathNaming);
   if (!section) {
     throw new Error(`${command}: no such section: ${path}`);
   }
   return section;
-}
-
-function findSectionByResolvedPath(sections: VisualSection[], resolvedPath: string): VisualSection | null {
-  return findSectionById(sections, resolvedPath.split('/').filter(Boolean).pop() ?? '');
-}
-
-function findSectionById(sections: VisualSection[], id: string): VisualSection | null {
-  for (const section of sections) {
-    if (getSectionId(section) === id) {
-      return section;
-    }
-    const child = findSectionById(section.children, id);
-    if (child) {
-      return child;
-    }
-  }
-  return null;
 }
 
 function findNearestComponentPath(ctx: HvyDocumentCommandContext, resolvedPath: string): string {

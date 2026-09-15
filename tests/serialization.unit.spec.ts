@@ -1798,3 +1798,53 @@ hvy_version: 0.1
 
   expect(new TextDecoder().decode(expectedResult)).toBe('native-result');
 });
+
+test('expected result: component definitions and flavors preserve root text through serialization', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-text-template
+    baseType: text
+    text: "Fake {% fake_label %}"
+    schema:
+      placeholder: Fake placeholder
+    flavors:
+      - name: fake-alternate
+        text: Fake alternate text
+        schema:
+          css: "font-weight: bold;"
+---
+`, '.thvy');
+  expect(document.meta.component_defs?.[0]?.template?.text).toBe('Fake {% fake_label %}');
+
+  const expectedResult = deserializeDocument(serializeDocument(document), '.thvy');
+
+  expect(expectedResult.meta.component_defs?.[0]?.text).toBe('Fake {% fake_label %}');
+  expect(expectedResult.meta.component_defs?.[0]?.template?.text).toBe('Fake {% fake_label %}');
+  expect(expectedResult.meta.component_defs?.[0]?.flavors?.[0]?.template?.text).toBe('Fake alternate text');
+  expect(expectedResult.meta.component_defs?.[0]?.flavors?.[0]?.schema?.css).toBe('font-weight: bold;');
+});
+
+test('expected result: unmodified custom references in section definitions stay reusable shorthand', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-reusable-text
+    baseType: text
+    text: Fake default
+    schema:
+      css: "font-weight: bold;"
+section_defs:
+  - name: Fake Section
+    template:
+      title: Fake Title
+      blocks:
+        - component: fake-reusable-text
+---
+`, '.thvy');
+  expect(document.meta.section_defs?.[0]?.template?.blocks[0].text).toBe('Fake default');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('blocks:\n        - component: fake-reusable-text');
+});

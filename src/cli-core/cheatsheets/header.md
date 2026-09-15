@@ -1,12 +1,12 @@
 # Header Cheatsheet
 
-The document header is the YAML front matter for document-wide metadata, reusable definitions, theme colors, and defaults.
+The document header stores document-wide metadata, theme colors, and defaults. The virtual /header.yaml excludes component_defs and section_defs; edit those through /templates/components and /templates/sections. Header writes preserve both collections and reject definitions supplied inline.
 
 Inspect the header before patching it:
 
 ```shell
 cat /header.yaml
-grep -n "component_defs\|section_defs\|theme\|component_defaults\|section_defaults\|heading_styles" /header.yaml
+grep -n "theme\|component_defaults\|section_defaults\|heading_styles" /header.yaml
 nl -ba /header.yaml
 ```
 
@@ -14,7 +14,6 @@ Use the header for document-level concerns:
 
 - `title`, `description`, `tags`, `sidebar_label`, `reader_max_width`, `sidebar_max_width`, and `database_table_max_column_width`
 - `theme.colors`
-- `component_defs` and `section_defs`
 - `component_defaults`, `section_defaults`, and `heading_styles`
 - plugin or template metadata that belongs to the whole document
 

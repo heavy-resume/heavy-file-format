@@ -1,9 +1,11 @@
+import { findTemplateDirectory, insertTemplateDefinition } from './template-directories';
 import type { VisualDocument } from '../types';
 import {
   buildHvyVirtualFileSystem,
   buildVirtualDirectoryBlockLookupWithAliases,
   buildVirtualDirectorySectionLookupWithAliases,
   findBlockForVirtualDirectory,
+  findSectionForVirtualDirectory,
   findBlockInsertionTargetForVirtualDirectory,
   listDirectory,
   resolveVirtualPath,
@@ -187,7 +189,7 @@ export function getHvyCliCommandSummary(): string {
 }
 
 export function getHvyCliPreferredCommandSummary(): string {
-  return 'Commands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details.';
+  return 'Commands: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true. Ask: ask QUESTION. Finish: done MESSAGE_TO_USER. Use man <command> for details. Reusable definitions: ls /templates; hvy help templates.';
 }
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
@@ -1808,7 +1810,7 @@ function commandRm(ctx: HvyCliCommandContext, args: string[]): string {
       }
       removeDocumentDirectory(ctx.document, resolved, ctx.pathNaming);
       const targetId = resolved.split('/').filter(Boolean).at(-1) ?? '';
-      const xrefHint = pruneXrefHint(ctx.document, targetId, parsed.flags.has('prune-xref'));
+      const xrefHint = resolved.startsWith('/templates/') ? '' : pruneXrefHint(ctx.document, targetId, parsed.flags.has('prune-xref'));
       return [`${resolved}: removed`, xrefHint].filter(Boolean).join('\n');
     })
     .filter((line) => line.length > 0)
@@ -1856,6 +1858,19 @@ function copyVirtualFile(ctx: HvyCliCommandContext, sourcePath: string, destinat
 }
 
 function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: string, destination: string): string {
+  const destinationResolved = resolveVirtualPath(ctx.fs, ctx.cwd, destination);
+  const templateParent = destinationResolved.replace(/\/[^/]+$/, '');
+  if (templateParent === '/templates/components' || templateParent === '/templates/sections' || templateParent.endsWith('/flavors')) {
+    const sourceRoot = findTemplateDirectory(ctx.document, sourcePath);
+    const sourceNode = (sourceRoot?.path === sourcePath ? sourceRoot.block ?? sourceRoot.section : undefined)
+      ?? findBlockForVirtualDirectory(ctx.document, sourcePath, ctx.pathNaming)
+      ?? findSectionForVirtualDirectory(ctx.document, sourcePath, ctx.pathNaming);
+    if (!sourceNode) throw new Error(`cp: no component or section at ${sourcePath}`);
+    if (ctx.fs.entries.has(destinationResolved)) throw new Error(`cp: destination already exists: ${destinationResolved}`);
+    const path = insertTemplateDefinition(ctx.document, templateParent, decodeURIComponent(destinationResolved.split('/').pop()!), -1, sourceNode, sourceRoot?.path === sourcePath ? sourceRoot.metadata : undefined);
+    return `${sourcePath} -> ${path}: copied`;
+  }
+
   const sourceBlock = findBlockForVirtualDirectory(ctx.document, sourcePath, ctx.pathNaming);
   if (!sourceBlock) {
     throw new Error(`cp: can only copy component directories: ${sourcePath}`);
@@ -2009,6 +2024,24 @@ function removeDocumentBlockDirectory(document: VisualDocument, path: string, pa
 }
 
 function removeDocumentDirectoryInternal(document: VisualDocument, path: string, pathNaming?: HvyVirtualPathNamingState): VisualBlock | VisualSection {
+  if (path.startsWith('/templates/')) {
+    const root = findTemplateDirectory(document, path);
+    if (!root) throw new Error(`rm: refusing to remove template collection: ${path}`);
+    if (path === root.path) {
+      root.remove();
+      return (root.block ?? root.section)!;
+    }
+    if (path === root.contentPath) throw new Error(`rm: remove the definition directory to delete its root: ${root.path}`);
+    const block = findBlockForVirtualDirectory(document, path, pathNaming);
+    if (block && (root.block ? removeBlockReferenceFromList([root.block], block) : removeBlockReferenceFromSections([root.section!], block))) {
+      root.commit();
+      return block;
+    }
+    const section = findSectionForVirtualDirectory(document, path, pathNaming);
+    if (section && root.section && removeSectionReference(root.section.children, section)) return section;
+    throw new Error(`rm: cannot map virtual path to template node: ${path}`);
+  }
+
   if (path === '/' || path === '/body' || path === '/attachments') {
     throw new Error(`rm: refusing to remove protected directory: ${path}`);
   }
@@ -2025,6 +2058,12 @@ function removeDocumentDirectoryInternal(document: VisualDocument, path: string,
     throw new Error(`rm: cannot map virtual path to document node: ${path}`);
   }
   return removed;
+}
+
+function removeSectionReference(sections: VisualSection[], target: VisualSection): boolean {
+  const index = sections.indexOf(target);
+  if (index >= 0) { sections.splice(index, 1); return true; }
+  return sections.some((section) => removeSectionReference(section.children, target));
 }
 
 function removeBlockReferenceFromSections(sections: VisualSection[], target: VisualBlock): VisualBlock | null {

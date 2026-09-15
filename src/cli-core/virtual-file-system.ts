@@ -1,3 +1,4 @@
+import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment } from './template-directories';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
@@ -11,7 +12,6 @@ import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-h
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 import { getHvyReferenceDocs } from './reference-library';
 import { assertCssValueIsDeclarationString } from '../css-value-validation';
-import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
@@ -75,17 +75,20 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
 
   addFile(
     '/header.yaml',
-    () => stringifyYaml(omitComponentDefs(document.meta)).trimEnd(),
+    () => stringifyYaml(omitTemplateDefinitions(document.meta)).trimEnd(),
     (content) => {
       const parsed = parseYaml(content);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('/header.yaml must contain a YAML object.');
       }
       const componentDefs = document.meta.component_defs;
+      const sectionDefs = document.meta.section_defs;
+      if ('component_defs' in parsed || 'section_defs' in parsed) throw new Error('Edit reusable definitions under /templates, not /header.yaml.');
       validateHeaderCssValues(parsed as JsonObject);
       document.meta = {
         ...(parsed as JsonObject),
         ...(componentDefs ? { component_defs: componentDefs } : {}),
+        ...(sectionDefs ? { section_defs: sectionDefs } : {}),
       };
     }
   );
@@ -93,6 +96,7 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
   measurePhase('cli.fs.build.sections', {}, () => {
     addSectionList(entries, document, document.sections, '/body', naming);
   });
+  addTemplateFiles(entries, document, naming);
   measurePhase('cli.fs.build.docs', {}, () => {
     addDocsDirectory(entries, document.meta);
   });
@@ -109,6 +113,23 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
   });
 
   return { entries };
+}
+
+function addTemplateFiles(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, naming?: HvyVirtualPathNamingState): void {
+  const roots = getTemplateDirectories(document);
+  addTemplateMetadataFiles(entries, roots);
+  for (const root of roots) {
+    const subtree = new Map<string, HvyVirtualEntry>();
+    if (root.block) addBlock(subtree, document, root.block, root.contentPath, naming);
+    if (root.section) addSection(subtree, document, root.section, root.contentPath, naming);
+    for (const [path, entry] of subtree) {
+      if (entry.kind === 'file' && entry.write) {
+        const write = entry.write;
+        entry.write = (content) => { write(content); root.commit(); };
+      }
+      entries.set(path, entry);
+    }
+  }
 }
 
 function addDocsDirectory(entries: Map<string, HvyVirtualEntry>, meta: JsonObject): void {
@@ -192,6 +213,14 @@ function validateHeaderCssValues(meta: JsonObject): void {
 
 export function findBlockForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualBlock | null {
   const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+  if (normalized.startsWith('/templates/')) {
+    const root = findTemplateDirectory(document, normalized);
+    const blocks = new Map<string, VisualBlock>();
+    const entries = new Map<string, HvyVirtualEntry>();
+    if (root?.block) addBlockLookup(document.meta, entries, blocks, root.block, root.contentPath, naming);
+    if (root?.section) addSectionBlockLookup(document.meta, entries, blocks, root.section, root.contentPath, naming);
+    return blocks.get(normalized) ?? null;
+  }
   const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -204,6 +233,12 @@ export function findBlockForVirtualDirectory(document: VisualDocument, path: str
 
 export function findSectionForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualSection | null {
   const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+  if (normalized.startsWith('/templates/')) {
+    const root = findTemplateDirectory(document, normalized);
+    const sections = new Map<string, VisualSection>();
+    if (root?.section) addSectionLookup(new Map(), sections, root.section, root.contentPath, naming);
+    return sections.get(normalized) ?? null;
+  }
   const entries = new Map<string, HvyVirtualEntry>();
   const sections = new Map<string, VisualSection>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -333,6 +368,15 @@ function addSectionLookup(
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
   return measurePhase('cli.fs.findBlockInsertionTargetForVirtualDirectory', { path }, () => {
     const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+    if (normalized.startsWith('/templates/')) {
+      const root = findTemplateDirectory(document, normalized);
+      const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
+      const entries = new Map<string, HvyVirtualEntry>();
+      if (root?.block) addBlockInsertionTargets(document.meta, entries, targets, root.block, root.contentPath, naming);
+      if (root?.section) addSectionInsertionTargets(document.meta, entries, targets, root.section, root.contentPath, naming);
+      const target = targets.get(normalized);
+      return target && root ? { kind: target.kind, insert: (block, index) => { target.insert(block, index); root.commit(); } } : null;
+    }
     const entries = new Map<string, HvyVirtualEntry>();
     const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
     entries.set('/', { kind: 'dir', path: '/' });
@@ -1044,11 +1088,10 @@ function formatComponentAbout(meta: JsonObject, component: string): string {
     `About ${component}`,
     `component template: ${definition.name}`,
     definition.baseType ? `base component: ${definition.baseType}` : '',
-    'Edit this component template definition in /header.yaml under component_defs.',
-    'Component template YAML:',
-    '```yaml',
-    formatReusableDefinitionYaml(definition),
-    '```',
+    'Edit this reusable definition under /templates/components. Use ls to discover its directory, then edit definition.json or the nested schema files.',
+    `Definition metadata: /templates/components/${templatePathSegment(definition.name)}/definition.json`,
+    `Definition contents: /templates/components/${templatePathSegment(definition.name)}/schema/`,
+    definition.description ? `Description: ${definition.description}` : '',
     '',
     'Virtual directory mapping:',
     ...formatComponentDirectoryMapping(component, baseComponent),
@@ -1057,17 +1100,6 @@ function formatComponentAbout(meta: JsonObject, component: string): string {
     '',
   ].filter((line, index, all) => line || all[index - 1] !== '');
   return `${lines.join('\n').trimEnd()}\n`;
-}
-
-function formatReusableDefinitionYaml(definition: NonNullable<ReturnType<typeof getComponentDefsFromMeta>[number]>): string {
-  const value = serializeComponentDefinition({
-    name: definition.name,
-    baseType: definition.baseType,
-  } as JsonObject);
-  if (definition.description) value.description = definition.description;
-  if (definition.tags) value.tags = definition.tags;
-  if (definition.schema) value.schema = definition.schema as unknown as JsonObject;
-  return stringifyYaml([serializeComponentDefinition(value)]).trimEnd();
 }
 
 function formatComponentDirectoryMapping(component: string, baseComponent: string): string[] {
@@ -1461,8 +1493,8 @@ function parseJsonObject(content: string, path: string): JsonObject {
   return parsed as JsonObject;
 }
 
-function omitComponentDefs(meta: JsonObject): JsonObject {
-  const { component_defs: _componentDefs, ...rest } = meta;
+function omitTemplateDefinitions(meta: JsonObject): JsonObject {
+  const { component_defs: _componentDefs, section_defs: _sectionDefs, ...rest } = meta;
   return rest;
 }
 

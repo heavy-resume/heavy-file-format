@@ -79,3 +79,32 @@ hvy_version: 0.1
   expect(fetch).toHaveBeenCalledTimes(2);
   vi.unstubAllGlobals();
 });
+
+test('expected result: MCP persists targeted template edits beyond the raw document limit and preserves tail bytes', async () => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'hvy-mcp-templates-test-'));
+  const filePath = join(temporaryDirectory, 'fake-large.thvy');
+  await writeFile(filePath, Buffer.concat([
+    Buffer.from(`---\nhvy_version: 0.1\ndescription: ${'Fake large document. '.repeat(300)}\n---\n\n<!--hvy:tail {"id":"fake-attachment","mime":"application/octet-stream","length":4}-->\n--HVY-TAIL--\n`),
+    Buffer.from([0, 255, 10, 128]),
+  ]));
+
+  const expectedResult = await runHvyCliOnFile({
+    filePath,
+    commands: [
+      'ls /',
+      'hvy insert -1 text /templates/components --id fake-text',
+      'printf "Fake saved text" > /templates/components/fake-text/schema/text.txt',
+      'hvy insert -1 section /templates/sections --id fake-section',
+      'hvy insert -1 fake-text /templates/sections/fake-section/template --id fake-child',
+    ],
+  });
+
+  expect(expectedResult.mutated).toBe(true);
+  expect(expectedResult.results[0].output).toContain('raw-preview.hvy.txt');
+  expect(expectedResult.results[0].output).not.toMatch(/file raw\.hvy/);
+  expect((await readFile(filePath)).subarray(-4)).toEqual(Buffer.from([0, 255, 10, 128]));
+  expect((await runHvyCliOnFile({ filePath, commands: [
+    'cat /templates/components/fake-text/schema/text.txt',
+    'cat /templates/sections/fake-section/template/fake-child/fake-text.txt',
+  ] })).results.map((result: { output: string }) => result.output.trim())).toEqual(['Fake saved text', 'Fake saved text']);
+});

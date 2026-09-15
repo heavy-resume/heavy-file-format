@@ -105,6 +105,32 @@ The CLI harness can load any HVY document for node-based inspection:
 node scripts/hvy-cli.mjs --file examples/resume.hvy -- "find /body/tools-technologies"
 ```
 
+### Editing reusable definitions through CLI and MCP
+
+The shared CLI exposes reusable definitions under `/templates/components/NAME` and
+`/templates/sections/KEY`. Document instances remain under `/body`. Each definition
+has a small `definition.json` metadata file and component `schema/` or section
+`template/` contents using the usual nested component editing files. Alternate
+flavors have the same layout under `flavors/`. `/header.yaml` excludes and preserves
+both definition collections.
+
+```shell
+hvy insert -1 grid /templates/components --id fake-card
+hvy insert -1 text /templates/components/fake-card/schema/grid --id fake-label
+printf 'Fake label' > /templates/components/fake-card/schema/grid/fake-label/text.txt
+hvy insert -1 section /templates/sections --id fake-section
+hvy insert -1 fake-card /templates/sections/fake-section/template --id fake-instance
+```
+
+Use `cp -r SOURCE /templates/components/NEW_NAME` (or `/templates/sections/NEW_NAME`)
+to save an existing component or section as an independent definition. Use `ls` to
+discover exact paths; names are percent-encoded. Edit individual nested files to
+avoid full-document or full-template rewrites, including when `/raw.hvy` is unavailable.
+Definition edits affect future instances; existing document contents are unchanged.
+Run `hvy help templates` or `hvy cheatsheet reusable-component` for metadata, flavor,
+instantiation, and removal instructions. These operations use the same implementation
+in the CLI, document chat, WebMCP, and the MCP file runner.
+
 For AI document chat in local development, configure provider credentials in `.env` for the local proxy:
 
 ```bash

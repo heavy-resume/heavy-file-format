@@ -466,6 +466,7 @@ export type SelectedExample =
 
 export interface ComponentDefinition {
   name: string;
+  text?: string;
   baseType: string;
   tags?: string;
   description?: string;
@@ -478,6 +479,7 @@ export interface ComponentDefinition {
 
 export interface ComponentTemplateFlavor {
   name: string;
+  text?: string;
   description?: string;
   templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   schema?: BlockSchema;

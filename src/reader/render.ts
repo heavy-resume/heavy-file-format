@@ -2021,9 +2021,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <div class="modal-head">
               <h3>${deps.escapeHtml(title)}</h3>
               <div class="modal-head-actions">
-                <button type="button" class="ghost remove-x" data-modal-action="reusable-definition-cancel" aria-label="Cancel ${deps.escapeAttr(title)}" title="Cancel">${closeIcon()}</button>
+                <button type="button" class="ghost remove-x" data-modal-action="reusable-definition-close" aria-label="Close ${deps.escapeAttr(title)}" title="Close">${closeIcon()}</button>
               </div>
             </div>
+            <div class="reusable-definition-scroll-body">
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
             ${activeFlavorIndex === null ? '' : `<div class="reusable-definition-flavor-settings">
               <label><span>Description</span><input data-field="builder-flavor-description" value="${deps.escapeAttr((componentFlavor ?? sectionFlavor)?.description ?? '')}" /></label>
@@ -2087,7 +2088,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     </div>`).join('')}
                   </aside>
                 </div>
-            <div class="link-inline-actions reusable-save-actions">
+            </div>
+            <div class="link-inline-actions reusable-save-actions reusable-definition-footer">
               <button type="button" class="ghost" data-modal-action="reusable-definition-cancel">Cancel</button>
               <button type="button" class="secondary" data-modal-action="save-reusable-definition-close">Save Template</button>
             </div>

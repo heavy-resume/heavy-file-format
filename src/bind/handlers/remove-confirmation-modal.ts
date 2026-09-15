@@ -1,8 +1,10 @@
 let pendingConfirmDeletion: (() => void) | null = null;
 
 export interface RemoveConfirmationOptions {
+  title?: string;
   description?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
 }
 
 export function openRemoveConfirmationModal(
@@ -27,6 +29,10 @@ export function openRemoveConfirmationModal(
       </div>
     </section>
   `;
+  const title = modal.querySelector<HTMLElement>('#removeConfirmationTitle');
+  if (title && options.title?.trim()) title.textContent = options.title.trim();
+  const cancel = modal.querySelector<HTMLButtonElement>('button[data-remove-modal-action="cancel"]');
+  if (cancel && options.cancelLabel?.trim()) cancel.textContent = options.cancelLabel.trim();
   const description = modal.querySelector<HTMLElement>('[data-remove-confirmation-description]');
   if (description && options.description?.trim()) {
     description.textContent = options.description.trim();
@@ -50,9 +56,15 @@ export function openRemoveConfirmationModal(
     }
     closeRemoveConfirmationModal();
   });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeRemoveConfirmationModal();
+  });
   const mount = root.querySelector<HTMLElement>('.hvy-embed-layout') ?? root;
   mount.appendChild(modal);
-  modal.querySelector<HTMLButtonElement>('[data-remove-modal-action="cancel"]')?.focus();
+  cancel?.focus();
 }
 
 export function closeRemoveConfirmationModal(clearPending = true): void {

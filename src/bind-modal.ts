@@ -6,6 +6,9 @@ import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
 import { clearActiveEditorBlock, findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
+import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
+import { hasReusableDefinitionChanges } from './reusable-definition-changes';
+import { openRemoveConfirmationModal } from './bind/handlers/remove-confirmation-modal';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { parseAttachedComponentBlocks } from './plugins/db-table-fragment';
 import { serializeBlockFragment } from './serialization';
@@ -33,8 +36,22 @@ export function bindModal(app: HTMLElement): void {
     return;
   }
 
+  modalRoot.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || !(event.target instanceof Element)) return;
+    if (event.target.closest('.reusable-definition-modal [data-modal-action]')) {
+      // Keep blur-driven structural updates from replacing an action before
+      // its click arrives. Commit the active field when handling that click.
+      event.preventDefault();
+    }
+  });
+
   modalRoot.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    if (target.closest('.reusable-definition-modal [data-modal-action]')
+      && document.activeElement instanceof HTMLElement
+      && modalRoot.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
     if (target.dataset.modalAction === 'close-overlay') {
       closeModal();
       getRenderApp()();
@@ -119,6 +136,20 @@ export function bindModal(app: HTMLElement): void {
     const reusableDefinitionCancelBtn = target.closest<HTMLElement>('[data-modal-action="reusable-definition-cancel"]');
     if (reusableDefinitionCancelBtn && state.reusableDefinitionEditModal) {
       cancelReusableDefinitionModal();
+      return;
+    }
+
+    if (target.closest('[data-modal-action="reusable-definition-close"]') && state.reusableDefinitionEditModal) {
+      if (hasReusableDefinitionChanges(state.document, state.reusableDefinitionEditModal)) {
+        openRemoveConfirmationModal(cancelReusableDefinitionModal, app, {
+          title: 'Discard changes?',
+          description: 'Your changes to this template will be lost.',
+          confirmLabel: 'Discard',
+          cancelLabel: 'Keep editing',
+        });
+      } else {
+        cancelReusableDefinitionModal();
+      }
       return;
     }
 
@@ -757,6 +788,7 @@ function renameBuilderTemplateVariable(input: HTMLInputElement): void {
     input.value = oldName;
     return;
   }
+  if (newName === oldName) return;
   const variables = state.reusableDefinitionEditModal?.kind === 'component'
     ? active.flavor ? extractReusableTemplateVariablesFromFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromDefinition(active.definition)
     : active.flavor ? extractReusableTemplateVariablesFromSectionFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromSectionDefinition(active.definition);
@@ -931,6 +963,7 @@ function cancelReusableDefinitionModal(): void {
   closeReusableDefinitionBuilder();
   getRenderApp()();
   getRefreshReaderPanels()();
+  notifyDocumentMayHaveChanged('template:cancel', inferDocumentChangeSource('template:cancel'), { authoritative: true });
 }
 
 function saveReusableDefinitionModalAndClose(): void {
@@ -1011,8 +1044,10 @@ function saveReusableDefinitionModalAndClose(): void {
   closeReusableDefinitionBuilder();
   getRenderApp()();
   restoreReusableDefinitionHistory(modal);
-  recordHistory();
+  recordHistory(undefined, { notify: false });
   getRefreshReaderPanels()();
+  // Closing a draft can leave the serialized document unchanged.
+  notifyDocumentMayHaveChanged('template:save', inferDocumentChangeSource('template:save'), { authoritative: true });
 }
 
 function pruneReusableTemplateVariableConfig(owner: any, variables: Array<{ name: string }>): void {

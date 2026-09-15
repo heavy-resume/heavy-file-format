@@ -44,7 +44,7 @@ const addComponentDef: AppActionHandler = () => {
     index: defs.length - 1,
     error: null,
     activeFlavorIndex: null,
-    originalRaw: '',
+    originalRaw: stringifyYaml(defs[defs.length - 1]).trimEnd(),
     isNew: true,
     historyBeforeDraft: { history: [...state.history], future: [...state.future] },
   };
@@ -64,7 +64,7 @@ const addSectionDef: AppActionHandler = () => {
     index: defs.length - 1,
     error: null,
     activeFlavorIndex: null,
-    originalRaw: '',
+    originalRaw: stringifyYaml(defs[defs.length - 1]).trimEnd(),
     isNew: true,
     historyBeforeDraft: { history: [...state.history], future: [...state.future] },
   };
@@ -246,7 +246,7 @@ const openReusableDefinitionEditor: AppActionHandler = ({ actionButton }) => {
   if (!definition) {
     return;
   }
-  recordHistory(`edit-${kind}-template:${definition.name}`);
+  recordHistory(`edit-${kind}-template:${definition.name}`, { notify: false });
   const raw = stringifyYaml(definition).trimEnd();
   state.reusableDefinitionEditModal = {
     kind,

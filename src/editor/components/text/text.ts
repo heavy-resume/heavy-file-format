@@ -148,7 +148,7 @@ export function renderTemplateValueTokens(html: string, options: { editable?: bo
       marker.tabIndex = -1;
       marker.dataset.templateValueToken = match[1] ?? '';
       const variable = variables.get(match[1] ?? '');
-      const tokenType = match[2] === 'isempty' ? 'empty check' : variable?.type === 'block' ? 'multi-line' : 'text';
+      const tokenType = match[2] === 'isempty' ? 'empty check' : variable?.type === 'block' ? 'multi-line' : variable?.type === 'url' ? 'URL' : 'text';
       marker.dataset.templateValueDisplay = `${variable?.label ?? match[1] ?? 'Value'} · ${tokenType}`;
       marker.setAttribute('aria-label', marker.dataset.templateValueDisplay);
       const sourceToken = document.createElement('span');

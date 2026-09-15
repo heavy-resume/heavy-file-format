@@ -635,7 +635,8 @@ function parseBlocks(
           const componentName = typeof parsed.component === 'string' ? parsed.component : 'text';
           openOrQueueBlock(schemaFromDirectivePayload(componentName, parsed), getCurrentAttach());
         } else {
-          openOrQueueBlock(schemaFromDirectivePayload(directive, parsed), getCurrentAttach());
+          const componentName = isBuiltinComponentName(directive) ? directive : (match[1] ?? directive);
+          openOrQueueBlock(schemaFromDirectivePayload(componentName, parsed), getCurrentAttach());
         }
       }
     } catch {

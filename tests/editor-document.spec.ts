@@ -5036,7 +5036,7 @@ test('AI mode sidebar add section creates a sidebar section', async ({ page }) =
 test('AI mode opens added section templates with nested components editable', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 section_defs:

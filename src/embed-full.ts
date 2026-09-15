@@ -1082,6 +1082,7 @@ function refreshEditorBlock(sectionKey: string, blockId: string, options: Editor
   return refreshEditorBlockDom({
     root: currentRoot,
     editorRenderer,
+    readerRenderer,
     sections: state.document.sections,
     sectionKey,
     block,

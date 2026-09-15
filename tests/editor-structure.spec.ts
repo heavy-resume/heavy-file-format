@@ -535,15 +535,15 @@ hvy_version: 0.1
   await expect(activeTextEditor).toContainText('Summary');
 });
 
-test('ai resume summary placeholder expands parent before editing', async ({ page }) => {
+test('ai resume summary heading expands parent without entering editing', async ({ page }) => {
   await page.goto('/');
 
   await selectDocumentMenuItem(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
 
-  const summaryPlaceholder = page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first();
-  await expect(summaryPlaceholder).toHaveCSS('cursor', 'text');
-  await summaryPlaceholder.click();
+  const summaryHeading = page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first();
+  await expect(summaryHeading).toHaveCSS('cursor', 'pointer');
+  await summaryHeading.click();
 
   await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(1);
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
@@ -3862,7 +3862,7 @@ test('default example preserves bottom scroll when adding and deleting text belo
 test('AI mode cancel does not scroll for components at different container positions', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

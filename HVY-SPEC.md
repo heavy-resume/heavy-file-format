@@ -904,6 +904,19 @@ Template value notes:
 - `isempty` resolves to `yes` when the value is empty or whitespace-only, and `no` otherwise. It does not change the variable's text/block validation type.
 - Variable names MUST be identifier-like strings: letters, numbers, underscores, and hyphens, starting with a letter or underscore.
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
+- `templateVariables.<name>.type` MAY declare `text`, `block`, or `url`. When present, this metadata takes precedence over the inline text/block type; otherwise inline declarations determine the type. The `url` type is declared in metadata, not as an inline filter. Flavor variable metadata overrides individual fields of the corresponding base variable; omitted fields retain their base values.
+- URL values use the same link-input normalization as the text editor: trim surrounding whitespace, prefix email addresses with `mailto:`, and prefix recognized bare web domains with `https://`. Other destinations, including relative paths and fragment targets, remain allowed; `url` does not require an absolute HTTP URL. URL values are single-line strings. Normalization MUST occur before substitution in component and section instances, including plugin and CLI creation.
+- When substituted in Markdown text bodies, URL values MUST use the same destination serialization as text-editor links: percent-encode whitespace and backslash-escape `<`, `>`, `(`, and `)`. Schema fields and non-Markdown bodies receive the normalized destination without Markdown escaping. Existing percent encoding MUST NOT be encoded again. Empty URL values remain empty and MUST NOT become text fill-in markers inside link destinations.
+
+```yaml
+templateVariables:
+  fake_link:
+    label: Fake link
+    type: url
+# In the template's text block:
+# text: "[Fake link]({% fake_link %})"
+```
+
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
 - Component template definitions and section template definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.

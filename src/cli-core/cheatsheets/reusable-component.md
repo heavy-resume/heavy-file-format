@@ -60,7 +60,7 @@ hvy insert -1 grid /templates/components/fake-card/flavors --id fake-alternate
 hvy insert -1 section /templates/sections/fake-section/flavors --id fake-alternate
 ```
 
-Template tokens such as `{% fake_label %}` can appear in root or nested text and schema strings. Configure their labels/generators in `definition.json` under `templateVariables`. Tokens stay unfilled while editing a definition.
+Template tokens such as `{% fake_label %}` can appear in root or nested text and schema strings. Configure their types, labels, and generators in `definition.json` under `templateVariables`. Set a variable's `type` to `url` to use the text editor's link normalization and Markdown destination encoding; keep its token as `{% fake_link %}`. Tokens stay unfilled while editing a definition.
 
 ## Instantiate in the document
 

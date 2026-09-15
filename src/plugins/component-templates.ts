@@ -247,6 +247,10 @@ function mountTemplateValues(
     heading.append(text);
     const input = variable.type === 'block' ? document.createElement('textarea') : document.createElement('input');
     if (input instanceof HTMLTextAreaElement) input.rows = 5;
+    if (variable.type === 'url') {
+      input.inputMode = 'url';
+      input.spellcheck = false;
+    }
     input.dataset.templateVariable = variable.name;
     input.value = values[variable.name] ?? '';
     input.addEventListener('input', () => {

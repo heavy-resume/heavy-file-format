@@ -7,6 +7,7 @@ import {
   extractReusableTemplateVariables,
   extractReusableTemplateVariablesFromSectionDefinition,
   extractReusableTemplateVariablesFromDefinition,
+  extractReusableTemplateVariablesFromFlavor,
   validateReusableTemplateValues,
   renameReusableTemplateVariable,
   replaceReusableTemplateVariableOccurrenceWithText,
@@ -497,4 +498,58 @@ test('extracts reusable template variables from persisted schema definitions', (
   };
 
   expect(extractReusableTemplateVariablesFromDefinition(definition)).toEqual([{ name: 'description', type: 'block', label: 'Description' }]);
+});
+
+test('expected result: URL metadata overrides inline text types and uses configured labels', () => {
+  expect(extractReusableTemplateVariables('[Fake]({% fake_url | text %})', {
+    fake_url: { type: 'url', label: 'Fake destination' },
+  })).toEqual([{ name: 'fake_url', type: 'url', label: 'Fake destination' }]);
+});
+
+test('expected result: URL values share link conversion across nested Markdown bodies while schema strings stay unescaped', () => {
+  const block = {
+    id: 'fake-container', text: '', schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('container'),
+      containerBlocks: [{
+        id: 'fake-link', text: '[Fake link]({% fake_url %})', schemaMode: false,
+        schema: { ...defaultBlockSchema('text'), description: '{% fake_url %}' },
+      }],
+    },
+  };
+  expect(block.schema.containerBlocks[0].text).toBe('[Fake link]({% fake_url %})');
+
+  applyReusableTemplateValues(block, { fake_url: ' https://fake.example/Fake File(1) ' }, [
+    { name: 'fake_url', type: 'url', label: 'Fake URL' },
+  ]);
+
+  expect(block.schema.containerBlocks[0].text).toBe('[Fake link](https://fake.example/Fake%20File\\(1\\))');
+  expect(block.schema.containerBlocks[0].schema.description).toBe('https://fake.example/Fake File(1)');
+});
+
+test('expected result: empty URL values remain empty destinations instead of becoming inline fill-in comments', () => {
+  const block = { id: 'fake-link', text: '[Fake link]({% fake_url %})', schemaMode: false, schema: defaultBlockSchema('text') };
+
+  applyReusableTemplateValues(block, { fake_url: ' ' }, [{ name: 'fake_url', type: 'url', label: 'Fake URL' }]);
+
+  expect(block.text).toBe('[Fake link]()');
+  expect(block.schema.fillIn).toBe(false);
+});
+
+
+test('expected result: a flavor label override preserves the inherited URL type', () => {
+  expect(extractReusableTemplateVariablesFromFlavor({
+    name: 'fake-flavor',
+    text: '',
+    templateVariables: { fake_url: { label: 'Fake alternate URL' } },
+    template: { id: 'fake-link', text: '[Fake]({% fake_url %})', schema: defaultBlockSchema('text'), schemaMode: false },
+  }, { fake_url: { label: 'Fake URL', type: 'url' } })).toEqual([
+    { name: 'fake_url', type: 'url', label: 'Fake alternate URL' },
+  ]);
+});
+
+test('expected result: URL inputs retain single-line validation', () => {
+  expect(() => validateReusableTemplateValues([{ name: 'fake_url', type: 'url', label: 'Fake URL' }], {
+    fake_url: 'fake\nurl',
+  })).toThrow('is type url and cannot contain newlines');
 });

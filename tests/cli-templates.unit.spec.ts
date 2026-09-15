@@ -247,3 +247,30 @@ test('expected result: copying a definition preserves its metadata and independe
   expect(expectedResult[0].flavors?.[0].schema?.gridColumns).toBe(3);
   expect(expectedResult[1].flavors?.[0].schema?.gridColumns).toBe(5);
 });
+
+test('expected result: URL variable metadata survives serialization and CLI insertion uses text-editor link conversion', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-link
+    baseType: text
+    templateVariables:
+      fake_url:
+        label: Fake URL
+        type: url
+    template:
+      text: "[Fake link]({% fake_url %})"
+      schema:
+        component: text
+---
+<!--hvy: {"id":"fake-body"}-->
+#! Fake Body
+`, '.thvy');
+  const reopened = deserializeDocument(serializeDocument(document), '.thvy');
+  expect(getComponentDefsFromMeta(reopened.meta)[0].templateVariables?.fake_url).toEqual({ label: 'Fake URL', type: 'url' });
+
+  await executeHvyCliCommand(reopened, createHvyCliSession(), `hvy insert -1 fake-link /body/fake-body --id fake-filled --using-template '{"fake_url":"Pub URL"}'`);
+
+  expect(reopened.sections[0].blocks[0].text).toBe('[Fake link](Pub%20URL)');
+  expect(deserializeDocument(serializeDocument(reopened), '.hvy').sections[0].blocks[0].text).toBe('[Fake link](Pub%20URL)');
+});

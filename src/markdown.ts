@@ -1,3 +1,4 @@
+import { serializeMarkdownLinkDestination } from './link-value';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
@@ -129,12 +130,6 @@ turndown.addRule('hvy-link', {
     return href.length > 0 ? `[${content}](${serializeMarkdownLinkDestination(href)})` : content;
   },
 });
-
-function serializeMarkdownLinkDestination(href: string): string {
-  return href
-    .replace(/\s/g, (whitespace) => encodeURIComponent(whitespace))
-    .replace(/([<>()])/g, '\\$1');
-}
 
 turndown.addRule('non-text-media', {
   filter: (node) => isNonTextMediaElement(node),

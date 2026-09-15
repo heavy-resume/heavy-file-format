@@ -1898,7 +1898,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </label>`
           : `<label>
               ${labelHead}
-              <input id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" />
+              <input id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}"${variable.type === 'url' ? ' inputmode="url" spellcheck="false"' : ''} />
               ${status}
             </label>`;
       }).join('');
@@ -2076,7 +2076,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     ${displayedVariables.length === 0 ? '<div class="muted">No template values yet.</div>' : displayedVariables.map((variable) => `<div class="template-variable-card${variable.referenced ? '' : ' is-unreferenced'}" data-template-variable-card="${deps.escapeAttr(variable.name)}">
                       <span class="template-variable-unreferenced-label">template value will be deleted on save</span>
                       <label><span>Name</span><input data-field="builder-template-variable-name" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'} /></label>
-                      <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'}><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option></select></label>
+                      <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'}><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option><option value="url"${variable.type === 'url' ? ' selected' : ''}>URL</option></select></label>
                       <label><span>Label</span><input data-field="builder-template-variable-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.label)}"${variable.referenced ? '' : ' disabled'} /></label>
                       <section class="template-variable-generator-config">
                         <div class="template-variable-generator-head"><strong>Generator</strong><span class="muted">Optional AI value generator</span></div>

@@ -10,6 +10,13 @@ import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';
 import type { HvyPdfStylePreset } from './pdf-style-presets';
 
+export interface ReusableTemplateVariableConfig {
+  type?: 'text' | 'block' | 'url';
+  label?: string;
+  generator?: string;
+  generatorLabel?: string;
+}
+
 export interface DocumentAttachment {
   id: string;
   meta: JsonObject;
@@ -472,7 +479,7 @@ export interface ComponentDefinition {
   tags?: string;
   description?: string;
   sortValueDefs?: Record<string, SortValueDefinition>;
-  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
+  templateVariables?: Record<string, ReusableTemplateVariableConfig>;
   schema?: BlockSchema;
   template?: VisualBlock;
   flavors?: ComponentTemplateFlavor[];
@@ -482,7 +489,7 @@ export interface ComponentTemplateFlavor {
   name: string;
   text?: string;
   description?: string;
-  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
+  templateVariables?: Record<string, ReusableTemplateVariableConfig>;
   schema?: BlockSchema;
   template?: VisualBlock;
 }
@@ -506,7 +513,7 @@ export interface SectionDefinition {
   name: string;
   key?: string;
   repeatable?: boolean;
-  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
+  templateVariables?: Record<string, ReusableTemplateVariableConfig>;
   template: VisualSection;
   flavors?: SectionTemplateFlavor[];
 }
@@ -514,7 +521,7 @@ export interface SectionDefinition {
 export interface SectionTemplateFlavor {
   name: string;
   description?: string;
-  templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
+  templateVariables?: Record<string, ReusableTemplateVariableConfig>;
   template: VisualSection;
 }
 

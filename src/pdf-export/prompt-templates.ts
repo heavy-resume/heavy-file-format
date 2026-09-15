@@ -51,7 +51,7 @@ function normalizePromptTemplate(raw: unknown, index: number): HvyPdfExportPromp
   const discoveredVariables = extractReusableTemplateVariables(prompt, variables);
   for (const variable of discoveredVariables) {
     variables[variable.name] = {
-      type: variable.type,
+      type: variable.type === 'block' ? 'block' : 'text',
       label: variable.label,
       required: variables[variable.name]?.required ?? true,
       ...(variables[variable.name]?.placeholder ? { placeholder: variables[variable.name]?.placeholder } : {}),

@@ -1,9 +1,10 @@
+import { normalizeLinkInputValue, serializeMarkdownLinkDestination } from './link-value';
 import type { VisualBlock, VisualSection } from './editor/types';
 import { createTextFillInMarker } from './text-fill-in';
-import type { ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor } from './types';
+import type { ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, ReusableTemplateVariableConfig } from './types';
 
-export type ReusableTemplateVariableType = 'text' | 'block';
-type ReusableTemplateFilter = ReusableTemplateVariableType | 'isempty';
+export type ReusableTemplateVariableType = 'text' | 'block' | 'url';
+type ReusableTemplateFilter = 'text' | 'block' | 'isempty';
 
 export interface ReusableTemplateVariable {
   name: string;
@@ -33,10 +34,7 @@ export function extractReusableTemplateVariablesFromFlavor(
   if (!source) {
     return [];
   }
-  return extractReusableTemplateVariables(source, {
-    ...getReusableTemplateVariableConfig({ templateVariables: fallbackConfig } as ComponentTemplateFlavor),
-    ...getReusableTemplateVariableConfig(flavor),
-  });
+  return extractReusableTemplateVariables(source, mergeTemplateVariableConfig(fallbackConfig, flavor));
 }
 
 export function extractReusableTemplateVariablesFromSectionDefinition(definition: SectionDefinition | null | undefined): ReusableTemplateVariable[] {
@@ -53,20 +51,28 @@ export function extractReusableTemplateVariablesFromSectionFlavor(
   if (!flavor?.template) {
     return [];
   }
-  return extractReusableTemplateVariables(flavor.template, {
-    ...getReusableTemplateVariableConfig({ templateVariables: fallbackConfig } as SectionTemplateFlavor),
-    ...getReusableTemplateVariableConfig(flavor),
-  });
+  return extractReusableTemplateVariables(flavor.template, mergeTemplateVariableConfig(fallbackConfig, flavor));
 }
 
-export function extractReusableTemplateVariables(value: unknown, config: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {}): ReusableTemplateVariable[] {
+function mergeTemplateVariableConfig(
+  fallback: Record<string, ReusableTemplateVariableConfig>,
+  flavor: ComponentTemplateFlavor | SectionTemplateFlavor | null | undefined
+): Record<string, ReusableTemplateVariableConfig> {
+  const config = getReusableTemplateVariableConfig({ templateVariables: fallback } as ComponentTemplateFlavor);
+  Object.entries(getReusableTemplateVariableConfig(flavor)).forEach(([name, value]) => {
+    config[name] = { ...config[name], ...value };
+  });
+  return config;
+}
+
+export function extractReusableTemplateVariables(value: unknown, config: Record<string, ReusableTemplateVariableConfig> = {}): ReusableTemplateVariable[] {
   const variables = new Map<string, { type: ReusableTemplateVariableType; explicit: boolean }>();
   visitTemplateStrings(value, (text) => {
     for (const match of text.matchAll(TEMPLATE_TOKEN_PATTERN)) {
       const name = match[1] ?? '';
       const { type, explicit } = normalizeTemplateVariableType(match[2]);
       const existing = variables.get(name);
-      if (existing && existing.explicit && explicit && existing.type !== type) {
+      if (existing && existing.explicit && explicit && existing.type !== type && !config[name]?.type) {
         throw new Error(`Template variable "${name}" uses conflicting types: ${existing.type} and ${type}.`);
       }
       if (!existing) {
@@ -79,7 +85,7 @@ export function extractReusableTemplateVariables(value: unknown, config: Record<
   });
   return [...variables.entries()].map(([name, variable]) => ({
     name,
-    type: variable.type,
+    type: config[name]?.type ?? variable.type,
     label: config[name]?.label || humanizeTemplateVariableName(name),
     ...(config[name]?.generator ? { generator: config[name]?.generator } : {}),
     ...(config[name]?.generatorLabel ? { generatorLabel: config[name]?.generatorLabel } : {}),
@@ -103,10 +109,9 @@ export function validateReusableTemplateValues(
       extra.length > 0 ? `Extra keys: ${formatTemplateKeys(extra)}` : '',
     ].filter(Boolean).join(' '));
   }
-  const textVariables = variables.filter((variable) => variable.type === 'text').map((variable) => variable.name);
-  const multilineTextKey = textVariables.find((key) => /\r|\n/.test(values[key] ?? ''));
-  if (multilineTextKey) {
-    throw new Error(`Template value "${multilineTextKey}" is type text and cannot contain newlines. Use "{% ${multilineTextKey} | block %}" for multi-line values.`);
+  const multilineVariable = variables.find((variable) => variable.type !== 'block' && /\r|\n/.test(values[variable.name] ?? ''));
+  if (multilineVariable) {
+    throw new Error(`Template value "${multilineVariable.name}" is type ${multilineVariable.type} and cannot contain newlines. Set its templateVariables type to block for multi-line values.`);
   }
 }
 
@@ -115,7 +120,13 @@ export function applyReusableTemplateValues(
   values: Record<string, string>,
   variables: ReusableTemplateVariable[] = []
 ): VisualBlock {
-  replaceTemplateStringsInBlock(block, values, getReusableTemplateVariableLabelMap(variables));
+  replaceTemplateStringsInBlock(
+    block,
+    normalizeTemplateLinkValues(values, variables),
+    getReusableTemplateVariableLabelMap(variables),
+    new WeakSet<object>(),
+    new Set(variables.filter((variable) => variable.type === 'url').map((variable) => variable.name))
+  );
   normalizeTemplatePlaceholderTextBlocks(block);
   return block;
 }
@@ -125,9 +136,23 @@ export function applyReusableSectionTemplateValues(
   values: Record<string, string>,
   variables: ReusableTemplateVariable[] = []
 ): VisualSection {
-  replaceTemplateStringsInSection(section, values, getReusableTemplateVariableLabelMap(variables));
+  replaceTemplateStringsInSection(
+    section,
+    normalizeTemplateLinkValues(values, variables),
+    getReusableTemplateVariableLabelMap(variables),
+    new WeakSet<object>(),
+    new Set(variables.filter((variable) => variable.type === 'url').map((variable) => variable.name))
+  );
   normalizeSectionTemplatePlaceholderTextBlocks(section);
   return section;
+}
+
+function normalizeTemplateLinkValues(values: Record<string, string>, variables: ReusableTemplateVariable[]): Record<string, string> {
+  const normalized = { ...values };
+  variables.filter((variable) => variable.type === 'url').forEach((variable) => {
+    normalized[variable.name] = normalizeLinkInputValue(values[variable.name] ?? '');
+  });
+  return normalized;
 }
 
 export function parseReusableTemplateJson(raw: string): Record<string, string> {
@@ -195,7 +220,7 @@ export function renameReusableTemplateVariable(value: unknown, oldName: string, 
 export function setReusableTemplateVariableType(
   value: unknown,
   name: string,
-  type: ReusableTemplateVariableType
+  type: 'text' | 'block'
 ): void {
   visitAndReplaceTemplateStrings(value, (text) => text.replace(
     new RegExp(`{%\\s*${escapeRegExp(name)}\\s*(?:\\|\\s*(text|block|isempty)\\s*)?%}`, 'g'),
@@ -246,17 +271,21 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getReusableTemplateVariableConfig(definition: ComponentDefinition | ComponentTemplateFlavor | SectionDefinition | SectionTemplateFlavor | null | undefined): Record<string, { label?: string; generator?: string; generatorLabel?: string }> {
+function getReusableTemplateVariableConfig(definition: ComponentDefinition | ComponentTemplateFlavor | SectionDefinition | SectionTemplateFlavor | null | undefined): Record<string, ReusableTemplateVariableConfig> {
   const config = definition?.templateVariables;
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return {};
   }
-  const variables: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {};
+  const variables: Record<string, ReusableTemplateVariableConfig> = {};
   Object.entries(config).forEach(([name, value]) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return;
     }
-    const next: { label?: string; generator?: string; generatorLabel?: string } = {};
+    const next: ReusableTemplateVariableConfig = {};
+    if (value.type !== undefined) {
+      if (!['text', 'block', 'url'].includes(value.type)) throw new Error(`Invalid template variable type: ${value.type}`);
+      next.type = value.type;
+    }
     const label = (value as { label?: unknown }).label;
     if (typeof label === 'string' && label.trim()) {
       next.label = label.trim();
@@ -278,7 +307,8 @@ function replaceTemplateStringsInSection(
   section: VisualSection,
   values: Record<string, string>,
   labels: Record<string, string>,
-  seen = new WeakSet<object>()
+  seen = new WeakSet<object>(),
+  urlVariables = new Set<string>()
 ): void {
   if (seen.has(section)) {
     return;
@@ -292,8 +322,8 @@ function replaceTemplateStringsInSection(
   section.templateKey = typeof section.templateKey === 'string'
     ? replaceTemplateStrings(section.templateKey, values, seen) as string
     : section.templateKey;
-  section.blocks.forEach((block) => replaceTemplateStringsInBlock(block, values, labels, seen));
-  section.children.forEach((child) => replaceTemplateStringsInSection(child, values, labels, seen));
+  section.blocks.forEach((block) => replaceTemplateStringsInBlock(block, values, labels, seen, urlVariables));
+  section.children.forEach((child) => replaceTemplateStringsInSection(child, values, labels, seen, urlVariables));
 }
 
 function getReusableTemplateVariableLabelMap(variables: ReusableTemplateVariable[]): Record<string, string> {
@@ -339,14 +369,15 @@ function replaceTemplateStringsInBlock(
   block: VisualBlock,
   values: Record<string, string>,
   labels: Record<string, string>,
-  seen = new WeakSet<object>()
+  seen = new WeakSet<object>(),
+  urlVariables = new Set<string>()
 ): void {
   if (seen.has(block)) {
     return;
   }
   seen.add(block);
 
-  const textResult = replaceTemplateString(block.text, values, labels, block.schema.component === 'text');
+  const textResult = replaceTemplateString(block.text, values, labels, block.schema.kind === 'text' || block.schema.component === 'text', urlVariables);
   block.text = textResult.text;
 
   replaceTemplateStringsInSchema(block.schema as unknown as Record<string, unknown>, values, seen);
@@ -354,11 +385,11 @@ function replaceTemplateStringsInBlock(
     block.schema.fillIn = true;
     block.schema.placeholder = '';
   }
-  block.schema.containerBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen));
-  block.schema.componentListBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen));
-  block.schema.gridItems?.forEach((item) => replaceTemplateStringsInBlock(item.block, values, labels, seen));
-  block.schema.expandableStubBlocks?.children.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen));
-  block.schema.expandableContentBlocks?.children.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen));
+  block.schema.containerBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen, urlVariables));
+  block.schema.componentListBlocks?.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen, urlVariables));
+  block.schema.gridItems?.forEach((item) => replaceTemplateStringsInBlock(item.block, values, labels, seen, urlVariables));
+  block.schema.expandableStubBlocks?.children.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen, urlVariables));
+  block.schema.expandableContentBlocks?.children.forEach((child) => replaceTemplateStringsInBlock(child, values, labels, seen, urlVariables));
 }
 
 function replaceTemplateStringsInSchema(schema: Record<string, unknown>, values: Record<string, string>, seen: WeakSet<object>): void {
@@ -413,7 +444,8 @@ function replaceTemplateString(
   text: string,
   values: Record<string, string>,
   labels: Record<string, string>,
-  blankAsFillIn: boolean
+  blankAsFillIn: boolean,
+  urlVariables: Set<string>
 ): { text: string; fillIn: boolean } {
   let fillIn = false;
   const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string, rawFilter: ReusableTemplateFilter | undefined) => {
@@ -421,6 +453,7 @@ function replaceTemplateString(
     if (rawFilter === 'isempty') {
       return value.trim().length === 0 ? 'yes' : 'no';
     }
+    if (urlVariables.has(name)) return blankAsFillIn ? serializeMarkdownLinkDestination(value) : value;
     if (blankAsFillIn && value.length === 0) {
       fillIn = true;
       return createTextFillInMarker(Object.prototype.hasOwnProperty.call(labels, name) ? labels[name] || humanizeTemplateVariableName(name) : humanizeTemplateVariableName(name));

@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, getRefreshReaderPanels } from '../../state';
+import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, getRefreshReaderPanels, getRefreshReaderSection } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { splitTextParagraphsOnCommit } from '../../text-paragraph-split';
@@ -176,6 +176,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
     ? splitTextParagraphsOnCommit(state.document, sectionKey, blockId, richEditor)
     : null;
   const blockChanged = hasActiveEditorBlockChanges(sectionKey, blockId);
+  const aiSectionHost = state.aiEditorHostSectionKey;
   const result = deactivateEditorBlock(sectionKey, blockId);
   const sortValuesChanged = state.currentView === 'ai' && (result === 'closed' || result === 'removed')
     ? syncSortValuesForDocument(state.document)
@@ -189,9 +190,12 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
-  const refreshedEditorSurface = (result !== 'removed' && getRefreshEditorBlock()(sectionKey, refreshBlockId, {
-    replacementBlocks: splitBlocks ?? undefined,
-  }))
+  const refreshedEditorSurface = (aiSectionHost === sectionKey
+    && state.aiEditorHostSectionKey !== aiSectionHost
+    && getRefreshReaderSection()(app, sectionKey))
+    || (result !== 'removed' && getRefreshEditorBlock()(sectionKey, refreshBlockId, {
+      replacementBlocks: splitBlocks ?? undefined,
+    }))
     || getRefreshEditorSection()(sectionKey);
   if (!refreshedEditorSurface) {
     getRenderApp()();
@@ -240,9 +244,13 @@ const cancelBlockEdit: AppActionHandler = ({ app, actionButton, event, sectionKe
     && deactivationAnchor
     && !hasEditorViewportMovedSinceActivation(app, deactivationAnchor)
   );
+  const aiSectionHost = state.aiEditorHostSectionKey;
   const refreshAfterCancel = (): void => {
     getRefreshReaderPanels()();
-    const refreshedEditorSurface = getRefreshEditorBlock()(sectionKey, refreshBlockId)
+    const refreshedEditorSurface = (aiSectionHost === sectionKey
+      && state.aiEditorHostSectionKey !== aiSectionHost
+      && getRefreshReaderSection()(app, sectionKey))
+      || getRefreshEditorBlock()(sectionKey, refreshBlockId)
       || getRefreshEditorSection()(sectionKey);
     if (!refreshedEditorSurface) {
       getRenderApp()();

@@ -3,6 +3,8 @@ import { preserveEditorScrollTop } from '../scroll';
 import type { SectionLocation, VisualBlock, VisualSection } from './types';
 import type { EditorRenderer } from './render';
 import type { EditorRenderTreeWindowOptions } from './editor-render-tree-window';
+import type { ReaderRenderer } from '../reader/render';
+import { createReaderBlockElement } from '../reader/block-refresh';
 
 export interface EditorSectionRefreshOptions {
   root: ParentNode;
@@ -15,6 +17,7 @@ export interface EditorSectionRefreshOptions {
 export interface EditorBlockRefreshOptions {
   root: ParentNode;
   editorRenderer: EditorRenderer;
+  readerRenderer: ReaderRenderer;
   sections: VisualSection[];
   sectionKey: string;
   block: VisualBlock;
@@ -84,14 +87,26 @@ export function refreshEditorBlockDom(options: EditorBlockRefreshOptions): boole
       && (target.matches('[data-active-editor-block="true"]')
         || Boolean(target.querySelector('.editor-block[data-active-editor-block="true"]')));
     const surroundingRects = captureVisibleSiblingRects(target, scrollContainer);
-    const replacements = (options.replacementBlocks ?? [options.block]).flatMap((block) => createEditorBlockElements(
-      target.ownerDocument,
-      options.editorRenderer,
-      options.sectionKey,
-      block,
-      options.sections,
-      target.dataset.parentLocked === 'true'
-    ));
+    // Reader surfaces delegate active hosts to the editor renderer. Re-evaluate
+    // that boundary on refresh so closing a host restores normal reader behavior.
+    const readerSection = !parent.closest('.editor-block, .editor-block-passive')
+      && target.closest('.reader-document, .viewer-sidebar-panel')
+      ? findSectionByKey(options.sections, options.sectionKey)
+      : null;
+    const replacements = (options.replacementBlocks ?? [options.block]).flatMap((block) => {
+      if (readerSection) {
+        const element = createReaderBlockElement(target.ownerDocument, options.readerRenderer, readerSection, block);
+        return element ? [element] : [];
+      }
+      return createEditorBlockElements(
+        target.ownerDocument,
+        options.editorRenderer,
+        options.sectionKey,
+        block,
+        options.sections,
+        target.dataset.parentLocked === 'true'
+      );
+    });
     const replacementBlock = replacements.find((element) => element.dataset.blockId === options.block.id);
     if (!replacementBlock) {
       return;

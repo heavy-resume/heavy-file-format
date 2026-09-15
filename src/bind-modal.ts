@@ -677,8 +677,11 @@ function setupReusableDefinitionBuilderControls(modalRoot: HTMLDivElement): void
       control.addEventListener('change', () => {
         const active = getActiveReusableDefinition();
         const name = control.dataset.variableName ?? '';
-        if (!active || !name || (control.value !== 'text' && control.value !== 'block')) return;
-        setReusableTemplateVariableType(active.template, name, control.value);
+        if (!active || !name || (control.value !== 'text' && control.value !== 'block' && control.value !== 'url')) return;
+        const owner = active.flavor ?? active.definition;
+        owner.templateVariables = owner.templateVariables ?? {};
+        owner.templateVariables[name] = { ...owner.templateVariables[name], type: control.value };
+        if (control.value !== 'url') setReusableTemplateVariableType(active.template, name, control.value);
         getRenderApp()();
       });
       return;

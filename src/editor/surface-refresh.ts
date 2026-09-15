@@ -1,3 +1,5 @@
+import { renderReusableSectionOptions } from '../component-defs';
+import { state } from '../state';
 import { findSectionByKey } from '../section-ops';
 import { preserveEditorScrollTop } from '../scroll';
 import type { SectionLocation, VisualBlock, VisualSection } from './types';
@@ -57,6 +59,12 @@ export function insertEditorTopLevelSectionDom(options: EditorTopLevelSectionIns
     options.editorRenderer.renderTopLevelSectionInsertGutter(section, hasExistingSection)
   );
   anchor.before(...(gutter ? [gutter, element] : [element]));
+  options.root.querySelectorAll<HTMLSelectElement>('[data-field="reusable-section-type"]').forEach((picker) => {
+    const key = picker.dataset.sectionKey;
+    if (!key) return;
+    picker.innerHTML = renderReusableSectionOptions(state.addComponentBySection[key] ?? 'blank');
+    state.addComponentBySection[key] = picker.value;
+  });
   options.afterInsert?.(element);
   return true;
 }

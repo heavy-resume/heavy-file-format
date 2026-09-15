@@ -485,7 +485,7 @@ function resolvePreferredEditorActivationTarget(
   return matches.item(preferred.fieldIndex ?? 0);
 }
 
-function restorePreferredEditorSelection(
+export function restorePreferredEditorSelection(
   target: HTMLElement,
   preferred: NonNullable<typeof state.pendingEditorActivation>['preferredEditorTarget'] | undefined
 ): void {

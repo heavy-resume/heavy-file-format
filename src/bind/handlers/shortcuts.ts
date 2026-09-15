@@ -104,7 +104,7 @@ export function isDocumentUndoTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false;
   }
-  if (target.closest('.modal-root') && !target.closest('.theme-modal')) {
+  if (target.closest('.modal-root') && !target.closest('.theme-modal') && !target.closest('[data-template-draft-history]')) {
     return false;
   }
   const field = target.dataset.field ?? '';

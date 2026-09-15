@@ -28,6 +28,7 @@ import {
 } from './attachment-history-controller';
 import { recordDatabaseTablesChanged } from './database-change-tracker';
 import { findSectionByKey } from './section-ops';
+import { navigateReusableDefinitionHistory, recordReusableDefinitionHistory } from './reusable-definition-history';
 import {
   prepareHistoryViewportTransition,
 } from './history-viewport-transition';
@@ -132,6 +133,10 @@ export function commitHistorySnapshot(): void {
   if (state.isRestoring) {
     return;
   }
+  if (state.reusableDefinitionEditModal) {
+    recordReusableDefinitionHistory();
+    return;
+  }
   const snapshotId = incrementHistorySnapshotCount();
   const snap = debugMeasure('snapshotState:commit', { snapshotId, historyLength: state.history.length }, () => snapshotState());
   const last = getLastHistorySnapshot();
@@ -158,10 +163,9 @@ export function recordHistory(group?: string, options: { notify?: boolean } = {}
   if (state.isRestoring) {
     return;
   }
-  // Reusable definitions are edited as a modal draft. The snapshot taken when
-  // the builder opens is the single undo boundary; field-level editor updates
-  // must not leak additional history entries from that draft workspace.
+  // Keep draft checkpoints separate from the document's undo stack.
   if (state.reusableDefinitionEditModal) {
+    recordReusableDefinitionHistory(group);
     return;
   }
   if (isQueuedDatabaseHistoryCommandActive()) {
@@ -270,6 +274,7 @@ export function restoreHistoryStackState(value: unknown): void {
 }
 
 export function undoState(): void {
+  if (navigateReusableDefinitionHistory('undo')) return;
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
   const activeEditor = captureActiveEditorRestoreState();
@@ -309,6 +314,7 @@ export function undoState(): void {
 }
 
 export function redoState(): void {
+  if (navigateReusableDefinitionHistory('redo')) return;
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
   const activeEditor = captureActiveEditorRestoreState();
@@ -332,6 +338,7 @@ export function redoState(): void {
 }
 
 export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
+  if (navigateReusableDefinitionHistory('undo')) return Promise.resolve();
   return enqueueDatabaseHistoryNavigation('Undo database edit', async () => {
     ensureHistoryInitialized();
     const current = snapshotState({ includeDatabaseAttachment: databaseAttachmentChangedSinceHistory });
@@ -378,6 +385,7 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
 }
 
 export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
+  if (navigateReusableDefinitionHistory('redo')) return Promise.resolve();
   return enqueueDatabaseHistoryNavigation('Redo database edit', async () => {
     ensureHistoryInitialized();
     const nextEntry = state.future[state.future.length - 1];
@@ -562,7 +570,7 @@ function parseHistoryDeltaEntry(entry: string): HistoryDeltaEntry | null {
   }
 }
 
-function captureActiveEditorRestoreState(): ActiveEditorRestoreState | null {
+export function captureActiveEditorRestoreState(): ActiveEditorRestoreState | null {
   if (!state.activeEditorBlock) {
     return null;
   }
@@ -584,9 +592,10 @@ function captureActiveEditorRestoreState(): ActiveEditorRestoreState | null {
   };
 }
 
-function restoreActiveEditorState(
+export function restoreActiveEditorState(
   activeEditor: ActiveEditorRestoreState | null,
-  targetEditorContext: HistoryEditorContext | null = null
+  targetEditorContext: HistoryEditorContext | null = null,
+  findBlock: (sectionKey: string, blockId: string) => VisualBlock | null = findSnapshotBlockByIds
 ): void {
   state.pendingHistoryFocus = targetEditorContext?.preferredEditorTarget
     && !targetEditorContext.sectionKey && !targetEditorContext.blockId
@@ -596,16 +605,16 @@ function restoreActiveEditorState(
     return;
   }
   const { sectionKey, blockId } = activeEditor.activeEditorBlock;
-  if (!findSnapshotBlockByIds(sectionKey, blockId)) {
+  if (!findBlock(sectionKey, blockId)) {
     return;
   }
   const existingPath = activeEditor.activeEditorBlockPath.filter((active) =>
-    findSnapshotBlockByIds(active.sectionKey, active.blockId)
+    findBlock(active.sectionKey, active.blockId)
   );
   state.activeEditorBlockPath = existingPath.length > 0 ? existingPath : [{ sectionKey, blockId }];
   state.activeEditorBlock = { sectionKey, blockId };
   state.activeTextEditorMode = activeEditor.activeTextEditorMode ? { ...activeEditor.activeTextEditorMode } : null;
-  const restoredBlock = findSnapshotBlockByIds(sectionKey, blockId);
+  const restoredBlock = findBlock(sectionKey, blockId);
   if (
     state.activeTextEditorMode?.mode === 'fill-in'
     && restoredBlock
@@ -661,7 +670,7 @@ function captureActiveEditorPreferredTarget(
   return capturePreferredEditorTarget(active, activeBlock);
 }
 
-function capturePreferredEditorTarget(
+export function capturePreferredEditorTarget(
   active: HTMLElement,
   scope: HTMLElement
 ): NonNullable<AppState['pendingEditorActivation']>['preferredEditorTarget'] | null {

@@ -1031,6 +1031,14 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.containerExpanded = schema.containerExpanded;
     value.containerCollapsedPreviewRem = schema.containerCollapsedPreviewRem;
   }
+  if (baseComponent === 'expandable') {
+    value.expandableAlwaysShowStub = schema.expandableAlwaysShowStub;
+    value.expandableExpanded = schema.expandableExpanded;
+    value.expandableStubCss = schema.expandableStubCss;
+    value.expandableContentCss = schema.expandableContentCss;
+    value.expandableStubDescription = schema.expandableStubDescription;
+    value.expandableContentDescription = schema.expandableContentDescription;
+  }
   if (baseComponent === 'component-list') {
     value.componentListComponent = schema.componentListComponent;
     value.componentListItemLabel = schema.componentListItemLabel;
@@ -1141,6 +1149,11 @@ function applyBlockSchemaJson(
   value: JsonObject
 ): void {
   const defaults = defaultBlockSchema(component, baseComponent);
+  for (const field of ['expandableStubCss', 'expandableContentCss'] as const) {
+    if (baseComponent === 'expandable' && typeof value[field] === 'string') {
+      assertCssValueIsDeclarationString(value[field], `${component}.json ${field}`);
+    }
+  }
   schema.component = component;
   schema.id = defaults.id;
   schema.css = defaults.css;
@@ -1161,6 +1174,13 @@ function applyBlockSchemaJson(
     schema.containerTitle = defaults.containerTitle;
     schema.containerExpanded = defaults.containerExpanded;
     schema.containerCollapsedPreviewRem = defaults.containerCollapsedPreviewRem;
+  } else if (baseComponent === 'expandable') {
+    schema.expandableAlwaysShowStub = defaults.expandableAlwaysShowStub;
+    schema.expandableExpanded = defaults.expandableExpanded;
+    schema.expandableStubCss = defaults.expandableStubCss;
+    schema.expandableContentCss = defaults.expandableContentCss;
+    schema.expandableStubDescription = defaults.expandableStubDescription;
+    schema.expandableContentDescription = defaults.expandableContentDescription;
   } else if (baseComponent === 'component-list') {
     schema.componentListComponent = defaults.componentListComponent;
     schema.componentListItemLabel = defaults.componentListItemLabel;
@@ -1277,8 +1297,14 @@ function applyBlockSchemaJson(
   if (value.pluginSortValues && typeof value.pluginSortValues === 'object' && !Array.isArray(value.pluginSortValues)) {
     schema.pluginSortValues = parseSortKeys(value.pluginSortValues);
   }
-  if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;
-  if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;
+  if (baseComponent === 'expandable') {
+    if (typeof value.expandableAlwaysShowStub === 'boolean') schema.expandableAlwaysShowStub = value.expandableAlwaysShowStub;
+    if (typeof value.expandableExpanded === 'boolean') schema.expandableExpanded = value.expandableExpanded;
+    if (typeof value.expandableStubCss === 'string') schema.expandableStubCss = value.expandableStubCss;
+    if (typeof value.expandableContentCss === 'string') schema.expandableContentCss = value.expandableContentCss;
+    if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;
+    if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;
+  }
 }
 
 function readBlockBodyText(block: VisualBlock, meta: JsonObject): string {

@@ -352,6 +352,7 @@ export interface ReusableDefinitionEditModalState {
   originalRaw?: string;
   isNew?: boolean;
   draftName?: string;
+  pendingDocumentSync?: boolean;
   flavorManager?: {
     mode: 'browse' | 'create';
     selectedIndex: number;

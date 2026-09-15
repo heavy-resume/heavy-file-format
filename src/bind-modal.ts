@@ -3,11 +3,12 @@ import { parse as parseYaml } from 'yaml';
 import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } from './state';
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
-import { saveReusableFromModal } from './reusable';
+import { applyReusableTemplateToDocument, saveReusableFromModal } from './reusable';
 import { clearActiveEditorBlock, findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 import { hasReusableDefinitionChanges } from './reusable-definition-changes';
+import { bindReusableDefinitionHistory } from './reusable-definition-history';
 import { openRemoveConfirmationModal } from './bind/handlers/remove-confirmation-modal';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { parseAttachedComponentBlocks } from './plugins/db-table-fragment';
@@ -35,6 +36,7 @@ export function bindModal(app: HTMLElement): void {
   if (!modalRoot) {
     return;
   }
+  bindReusableDefinitionHistory(modalRoot);
 
   modalRoot.addEventListener('mousedown', (event) => {
     if (event.button !== 0 || !(event.target instanceof Element)) return;
@@ -1040,8 +1042,13 @@ function saveReusableDefinitionModalAndClose(): void {
     getRenderApp()();
     return;
   }
+  const syncDocumentInstances = modal.kind === 'component' && modal.pendingDocumentSync
+    && hasReusableDefinitionChanges(state.document, modal);
   clearActiveEditorBlock();
   closeReusableDefinitionBuilder();
+  if (syncDocumentInstances) {
+    applyReusableTemplateToDocument(active.definition.name, active.definition.template, null);
+  }
   getRenderApp()();
   restoreReusableDefinitionHistory(modal);
   recordHistory(undefined, { notify: false });

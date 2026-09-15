@@ -205,6 +205,12 @@ test('advanced grid component picker stays inside the template modal', async ({ 
   await gridPicker.locator('.component-picker-trigger').click();
   await gridPicker.locator('.component-picker-row-category', { hasText: 'Advanced' }).click();
 
+  // Placement is scheduled for the next animation frame.
+  await expect.poll(async () => {
+    const modalBounds = await modal.boundingBox();
+    const popoverBounds = await gridPicker.locator('.component-picker-popover').boundingBox();
+    return modalBounds && popoverBounds ? popoverBounds.x - modalBounds.x : 0;
+  }).toBeGreaterThanOrEqual(7);
   const modalBounds = await modal.boundingBox();
   const popoverBounds = await gridPicker.locator('.component-picker-popover').boundingBox();
   expect(modalBounds).not.toBeNull();

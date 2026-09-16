@@ -1,4 +1,4 @@
-import { state, REUSABLE_SECTION_DEF_PREFIX } from './state';
+import { state, REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX } from './state';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
 import type { ComponentDefinition, SectionDefinition } from './types';
 import { areTablesEnabled } from './reference-config';
@@ -32,8 +32,20 @@ export function getSectionTemplateKey(def: SectionDefinition): string {
 }
 
 export function getReusableNameFromSectionKey(sectionKey: string): string | null {
-  const REUSABLE_SECTION_PREFIX = '__reusable__:';
   return sectionKey.startsWith(REUSABLE_SECTION_PREFIX) ? sectionKey.slice(REUSABLE_SECTION_PREFIX.length) : null;
+}
+
+/** True when the section key belongs to a component or section template being edited, not the main document. */
+export function isReusableDefinitionSectionKey(sectionKey: string): boolean {
+  if (sectionKey.startsWith(REUSABLE_SECTION_PREFIX) || sectionKey.startsWith(REUSABLE_SECTION_DEF_PREFIX)) {
+    return true;
+  }
+  const modal = state.reusableDefinitionEditModal;
+  if (modal?.kind !== 'section') {
+    return false;
+  }
+  const definition = getSectionDefsFromMeta(state.document.meta)[modal.index];
+  return Boolean(definition?.template?.key && definition.template.key === sectionKey);
 }
 
 export function getComponentOptions(): string[] {

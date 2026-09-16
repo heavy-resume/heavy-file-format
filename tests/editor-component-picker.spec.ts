@@ -179,6 +179,7 @@ test('component picker opens categories and adds selected component', async ({ p
   await picker.locator('.component-picker-row-category', { hasText: 'Advanced' }).click();
   await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Table' })).toBeVisible();
   await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Reference' })).toBeVisible();
+  await expect(picker.locator('[data-picker-pane="advanced"] .component-picker-row-title', { hasText: 'Component Location' })).toHaveCount(0);
   await picker.locator('[data-picker-pane="advanced"] .component-picker-back').click();
   await expect(rootPane.locator('.component-picker-row-title', { hasText: 'Advanced' })).toBeVisible();
 

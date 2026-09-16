@@ -10,6 +10,7 @@ import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
 import { applyPersistedAnswerSelection } from './persisted-answer-selection';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
+import { isPressSelectingText, trackPressToggleIntent } from './reader/press-toggle-intent';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
@@ -284,6 +285,9 @@ export function bindReaderUi(app: HTMLElement): void {
         return;
       }
       event.stopPropagation();
+      if (isPressSelectingText(event, expandable)) {
+        return;
+      }
       const sectionKey = expandable.dataset.sectionKey;
       const blockId = expandable.dataset.blockId;
       if (!sectionKey || !blockId) {
@@ -420,6 +424,7 @@ export function bindReaderUi(app: HTMLElement): void {
     }
   };
 
+  trackPressToggleIntent(app);
   readerDocuments.forEach((readerDocument) => {
     readerDocument.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
     readerDocument.addEventListener('click', handleReaderAreaClick);

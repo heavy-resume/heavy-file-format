@@ -1,3 +1,4 @@
+import { isPressSelectingText, trackPressToggleIntent } from '../reader/press-toggle-intent';
 import { state } from '../state';
 
 let lastBoundChatMessageCount = -1;
@@ -168,6 +169,7 @@ function bindChatExpandableToggles(chatThread: HTMLElement): void {
     return;
   }
   chatExpandableBoundThreads.add(chatThread);
+  trackPressToggleIntent(chatThread);
   chatThread.addEventListener('click', (event) => {
     const target = event.target instanceof HTMLElement ? event.target : null;
     const expandable = target?.closest<HTMLElement>('[data-chat-action="toggle-expandable"]');
@@ -175,8 +177,11 @@ function bindChatExpandableToggles(chatThread: HTMLElement): void {
       return;
     }
 
-    event.preventDefault();
     event.stopPropagation();
+    if (isPressSelectingText(event, expandable)) {
+      return;
+    }
+    event.preventDefault();
 
     const readerEl = expandable.closest<HTMLElement>('[data-expandable-id]');
     if (!readerEl) {

@@ -59,6 +59,7 @@ import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
+import { isPressSelectingText, trackPressToggleIntent } from './reader/press-toggle-intent';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
@@ -1047,6 +1048,10 @@ export function bindUi(app: HTMLElement): void {
         }
         return;
       }
+      if (isPressSelectingText(event, expandable)) {
+        event.stopPropagation();
+        return;
+      }
       if (state.currentView === 'ai' && expandableContainsActiveEditor(expandable)) {
         event.stopPropagation();
         logClickTrace(event, 'reader-area:skip', {
@@ -1246,6 +1251,7 @@ export function bindUi(app: HTMLElement): void {
     });
   };
 
+  trackPressToggleIntent(app);
   readerDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   readerSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   aiReaderDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);

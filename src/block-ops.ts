@@ -845,10 +845,38 @@ function getTextFillInRichEditorHtml(editor: HTMLElement): string {
 }
 
 function getInlineEditableMarkdown(target: HTMLElement, options: { preserveLineBreaks?: boolean } = {}): string {
-  const markdown = normalizeEditorMarkdownWhitespace(turndown.turndown(target)).replaceAll('\u200b', '');
+  const source = options.preserveLineBreaks ? cloneWithTextNewlinesAsLineBreaks(target) : target;
+  const markdown = normalizeEditorMarkdownWhitespace(turndown.turndown(source)).replaceAll('\u200b', '');
   return options.preserveLineBreaks
     ? markdown.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').trim()
     : markdown.replace(/\s*\n+\s*/g, ' ').trim();
+}
+
+// Pre-wrap editables receive typed and pasted line breaks as newline characters in text nodes,
+// which turndown collapses as insignificant whitespace; convert them to <br> so they survive.
+function cloneWithTextNewlinesAsLineBreaks(target: HTMLElement): HTMLElement {
+  const clone = target.cloneNode(true) as HTMLElement;
+  const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if ((node.nodeValue ?? '').includes('\n') && !node.parentElement?.closest('pre, code')) {
+      textNodes.push(node as Text);
+    }
+  }
+  textNodes.forEach((textNode) => {
+    const parts = (textNode.nodeValue ?? '').split('\n');
+    const fragment = document.createDocumentFragment();
+    parts.forEach((part, index) => {
+      if (index > 0) {
+        fragment.append(document.createElement('br'));
+      }
+      if (part) {
+        fragment.append(part);
+      }
+    });
+    textNode.replaceWith(fragment);
+  });
+  return clone;
 }
 
 function syncTableRowEmptyClass(target: HTMLElement): void {

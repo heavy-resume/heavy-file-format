@@ -70,9 +70,9 @@ function unwrapTableParagraphs(html: string): string {
   }
   const paragraphsOnly = trimmed.replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, '').trim().length === 0;
   if (paragraphsOnly) {
-    return Array.from(trimmed.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi), (match) => match[1] ?? '').join('<br>');
+    return Array.from(trimmed.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi), (match) => match[1] ?? '').join('<br><br>');
   }
-  return trimmed.replace(/<\/p>\s*<p\b[^>]*>/gi, '<br>').replace(/<p\b[^>]*>/gi, '').replace(/<\/p>/gi, '');
+  return trimmed.replace(/<\/p>\s*<p\b[^>]*>/gi, '<br><br>').replace(/<p\b[^>]*>/gi, '').replace(/<\/p>/gi, '');
 }
 
 function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentReaderRenderer>[1], helpers: Parameters<ComponentReaderRenderer>[2]): string {
@@ -171,7 +171,7 @@ function renderTableRowEditor(
               <div
                 class="inline-editable table-inline-text"
                 contenteditable="true"
-                spellcheck="false"
+                spellcheck="true"
                 data-inline-text="true"
                 data-section-key="${helpers.escapeAttr(sectionKey)}"
                 data-block-id="${helpers.escapeAttr(blockId)}"
@@ -268,7 +268,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                           <div
                             class="inline-editable table-inline-text table-column-name"
                             contenteditable="${block.schema.lock ? 'false' : 'true'}"
-                            spellcheck="false"
+                            spellcheck="true"
                             data-inline-text="true"
                             data-section-key="${helpers.escapeAttr(sectionKey)}"
                             data-block-id="${helpers.escapeAttr(block.id)}"

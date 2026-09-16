@@ -750,6 +750,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   bindCarouselInteractions(root);
   bindLazyImageHydration(root);
   centerPendingEditorSection(root);
+  scrollPendingEditorActivation(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
   logPerfTrace('renderApp', {

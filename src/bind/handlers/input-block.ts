@@ -34,7 +34,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types
 import type { SortValueDateFormat, SortValueType } from '../../types';
 import { componentSortValueDetailsKey } from '../../editor/render';
 import type { JsonObject } from '../../hvy/types';
-import { writeDocumentParagraphSpacing } from '../../document-typography';
+import { writeDocumentParagraphSpacing, writeDocumentRecolorStrikethrough } from '../../document-typography';
 import {
   formatPdfMarginUnitValue,
   formatPdfPointsAsUnit,
@@ -192,6 +192,13 @@ export function bindInputBlock(app: HTMLElement): void {
       }
       applyTheme();
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-recolor-strikethrough' && target instanceof HTMLInputElement) {
+      recordHistory('meta:recolor-strikethrough');
+      writeDocumentRecolorStrikethrough(state.document.meta, target.checked);
+      applyTheme();
       return;
     }
 

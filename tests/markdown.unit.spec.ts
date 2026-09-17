@@ -562,3 +562,26 @@ Plain Markdown should not go blank.
   expect(expectedResult).toContain('<!--hvy:text {}-->');
   expect(expectedResult).toContain('Plain Markdown should not go blank.');
 });
+
+
+test('expected result: document strikethrough color and markdown survive save and reload', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+theme:
+  colors:
+    --hvy-strikethrough-color: '#d12345'
+typography:
+  recolorStrikethrough: true
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+<!--hvy:text {"id":"fake-text"}-->
+~~Fake removed text~~
+`, '.hvy');
+
+  const expectedResult = deserializeDocument(serializeDocument(document), '.hvy');
+
+  expect(expectedResult.meta.theme).toEqual({ colors: { '--hvy-strikethrough-color': '#d12345' } });
+  expect(expectedResult.meta.typography).toEqual({ recolorStrikethrough: true });
+  expect(expectedResult.sections[0].blocks[0].text).toContain('~~Fake removed text~~');
+});

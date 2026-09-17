@@ -66,3 +66,17 @@ function parseSimpleLength(value: string): { value: number; unit: string } | nul
 function extractMarginTop(css: string): string {
   return css.match(/(?:^|;)\s*margin-top:\s*([^;]+)/i)?.[1]?.trim() ?? '';
 }
+
+export function getDocumentRecolorStrikethrough(meta: Record<string, unknown> | null | undefined): boolean {
+  const typography = meta?.typography;
+  return !!typography && typeof typography === 'object' && !Array.isArray(typography)
+    && (typography as JsonObject).recolorStrikethrough === true;
+}
+
+export function writeDocumentRecolorStrikethrough(meta: JsonObject, enabled: boolean): void {
+  const typography = meta.typography && typeof meta.typography === 'object' && !Array.isArray(meta.typography)
+    ? { ...(meta.typography as JsonObject) }
+    : {};
+  typography.recolorStrikethrough = enabled;
+  meta.typography = typography;
+}

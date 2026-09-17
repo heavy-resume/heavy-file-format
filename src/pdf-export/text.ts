@@ -230,7 +230,7 @@ function renderMarkedInlineToken(token: unknown): Array<string | HvyPdfMakeNodeO
     return [{ text: typed.text ?? '', font: 'Roboto' }];
   }
   if (typed.type === 'del') {
-    return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), decoration: 'lineThrough' }];
+    return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), decoration: 'lineThrough', style: 'strikethrough' }];
   }
   if (typed.type === 'link') {
     return [{

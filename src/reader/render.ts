@@ -1131,7 +1131,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       },
       schemaMode: false,
     });
-    const previewTextBlock = makePreviewBlock('theme-preview-text', 'text', 'Paragraph with *alternate text* and a fill-in.');
+    const previewTextBlock = makePreviewBlock('theme-preview-text', 'text', 'Paragraph with *alternate text*, ~~strikethrough~~, and a fill-in.');
     const previewButtonBlock = makePreviewBlock('theme-preview-button', 'button', '', { buttonLabel: 'Generate' });
     const previewFillInBlock = makePreviewBlock('theme-preview-fill-in', 'text', 'The answer is [____].', { fillIn: true });
     const previewXrefTarget = state.documentSections[0] ? `#${deps.getSectionId(state.documentSections[0])}` : '#';
@@ -1220,7 +1220,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const textPreview = renderDemoSurface(
       renderTextReader(previewSection, previewTextBlock, helpers),
       'rest',
-      '--hvy-text --hvy-text-alt --hvy-text-muted',
+      '--hvy-text --hvy-text-alt --hvy-text-muted --hvy-strikethrough-color',
       'theme-demo-rich-text'
     );
     const buttonRestPreview = renderDemoWrapper(
@@ -1320,9 +1320,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           label: 'Text',
           detail: 'Rich text, fill-ins, quotes, and AI target state',
           className: 'theme-preview-text-card',
-          variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+          variables: ['--hvy-strikethrough-color', '--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
           states: [
-            { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted'] },
+            { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-strikethrough-color'] },
             { id: 'fill-in', label: 'Fill-in', variables: ['--hvy-text', '--hvy-text-muted', '--hvy-focus-ring'] },
             { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
           ],

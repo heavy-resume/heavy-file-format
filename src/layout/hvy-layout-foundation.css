@@ -77,3 +77,9 @@
   background: var(--hvy-surface-alt);
   color: var(--hvy-text-alt);
 }
+
+.hvy-document.hvy-recolor-strikethrough :is(s, strike, del),
+.hvy-document .theme-demo-rich-text :is(s, strike, del) {
+  color: var(--hvy-strikethrough-color, currentColor);
+  text-decoration-color: var(--hvy-strikethrough-color, currentColor);
+}

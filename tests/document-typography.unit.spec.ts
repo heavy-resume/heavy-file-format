@@ -3,6 +3,8 @@ import { expect, test } from 'vitest';
 import {
   DEFAULT_PARAGRAPH_SPACING,
   getDocumentParagraphSpacing,
+  getDocumentRecolorStrikethrough,
+  writeDocumentRecolorStrikethrough,
   getParagraphGapCss,
   getParagraphSplitMarginTop,
   isDocumentParagraphSpacing,
@@ -38,4 +40,17 @@ test('expected result: paragraph spacing can be multiplied for generated compone
     { typography: { paragraphSpacing: '0.6rem' } },
     2
   )).toBe('0.7rem');
+});
+
+
+test('expected result: strikethrough recoloring is opt-in and preserves other typography settings', () => {
+  expect(getDocumentRecolorStrikethrough({})).toBe(false);
+  expect(getDocumentRecolorStrikethrough({ typography: { recolorStrikethrough: 'true' } })).toBe(false);
+  const meta = { typography: { paragraphSpacing: '0.7rem' } };
+  writeDocumentRecolorStrikethrough(meta, true);
+  expect(getDocumentRecolorStrikethrough(meta)).toBe(true);
+  expect(meta.typography).toEqual({ paragraphSpacing: '0.7rem', recolorStrikethrough: true });
+  writeDocumentRecolorStrikethrough(meta, false);
+  expect(getDocumentRecolorStrikethrough(meta)).toBe(false);
+  expect(getDocumentParagraphSpacing(meta)).toBe('0.7rem');
 });

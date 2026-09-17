@@ -7,7 +7,7 @@ import { cssFragmentTriggersNetwork } from './css-sanitizer';
 import { isExternalCssAllowed } from './reference-config';
 import { getPaletteById } from './palettes/palette-registry';
 import { DEFAULT_SIDEBAR_MAX_WIDTH } from './document-factory';
-import { getDocumentParagraphSpacing } from './document-typography';
+import { getDocumentParagraphSpacing, getDocumentRecolorStrikethrough } from './document-typography';
 
 export type { ThemeConfig };
 export type ColorMode = 'light' | 'dark';
@@ -21,6 +21,7 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-text',
   '--hvy-text-alt',
   '--hvy-text-muted',
+  '--hvy-strikethrough-color',
   '--hvy-link-color',
   '--hvy-link-hover-color',
   '--hvy-accent-1',
@@ -88,6 +89,7 @@ const THEME_COLOR_LABELS: Record<string, string> = {
   '--hvy-text': 'Primary Text',
   '--hvy-text-alt': 'Secondary Text',
   '--hvy-text-muted': 'Muted Helper Text',
+  '--hvy-strikethrough-color': 'Strikethrough Color',
   '--hvy-link-color': 'Inline Link Text',
   '--hvy-link-hover-color': 'Inline Link Hover Text',
   '--hvy-accent-1': 'Primary Accent Fill',
@@ -182,6 +184,7 @@ export function applyTheme(): void {
   const theme = getThemeConfig();
   const root = getThemeRoot();
 
+  root.classList.toggle('hvy-recolor-strikethrough', getDocumentRecolorStrikethrough(state.document.meta));
   applyColorMode();
 
   // Remove all previously applied user override inline properties.

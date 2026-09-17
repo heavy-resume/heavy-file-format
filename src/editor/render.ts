@@ -58,7 +58,7 @@ import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon, wrenchIcon } from '../icons';
 import { getEmptySectionHeadingLevel } from '../section-heading-memory';
-import { getDocumentParagraphSpacing } from '../document-typography';
+import { getDocumentParagraphSpacing, getDocumentRecolorStrikethrough } from '../document-typography';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
 import { getComponentEditorMinimumWidth } from './component-editor-width';
 import {
@@ -1741,6 +1741,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Sidebar Max Width</span>
           <input data-field="meta-sidebar-max-width" placeholder="40rem" value="${deps.escapeAttr(String(state.documentMeta.sidebar_max_width ?? ''))}" />
         </label>
+        <label class="checkbox-label">
+          <span>Recolor Strikethrough</span>
+          <input type="checkbox" data-field="meta-recolor-strikethrough" ${getDocumentRecolorStrikethrough(state.documentMeta) ? 'checked' : ''} />
+        </label>
+        <p class="muted">Use the active theme’s strikethrough color for both the struck text and its line.</p>
         <label>
           <span>Paragraph Spacing</span>
           <input data-field="meta-paragraph-spacing" placeholder="0.45rem" value="${deps.escapeAttr(getDocumentParagraphSpacing(state.documentMeta))}" />

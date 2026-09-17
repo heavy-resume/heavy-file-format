@@ -59,7 +59,7 @@ Changing an encrypted component's key MUST generate a fresh UUID and Fernet key,
 
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is the preferred syntax for italics. An opening single underscore MAY immediately follow a letter or number so authors can begin italics within a word, as in `Someth_ing there_`; the closing underscore must occur at a normal emphasis boundary. This intraword-opening behavior is an HVY Markdown extension and MUST NOT reinterpret ordinary embedded-underscore identifiers such as `snake_case_value`. Authoring clients SHOULD use standard `*text*` emphasis when an italic run directly touches unformatted letters or numbers and underscore delimiters would become ambiguous, such as multiple formatted fragments within one word.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
-Use `~~text~~` for strikethrough. Authoring clients MUST preserve this syntax when serializing strikethrough text from a rich editor.
+Use `~~text~~` for strikethrough. The document setting `typography.recolorStrikethrough` defaults to `false`: the line MUST use the struck text’s color. When `true`, renderers MUST use the active theme’s `--hvy-strikethrough-color` for both the struck text and its line (see §5.12). This setting applies even when the viewer selects a local palette instead of document colors. Authoring clients MUST preserve this syntax when serializing strikethrough text from a rich editor.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
 
 Blank lines inside text components are meaningful Markdown paragraph separators. The normal paragraph gap is configured by `typography.paragraphSpacing` and defaults to `0.45rem`.
@@ -214,7 +214,7 @@ Presentation keys in document metadata include:
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
 - `sidebar_max_width`: optional CSS width value limiting the editor and viewer sidebar. Defaults to `40rem`.
 - `database_table_max_column_width`: optional positive CSS length limiting interactive database-table column resizing and auto-fit. It accepts `px`, `rem`, `em`, or `ch` units and defaults to `40rem`.
-- `typography`: optional object for document-wide text rhythm. `typography.paragraphSpacing` is an optional non-negative CSS length used between Markdown paragraphs and paragraph-flow text components. It defaults to `0.45rem`.
+- `typography`: optional object for document-wide typography. `typography.recolorStrikethrough` is an optional boolean (default `false`) enabling the active theme’s color for both struck text and its line. `typography.paragraphSpacing` is an optional non-negative CSS length used between Markdown paragraphs and paragraph-flow text components. It defaults to `0.45rem`.
 - `responsive_breakpoints`: optional object mapping surface breakpoint names to simple CSS length tokens. Responsive inline CSS variants use these names. The defaults are `sm: 40rem`, `md: 48rem`, `lg: 64rem`, `xl: 80rem`, and `2xl: 96rem`. Authors MAY override these values or add names. Breakpoint names MUST start with a letter and contain only ASCII letters, digits, and hyphens; values MUST be simple CSS length tokens.
 - `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
@@ -1052,6 +1052,7 @@ Viewers SHOULD ship built-in defaults for the following conventional names so do
 | `--hvy-text` | Primary text |
 | `--hvy-text-alt` | Secondary text |
 | `--hvy-text-muted` | Muted helper text |
+| `--hvy-strikethrough-color` | Struck text and line color when `typography.recolorStrikethrough` is enabled; themes SHOULD choose a contrasting color, such as red |
 | `--hvy-link-color` | Inline link text |
 | `--hvy-accent-1` | Primary accent fill |
 | `--hvy-accent-1-alt` | Primary accent border |

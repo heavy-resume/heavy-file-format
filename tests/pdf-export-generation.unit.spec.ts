@@ -3,7 +3,7 @@ import { expect, test } from 'vitest';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob } from '../src/pdf-export/export';
-import { renderPdfTextBlock } from '../src/pdf-export/text';
+import { renderPdfInlineMarkdown, renderPdfTextBlock } from '../src/pdf-export/text';
 import type { HvyPdfMakeNodeObject } from '../src/pdf-export/types';
 import type { VisualDocument } from '../src/types';
 import { createDefaultTextCaption } from '../src/caption';
@@ -709,3 +709,23 @@ function countPdfPages(buffer: ArrayBuffer): number {
   const text = Buffer.from(buffer).toString('latin1');
   return (text.match(/\/Type\s*\/Page\b/g) ?? []).length;
 }
+
+
+test('PDF strikethrough recoloring applies to text and line only when enabled', () => {
+  const document: VisualDocument = {
+    meta: { typography: { recolorStrikethrough: true }, theme: { colors: { '--hvy-strikethrough-color': '#d12345' } } },
+    extension: '.hvy', attachments: [], sections: [],
+  };
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({ color: '#d12345', decorationColor: '#d12345' });
+  expect(renderPdfInlineMarkdown('~~Fake removed text~~')).toEqual([
+    { text: 'Fake removed text', decoration: 'lineThrough', style: 'strikethrough' },
+  ]);
+  document.meta.theme = { colors: { '--hvy-strikethrough-color': 'currentColor' } };
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({});
+  delete document.meta.theme;
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({ color: '#b83232', decorationColor: '#b83232' });
+  document.meta.typography = { recolorStrikethrough: false };
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({});
+  delete document.meta.typography;
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({});
+});

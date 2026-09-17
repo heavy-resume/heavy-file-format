@@ -145,6 +145,7 @@ export function renderTemplateValueTokens(html: string, options: { editable?: bo
       const marker = document.createElement('span');
       marker.className = 'template-value-token';
       marker.contentEditable = 'false';
+      marker.dataset.richAtomic = 'true';
       marker.tabIndex = -1;
       marker.dataset.templateValueToken = match[1] ?? '';
       const variable = variables.get(match[1] ?? '');
@@ -154,7 +155,10 @@ export function renderTemplateValueTokens(html: string, options: { editable?: bo
       const sourceToken = document.createElement('span');
       sourceToken.className = 'template-value-token-source';
       sourceToken.textContent = match[0];
-      marker.append(sourceToken);
+      const label = document.createElement('span');
+      label.className = 'template-value-token-label';
+      label.textContent = marker.dataset.templateValueDisplay;
+      marker.append(sourceToken, label);
       fragment.append(marker);
       if (options.editable) {
         fragment.append(document.createTextNode('\u200b'));

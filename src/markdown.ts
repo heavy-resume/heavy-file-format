@@ -188,6 +188,13 @@ turndown.addRule('hvy-text-fill-in-marker', {
   replacement: (_content, node) => createTextFillInMarker((node as Element).getAttribute('data-placeholder') ?? ''),
 });
 
+turndown.addRule('hvy-template-value-token', {
+  filter: (node) => node.nodeType === 1 && (node as Element).hasAttribute('data-template-value-token'),
+  // The hidden source is HVY syntax, not prose: escaping its underscores changes
+  // the variable name and prevents template substitution after an editor round trip.
+  replacement: (_content, node) => (node as Element).querySelector('.template-value-token-source')?.textContent ?? '',
+});
+
 turndown.addRule('hvy-sort-value', {
   filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-sort-value') === 'true',
   replacement: (content, node) => {

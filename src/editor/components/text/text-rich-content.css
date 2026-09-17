@@ -208,8 +208,8 @@
 }
 
 .hvy-document .template-value-token {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
+  user-select: all;
   max-width: 100%;
   padding: 0.08rem 0.42rem;
   border: 1px solid color-mix(in srgb, var(--hvy-accent-1) 55%, var(--hvy-border));
@@ -217,7 +217,7 @@
   background: color-mix(in srgb, var(--hvy-accent-1) 14%, var(--hvy-surface));
   color: var(--hvy-text);
   font-size: inherit;
-  font-weight: 650;
+  font-weight: inherit;
   vertical-align: baseline;
   line-height: 1;
 }
@@ -226,8 +226,7 @@
   display: none;
 }
 
-.hvy-document .template-value-token::after {
-  content: attr(data-template-value-display);
+.hvy-document .template-value-token-label {
   font-size: 0.82em;
   line-height: 1;
 }

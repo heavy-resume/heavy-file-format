@@ -20,6 +20,7 @@ import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace, INLINE_CHECKBOX_CARET_ANCHOR } from './editor/inline-checkbox';
 import { renderInlineAnswerGroupOption, renderTextRichEditorContent } from './editor/components/text/text';
+import { beginAtomicInlineSelection } from './editor/components/text/text-atomic-selection';
 import {
   getInlineAnswerGroupIndex,
   getNearbyRadioGroupNames,
@@ -2749,6 +2750,7 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
 
 export function handleRichEditorPointerDown(event: MouseEvent, editable: HTMLElement): boolean {
   if (event.button !== 0 || !(event.target instanceof Element)) return false;
+  if (beginAtomicInlineSelection(event, editable)) return true;
   const answerRow = findInlineAnswerRowAtPointer(editable, event);
   if (!answerRow) return false;
   const firstControl = answerRow.querySelector<HTMLInputElement>('input.hvy-inline-checkbox');

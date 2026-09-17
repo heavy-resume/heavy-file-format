@@ -63,10 +63,10 @@ test('component template builder creates tokens and flavors as one undoable edit
   await modal.locator('[data-rich-action="template-value"]').evaluate((node) => {
     node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   });
-  await expect(modal.locator('.template-value-token')).toHaveText('{% expected-title | text %}');
+  await expect(modal.locator('.template-value-token-source')).toHaveText('{% expected-title | text %}');
   await expect(modal.locator('.template-value-token')).toHaveAttribute('data-template-value-display', 'Expected title · text');
   await modal.locator('[data-field="builder-template-variable-type"]').selectOption('block');
-  await expect(modal.locator('.template-value-token')).toHaveText('{% expected-title | block %}');
+  await expect(modal.locator('.template-value-token-source')).toHaveText('{% expected-title | block %}');
   await expect(modal.locator('.template-value-token')).toHaveAttribute('data-template-value-display', 'Expected title · multi-line');
   await editor.evaluate((editable) => {
     editable.insertAdjacentHTML('beforeend', '<p>Repeated phrase</p>');
@@ -91,7 +91,7 @@ test('component template builder creates tokens and flavors as one undoable edit
   const variableName = modal.locator('[data-field="builder-template-variable-name"]');
   await variableName.fill('renamed-title');
   await variableName.press('Tab');
-  await expect(modal.locator('.template-value-token')).toHaveText([
+  await expect(modal.locator('.template-value-token-source')).toHaveText([
     '{% renamed-title | block %}',
     '{% renamed-title | block %}',
   ]);

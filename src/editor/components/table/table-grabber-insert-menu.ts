@@ -1,3 +1,5 @@
+import { activateTransientPopover, releaseTransientPopover } from '../../../transient-popovers';
+
 type TableGrabberKind = 'row' | 'column';
 
 interface TableGrabberInsertMenuOptions {
@@ -27,7 +29,7 @@ export function renderTableGrabberInsertMenu(options: TableGrabberInsertMenuOpti
       aria-haspopup="menu"
       aria-expanded="false"
     >::</button>
-    <span class="table-grabber-insert-popover" role="menu" aria-label="Insert ${kind}" hidden>
+    <span class="table-grabber-insert-popover" popover="manual" role="menu" aria-label="Insert ${kind}" hidden>
       <button type="button" role="menuitem" data-action="insert-table-${kind}-before" ${data}>Insert before</button>
       <button type="button" role="menuitem" data-action="insert-table-${kind}-after" ${data}>Insert after</button>
     </span>
@@ -35,6 +37,17 @@ export function renderTableGrabberInsertMenu(options: TableGrabberInsertMenuOpti
 }
 
 export function bindTableGrabberInsertMenus(app: HTMLElement): void {
+  app.addEventListener('scroll', (event) => {
+    if (!(event.target instanceof Element) || !event.target.closest('.table-grabber-insert-popover')) {
+      app.querySelectorAll<HTMLElement>('.table-grabber-insert-menu.is-open').forEach((menu) => {
+        positionTableGrabberInsertMenu(
+          menu.querySelector<HTMLElement>('[data-drag-handle]')!,
+          menu.querySelector<HTMLElement>('.table-grabber-insert-popover')!
+        );
+      });
+    }
+  }, { capture: true });
+
   app.addEventListener('dblclick', (event) => {
     openTableGrabberInsertMenu(app, event);
   });
@@ -82,7 +95,10 @@ function openTableGrabberInsertMenu(app: HTMLElement, event: MouseEvent): boolea
   event.preventDefault();
   event.stopPropagation();
   closeTableGrabberInsertMenus(app, menu);
+  activateTransientPopover(app, popover, () => closeTableGrabberInsertMenus(app));
   popover.hidden = false;
+  popover.showPopover();
+  positionTableGrabberInsertMenu(handle, popover);
   menu.classList.add('is-open');
   handle.setAttribute('aria-expanded', 'true');
   popover.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
@@ -98,10 +114,35 @@ export function closeTableGrabberInsertMenus(root: ParentNode, except: HTMLEleme
     menu.classList.remove('is-open');
     const popover = menu.querySelector<HTMLElement>('.table-grabber-insert-popover');
     if (popover) {
+      releaseTransientPopover(root, popover);
+      popover.hidePopover();
       popover.hidden = true;
     }
     menu.querySelector<HTMLElement>('[data-drag-handle]')?.setAttribute('aria-expanded', 'false');
     closed = true;
   });
   return closed;
+}
+
+function positionTableGrabberInsertMenu(handle: HTMLElement, popover: HTMLElement): void {
+  const surface = handle.closest<HTMLElement>('.modal-panel, .editor-shell, .viewer-shell') ?? handle.closest<HTMLElement>('.hvy-document')!;
+  const bounds = surface.getBoundingClientRect();
+  const anchor = handle.getBoundingClientRect();
+  const margin = 8;
+  const gap = 5;
+  const left = Math.max(0, bounds.left) + margin;
+  const top = Math.max(0, bounds.top) + margin;
+  const right = Math.min(window.innerWidth, bounds.right) - margin;
+  const bottom = Math.min(window.innerHeight, bounds.bottom) - margin;
+  popover.style.maxWidth = `${Math.max(0, right - left)}px`;
+  popover.style.maxHeight = `${Math.max(0, bottom - top)}px`;
+  const size = popover.getBoundingClientRect();
+  const x = Math.max(left, Math.min(anchor.left, right - size.width));
+  const preferredY = anchor.bottom + gap + size.height <= bottom
+    ? anchor.bottom + gap
+    : anchor.top - gap - size.height;
+  const y = Math.max(top, Math.min(preferredY, bottom - size.height));
+  // Absolute top-layer coordinates escape table overflow; bounds still belong to the preview surface.
+  popover.style.left = `${x + window.scrollX}px`;
+  popover.style.top = `${y + window.scrollY}px`;
 }

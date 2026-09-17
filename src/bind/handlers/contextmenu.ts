@@ -3,6 +3,7 @@ import { getAiEditorDoubleClickDelayMs } from '../../reference-config';
 import { hasComponentInEditorClipboard, hasSectionInEditorClipboard } from '../../editor-clipboard';
 import { findBlockByIds } from '../../block-ops';
 import { findBlockContainerById } from '../../section-ops';
+import { activateTransientPopover, releaseTransientPopover } from '../../transient-popovers';
 
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 const AI_LONG_PRESS_MS = 560;
@@ -428,6 +429,7 @@ function renderContextMenuElement(app: HTMLElement): void {
     addButton('Clear filtering', 'clear-target-filtering');
   }
   root.append(...(backdrop ? [backdrop] : []), ...(clone ? [clone] : []), popover);
+  activateTransientPopover(app, popover, () => closeReaderContextPopover(app));
   const position = placeContextMenuPopover(root, popover, menu.x, menu.y);
   menu.x = position.x;
   menu.y = position.y;
@@ -518,6 +520,7 @@ function getComponentPasteContextAttrs(menu: { sectionKey: string; blockId?: str
 }
 
 export function closeReaderContextPopover(app: HTMLElement, clearState = true): void {
+  releaseTransientPopover(app, app.querySelector<HTMLElement>('.hvy-context-popover'));
   if (clearState) {
     state.contextMenu = null;
   }

@@ -366,6 +366,8 @@
   margin: 0;
   display: grid;
   width: max-content;
+  height: max-content;
+  align-content: start;
   min-width: min(8.5rem, 100%);
   box-sizing: border-box;
   overflow: auto;

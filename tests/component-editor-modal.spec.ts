@@ -238,3 +238,40 @@ component_defs:
   await markerEditor.getByRole('button', { name: 'Close' }).click();
   await expect(builder.locator('[data-field="block-location-marker-name"]')).toHaveValue('primary-actions');
 });
+
+test('narrow component editors stay inline when the modal would not give them more room', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"stacked-grid","gridColumns":2}-->
+  <!--hvy:grid:0 {"id":"stacked-first"}-->
+   <!--hvy:container {"id":"outer-container"}-->
+    <!--hvy:container {"id":"inner-container"}-->
+     <!--hvy:text {"id":"deep-text"}-->
+      Deep expected result
+
+  <!--hvy:grid:1 {"id":"stacked-second"}-->
+   <!--hvy:text {}-->
+    Second
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Deep expected result' }).last().click();
+  const deepTextGate = await page.locator('[data-hvy-component-editor-gate="true"][data-component-label="text"]', { hasText: 'Deep expected result' }).last().evaluate((gate) => ({
+    width: gate.getBoundingClientRect().width,
+    tooNarrow: gate.classList.contains('is-component-editor-too-narrow'),
+  }));
+  expect(deepTextGate.width).toBeLessThan(300);
+  expect(deepTextGate.tooNarrow).toBe(false);
+  await expect(page.locator('.component-editor-compact-button:visible')).toHaveCount(0);
+  await expect(page.locator('.component-editor-modal-probe')).toHaveCount(0);
+});

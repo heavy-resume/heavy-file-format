@@ -200,3 +200,8 @@
   border-top: 1px solid var(--hvy-border);
   background: var(--hvy-surface-alt);
 }
+
+.hvy-document .component-editor-modal-probe {
+  visibility: hidden;
+  pointer-events: none;
+}

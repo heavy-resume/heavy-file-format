@@ -385,7 +385,7 @@ test('isolated embed example exposes matching text editors for plugin authors', 
 
 test('plugins can mount the shared text editor helper', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Raw' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const { setHostPlugins } = await import('/src/plugins/registry.ts');
     setHostPlugins([{
@@ -416,7 +416,7 @@ test('plugins can mount the shared text editor helper', async ({ page }) => {
     }]);
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toBeVisible();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
@@ -496,9 +496,9 @@ text_line_styles:
 
 test('built-in editable text plugin remains editable from viewer mode', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Raw' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toBeVisible();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
@@ -741,7 +741,7 @@ test('italic toolbar action serializes multi-paragraph and list selections', asy
     emptyEmphasis: 0,
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('_Alpha_');
   await expect(page.locator('#rawEditor')).toContainText('- _Bravo_');
   await expect(page.locator('#rawEditor')).toContainText('- _Charlie_');
@@ -789,7 +789,7 @@ test('quote toolbar action formats every selected paragraph and list block', asy
   expect(bulletBox).not.toBeNull();
   expect(bulletBox!.x).toBeGreaterThan(quoteBox!.x + 12);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('> Alpha');
   await expect(page.locator('#rawEditor')).toContainText('> - Bravo');
   await expect(page.locator('#rawEditor')).toContainText('> - Charlie');
@@ -1189,7 +1189,7 @@ test('paragraph style picker shows two recent choices and opens the full list', 
 test('paragraph style recents carry across active text blocks', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 text_line_styles:
@@ -1674,7 +1674,7 @@ test('plugin text editor hotkeys promote their actions in compact history', asyn
 test('grid text editor uses an unsquashed floating toolbar without covering component controls', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 reader_max_width: 70rem
@@ -1861,7 +1861,7 @@ test('floating text toolbar reserves no space above the editor and keeps bottom 
 test('paragraph style picker fits inside compact sidebar editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 text_line_styles:

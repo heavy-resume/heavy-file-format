@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('before, image edits, after: the editor viewport stays mounted and keeps its scroll anchor', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -74,7 +74,7 @@ ${Array.from({ length: 24 }, (_, index) => ` <!--hvy:text {}-->
 test('before, text above a loaded image, after: activating the text keeps its viewport anchor', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -340,7 +340,7 @@ hvy_version: 0.1
 test('before, an image and table are open, after: closing the table keeps its viewport anchor', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -424,7 +424,7 @@ ${Array.from({ length: 10 }, (_item, index) => `<!--hvy: {"id":"trailing-section
 test('before, an image and nested list item are open, after: moving the item keeps the viewport position', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

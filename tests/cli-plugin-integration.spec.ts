@@ -189,7 +189,7 @@ test('scripting globals do not expose browser globals or wrapper internals', asy
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -229,7 +229,7 @@ doc.header.set("sandbox_direct", ",".join(direct_leaked) or "clean")
   await waitForScriptingIdle(page);
 
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(page.locator('#rawEditor')).toContainText('sandbox_globals: clean');
   await expect(page.locator('#rawEditor')).toContainText('sandbox_direct: clean');
@@ -239,7 +239,7 @@ test('scripting sandbox blocks dynamic imports eval globals and frame escapes', 
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -286,7 +286,7 @@ test('scripting supports standard attribute lookup detection assignment and dele
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -322,7 +322,7 @@ test('attribute builtins do not reach restricted browser capabilities', async ({
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -377,7 +377,7 @@ test('scripting checked regex library runs without Brython native re import', as
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -404,7 +404,7 @@ test('scripting checked datetime library supports safe calendar arithmetic and I
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -446,7 +446,7 @@ test('scripting checked random library supports safe sequence and numeric helper
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -503,7 +503,7 @@ test('scripting checked datetime library does not expose runtime capabilities', 
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -537,7 +537,7 @@ test('scripting checked regex library does not expose Brython re dependency modu
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -581,7 +581,7 @@ doc.header.set("regex_dependency_modules", ",".join(results))
 
 test('visibleScript uses the shared scripting sandbox', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -640,7 +640,7 @@ scripts:
   await form.getByRole('button', { name: 'Submit' }).click();
 
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('script_return: before');
   await expect(page.locator('#rawEditor')).toContainText('form_return: before');
   await expect(page.locator('#rawEditor')).not.toContainText('script_return: after');
@@ -675,7 +675,7 @@ scripts:
   await expect(form.locator('select[name="Choice"] option')).toContainText(['Alpha', 'Beta']);
 
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('form_initial_runs: 1');
   await expect(page.locator('#rawEditor')).toContainText('initial_choice: a');
   await page.getByRole('button', { name: 'Viewer' }).click();

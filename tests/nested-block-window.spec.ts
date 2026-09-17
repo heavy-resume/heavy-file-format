@@ -47,7 +47,7 @@ async function loadNestedBlockDocument(
   source = NESTED_BLOCK_DOCUMENT
 ): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').evaluate((rawEditor, value) => {
     rawEditor.value = value;
     rawEditor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: null }));

@@ -1,23 +1,12 @@
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import { createDefaultChatState } from '../src/chat/chat';
 import { createDefaultSearchState } from '../src/search/state';
 import { initCallbacks, initState, getActiveStateRuntime, state } from '../src/state';
 import type { VisualSection } from '../src/editor/types';
-import type { AppState, VisualDocument } from '../src/types';
+import type { AppState } from '../src/types';
 
-vi.mock('../src/serialization', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/serialization')>();
-  return {
-    ...actual,
-    serializeDocumentBytes: vi.fn((document: VisualDocument) =>
-      new TextEncoder().encode(JSON.stringify({
-        title: document.meta.title ?? '',
-        sectionCount: document.sections.length,
-      }))
-    ),
-  };
-});
+afterEach(() => vi.restoreAllMocks());
 
 function createDocumentChangeTestState(): AppState {
   return {
@@ -150,8 +139,8 @@ function createSection(key: string, title: string): VisualSection {
 
 test('document change notifications use revisions without serializing document bytes', async () => {
   const { initDocumentChangeTracking, isDocumentDirty, markDocumentSaved, notifyDocumentMayHaveChanged } = await import('../src/document-change');
-  const { serializeDocumentBytes } = await import('../src/serialization');
-  const serializeDocumentBytesMock = vi.mocked(serializeDocumentBytes);
+  const serialization = await import('../src/serialization');
+  const serializeDocumentBytesSpy = vi.spyOn(serialization, 'serializeDocumentBytes');
   initCallbacks({
     renderApp: () => {},
     refreshReaderPanels: () => {},
@@ -163,13 +152,13 @@ test('document change notifications use revisions without serializing document b
   const expectedEvents: Array<{ dirty: boolean; reason?: string }> = [];
 
   initDocumentChangeTracking(getActiveStateRuntime(), (event) => expectedEvents.push(event));
-  serializeDocumentBytesMock.mockClear();
+  serializeDocumentBytesSpy.mockClear();
 
   notifyDocumentMayHaveChanged('before-title-input', 'editor');
   state.document.meta.title = 'Edited';
   await Promise.resolve();
 
-  expect(serializeDocumentBytesMock).not.toHaveBeenCalled();
+  expect(serializeDocumentBytesSpy).not.toHaveBeenCalled();
   expect(expectedEvents.at(-1)).toEqual({
     dirty: true,
     reason: 'before-title-input',
@@ -178,11 +167,11 @@ test('document change notifications use revisions without serializing document b
   });
 
   expect(isDocumentDirty(getActiveStateRuntime())).toBe(true);
-  expect(serializeDocumentBytesMock).toHaveBeenCalledTimes(1);
+  expect(serializeDocumentBytesSpy).toHaveBeenCalledTimes(1);
 
-  serializeDocumentBytesMock.mockClear();
+  serializeDocumentBytesSpy.mockClear();
   markDocumentSaved(getActiveStateRuntime());
-  expect(serializeDocumentBytesMock).toHaveBeenCalledTimes(1);
+  expect(serializeDocumentBytesSpy).toHaveBeenCalledTimes(1);
   expect(expectedEvents.at(-1)).toEqual({ dirty: false, reason: 'mark-saved', changedSectionTitles: [] });
 });
 

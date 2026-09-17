@@ -17,7 +17,7 @@ ${Array.from({ length: 200 }, (_item, index) => `<!--hvy:text {"id":"giant-windo
 
 async function loadGiantBlockDocument(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').evaluate((rawEditor, value) => {
     rawEditor.value = value;
     rawEditor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: null }));

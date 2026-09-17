@@ -97,7 +97,7 @@ test('compacted section click refresh cost compares small, large, and nearly emp
 async function loadRawDocument(page: Page, source: string): Promise<void> {
   await expect(page.getByRole('button', { name: 'Editor' })).toBeVisible();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toBeVisible();
   await page.locator('#rawEditor').evaluate((textarea, value) => {
     if (!(textarea instanceof HTMLTextAreaElement)) {

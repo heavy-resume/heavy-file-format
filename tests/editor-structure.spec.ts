@@ -1186,6 +1186,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'AI' }).click();
 
   const block = page.locator('#aiReaderDocument .reader-block', { hasText: 'Touch target summary words' });
+  await expect(page.locator('.ai-view-shell')).toHaveCSS('touch-action', 'manipulation');
   await block.dispatchEvent('pointerup', {
     bubbles: true,
     pointerType: 'touch',

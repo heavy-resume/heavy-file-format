@@ -2278,16 +2278,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
         ${component === 'container'
         ? `<label>
-          <span>Preview Height (CSS units)</span>
-          <input
-            type="number"
-            min="1"
-            step="0.25"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-container-collapsed-preview-rem"
-            value="${deps.escapeAttr(String(block.schema.containerCollapsedPreviewRem))}"
-          />
+          <span>Preview Height (CSS sizing)</span>
+          <span class="input-with-unit">
+            <input
+              type="number"
+              min="1"
+              step="0.25"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-container-collapsed-preview-rem"
+              value="${deps.escapeAttr(String(block.schema.containerCollapsedPreviewRem))}"
+            />
+            <span class="input-unit">rem</span>
+          </span>
         </label>`
         : ''
       }

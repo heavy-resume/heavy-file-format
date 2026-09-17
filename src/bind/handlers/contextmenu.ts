@@ -62,7 +62,7 @@ export function bindContextmenu(app: HTMLElement): void {
       }
       return;
     }
-    if (state.currentView === 'ai' && isNativeContextMenuModifier(event)) {
+    if (state.currentView === 'ai' && (isNativeContextMenuModifier(event) || shouldIgnoreAiContextGestureTarget(target))) {
       return;
     }
 

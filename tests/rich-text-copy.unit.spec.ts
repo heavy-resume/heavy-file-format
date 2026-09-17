@@ -6,7 +6,7 @@ import { buildDocumentRichTextCopyPayload } from '../src/rich-text-copy';
 
 test('buildDocumentRichTextCopyPayload linearizes PDF-rendered PHVY content as html and plain text', () => {
   const document = createBlankDocument('.phvy');
-  const section = createEmptySection(1);
+  const section = createEmptySection();
   section.title = 'Profile';
   const text = createEmptyBlock('text');
   text.text = 'Senior **engineer**\n\n- Builds tools';
@@ -26,7 +26,7 @@ test('buildDocumentRichTextCopyPayload linearizes PDF-rendered PHVY content as h
     schema: defaultBlockSchema('text') as TextBlockSchema,
   };
   section.blocks = [text, table, container, image];
-  const hidden = createEmptySection(1);
+  const hidden = createEmptySection();
   hidden.title = 'Hidden';
   hidden.editorOnly = true;
   document.sections = [section, hidden];
@@ -53,7 +53,7 @@ test('buildDocumentRichTextCopyPayload linearizes PDF-rendered PHVY content as h
 
 test('buildDocumentRichTextCopyPayload omits invisible PHVY fill-in markers', () => {
   const document = createBlankDocument('.phvy');
-  const section = createEmptySection(1);
+  const section = createEmptySection();
   const heading = createEmptyBlock('text');
   heading.schema.fillIn = true;
   heading.text = '**<!-- value {"placeholder":"A literal \"Accomplishments\" or \'\' if none given"} -->**';

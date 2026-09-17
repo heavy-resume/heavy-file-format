@@ -14,7 +14,7 @@ eliminating the need to guess about information boundaries for things like docum
 
 A HVY document consists of header with meta information, a body, and a tail. The meta information
 can include things such as document color schemes, component template definitions, formatting config,
-and more. The body consists of sections, and within sections contain components or subsections. The tail
+and more. The body consists of sections, and within sections contain components. The tail
 consists of attached files, such as images, a SQLite database, or arbitrary files such as PDFs.
 
 The main body has a main window and pullout sidebar. Sections can be moved between main / sidebar via the editor.

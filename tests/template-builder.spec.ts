@@ -441,7 +441,7 @@ test('plugin template value forms update locally and preserve the active field',
         schema: defaultBlockSchema('text'),
       },
     }];
-    documentValue.sections = [createEmptySectionWithMeta(1, 'text', false, documentValue.meta)];
+    documentValue.sections = [createEmptySectionWithMeta('text', false, documentValue.meta)];
     registerHostPlugin({
       id: 'fake.generator',
       version: '1.0.0',

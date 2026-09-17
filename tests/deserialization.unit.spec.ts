@@ -139,7 +139,6 @@ section_defs:
     template:
       id: projects
       title: Projects
-      level: 1
       exclude_from_import: true
       protect_from_import: true
       tags: reciprocal-xref-source
@@ -157,7 +156,6 @@ section_defs:
         label: Section title
     template:
       title: Resume Section
-      level: 1
       blocks: []
       children: []
 ---

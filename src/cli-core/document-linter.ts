@@ -502,9 +502,6 @@ function fixSectionPluginAliasIds(section: VisualSection, fixed: string[]): void
   for (const block of section.blocks) {
     fixBlockPluginAliasIds(block, fixed);
   }
-  for (const child of section.children) {
-    fixSectionPluginAliasIds(child, fixed);
-  }
 }
 
 function fixBlockPluginAliasIds(block: VisualBlock, fixed: string[]): void {

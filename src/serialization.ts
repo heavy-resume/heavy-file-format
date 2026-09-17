@@ -184,8 +184,6 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'Document directives must be JSON objects like `<!--hvy:doc {}-->`.';
     case 'invalid_css_directive_json':
       return 'CSS directives must be JSON objects like `<!--hvy:css {}-->`.';
-    case 'invalid_subsection_directive_json':
-      return 'Subsection directives must be JSON objects like `<!--hvy:subsection {"id":"child"}-->`.';
     case 'invalid_section_directive_json':
       return 'Section directives must be JSON objects like `<!--hvy: {"id":"section-id"}-->`.';
     case 'unclosed_css_fence':
@@ -232,7 +230,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     idEditorOpen: false,
     isGhost: false,
     title: section.title || 'Untitled Section',
-    level: section.level,
+
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
     priority: sectionMeta.priority === true,
@@ -245,7 +243,6 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     protect_from_import: sectionMeta.protect_from_import === true,
     templateKey: typeof sectionMeta.templateKey === 'string' ? sectionMeta.templateKey : undefined,
     blocks,
-    children: section.children.map((child) => mapParsedSection(child, documentMeta, diagnostics)),
   };
 }
 
@@ -681,9 +678,6 @@ function mapParserErrorToDiagnostic(message: string): HvyDiagnostic {
   if (detail === 'invalid hvy:css directive JSON.') {
     return { severity: 'error', code: 'invalid_css_directive_json', message: `${linePrefix}CSS directive has invalid JSON.` };
   }
-  if (detail === 'invalid hvy:subsection directive JSON.') {
-    return { severity: 'error', code: 'invalid_subsection_directive_json', message: `${linePrefix}Subsection directive has invalid JSON.` };
-  }
   if (detail === 'invalid section hvy directive JSON.') {
     return { severity: 'error', code: 'invalid_section_directive_json', message: `${linePrefix}Section directive has invalid JSON.` };
   }
@@ -727,9 +721,6 @@ function validateSectionSemantics(section: VisualSection, document: VisualDocume
   }
   for (const block of section.blocks) {
     validateBlockSemantics(block, sectionLabel, document, diagnostics);
-  }
-  for (const child of section.children) {
-    validateSectionSemantics(child, document, diagnostics);
   }
 }
 
@@ -1000,7 +991,7 @@ export function serializeDocument(document: VisualDocument): string {
   const body = trimBoundaryNewlines(
     document.sections
       .filter((section) => !section.isGhost)
-      .map((section) => serializeSection(section, 1, document.meta))
+      .map((section) => serializeSection(section, document.meta))
       .join('\n')
   );
   const textBody = `${frontMatter}\n${body}\n`;
@@ -1008,7 +999,7 @@ export function serializeDocument(document: VisualDocument): string {
 }
 
 export function serializeSectionFragment(section: VisualSection, documentMeta: JsonObject | null = null): string {
-  return serializeSection(section, 1, documentMeta);
+  return serializeSection(section, documentMeta);
 }
 
 export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
@@ -1138,7 +1129,6 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject, docu
     result.id = id;
   }
   result.title = typeof section.title === 'string' ? section.title : 'Untitled Section';
-  result.level = typeof section.level === 'number' ? section.level : 1;
   if (section.contained === false) {
     result.contained = false;
   }
@@ -1179,9 +1169,6 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject, docu
     result.protect_from_import = true;
   }
   result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject, documentMeta)) : [];
-  result.children = Array.isArray(section.children)
-    ? section.children.map((child) => cleanSectionTemplate(child as Partial<VisualSection> & JsonObject, documentMeta))
-    : [];
   return result;
 }
 
@@ -1389,7 +1376,7 @@ function lastIndexOfBytes(source: Uint8Array, needle: Uint8Array): number {
   return -1;
 }
 
-function serializeSection(section: VisualSection, level: number, documentMeta: JsonObject | null): string {
+function serializeSection(section: VisualSection, documentMeta: JsonObject | null): string {
   const heading = `#! ${section.title}`;
   const authoredId = section.customIdGenerated === true ? '' : section.customId.trim();
   const meta: JsonObject = {
@@ -1433,19 +1420,13 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
     meta.templateKey = section.templateKey;
   }
 
-  const directiveName = level === 1 ? 'hvy:' : 'hvy:subsection';
-  const directive = `<!--${directiveName} ${JSON.stringify(meta)}-->`;
+  const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;
 
   const blockText = section.blocks
     .map((block) => serializeBlock(block, 1, documentMeta))
     .join('\n\n');
 
-  const children = section.children
-    .filter((child) => !child.isGhost)
-    .map((child) => serializeSection(child, level + 1, documentMeta))
-    .join('\n\n');
-
-  return `${directive}\n${heading}\n\n${blockText}${children ? `\n\n${children}` : ''}`;
+  return `${directive}\n${heading}\n\n${blockText}`;
 }
 
 function serializeBlockSchema(
@@ -1632,7 +1613,7 @@ function serializeBlockDirective(block: VisualBlock, documentMeta: JsonObject | 
   const component = schema.component.trim();
   const omitId = block.idGenerated === true;
   const omitTableRows = resolveBaseComponentFromMeta(component, documentMeta) === 'table' && block.text.trim().length === 0;
-  if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
+  if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css'].includes(component)) {
     return {
       name: component,
       schema: serializeBlockSchema(schema, { omitId, omitComponent: true, omitTableRows, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),

@@ -396,12 +396,6 @@ export function expandSectionPathById(sections: VisualSection[], sectionId: stri
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
     }
-    const childRes = expandSectionPathById(section.children, sectionId);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
-    }
   }
   return emptyExpandResult();
 }
@@ -412,12 +406,6 @@ export function expandSectionPathByKey(sections: VisualSection[], sectionKey: st
       const changed = !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
-    }
-    const childRes = expandSectionPathByKey(section.children, sectionKey);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
   return emptyExpandResult();
@@ -431,12 +419,6 @@ export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: s
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
     }
-    const childRes = expandBlockPathBySchemaId(section.children, schemaId);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
-    }
   }
   return emptyExpandResult();
 }
@@ -444,12 +426,6 @@ export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: s
 export function expandBlockPathByBlockId(sections: VisualSection[], blockId: string, sectionKey?: string): ExpandResult {
   for (const section of sections) {
     if (sectionKey && section.key !== sectionKey && !sectionContainsBlock(section, blockId)) {
-      const childRes = expandBlockPathByBlockId(section.children, blockId, sectionKey);
-      if (childRes.found) {
-        const changed = childRes.changed || !getReaderSectionExpanded(section);
-        setReaderSectionExpanded(section, true);
-        return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
-      }
       continue;
     }
     const blockRes = expandBlockPathInList(section.blocks, blockId, section.key, 'block-id');
@@ -457,12 +433,6 @@ export function expandBlockPathByBlockId(sections: VisualSection[], blockId: str
       const changed = blockRes.changed || !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
-    }
-    const childRes = expandBlockPathByBlockId(section.children, blockId, sectionKey);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
   return emptyExpandResult();
@@ -519,7 +489,7 @@ function expandBlockPathInList(blocks: VisualBlock[], id: string, sectionKey: st
 }
 
 function sectionContainsBlock(section: VisualSection, blockId: string): boolean {
-  return section.blocks.some((block) => findBlockInSectionById(block, blockId)) || section.children.some((child) => sectionContainsBlock(child, blockId));
+  return section.blocks.some((block) => findBlockInSectionById(block, blockId));
 }
 
 function emptyExpandResult(): ExpandResult {

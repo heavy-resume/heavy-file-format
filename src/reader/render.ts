@@ -221,7 +221,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           ${items
           .map(
             (section) =>
-              `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
+              `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}">${deps.escapeHtml(
                 deps.formatSectionTitle(section.title)
               )}</button>`
           )
@@ -269,7 +269,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function hasReaderSectionContentCandidate(section: VisualSection): boolean {
-    return section.blocks.length > 0 || section.children.some(hasReaderSectionContentCandidate);
+    return section.blocks.length > 0;
   }
 
   function renderReaderSectionPlaceholder(section: VisualSection, estimatedHeight: number): string {
@@ -449,7 +449,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function shouldAutoExpandAuthoringSection(section: VisualSection): boolean {
-    if (state.currentView !== 'ai' || !section.contained || section.children.length > 0) {
+    if (state.currentView !== 'ai' || !section.contained) {
       return false;
     }
     return section.blocks.some((block) =>
@@ -463,14 +463,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     windowOptions?: ReaderRenderTreeWindowOptions
   ): string {
     const blocks = getVisibleReaderBlocks(section, section.blocks, false);
-    const viewContext = getActiveReaderViewContext();
-    const searchContext = getActiveSearchFilterContext();
-    const children = orderReaderSections(section.children.filter((child) => (
-      !child.isGhost
-      && !isViewerHiddenSection(child)
-      && !hasReaderViewModifier(viewContext, getSectionReaderViewTargetKey(child), 'hidden')
-      && isSectionSearchVisible(searchContext, child)
-    )));
     const activeResult = state.search.results.find((result) => result.id === state.search.activeResultId);
     const forceNodeKeys = new Set<string>();
     if (activeResult) {
@@ -479,38 +471,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           forceNodeKeys.add(block.id);
         }
       });
-      children.forEach((child) => {
-        if (child.key === activeResult.sectionKey || containsReaderSectionKey(child, activeResult.sectionKey)) {
-          forceNodeKeys.add(child.key);
-        }
-      });
+
     }
     const effectiveWindowOptions = windowOptions ? { ...windowOptions, forceNodeKeys } : undefined;
     const nodes = [
       ...blocks.map(createReaderBlockRenderTreeNode),
-      ...children.map(createReaderSectionRenderTreeNode),
     ];
     const entries = readerRenderTreeHeightLedger.plan(
       nodes,
       effectiveWindowOptions,
-      children.length > 0 ? READER_SECTION_TREE_LAYOUT : READER_BLOCK_TREE_LAYOUT
+      READER_BLOCK_TREE_LAYOUT
     );
     const output: string[] = [];
     for (let index = 0; index < entries.length;) {
       const entry = entries[index];
       if (!entry) break;
-      if (entry.node.kind === 'section') {
-        const child = entry.node.item as VisualSection;
-        output.push(entry.shouldRender
-          ? renderReaderSection(
-            child,
-            createChildRenderTreeWindowOptions(effectiveWindowOptions, entry.offsetTop, 44)
-          )
-          : renderReaderSectionPlaceholder(child, entry.estimatedHeight)
-        );
-        index += 1;
-        continue;
-      }
       if (entry.shouldRender) {
         const renderOptions = section.contained
           ? {
@@ -545,11 +520,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       if (candidate !== block && candidate.id === blockId) found = true;
     });
     return found;
-  }
-
-  function containsReaderSectionKey(section: VisualSection, sectionKey: string | undefined): boolean {
-    if (!sectionKey) return false;
-    return section.children.some((child) => child.key === sectionKey || containsReaderSectionKey(child, sectionKey));
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
@@ -1012,8 +982,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function sectionContainsAdvancedOnlyScriptingBlock(section: VisualSection): boolean {
-    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock)
-      || section.children.some(sectionContainsAdvancedOnlyScriptingBlock);
+    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock);
   }
 
   function blockContainsAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
@@ -1111,7 +1080,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       idEditorOpen: false,
       isGhost: false,
       title: 'Theme Preview',
-      level: 1,
+
       expanded: true,
       highlight: false,
       css: '',
@@ -1119,7 +1088,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       description: '',
       location: 'main',
       blocks: [],
-      children: [],
     };
     const makePreviewBlock = (id: string, component: string, text: string, schema: Partial<BlockSchema> = {}): VisualBlock => ({
       id,
@@ -1801,7 +1769,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             ? `This component already uses "${deps.escapeHtml(existingName)}". Update that component template, save this component as a new template, or add it as a flavor.`
             : `This section already uses "${deps.escapeHtml(existingName)}". Update that section template, save this section as a new template, or add it as a flavor.`
           : state.reusableSaveModal.kind === 'section'
-            ? 'This saves a cloned section template, including its current blocks and nested subsections.'
+            ? 'This saves a cloned section template, including its current components.'
             : 'This saves a cloned component template, including pre-filled values and nested children.';
       return `
         <div id="modalRoot" class="modal-root">
@@ -2371,7 +2339,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         schemaMode: false,
       } : null);
       if (!template) return '<p class="muted">This flavor has no component preview.</p>';
-      const previewSection = createEmptySectionWithMeta(1, 'text', false, state.documentMeta);
+      const previewSection = createEmptySectionWithMeta('text', false, state.documentMeta);
       previewSection.key = `__reusable_flavor_preview__:${definitionName}:${flavorIndex}`;
       return renderReaderBlock(previewSection, template, { ignoreReaderSessionState: true });
     }

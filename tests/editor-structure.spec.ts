@@ -3534,40 +3534,13 @@ hvy_version: 0.1
   await expect(page.locator('.editor-tree', { hasText: 'Target Location(s)' })).toHaveCount(0);
 });
 
-test('component editors do not render subsection side buttons', async ({ page }) => {
+test('component editors do not render section nesting controls', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
 
   await expect(page.locator('.editor-block[data-active-editor-block="true"] .block-nest-toggle')).toHaveCount(0);
   await expect(page.locator('.editor-section-head [data-action="toggle-section-location"]').first()).toBeVisible();
-});
-
-test('subsections do not render sidebar location buttons', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Raw', exact: true }).click();
-  await page.locator('#rawEditor').fill(`---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"parent"}-->
-#! Parent
-
- <!--hvy:text {}-->
-  Parent body
-
-<!--hvy: {"id":"child"}-->
-## Child
-
- <!--hvy:text {}-->
-  Child body
-`);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Advanced' }).click();
-
-  await expect(page.locator('.editor-section-card:not(.editor-subsection-card) > .editor-section-head [data-action="toggle-section-location"]').first()).toBeVisible();
-  await expect(page.locator('.editor-subsection-card > .editor-section-head [data-action="toggle-section-location"]')).toHaveCount(0);
 });
 
 test('clicking a nested component-list item opens the item editor on first click', async ({ page }) => {
@@ -5153,7 +5126,7 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-up"]')).toHaveCount(1);
   await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-down"]')).toHaveCount(0);
 
-  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  const sections = page.locator('.editor-section-card');
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
@@ -5211,11 +5184,11 @@ test('section dragover previews insertion title at the target edge', async ({ pa
   await page.goto('/');
 
   await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
-  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  const sections = page.locator('.editor-section-card');
   await expect(sections).toHaveCount(2);
 
   const expectedResult = await page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll<HTMLElement>('.editor-section-card:not(.editor-subsection-card)'));
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('.editor-section-card'));
     const sourceHandle = cards[0]?.querySelector<HTMLElement>('.section-drag-handle');
     const targetCard = cards[1];
     if (!sourceHandle || !targetCard) {

@@ -171,7 +171,6 @@ function visitBlocksForXrefOptions(
     sections.forEach((section) => {
       const sectionTags = combineTags(inheritedTags, section.tags);
       visitList(section.blocks, sectionTags);
-      visitSections(section.children, sectionTags);
     });
   };
 

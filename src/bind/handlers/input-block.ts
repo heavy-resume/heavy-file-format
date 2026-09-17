@@ -1021,11 +1021,9 @@ function renameComponentTemplateReferences(oldName: string, newName: string): vo
   });
   getSectionDefs().forEach((def) => {
     visitBlocksInList(def.template.blocks, renameBlock);
-    def.template.children.forEach((child) => visitSectionTemplateBlocks(child, renameBlock));
     (def.flavors ?? []).forEach((flavor) => {
       if (flavor.template) {
         visitBlocksInList(flavor.template.blocks, renameBlock);
-        flavor.template.children.forEach((child) => visitSectionTemplateBlocks(child, renameBlock));
       }
     });
   });
@@ -1054,10 +1052,6 @@ function renameComponentSchemaTree(
   visitBlocksInList(schema.expandableContentBlocks?.children ?? [], renameBlock);
 }
 
-function visitSectionTemplateBlocks(section: VisualSection, visitor: (block: VisualBlock) => void): void {
-  visitBlocksInList(section.blocks, visitor);
-  section.children.forEach((child) => visitSectionTemplateBlocks(child, visitor));
-}
 
 function renameSectionTemplateReferences(oldName: string, newName: string, stableKey?: string): void {
   if (!oldName || !newName || oldName === newName || stableKey?.trim()) {
@@ -1067,7 +1061,6 @@ function renameSectionTemplateReferences(oldName: string, newName: string, stabl
     if (section.templateKey === oldName) {
       section.templateKey = newName;
     }
-    section.children.forEach(renameSection);
   };
   state.document.sections.forEach(renameSection);
   getSectionDefs().forEach((def) => {

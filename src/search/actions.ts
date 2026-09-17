@@ -622,10 +622,6 @@ function findSectionByKeyDeep(sections: VisualSection[], sectionKey: string): Vi
     if (section.key === sectionKey) {
       return section;
     }
-    const child = findSectionByKeyDeep(section.children, sectionKey);
-    if (child) {
-      return child;
-    }
   }
   return null;
 }

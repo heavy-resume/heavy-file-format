@@ -1,11 +1,11 @@
 import { state, getInsertEditorTopLevelSection, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
-import { isDefaultUntitledSectionTitle, getSectionId, isHiddenEditorOnlySection, moveSectionByFilteredOffset, removeSectionByKey, makeBlockSubsection, removeSubsection, findSectionContainer } from '../../section-ops';
+import { isDefaultUntitledSectionTitle, getSectionId, isHiddenEditorOnlySection, moveSectionByFilteredOffset, removeSectionByKey, findSectionContainer } from '../../section-ops';
 import { clearOpenEditorSection, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import { createEmptySectionWithMeta, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
 import { getAvailableSectionDefs, getSectionTemplateKey } from '../../component-defs';
-import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
+import { isPdfDocument } from '../../pdf-document-capabilities';
 import {
   cloneSectionFromEditorClipboard,
   collectSectionAttachments,
@@ -51,8 +51,8 @@ export function insertTopLevelSection(
   }
   recordHistory();
   const section = starter === 'blank'
-    ? createEmptySectionWithMeta(1, state.currentView === 'ai' ? 'text' : '', false, state.document.meta)
-    : instantiateReusableSection(starter, 1, flavorName);
+    ? createEmptySectionWithMeta(state.currentView === 'ai' ? 'text' : '', false, state.document.meta)
+    : instantiateReusableSection(starter, flavorName);
   if (!section) {
     return;
   }
@@ -106,21 +106,6 @@ function getSelectableSectionFlavors(definition: ReturnType<typeof getSelectedSe
   return (definition?.flavors ?? []).filter((flavor) => flavor.name.trim().length > 0 && !!flavor.template);
 }
 
-const spawnGhostChild: ActionHandler = ({ section }) => {
-  if (!section || section.lock) {
-    return;
-  }
-  const component = state.addComponentBySection[section.key] ?? 'container';
-  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
-    return;
-  }
-  recordHistory();
-  const child = createEmptySectionWithMeta(Math.min(section.level + 1, 6), component, false, state.document.meta);
-  section.children.push(child);
-  state.pendingEditorCenterSectionKey = child.key;
-  getRenderApp()();
-};
-
 const toggleSectionLocation: ActionHandler = ({ section }) => {
   if (!section) {
     return;
@@ -130,30 +115,6 @@ const toggleSectionLocation: ActionHandler = ({ section }) => {
   }
   recordHistory();
   section.location = section.location === 'sidebar' ? 'main' : 'sidebar';
-  getRenderApp()();
-};
-
-const removeSubsectionAction: ActionHandler = ({ section, sectionKey }) => {
-  if (!section) {
-    return;
-  }
-  recordHistory();
-  if (!removeSubsection(state.document.sections, sectionKey)) {
-    return;
-  }
-  if (state.activeEditorSectionTitleKey === sectionKey) {
-    state.activeEditorSectionTitleKey = null;
-  }
-  clearOpenEditorSection(sectionKey);
-  if (state.aiEditorHostBlock?.sectionKey === sectionKey) {
-    state.aiEditorHostBlock = null;
-  }
-  if (state.aiEditorHostSectionKey === sectionKey) {
-    state.aiEditorHostSectionKey = null;
-  }
-  if (state.componentPlacement?.sectionKey === sectionKey) {
-    state.componentPlacement = null;
-  }
   getRenderApp()();
 };
 
@@ -190,45 +151,12 @@ const moveSection = (offset: -1 | 1): ActionHandler => ({ section, sectionKey })
   }
 };
 
-function isEditorOrderSibling(candidate: VisualSection, target: VisualSection, parent: VisualSection | null): boolean {
+function isEditorOrderSibling(candidate: VisualSection, target: VisualSection): boolean {
   if (candidate.isGhost || isHiddenEditorOnlySection(candidate, state.document.meta, state.showAdvancedEditor)) {
     return false;
   }
-  return parent !== null || candidate.location === target.location;
+  return candidate.location === target.location;
 }
-
-const addChild: ActionHandler = ({ section }) => {
-  if (!section || section.lock) {
-    return;
-  }
-  const component = state.addComponentBySection[section.key] ?? 'container';
-  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
-    return;
-  }
-  recordHistory();
-  const child = createEmptySectionWithMeta(Math.min(section.level + 1, 6), component, true, state.document.meta);
-  section.children.push(child);
-  if (child.blocks[0]) {
-    setActiveEditorBlock(child.key, child.blocks[0].id);
-  }
-  getRenderApp()();
-};
-
-const makeBlockSubsectionAction: ActionHandler = ({ section, sectionKey, blockId }) => {
-  if (!section || section.lock || !blockId) {
-    return;
-  }
-  recordHistory();
-  const newSub = makeBlockSubsection(state.document.sections, sectionKey, blockId, state.document.meta);
-  if (!newSub) {
-    return;
-  }
-  const movedBlock = newSub.blocks[0];
-  if (movedBlock) {
-    setActiveEditorBlock(newSub.key, movedBlock.id);
-  }
-  getRenderApp()();
-};
 
 const realizeGhost: ActionHandler = ({ section }) => {
   if (!section) {
@@ -261,7 +189,7 @@ const pasteSection: ActionHandler = ({ actionButton }) => {
   if (isPdfDocument(state.document) && location === 'sidebar') {
     return;
   }
-  const section = cloneSectionFromEditorClipboard(1);
+  const section = cloneSectionFromEditorClipboard();
   if (!section) {
     return;
   }
@@ -285,7 +213,7 @@ const pasteSectionAfter: ActionHandler = ({ sectionKey }) => {
   if (!targetLocation || !target) {
     return;
   }
-  const section = cloneSectionFromEditorClipboard(target.level);
+  const section = cloneSectionFromEditorClipboard();
   if (!section) {
     return;
   }
@@ -315,15 +243,10 @@ function activatePastedSection(section: VisualSection): void {
 export const sectionActions: Record<string, ActionHandler> = {
   'add-top-level-section': addTopLevelSection,
   'insert-top-level-section-before': insertTopLevelSectionBefore,
-  'spawn-child-ghost': spawnGhostChild,
-  'spawn-block-ghost': spawnGhostChild,
   'toggle-section-location': toggleSectionLocation,
-  'remove-subsection': removeSubsectionAction,
   'remove-section': removeSection,
   'move-section-up': moveSection(-1),
   'move-section-down': moveSection(1),
-  'add-child': addChild,
-  'make-block-subsection': makeBlockSubsectionAction,
   'realize-ghost': realizeGhost,
   'jump-to-reader': jumpToReader,
   'copy-section': copySection,

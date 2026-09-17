@@ -62,7 +62,6 @@ function validatePdfDocumentComponents(document: VisualDocument): void {
         throw new Error(`PDF document cannot render sidebar section "${section.title || section.customId || 'Untitled Section'}".`);
       }
       visit(section.blocks);
-      visitSections(section.children);
     }
   };
   visitSections(document.sections);
@@ -134,7 +133,7 @@ function resolvePrepScriptSource(
 }
 
 function collectSectionBlocks(sections: VisualSection[]): VisualBlock[] {
-  return sections.flatMap((section) => [...section.blocks, ...collectSectionBlocks(section.children)]);
+  return sections.flatMap((section) => section.blocks);
 }
 
 function findBlockBySchemaId(blocks: VisualBlock[], componentId: string): VisualBlock | null {

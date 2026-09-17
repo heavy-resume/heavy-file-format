@@ -1080,8 +1080,7 @@ export function deleteCurrentImageAttachment(sectionKey: string, blockId: string
 }
 
 function countSectionImageReferences(section: VisualSection, filename: string): number {
-  return section.blocks.reduce((count, block) => count + countBlockImageReferences(block, filename), 0)
-    + section.children.reduce((count, child) => count + countSectionImageReferences(child, filename), 0);
+  return section.blocks.reduce((count, block) => count + countBlockImageReferences(block, filename), 0);
 }
 
 function countBlockImageReferences(block: VisualBlock, filename: string): number {

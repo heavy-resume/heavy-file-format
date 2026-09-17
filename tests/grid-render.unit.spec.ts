@@ -73,7 +73,7 @@ function createHelpers(advanced = false): ComponentRenderHelpers {
 }
 
 function createDocument(): VisualDocument {
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.key = 'section-summary';
   section.customId = 'summary';
   const grid = createEmptyBlock('grid');

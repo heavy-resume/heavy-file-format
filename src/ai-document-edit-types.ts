@@ -116,10 +116,9 @@ export type DocumentEditSingleToolRequest =
   | {
       tool: 'create_section';
       title?: string;
-      position: 'append-root' | 'append-child' | 'before' | 'after';
+      position: 'append-root' | 'before' | 'after';
       new_position_index_from_0?: number;
       target_section_ref?: string;
-      parent_section_ref?: string;
       hvy?: string;
       reason?: string;
     }

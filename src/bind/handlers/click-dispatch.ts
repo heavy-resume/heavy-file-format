@@ -802,7 +802,6 @@ function requiresRemoveConfirmation(action: string, actionButton: HTMLElement): 
   return new Set([
     'remove-block',
     'remove-section',
-    'remove-subsection',
     'remove-grid-item',
     'remove-table-row',
     'remove-table-column',

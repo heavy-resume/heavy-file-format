@@ -25,7 +25,6 @@ function renderSection(section: VisualSection): RichTextCopyPayload[] {
   }
   const parts: RichTextCopyPayload[] = [];
   parts.push(...section.blocks.flatMap(renderBlock));
-  parts.push(...section.children.flatMap(renderSection));
   return parts;
 }
 

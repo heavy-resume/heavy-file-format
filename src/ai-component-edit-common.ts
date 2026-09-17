@@ -108,11 +108,11 @@ export function parseAiBlockEditResponse(source: string, meta?: JsonObject): AiE
     };
   }
 
-  if (document.sections.length !== 1 || section.children.length > 0 || section.blocks.length !== 1) {
+  if (document.sections.length !== 1 || section.blocks.length !== 1) {
     issues.push({
       severity: 'error',
       message: 'The response must contain exactly one top-level component.',
-      hint: 'Return one component only, without subsection directives or sibling components.',
+      hint: 'Return one component only, without section directives or sibling components.',
     });
   }
 

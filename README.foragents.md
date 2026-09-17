@@ -69,7 +69,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 ## TypeScript Reference Implementation
 
 A browser-based reference app is included with:
-- `Visual Editor`: click to add sections, nested sections, and text blocks.
+- `Visual Editor`: click to add sections, containers, and text blocks.
 - `Schema Mode`: per-block advanced settings (component, alignment, left/center/right slot).
 - `Reader`: expandable sections, navigation by section ID, and section meta styling.
 - `Download`: save the current editor buffer as a local file.

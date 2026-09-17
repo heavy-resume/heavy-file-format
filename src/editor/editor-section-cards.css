@@ -144,36 +144,6 @@
   bottom: -0.95rem;
 }
 
-.hvy-document .editor-subsection-card {
-  padding-left: 1rem;
-}
-
-.hvy-document .section-nest-toggle {
-  position: absolute;
-  left: 0rem;
-  top: 0;
-  bottom: 0;
-  width: 0.85rem;
-  border: 0;
-  background: transparent;
-  color: var(--hvy-muted);
-  cursor: pointer;
-  border-radius: 10px 0 0 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.95rem;
-  line-height: 1;
-  padding: 0;
-  opacity: 0.5;
-}
-
-.hvy-document .section-nest-toggle:hover {
-  background: var(--hvy-border);
-  color: var(--hvy-text);
-  opacity: 1;
-}
-
 .hvy-document .editor-block,
 .hvy-document .editor-block-passive {
   position: relative;

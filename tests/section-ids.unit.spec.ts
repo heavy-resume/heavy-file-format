@@ -5,7 +5,7 @@ import { assignSectionTitleAndGeneratedId } from '../src/section-ops';
 import { deserializeDocument } from '../src/serialization';
 
 test('assignSectionTitleAndGeneratedId names a new section id from its title', () => {
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
 
   assignSectionTitleAndGeneratedId([section], section, 'Project Notes');
 
@@ -14,7 +14,7 @@ test('assignSectionTitleAndGeneratedId names a new section id from its title', (
 });
 
 test('assignSectionTitleAndGeneratedId refreshes title-derived ids and preserves custom ids', () => {
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   assignSectionTitleAndGeneratedId([section], section, 'Project Notes');
 
   assignSectionTitleAndGeneratedId([section], section, 'Launch Plan');
@@ -28,9 +28,9 @@ test('assignSectionTitleAndGeneratedId refreshes title-derived ids and preserves
 });
 
 test('assignSectionTitleAndGeneratedId gives duplicate title-derived ids a suffix', () => {
-  const existing = createEmptySection(1, '');
+  const existing = createEmptySection('');
   assignSectionTitleAndGeneratedId([existing], existing, 'Project Notes');
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
 
   assignSectionTitleAndGeneratedId([existing, section], section, 'Project Notes');
 

@@ -239,16 +239,16 @@ test('expected result: root text and template tokens persist and instantiate aft
 test('expected result: section contents and flavors support nested insertion and removal', async () => {
   const document = templateDocument();
   const session = createHvyCliSession();
-  expect(getSectionDefsFromMeta(document.meta)[0].template.children).toEqual([]);
+  expect(getSectionDefsFromMeta(document.meta)[0].template).not.toHaveProperty('children');
 
-  await executeHvyCliCommand(document, session, 'hvy insert -1 section /templates/sections/fake-section/template fake-subsection "Fake Subsection"');
-  await executeHvyCliCommand(document, session, 'hvy insert -1 text /templates/sections/fake-section/template/fake-subsection --id fake-leaf');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 container /templates/sections/fake-section/template --id fake-group');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 text /templates/sections/fake-section/template/fake-group --id fake-leaf');
   await executeHvyCliCommand(document, session, 'hvy insert -1 section /templates/sections/fake-section/flavors --id fake-alternate');
   await executeHvyCliCommand(document, session, 'hvy insert -1 text /templates/sections/fake-section/flavors/fake-alternate/template --id fake-leaf');
-  await executeHvyCliCommand(document, session, 'hvy remove /templates/sections/fake-section/template/fake-subsection');
+  await executeHvyCliCommand(document, session, 'hvy remove /templates/sections/fake-section/template/fake-group');
 
   const expectedResult = getSectionDefsFromMeta(deserializeDocument(serializeDocument(document), '.thvy').meta)[0];
-  expect(expectedResult.template.children).toEqual([]);
+  expect(expectedResult.template).not.toHaveProperty('children');
   expect(expectedResult.flavors?.[0].template.blocks[0].schema.id).toBe('fake-leaf');
 });
 

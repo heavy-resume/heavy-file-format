@@ -550,12 +550,6 @@ function findComponentBySchemaIdInSection(section: VisualSection, id: string): S
   if (found) {
     return { block: found, sectionKey: section.key };
   }
-  for (const child of section.children) {
-    const childFound = findComponentBySchemaIdInSection(child, id);
-    if (childFound) {
-      return childFound;
-    }
-  }
   return null;
 }
 
@@ -774,7 +768,6 @@ function getScriptingComponentHandles(
   };
   const visitSection = (section: VisualSection): void => {
     visit(section.blocks, section, []);
-    section.children.forEach(visitSection);
   };
   document.sections.forEach(visitSection);
   return matches;

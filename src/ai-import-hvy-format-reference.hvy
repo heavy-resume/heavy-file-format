@@ -19,7 +19,7 @@ text_line_styles:
   # Background
 
  <!--hvy:text {}-->
-  HVY is a multiple purpose file format built around information consumption. Sections and components define consumable portions of information. Sections define the root document, subsections can live in sections, and components can live things   in sections and subsections.
+  HVY is a multiple purpose file format built around information consumption. Sections and components define consumable portions of information. Sections define the document root and contain components. Containers group nested components within a section.
   
   This is being given in a HVY doc.
 

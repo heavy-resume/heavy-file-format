@@ -1,5 +1,4 @@
 import type { VisualBlock, VisualSection } from './editor/types';
-import { createEmptySectionWithMeta } from './document-factory';
 import type { JsonObject } from './hvy/types';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
@@ -7,25 +6,13 @@ import { REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX, state } from './s
 import { sanitizeOptionalId } from './utils';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
-  const output: VisualSection[] = [];
-  const walk = (nodes: VisualSection[]): void => {
-    nodes.forEach((node) => {
-      output.push(node);
-      walk(node.children);
-    });
-  };
-  walk(sections);
-  return output;
+  return sections.slice();
 }
 
 export function findSectionByKey(sections: VisualSection[], sectionKey: string): VisualSection | null {
   for (const section of sections) {
     if (section.key === sectionKey) {
       return section;
-    }
-    const nested = findSectionByKey(section.children, sectionKey);
-    if (nested) {
-      return nested;
     }
   }
   const templateSection = findReusableSectionTemplateByKey(sectionKey);
@@ -52,7 +39,7 @@ function findReusableSectionTemplateByKey(sectionKey: string): VisualSection | n
         idEditorOpen: false,
         isGhost: false,
         title: name,
-        level: 1,
+
         expanded: true,
         highlight: false,
         css: '',
@@ -60,7 +47,6 @@ function findReusableSectionTemplateByKey(sectionKey: string): VisualSection | n
         description: '',
         location: 'main',
         blocks: [template],
-        children: [],
       };
     }
     const defs = getSectionDefsFromMeta(state?.document?.meta);
@@ -85,19 +71,11 @@ function findReusableSectionTemplateByKey(sectionKey: string): VisualSection | n
 
 export function findSectionContainer(
   sections: VisualSection[],
-  sectionKey: string,
-  parent: VisualSection | null = null
-): { container: VisualSection[]; index: number; parent: VisualSection | null } | null {
+  sectionKey: string
+): { container: VisualSection[]; index: number } | null {
   const index = sections.findIndex((section) => section.key === sectionKey);
   if (index >= 0) {
-    return { container: sections, index, parent };
-  }
-
-  for (const section of sections) {
-    const nested = findSectionContainer(section.children, sectionKey, section);
-    if (nested) {
-      return nested;
-    }
+    return { container: sections, index };
   }
 
   return null;
@@ -107,21 +85,14 @@ export function moveScriptOnlySectionsAfterRegularSections(
   sections: VisualSection[],
   documentMeta: JsonObject | null
 ): boolean {
-  let changed = reorderScriptOnlySectionsInContainer(sections, documentMeta);
-  for (const section of sections) {
-    if (moveScriptOnlySectionsAfterRegularSections(section.children, documentMeta)) {
-      changed = true;
-    }
-  }
-  return changed;
+  return reorderScriptOnlySectionsInContainer(sections, documentMeta);
 }
 
 export function wouldMoveScriptOnlySectionsAfterRegularSections(
   sections: VisualSection[],
   documentMeta: JsonObject | null
 ): boolean {
-  return wouldReorderScriptOnlySectionsInContainer(sections, documentMeta)
-    || sections.some((section) => wouldMoveScriptOnlySectionsAfterRegularSections(section.children, documentMeta));
+  return wouldReorderScriptOnlySectionsInContainer(sections, documentMeta);
 }
 
 function reorderScriptOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
@@ -150,7 +121,6 @@ function wouldReorderScriptOnlySectionsInContainer(sections: VisualSection[], do
 
 function isScriptOnlySection(section: VisualSection, documentMeta: JsonObject | null): boolean {
   return section.blocks.length > 0
-    && section.children.length === 0
     && section.blocks.every((block) => isScriptingBlock(block, documentMeta));
 }
 
@@ -170,8 +140,7 @@ export function isHiddenEditorOnlySection(
 }
 
 function sectionContainsHiddenEditorOnlyScriptingBlock(section: VisualSection, documentMeta: JsonObject | null): boolean {
-  return section.blocks.some((block) => blockContainsHiddenEditorOnlyScriptingBlock(block, documentMeta))
-    || section.children.some((child) => sectionContainsHiddenEditorOnlyScriptingBlock(child, documentMeta));
+  return section.blocks.some((block) => blockContainsHiddenEditorOnlyScriptingBlock(block, documentMeta));
 }
 
 function blockContainsHiddenEditorOnlyScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
@@ -190,10 +159,7 @@ function isHiddenEditorOnlyScriptingBlock(block: VisualBlock, documentMeta: Json
 }
 
 export function sectionContainsKey(section: VisualSection, sectionKey: string): boolean {
-  if (section.key === sectionKey) {
-    return true;
-  }
-  return section.children.some((child) => sectionContainsKey(child, sectionKey));
+  return section.key === sectionKey;
 }
 
 export function moveSectionRelative(
@@ -214,7 +180,7 @@ export function moveSectionRelative(
 
   const draggedSection = draggedLocation.container[draggedLocation.index];
   const targetSection = targetLocation.container[targetLocation.index];
-  if (!draggedSection || !targetSection || draggedSection.level !== targetSection.level || sectionContainsKey(draggedSection, targetKey)) {
+  if (!draggedSection || !targetSection || sectionContainsKey(draggedSection, targetKey)) {
     return false;
   }
 
@@ -250,14 +216,14 @@ export function moveSectionByOffset(sections: VisualSection[], sectionKey: strin
 export function getSectionFilteredMoveAvailability(
   sections: VisualSection[],
   sectionKey: string,
-  siblingFilter: (section: VisualSection, target: VisualSection, parent: VisualSection | null) => boolean
+  siblingFilter: (section: VisualSection, target: VisualSection) => boolean
 ): { canMoveUp: boolean; canMoveDown: boolean } {
   const location = findSectionContainer(sections, sectionKey);
   const target = location?.container[location.index] ?? null;
   if (!location || !target) {
     return { canMoveUp: false, canMoveDown: false };
   }
-  const siblingIndexes = getFilteredSectionSiblingIndexes(location.container, target, location.parent, siblingFilter);
+  const siblingIndexes = getFilteredSectionSiblingIndexes(location.container, target, siblingFilter);
   const visualSiblingIndex = siblingIndexes.indexOf(location.index);
   return {
     canMoveUp: visualSiblingIndex > 0,
@@ -269,14 +235,14 @@ export function moveSectionByFilteredOffset(
   sections: VisualSection[],
   sectionKey: string,
   offset: -1 | 1,
-  siblingFilter: (section: VisualSection, target: VisualSection, parent: VisualSection | null) => boolean
+  siblingFilter: (section: VisualSection, target: VisualSection) => boolean
 ): boolean {
   const location = findSectionContainer(sections, sectionKey);
   const target = location?.container[location.index] ?? null;
   if (!location || !target) {
     return false;
   }
-  const siblingIndexes = getFilteredSectionSiblingIndexes(location.container, target, location.parent, siblingFilter);
+  const siblingIndexes = getFilteredSectionSiblingIndexes(location.container, target, siblingFilter);
   const visualSiblingIndex = siblingIndexes.indexOf(location.index);
   const targetContainerIndex = siblingIndexes[visualSiblingIndex + offset];
   if (visualSiblingIndex < 0 || targetContainerIndex === undefined) {
@@ -292,10 +258,9 @@ export function moveSectionByFilteredOffset(
 function getFilteredSectionSiblingIndexes(
   container: VisualSection[],
   target: VisualSection,
-  parent: VisualSection | null,
-  siblingFilter: (section: VisualSection, target: VisualSection, parent: VisualSection | null) => boolean
+  siblingFilter: (section: VisualSection, target: VisualSection) => boolean
 ): number[] {
-  return container.flatMap((section, index) => siblingFilter(section, target, parent) ? [index] : []);
+  return container.flatMap((section, index) => siblingFilter(section, target) ? [index] : []);
 }
 
 export function moveSectionToSiblingIndex(sections: VisualSection[], sectionKey: string, newPositionIndexFrom0: number): boolean {
@@ -405,234 +370,41 @@ export function findBlockContainerInList(
   return null;
 }
 
-/**
- * Wrap a section-level block in a new subsection inserted in-place: blocks
- * preceding the wrapped block stay in the section's blocks list, blocks following
- * are placed in an auto-generated trailing subsection so visual order is preserved,
- * and the wrapped block is moved into a fresh subsection inserted at the front of
- * the section's children. Returns the new subsection containing the wrapped block,
- * or null on failure.
- */
-export function makeBlockSubsection(
-  sections: VisualSection[],
-  sectionKey: string,
-  blockId: string,
-  documentMeta?: JsonObject | null
-): VisualSection | null {
-  const section = findSectionByKey(sections, sectionKey);
-  if (!section) {
-    return null;
-  }
-  const blockIndex = section.blocks.findIndex((b) => b.id === blockId);
-  if (blockIndex < 0) {
-    return null;
-  }
-  const [moved] = section.blocks.splice(blockIndex, 1);
-  if (!moved) {
-    return null;
-  }
-  const blocksAfter = section.blocks.splice(blockIndex);
-  const subLevel = Math.min(section.level + 1, 6);
-  const anchor = blockIndex > 0 ? section.blocks[blockIndex - 1].id : '';
-
-  const newSub = createEmptySectionWithMeta(subLevel, '', false, documentMeta);
-  newSub.blocks = [moved];
-  newSub.location = section.location;
-  newSub.renderAfterBlockId = anchor;
-
-  const inserts: VisualSection[] = [newSub];
-  if (blocksAfter.length > 0) {
-    const tailSub = createEmptySectionWithMeta(subLevel, '', false, documentMeta);
-    tailSub.blocks = blocksAfter;
-    tailSub.location = section.location;
-    tailSub.autoTail = true;
-    tailSub.renderAfterBlockId = anchor;
-    inserts.push(tailSub);
-  }
-  section.children.unshift(...inserts);
-  return newSub;
-}
-
-/**
- * Build an interleaved render sequence for a section. Subsections with
- * `renderAfterBlockId === ''` come before the first block; those anchored to a
- * specific block id render right after that block (in their order in `children`);
- * unanchored subsections render at the end (legacy behavior).
- */
-export function buildSectionRenderSequence(
-  section: VisualSection
-): Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }> {
-  const items: Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }> = [];
-  const childrenAt = (anchor: string | null): VisualSection[] => {
-    return section.children.filter((c) => {
-      if (anchor === null) return c.renderAfterBlockId == null;
-      return c.renderAfterBlockId === anchor;
-    });
-  };
-  childrenAt('').forEach((child) => items.push({ kind: 'child', child }));
-  for (const block of section.blocks) {
-    items.push({ kind: 'block', block });
-    childrenAt(block.id).forEach((child) => items.push({ kind: 'child', child }));
-  }
-  childrenAt(null).forEach((child) => items.push({ kind: 'child', child }));
-  return items;
+export function buildSectionRenderSequence(section: VisualSection): Array<{ kind: 'block'; block: VisualBlock }> {
+  return section.blocks.map((block) => ({ kind: 'block', block }));
 }
 
 export type SectionInsertionBoundary =
   | { beforeKind: 'block'; beforeId: string }
-  | { beforeKind: 'child'; beforeId: string }
   | { beforeKind: 'end'; beforeId: '' };
 
-export function getSectionInsertionBoundary(
-  section: VisualSection,
-  visualIndex: number
-): SectionInsertionBoundary {
-  const next = buildSectionRenderSequence(section)[visualIndex];
-  if (!next) return { beforeKind: 'end', beforeId: '' };
-  return next.kind === 'block'
-    ? { beforeKind: 'block', beforeId: next.block.id }
-    : { beforeKind: 'child', beforeId: next.child.key };
+export function getSectionInsertionBoundary(section: VisualSection, index: number): SectionInsertionBoundary {
+  const next = section.blocks[index];
+  return next ? { beforeKind: 'block', beforeId: next.id } : { beforeKind: 'end', beforeId: '' };
 }
 
-export function insertBlockAtSectionInsertionBoundary(
-  section: VisualSection,
-  block: VisualBlock,
-  boundary: SectionInsertionBoundary
-): boolean {
-  const sequence = buildSectionRenderSequence(section);
-  const insertIndex = boundary.beforeKind === 'end'
-    ? sequence.length
-    : sequence.findIndex((item) => boundary.beforeKind === item.kind && (
-      item.kind === 'block' ? item.block.id === boundary.beforeId : item.child.key === boundary.beforeId
-    ));
-  if (insertIndex < 0) return false;
-  sequence.splice(insertIndex, 0, { kind: 'block', block });
-  applySectionRenderSequence(section, sequence);
+export function insertBlockAtSectionInsertionBoundary(section: VisualSection, block: VisualBlock, boundary: SectionInsertionBoundary): boolean {
+  const index = boundary.beforeKind === 'end' ? section.blocks.length : section.blocks.findIndex((item) => item.id === boundary.beforeId);
+  if (index < 0) return false;
+  section.blocks.splice(index, 0, block);
   return true;
 }
 
 export function removeBlockFromSectionRenderSequence(section: VisualSection, blockId: string): boolean {
-  const sequence = buildSectionRenderSequence(section);
-  const removeIndex = sequence.findIndex((item) => item.kind === 'block' && item.block.id === blockId);
-  if (removeIndex < 0) return false;
-  sequence.splice(removeIndex, 1);
-  applySectionRenderSequence(section, sequence);
+  const index = section.blocks.findIndex((block) => block.id === blockId);
+  if (index < 0) return false;
+  section.blocks.splice(index, 1);
   return true;
 }
 
-function applySectionRenderSequence(
-  section: VisualSection,
-  sequence: Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }>,
-): void {
-  section.blocks = sequence.flatMap((item) => item.kind === 'block' ? [item.block] : []);
-  section.children = sequence.flatMap((item) => item.kind === 'child' ? [item.child] : []);
-  let precedingBlockId = '';
-  for (const item of sequence) {
-    if (item.kind === 'block') {
-      precedingBlockId = item.block.id;
-    } else {
-      item.child.renderAfterBlockId = precedingBlockId;
-    }
-  }
-}
-
-/** Move a section-level block up or down in the visual sequence, swapping with
- * adjacent subsections by repositioning their `renderAfterBlockId` anchor. */
-export function moveBlockInVisualSequence(
-  sections: VisualSection[],
-  sectionKey: string,
-  blockId: string,
-  offset: -1 | 1
-): boolean {
+export function moveBlockInVisualSequence(sections: VisualSection[], sectionKey: string, blockId: string, offset: -1 | 1): boolean {
   const section = findSectionByKey(sections, sectionKey);
-  if (!section) {
-    return false;
-  }
-  const sequence = buildSectionRenderSequence(section);
-  const myIndex = sequence.findIndex((item) => item.kind === 'block' && item.block.id === blockId);
-  if (myIndex < 0) {
-    return false;
-  }
-  const targetIndex = myIndex + offset;
-  if (targetIndex < 0 || targetIndex >= sequence.length) {
-    return false;
-  }
-  const target = sequence[targetIndex];
-  if (target.kind === 'block') {
-    const fromIdx = section.blocks.findIndex((b) => b.id === blockId);
-    const toIdx = section.blocks.findIndex((b) => b.id === target.block.id);
-    if (fromIdx < 0 || toIdx < 0) {
-      return false;
-    }
-    const [removed] = section.blocks.splice(fromIdx, 1);
-    section.blocks.splice(toIdx, 0, removed);
-    // Re-anchor any children that were anchored to the swapped block ids so
-    // their visual position relative to the shifting blocks is preserved.
-    return true;
-  }
-  // Swap with an adjacent subsection by repositioning its anchor.
-  const child = target.child;
-  if (offset === 1) {
-    // Block moves down past subsection: subsection now renders before this block.
-    // New anchor: whatever rendered before the block before our move.
-    const myBlockIdx = section.blocks.findIndex((b) => b.id === blockId);
-    child.renderAfterBlockId = myBlockIdx > 0 ? section.blocks[myBlockIdx - 1].id : '';
-  } else {
-    // Block moves up past subsection: subsection now renders after this block.
-    child.renderAfterBlockId = blockId;
-  }
-  return true;
-}
-
-/**
- * Remove a subsection, merging its blocks into the parent's blocks and its child
- * sections into the parent's children at the position the subsection occupied.
- * If the next sibling is an auto-generated trailing subsection (created by
- * `makeBlockSubsection` to hold blocks following the wrapped one), it is folded
- * back as well so the parent's block sequence is restored symmetrically.
- * Returns true on success; false if the section is not a subsection.
- */
-export function removeSubsection(sections: VisualSection[], sectionKey: string): boolean {
-  const location = findSectionContainer(sections, sectionKey);
-  if (!location || !location.parent) {
-    return false;
-  }
-  const sub = location.container[location.index];
-  const parent = location.parent;
-  const reLevel = (s: VisualSection, level: number): void => {
-    s.level = Math.min(level, 6);
-    s.children.forEach((c) => reLevel(c, level + 1));
-  };
-
-  const anchor = sub.renderAfterBlockId;
-  const insertAt = (() => {
-    if (anchor == null) return parent.blocks.length;
-    if (anchor === '') return 0;
-    const idx = parent.blocks.findIndex((b) => b.id === anchor);
-    return idx >= 0 ? idx + 1 : parent.blocks.length;
-  })();
-  parent.blocks.splice(insertAt, 0, ...sub.blocks);
-  sub.children.forEach((c) => reLevel(c, parent.level + 1));
-  location.container.splice(location.index, 1, ...sub.children);
-
-  const tailIndex = location.index + sub.children.length;
-  const tail = location.container[tailIndex];
-  if (tail && tail.autoTail && tail.children.length === 0) {
-    const tailAnchor = tail.renderAfterBlockId;
-    let tailInsertAt: number;
-    if (tailAnchor == null) {
-      tailInsertAt = parent.blocks.length;
-    } else if (tailAnchor === '') {
-      tailInsertAt = insertAt + sub.blocks.length;
-    } else if (tailAnchor === anchor) {
-      tailInsertAt = insertAt + sub.blocks.length;
-    } else {
-      const idx = parent.blocks.findIndex((b) => b.id === tailAnchor);
-      tailInsertAt = idx >= 0 ? idx + 1 : parent.blocks.length;
-    }
-    parent.blocks.splice(tailInsertAt, 0, ...tail.blocks);
-    location.container.splice(tailIndex, 1);
-  }
+  if (!section) return false;
+  const index = section.blocks.findIndex((block) => block.id === blockId);
+  const target = index + offset;
+  if (index < 0 || target < 0 || target >= section.blocks.length) return false;
+  const [block] = section.blocks.splice(index, 1);
+  section.blocks.splice(target, 0, block);
   return true;
 }
 
@@ -641,12 +413,6 @@ export function removeSectionByKey(sections: VisualSection[], sectionKey: string
   if (index >= 0) {
     sections.splice(index, 1);
     return true;
-  }
-
-  for (const section of sections) {
-    if (removeSectionByKey(section.children, sectionKey)) {
-      return true;
-    }
   }
 
   return false;
@@ -728,14 +494,6 @@ export function visitBlocks(sections: VisualSection[], visitor: (block: VisualBl
   const seen = new Set<VisualBlock>();
   sections.forEach((section) => {
     visitBlocksInList(section.blocks, visitor, seen);
-    visitBlocksWithSeen(section.children, visitor, seen);
-  });
-}
-
-function visitBlocksWithSeen(sections: VisualSection[], visitor: (block: VisualBlock) => void, seen: Set<VisualBlock>): void {
-  sections.forEach((section) => {
-    visitBlocksInList(section.blocks, visitor, seen);
-    visitBlocksWithSeen(section.children, visitor, seen);
   });
 }
 

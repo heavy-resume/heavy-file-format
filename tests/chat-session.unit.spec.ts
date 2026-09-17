@@ -639,7 +639,6 @@ section_defs:
     template:
       id: certifications
       title: Certifications
-      level: 1
       description: Certifications
       blocks: []
       children: []

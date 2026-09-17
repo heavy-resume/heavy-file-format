@@ -67,25 +67,18 @@ hvy_version: 0.1
   expect(expectedResult[0]!.blocks.map((block) => block.schema.id)).toEqual(['notes']);
 });
 
-test('clearing a child section also clears hidden template ancestors', () => {
+test('clearing a section does not clear a different section marker', () => {
   const document = deserializeDocument(`${scaffoldDocument}
-
-<!--hvy:subsection {"id":"awards","hideIfUnmodified":true}-->
-## Awards
-
- <!--hvy:text {}-->
-  TBD
+<!--hvy: {"id":"fake-peer","hideIfUnmodified":true}-->
+#! Fake Peer
 `, '.hvy');
-
-  const parent = document.sections[0]!;
-  const child = parent.children[0]!;
-  parent.expanded = false;
-  child.expanded = false;
-  expect(clearHideIfUnmodifiedForSectionPath(document.sections, child.key)).toBe(true);
-  expect(parent.hideIfUnmodified).toBe(false);
-  expect(child.hideIfUnmodified).toBe(false);
-  expect(parent.expanded).toBe(true);
-  expect(child.expanded).toBe(true);
+  document.sections[0].expanded = false;
+  document.sections[1].expanded = false;
+  expect(clearHideIfUnmodifiedForSectionPath(document.sections, document.sections[1].key)).toBe(true);
+  expect(document.sections[0].hideIfUnmodified).toBe(true);
+  expect(document.sections[0].expanded).toBe(false);
+  expect(document.sections[1].hideIfUnmodified).toBe(false);
+  expect(document.sections[1].expanded).toBe(true);
 });
 
 test('viewer search can use the filtered section tree for hidden template markers', async () => {

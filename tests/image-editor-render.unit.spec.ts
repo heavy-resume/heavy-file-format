@@ -62,7 +62,7 @@ describe('image editor render controls', () => {
     const document = createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [],
     }).document;
     let resolveCalls = 0;
@@ -94,7 +94,7 @@ describe('image editor render controls', () => {
     const document = createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [],
     }).document;
     const createObjectUrl = vi.spyOn(URL, 'createObjectURL');
@@ -122,7 +122,7 @@ describe('image editor render controls', () => {
     block.schema.imageFile = 'avatar.jpg';
     block.schema.imageAlt = 'Avatar';
     block.schema.caption = createDefaultTextCaption('Team photo');
-    const section = createEmptySection(1);
+    const section = createEmptySection();
     section.key = 'profile';
     section.title = 'Profile';
     section.blocks = [block];
@@ -167,7 +167,7 @@ describe('image editor render controls', () => {
     initState(createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [
         { id: 'image:avatar.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1, 2, 3]) },
       ],
@@ -187,7 +187,7 @@ describe('image editor render controls', () => {
     initState(createTestState({
       meta: {},
       extension: '.phvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [],
     }));
 
@@ -210,7 +210,7 @@ describe('image editor render controls', () => {
     initState(createTestState({
       meta: {},
       extension: '.phvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [],
     }));
 
@@ -227,7 +227,7 @@ describe('image editor render controls', () => {
     initState(createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [],
     }));
 
@@ -245,7 +245,7 @@ describe('image editor render controls', () => {
     initState(createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [{ id: 'image:other.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1]) }],
     }));
 
@@ -262,7 +262,7 @@ describe('image editor render controls', () => {
     const block: VisualBlock = createEmptyBlock('carousel');
     block.id = 'carousel';
     block.schema.carouselImages = [{ imageFile: 'slide.jpg', imageAlt: 'Slide', caption: '' }];
-    const section = createEmptySection(1);
+    const section = createEmptySection();
     section.key = 'gallery';
     section.title = 'Gallery';
     section.blocks = [block];
@@ -296,13 +296,13 @@ describe('image editor render controls', () => {
     initState(createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [
         { id: 'image:slide.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1, 2, 3]) },
       ],
     }));
 
-    const expectedResult = renderCarouselReader(createEmptySection(1), block, helpers);
+    const expectedResult = renderCarouselReader(createEmptySection(), block, helpers);
 
     expect(expectedResult).toContain('class="hvy-carousel-reader-frame"');
     expect(expectedResult).not.toContain('hvy-carousel-reader-frame-chrome');
@@ -314,7 +314,7 @@ describe('image editor render controls', () => {
     initState(createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [{ id: 'image:other.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1]) }],
     }));
 
@@ -333,7 +333,7 @@ describe('image editor render controls', () => {
     const document = createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [],
     });
     const attachmentStore = createHostedAttachmentAdapter({
@@ -353,7 +353,7 @@ describe('image editor render controls', () => {
       length: 45 * 1024 * 1024,
     });
 
-    const expectedResult = renderImageReader(createEmptySection(1), block, helpers);
+    const expectedResult = renderImageReader(createEmptySection(), block, helpers);
 
     expect(expectedResult).toContain('data-hvy-lazy-image="true"');
     expect(expectedResult).toContain('data-image-filename="static-photo.png"');
@@ -371,7 +371,7 @@ describe('image editor render controls', () => {
     const document = createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1)],
+      sections: [createEmptySection()],
       attachments: [
         { id: 'image:slide-a.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1]) },
         { id: 'image:slide-b.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([2]) },
@@ -379,7 +379,7 @@ describe('image editor render controls', () => {
     });
     initState(document);
 
-    const expectedResult = renderCarouselReader(createEmptySection(1), block, helpers);
+    const expectedResult = renderCarouselReader(createEmptySection(), block, helpers);
 
     expect(expectedResult).toContain('data-hvy-carousel-lazy-image="true"');
     expect(expectedResult).toContain('data-image-filename="slide-a.png"');
@@ -394,7 +394,7 @@ describe('image editor render controls', () => {
       { imageFile: 'slide-b.png', imageAlt: 'Slide B', caption: '' },
     ];
 
-    const expectedResult = renderCarouselReader(createEmptySection(1), block, helpers);
+    const expectedResult = renderCarouselReader(createEmptySection(), block, helpers);
 
     expect(expectedResult).toContain('data-carousel-clone="last" aria-hidden="true"');
     expect(expectedResult).toContain('data-carousel-clone="first" aria-hidden="true"');
@@ -454,7 +454,7 @@ describe('image editor render controls', () => {
     const testState = createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1, '')],
+      sections: [createEmptySection('')],
       attachments: [],
     });
     initState(testState);
@@ -477,7 +477,7 @@ describe('image editor render controls', () => {
     const testState = createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1, '')],
+      sections: [createEmptySection('')],
       attachments: [],
     });
     initState(testState);
@@ -496,7 +496,7 @@ describe('image editor render controls', () => {
   });
 
   test('before, images dropped into a container, after: they append linearly inside that container', async () => {
-    const section = createEmptySection(1, 'container');
+    const section = createEmptySection('container');
     section.blocks[0]!.schema.containerBlocks = [createEmptyBlock('text')];
     const testState = createTestState({ meta: {}, extension: '.hvy', sections: [section], attachments: [] });
     initState(testState);
@@ -515,7 +515,7 @@ describe('image editor render controls', () => {
   });
 
   test('before, multiple images choose carousel, after: one carousel preserves slide order', async () => {
-    const section = createEmptySection(1, '');
+    const section = createEmptySection('');
     const testState = createTestState({ meta: {}, extension: '.hvy', sections: [section], attachments: [] });
     initState(testState);
 
@@ -538,7 +538,7 @@ describe('image editor render controls', () => {
     const testState = createTestState({
       meta: {},
       extension: '.hvy',
-      sections: [createEmptySection(1, '')],
+      sections: [createEmptySection('')],
       attachments: [],
     });
     initState(testState);

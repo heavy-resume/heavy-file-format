@@ -5091,7 +5091,7 @@ ${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"virtual-${index 
 
   const editorTree = page.locator('#editorTree');
   await expect.poll(() => page.locator('#editorTree [data-hvy-virtual-placeholder="true"]').count()).toBeGreaterThan(0);
-  expect(await page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)').count()).toBeLessThan(42);
+  expect(await page.locator('#editorTree .editor-section-card').count()).toBeLessThan(42);
   await editorTree.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
@@ -5139,7 +5139,7 @@ ${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"open-virtual-${i
 test('section remove requires confirmation', async ({ page }) => {
   await page.goto('/');
 
-  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  const sections = page.locator('.editor-section-card');
   const initialCount = await sections.count();
 
   // Main and sidebar each have their own add-section ghost.

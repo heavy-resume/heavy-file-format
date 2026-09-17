@@ -88,7 +88,7 @@ function createParentListXrefBatch(
   startIndex: number
 ): ImportXrefBatch {
   const sectionPath = resolveSectionCliPath(document, section);
-  const sectionSlice = createEmptySection(section.level, '', false);
+  const sectionSlice = createEmptySection('', false);
   sectionSlice.key = section.key;
   sectionSlice.customId = section.customId;
   sectionSlice.customIdGenerated = section.customIdGenerated;
@@ -156,9 +156,6 @@ function collectXrefListsInSection(document: VisualDocument, section: VisualSect
     }
   };
   visit(section.blocks, null, null);
-  for (const child of section.children) {
-    found.push(...collectXrefListsInSection(document, child));
-  }
   return found;
 }
 
@@ -219,10 +216,6 @@ function findSectionByKeyLocal(sections: VisualSection[], key: string): VisualSe
   for (const section of sections) {
     if (section.key === key) {
       return section;
-    }
-    const child = findSectionByKeyLocal(section.children, key);
-    if (child) {
-      return child;
     }
   }
   return null;

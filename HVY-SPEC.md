@@ -102,7 +102,7 @@ viewer without creating a document component. Temporary, host, `blob:`,
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
-- ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.
+- ATX headings define section boundaries. Each heading starts a section at the document root, with the original heading retained as a text component. Markdown before the first heading goes into an "Imported Markdown" section.
 - Consecutive prose, list, blockquote, fenced or indented code, thematic-break, and raw HTML Markdown blocks become `text` components that preserve the source Markdown.
 - GitHub-Flavored Markdown table blocks become `table` components, using the header row for `tableColumns` and body rows for `tableRows`.
 - Imported Markdown documents SHOULD save as `.hvy` after conversion. The original Markdown source remains valid HVY by compatibility, but the editable imported representation is a richer client-authored HVY document.
@@ -158,7 +158,7 @@ When viewed, the HVY segments the information into the atomic sections and the d
 
 Everything is contained as either a section or component, and a section is essentially just a container component. There is a set of built in components native to the format, as well as component definitions used for templating, and finally plugin components.
 
-A section is considered an atomic thought if it has a defined ID. So for example, a section may exist for "Projects" and then each individual project can be a subsection or even a component within a subsection with its own ID.
+A section groups a document’s related content. Sections exist only at the document root and contain components. Use containers with their own IDs to group related components within a section.
 
 Component templates are defined as yaml in the document metadata.
 
@@ -238,9 +238,9 @@ This lets the same responsive rules work when a document is rendered inside a sm
 
 Top-level sections are defined by `<!--hvy: {...}-->` directives.
 
-Subsections (children of the current section) are defined by `<!--hvy:subsection {...}-->` directives.
+Sections cannot contain other sections. Nested content is represented by container components or other components that own child components.
 
-Either directive may be followed by a `#!` title line. The `!` suffix distinguishes section titles from standard ATX headings; `#!` lines are consumed by the parser and not rendered as Markdown content. Nesting is determined by the directive type, not the number of `#` characters.
+A section directive may be followed by a `#!` title line. The `!` suffix distinguishes section titles from standard ATX headings; `#!` lines are consumed by the parser and not rendered as Markdown content. A standalone `#!` title line starts a section without metadata. Heading depth does not create section nesting.
 
 If no `#!` line follows the directive, the section title defaults to the `id` value from the directive.
 
@@ -252,12 +252,6 @@ Top-level section with title:
 ```markdown
 <!--hvy: {"id":"topic-1","tags":["intro"],"style":"card"}-->
 #! Topic Title
-```
-
-Subsection:
-```markdown
-<!--hvy:subsection {"id":"details"}-->
-#! Details
 ```
 
 Without title (id is used as the section name):
@@ -366,7 +360,7 @@ Section metadata also includes optional presentation keys such as:
 `css` is an optional inline CSS style string applied to the rendered section wrapper.
 Inline section `css` follows the same declaration-only rule as block `css`. Use CSS blocks for media queries, container queries, selectors, and other stylesheet-level constructs.
 `priority` is an optional boolean for sections that should remain prominent in reader-oriented ordering. Readers SHOULD keep priority sections before non-priority sections when applying search/filter ordering or other relevance-based reordering. `priority` does not imply `highlight`; use `highlight` for visual emphasis.
-`lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
+`lock` is an optional boolean. Use it to prevent adding new blocks inside that section.
 `editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default, unless overridden by `document.meta.section_defaults.contained` for newly created manual sections), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
@@ -948,7 +942,6 @@ section_defs:
     template:
       id: faq
       title: "{% section_title %}"
-      level: 2
       contained: true
       expanded: true
       highlight: false
@@ -958,16 +951,15 @@ section_defs:
           schema:
             component: text
             css: "margin: 0.5rem 0;"
-      children: []
 ```
 
 Notes:
 - `key` is an optional stable template identity. When omitted, `name` is the template identity.
 - `repeatable` is optional and defaults to `false`. Authoring tools SHOULD hide a non-repeatable section template when the document already contains a section whose `templateKey` matches the definition's `key` or `name`.
 - Sections created from section template definitions SHOULD set `templateKey` to the definition's `key` or `name`. Manually created blank sections SHOULD omit `templateKey`.
-- `template` stores a full section subtree, including blocks and nested child sections.
+- `template` stores a full section subtree, including its component tree.
 - `templateVariables` follows the rules in section 5.9 and applies to tokens anywhere in the section template subtree, including section fields, block text, and nested block schema fields.
-- Clone a `section_defs[*].template` when inserting a new section or subsection.
+- Clone a `section_defs[*].template` when inserting a new section.
 - Section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `priority`, `css`, `location`, and `hideIfUnmodified`.
 - Section template definitions MAY include `flavors`, an array of alternate section templates. Each flavor has `name`, optional `description`, optional `templateVariables`, and `template`. AI import tools SHOULD choose the best section flavor before filling template values. If no flavors are defined, authoring tools use the main section template as usual.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a section template.
@@ -1220,7 +1212,7 @@ Rules:
 
 A `.thvy` file is a `.hvy` file. The distinction is the `.thvy` extension or `text/thvy` media type.
 
-Template sections that contain scaffold content but should not appear in a finished viewer until changed MAY set `hideIfUnmodified: true` in section metadata. Viewer-oriented surfaces hide a flagged section, its descendants, sidebar/navigation entries, search results, and reader-view targets while the flag is present. If a user, agent, or structured authoring tool edits that section, a child section, or any descendant block, the tool SHOULD remove `hideIfUnmodified` from the edited section and any flagged ancestor sections. After the flag is removed and saved, the section renders normally.
+Template sections that contain scaffold content but should not appear in a finished viewer until changed MAY set `hideIfUnmodified: true` in section metadata. Viewer-oriented surfaces hide a flagged section, its descendants, sidebar/navigation entries, search results, and reader-view targets while the flag is present. If a user, agent, or structured authoring tool edits that section, any descendant block, the tool SHOULD remove `hideIfUnmodified` from the edited section and its containing section. After the flag is removed and saved, the section renders normally.
 
 This is not an emptiness test. A section can contain headers, placeholder rows, tables, or list scaffolds and still be hidden while the flag remains. Editor and AI modes always show flagged sections. Raw source editors MAY leave or remove the flag directly; no baseline comparison is required.
 
@@ -2353,10 +2345,10 @@ Normative behavior:
 2. If the byte stream contains one or more consecutive `hvy:tail` directives immediately followed by `--HVY-TAIL--`, split the file into text bytes before the directives and opaque tail bytes after the sentinel. Each tail directive's `length` field controls how many bytes belong to that attachment, in declaration order. Otherwise treat the whole file as text bytes.
 3. Decode the text bytes as UTF-8 text.
 4. Parse YAML front matter if present at file start.
-5. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
+5. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define sections at the document root. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
 6. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, block component directives such as `<!--hvy:text ...-->`, legacy `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
 7. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
-8. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
+8. Build the flat section list and the nested component trees within each section.
 9. Validate template rules when extension is `.thvy`: require `hvy_version`.
 
 ## 10. Validation

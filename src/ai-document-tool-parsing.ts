@@ -282,8 +282,8 @@ export function parseDocumentEditToolRequest(source: string): { ok: true; value:
       };
     }
     if (tool === 'create_section' && typeof parsed.position === 'string') {
-      if (parsed.position !== 'append-root' && parsed.position !== 'append-child' && parsed.position !== 'before' && parsed.position !== 'after') {
-        return { ok: false, message: 'create_section.position must be append-root, append-child, before, or after.' };
+      if (parsed.position !== 'append-root' && parsed.position !== 'before' && parsed.position !== 'after') {
+        return { ok: false, message: 'create_section.position must be append-root, before, or after.' };
       }
       const title = typeof parsed.title === 'string' ? parsed.title : undefined;
       const hvy = typeof parsed.hvy === 'string' ? parsed.hvy : undefined;
@@ -305,7 +305,6 @@ export function parseDocumentEditToolRequest(source: string): { ok: true; value:
           hvy,
           new_position_index_from_0: Number.isInteger(parsed.new_position_index_from_0) ? Number(parsed.new_position_index_from_0) : undefined,
           target_section_ref: typeof parsed.target_section_ref === 'string' ? parsed.target_section_ref : undefined,
-          parent_section_ref: typeof parsed.parent_section_ref === 'string' ? parsed.parent_section_ref : undefined,
           reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
         },
       };
@@ -407,7 +406,7 @@ function validateHvyToolPayload(hvy: string, fieldName: string, kind: 'component
   if (kind === 'component' && !/^\s*<!--\s*hvy:[a-z][a-z0-9-]*(?::[a-z0-9-]+)*\s*\{/i.test(trimmed)) {
     return `${fieldName} must start with one HVY component directive, for example \`<!--hvy:text {}-->\`.`;
   }
-  if (kind === 'section' && !/^\s*<!--\s*hvy:(?:subsection\s*)?\s*\{/i.test(trimmed)) {
+  if (kind === 'section' && !/^\s*<!--\s*hvy:\s*\{/i.test(trimmed)) {
     return `${fieldName} must start with one HVY section directive, for example \`<!--hvy: {"id":"new-section"}-->\`.`;
   }
   return null;

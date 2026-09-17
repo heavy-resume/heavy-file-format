@@ -717,7 +717,6 @@ function buildImportTemplateSectionOutline(document: VisualDocument, options: Im
         continue;
       }
       if (options.newSectionsOnly === true) {
-        appendSections(section.children, depth);
         continue;
       }
       const title = trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section';
@@ -728,7 +727,6 @@ function buildImportTemplateSectionOutline(document: VisualDocument, options: Im
         section.hideIfUnmodified ? 'template scaffold' : '',
       ].filter(Boolean);
       lines.push(`${'  '.repeat(depth)}- body: ${title}${details.length > 0 ? ` (${details.join(', ')})` : ''}`);
-      appendSections(section.children, depth + 1);
     }
   };
   appendSections(document.sections, 0);
@@ -744,12 +742,7 @@ function buildImportTemplateSectionOutline(document: VisualDocument, options: Im
       template.location !== 'main' ? `location: ${template.location}` : '',
     ].filter(Boolean);
     lines.push(`- definition: ${title}${details.length > 0 ? ` (${details.join(', ')})` : ''}`);
-    const childSections = template.children;
-    for (const child of childSections) {
-      const childId = trimImportString(child.customId);
-      const childTitle = trimImportString(child.title) || childId || 'Untitled section';
-      lines.push(`  - definition child: ${childTitle}${childId ? ` (id: ${childId})` : ''}`);
-    }
+
   }
   return lines.length > 0 ? lines.join('\n') : '- No template sections';
 }
@@ -1958,32 +1951,27 @@ function getImportTemplateSectionFlavors(
 
 function cloneImportTemplateReusableSection(
   section: VisualSection,
-  documentMeta: VisualDocument['meta'],
-  targetLevel = section.level
+  documentMeta: VisualDocument['meta']
 ): VisualSection {
-  const levelDelta = targetLevel - section.level;
-  const cloneWithDelta = (item: VisualSection): VisualSection => ({
+  return {
     key: makeId('section'),
     customId: '',
-    contained: item.contained !== false,
-    editorOnly: item.editorOnly === true,
+    contained: section.contained !== false,
+    editorOnly: section.editorOnly === true,
     idEditorOpen: false,
     isGhost: false,
-    title: item.title,
-    level: Math.max(1, Math.min(6, item.level + levelDelta)),
-    lock: item.lock,
-    expanded: item.expanded,
-    highlight: item.highlight,
-    css: item.css,
-    tags: item.tags,
-    description: item.description,
-    location: item.location ?? 'main',
-    hideIfUnmodified: item.hideIfUnmodified === true,
-    templateKey: item.templateKey,
-    blocks: item.blocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta)),
-    children: item.children.map((child) => cloneWithDelta(child)),
-  });
-  return cloneWithDelta(section);
+    title: section.title,
+    lock: section.lock,
+    expanded: section.expanded,
+    highlight: section.highlight,
+    css: section.css,
+    tags: section.tags,
+    description: section.description,
+    location: section.location ?? 'main',
+    hideIfUnmodified: section.hideIfUnmodified === true,
+    templateKey: section.templateKey,
+    blocks: section.blocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta)),
+  };
 }
 
 function getImportTemplateStructureId(candidate: ImportTemplateSectionCandidate): string {
@@ -2015,9 +2003,6 @@ function collectImportTemplateFillInVariablesFromSection(
   includePlaceholderOnlyFields: boolean
 ): void {
   collectImportTemplateFillInVariablesFromBlocks(section.blocks, used, variables, includePlaceholderOnlyFields);
-  for (const child of section.children) {
-    collectImportTemplateFillInVariablesFromSection(child, used, variables, includePlaceholderOnlyFields);
-  }
 }
 
 function collectImportTemplateFillInVariablesFromBlock(block: VisualBlock, includePlaceholderOnlyFields = false): ReusableTemplateVariable[] {
@@ -2088,9 +2073,6 @@ function collectImportTemplateListStructures(
     }
   };
   collectFromBlocks(section.blocks);
-  for (const child of section.children) {
-    lists.push(...collectImportTemplateListStructures(child, componentDefs, includePlaceholderOnlyFields));
-  }
   return lists;
 }
 
@@ -2603,7 +2585,6 @@ function getImportTemplateSectionCandidates(document: VisualDocument, options: I
           sectionDefinition,
         });
       }
-      appendSections(section.children);
     }
   };
   appendSections(document.sections);
@@ -2747,7 +2728,6 @@ function buildImportSectionApplicationFrame(document: VisualDocument, applicatio
 function serializeImportMatchedSectionTemplate(section: VisualSection, documentMeta: VisualDocument['meta']): string {
   const template = cloneImportPromptSection(section, documentMeta);
   dedupeRedundantImportPromptBlocks(template.blocks, documentMeta);
-  template.children.forEach((child) => dedupeRedundantImportPromptSection(child, documentMeta));
   return serializeSectionFragment(template, documentMeta);
 }
 
@@ -2755,14 +2735,9 @@ function cloneImportPromptSection(section: VisualSection, documentMeta: VisualDo
   return {
     ...section,
     blocks: section.blocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta)),
-    children: section.children.map((child) => cloneImportPromptSection(child, documentMeta)),
   };
 }
 
-function dedupeRedundantImportPromptSection(section: VisualSection, documentMeta: VisualDocument['meta']): void {
-  dedupeRedundantImportPromptBlocks(section.blocks, documentMeta);
-  section.children.forEach((child) => dedupeRedundantImportPromptSection(child, documentMeta));
-}
 
 function dedupeRedundantImportPromptBlocks(blocks: VisualBlock[], documentMeta: VisualDocument['meta']): void {
   for (const block of blocks) {
@@ -3114,7 +3089,6 @@ function collectImportXrefTargets(document: VisualDocument): Array<{ id: string;
     for (const section of sections) {
       const tags = combineImportTags(inheritedTags, section.tags);
       add(getSectionId(section), formatSectionTitle(section.title), section.description, tags);
-      visitSections(section.children, tags);
     }
   };
   visitSections(document.sections);
@@ -3190,7 +3164,6 @@ function applyGeneratedImportTemplateSection(
     if (!location) {
       throw new Error(`Matched section "${target.title}" could not be found.`);
     }
-    adjustImportSectionLevel(generated, target.level);
     generated.key = target.key;
     const targetId = trimImportString(target.customId);
     const applicationTargetId = trimImportString(application.target.id);
@@ -3207,7 +3180,6 @@ function applyGeneratedImportTemplateSection(
       sectionKey: generated.key,
     };
   }
-  adjustImportSectionLevel(generated, 1);
   document.sections.push(generated);
   return {
     message: `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`,
@@ -3280,17 +3252,8 @@ function replaceImportTemplateListItems(document: VisualDocument, section: Visua
 function applyImportTemplateFillInValuesToSection(section: VisualSection, values: Record<string, string>): void {
   const used = new Set<string>();
   applyImportTemplateFillInValuesToBlocks(section.blocks, values, used);
-  for (const child of section.children) {
-    applyImportTemplateFillInValuesToSectionWithUsed(child, values, used);
-  }
 }
 
-function applyImportTemplateFillInValuesToSectionWithUsed(section: VisualSection, values: Record<string, string>, used: Set<string>): void {
-  applyImportTemplateFillInValuesToBlocks(section.blocks, values, used);
-  for (const child of section.children) {
-    applyImportTemplateFillInValuesToSectionWithUsed(child, values, used);
-  }
-}
 
 function applyImportTemplateFillInValuesToBlock(block: VisualBlock, values: Record<string, string>): void {
   applyImportTemplateFillInValuesToBlocks([block], values, new Set());
@@ -3408,7 +3371,6 @@ function collectImportUsedIds(document: VisualDocument): Set<string> {
         ids.add(id);
       }
     });
-    section.children.forEach(visitSection);
   };
   document.sections.forEach(visitSection);
   return ids;
@@ -3513,7 +3475,6 @@ function applyGeneratedImportSection(
     if (!location) {
       throw new Error(`Matched section "${target.title}" could not be found.`);
     }
-    adjustImportSectionLevel(generated, target.level);
     const previousKey = target.key;
     generated.key = previousKey;
     location.container.splice(location.index, 1, generated);
@@ -3522,7 +3483,6 @@ function applyGeneratedImportSection(
       sectionKey: generated.key,
     };
   }
-  adjustImportSectionLevel(generated, 1);
   document.sections.push(generated);
   return {
     message: `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`,
@@ -3874,7 +3834,6 @@ function sanitizeGeneratedImportSection(section: VisualSection, documentMeta: Vi
 
 function markImportedSectionVisible(section: VisualSection): void {
   section.hideIfUnmodified = false;
-  section.children.forEach(markImportedSectionVisible);
 }
 
 function normalizeLlmHvySafetyClosures(hvy: string): string {
@@ -3963,9 +3922,6 @@ function preserveTemplateFillIns(generated: VisualSection, template: VisualSecti
     return;
   }
   preserveTemplateFillInsInList(generated.blocks, templateFillIns);
-  for (const child of generated.children) {
-    preserveTemplateFillIns(child, template);
-  }
 }
 
 function preserveTemplateFillInsInList(blocks: VisualBlock[], templateFillIns: Map<string, VisualBlock>): void {
@@ -4000,15 +3956,6 @@ function isBlankGeneratedFillInReplacement(block: VisualBlock): boolean {
   return block.schema.fillIn !== true
     && block.text.trim().length === 0
     && (block.schema.placeholder.trim().length === 0 || block.schema.placeholder.trim().toLowerCase() === 'blank');
-}
-
-function adjustImportSectionLevel(section: VisualSection, targetLevel: number): void {
-  const delta = targetLevel - section.level;
-  const visit = (candidate: VisualSection): void => {
-    candidate.level = Math.min(Math.max(candidate.level + delta, 1), 6);
-    candidate.children.forEach(visit);
-  };
-  visit(section);
 }
 
 function buildImportSectionInformationResponseInstructions(): string {

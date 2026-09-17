@@ -212,7 +212,6 @@ test('substitutes reusable section template values through section fields and ne
       idEditorOpen: false,
       isGhost: false,
       title: 'Resume Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -273,7 +272,6 @@ test('substitutes reusable section template values through section fields and ne
           schemaMode: false,
         },
       ],
-      children: [],
     },
   };
 

@@ -47,7 +47,7 @@ Or copy an existing section:
 cp -r /body/fake-area /templates/sections/fake-section-copy
 ```
 
-Section `definition.json` exposes `repeatable` and template-variable metadata. `template/section.json` edits the section's own title, styling, and other fields. Nested sections and components use the existing insert commands within `template/`.
+Section `definition.json` exposes `repeatable` and template-variable metadata. `template/section.json` edits the section's own title, styling, and other fields. Components use the existing insert commands within `template/`. Use containers to group nested components.
 
 ## Edit metadata and flavors
 

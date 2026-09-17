@@ -464,7 +464,6 @@ export function buildInlineAnswerGroupIndex(sections: VisualSection[]): InlineAn
   const visitSections = (sections: VisualSection[]): void => {
     sections.forEach((section) => {
       section.blocks.forEach((block) => visitBlock(block, section.key));
-      visitSections(section.children);
     });
   };
   visitSections(sections);

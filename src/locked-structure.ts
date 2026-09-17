@@ -31,22 +31,8 @@ function validateSectionLocks(
 ): void {
   if (expected.lock === true) {
     validateBlockArrayShape(expected.blocks, received.blocks, documentMeta, errors, `${path}/blocks`, 'Locked section direct blocks');
-    validateSectionArrayShape(expected.children, received.children, errors, `${path}/sections`, 'Locked section child sections');
   }
   validateBlockArrayLocks(expected.blocks, received.blocks, documentMeta, errors, `${path}/blocks`);
-  expected.children.forEach((child, index) => {
-    const receivedChild = received.children[index];
-    if (!receivedChild) {
-      if (hasLockedSectionStructure(child)) {
-        errors.push({
-          path: `${path}/sections/${index}`,
-          message: `Locked child section at ${path}/sections/${index} is missing.`,
-        });
-      }
-      return;
-    }
-    validateSectionLocks(child, receivedChild, documentMeta, errors, `${path}/sections/${index}`);
-  });
 }
 
 function validateBlockArrayLocks(
@@ -141,20 +127,6 @@ function validateBlockArrayShape(
   });
 }
 
-function validateSectionArrayShape(
-  expectedSections: VisualSection[],
-  receivedSections: VisualSection[],
-  errors: LockedStructureValidationError[],
-  path: string,
-  label: string
-): void {
-  if (expectedSections.length !== receivedSections.length) {
-    errors.push({
-      path,
-      message: `${label} at ${path} cannot add or remove direct child sections; expected ${expectedSections.length}, received ${receivedSections.length}.`,
-    });
-  }
-}
 
 function validateGridItemShape(
   expected: VisualBlock,
@@ -247,9 +219,6 @@ function getStructuralComponentType(block: VisualBlock, documentMeta: VisualDocu
   return component === base ? base : `${component}:${base}`;
 }
 
-function hasLockedSectionStructure(section: VisualSection): boolean {
-  return section.lock === true || section.blocks.some(hasLockedBlockStructure) || section.children.some(hasLockedSectionStructure);
-}
 
 function hasLockedBlockStructure(block: VisualBlock): boolean {
   const stub = toLockedExpandablePart(block.schema.expandableStubBlocks);

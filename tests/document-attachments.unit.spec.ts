@@ -270,7 +270,6 @@ section_defs:
     key: resources
     template:
       title: Resources
-      level: 1
       blocks:
         - text: "[Section guide](@attachment:Shared%20Guide)"
           schema:
@@ -280,7 +279,6 @@ section_defs:
       - name: brief
         template:
           title: Brief resources
-          level: 1
           blocks:
             - text: "[Brief guide](@attachment:Shared%20Guide)"
               schema:

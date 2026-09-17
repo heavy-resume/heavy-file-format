@@ -18,10 +18,9 @@ function renderSectionMarkdown(section: VisualSection): string[] {
   if (section.isGhost || section.editorOnly || isSectionHiddenByTemplateMarker(section)) {
     return [];
   }
-  const heading = `${'#'.repeat(Math.max(1, Math.min(section.level || 1, 6)))} ${section.title.trim() || 'Untitled Section'}`;
+  const heading = `# ${section.title.trim() || 'Untitled Section'}`;
   const blockParts = section.blocks.flatMap((block) => renderBlockMarkdown(block));
-  const childParts = section.children.flatMap((child) => renderSectionMarkdown(child));
-  return [heading, ...blockParts, ...childParts].filter((part) => part.trim().length > 0);
+  return [heading, ...blockParts].filter((part) => part.trim().length > 0);
 }
 
 function renderBlockMarkdown(block: VisualBlock): string[] {

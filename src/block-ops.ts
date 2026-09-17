@@ -5798,8 +5798,7 @@ export function moveBlockByOffset(sectionKey: string, blockId: string, offset: -
     return false;
   }
   if (location.ownerBlockId === null) {
-    // Section-level block: walk the interleaved blocks/subsections sequence so
-    // arrows can swap with adjacent subsections by repositioning their anchors.
+    // Move within the section’s ordered component list.
     const ok = moveBlockInVisualSequence(state.document.sections, sectionKey, blockId, offset);
     if (ok) {
       syncReusableTemplateForBlock(sectionKey, blockId);

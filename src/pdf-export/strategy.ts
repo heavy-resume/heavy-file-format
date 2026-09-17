@@ -130,7 +130,6 @@ function collectDocumentTargets(
   const visitSection = (section: VisualSection): void => {
     sectionsByKey.set(section.key, section);
     visitBlocks(section.blocks);
-    section.children.forEach(visitSection);
   };
   document.sections.forEach(visitSection);
 }
@@ -170,7 +169,6 @@ function applyContentView(
     const target = getSectionReaderViewTargetKey(section);
     applyModifiers(target, getReaderViewModifiers(context, target));
     visitBlocks(section.blocks);
-    section.children.forEach(visitSection);
   };
   document.sections.forEach(visitSection);
 }

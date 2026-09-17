@@ -466,7 +466,6 @@ function collectAllowedTargets(document: VisualDocument): HvyPdfExportAllowedTar
       label: section.title || section.customId || section.key,
     });
     visitBlocks(section.blocks);
-    section.children.forEach(visitSection);
   };
   document.sections.forEach(visitSection);
   return targets;
@@ -495,7 +494,6 @@ function collectUnsupportedComponents(document: VisualDocument): HvyPdfExportUns
   };
   const visitSection = (section: VisualSection): void => {
     visit(section.blocks);
-    section.children.forEach(visitSection);
   };
   document.sections.forEach(visitSection);
   return unsupported;

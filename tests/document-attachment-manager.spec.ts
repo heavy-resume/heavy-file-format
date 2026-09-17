@@ -333,7 +333,6 @@ test('before, thousands of document IDs, expected result: search filters data be
         customId: `target-${index}`,
         title: `Target ${index}`,
         blocks: [],
-        children: [],
       })),
     };
     refreshLinkDocumentPicker(picker, documentWithManyIds);

@@ -644,30 +644,13 @@ export function executeCreateSectionTool(
   document: VisualDocument,
   onMutation?: (group?: string) => void
 ): string {
-  const targetLevel = resolveNewSectionLevel(request, snapshot, document);
-  const newSection = buildCreatedSection(request, targetLevel, document.meta);
+  const newSection = buildCreatedSection(request, document.meta);
   const title = newSection.title;
 
   if (request.position === 'append-root') {
     onMutation?.('ai-edit:section');
     insertSectionAtOptionalIndex(document.sections, newSection, request.new_position_index_from_0, 'root sections');
     return `Created root section "${title}" (${getSectionId(newSection)}).`;
-  }
-
-  if (request.position === 'append-child') {
-    const parentRef = request.parent_section_ref?.trim();
-    if (!parentRef) {
-      throw new Error('append-child requires parent_section_ref.');
-    }
-    const parentEntry = snapshot.sectionRefs.get(parentRef);
-    const parent = parentEntry ? findSectionByKey(document.sections, parentEntry.key) : null;
-    if (!parent) {
-      throw new Error(`Unknown parent section ref "${parentRef}".`);
-    }
-    onMutation?.('ai-edit:section');
-    clearHideIfUnmodifiedForSectionPath(document.sections, parent.key);
-    insertSectionAtOptionalIndex(parent.children, newSection, request.new_position_index_from_0, `children of "${parent.title}"`);
-    return `Created subsection "${title}" (${getSectionId(newSection)}) inside "${parent.title}".`;
   }
 
   const targetRef = request.target_section_ref?.trim();
@@ -683,7 +666,6 @@ export function executeCreateSectionTool(
   if (!targetLocation || !targetSection) {
     throw new Error(`Target section "${targetRef}" could not be found.`);
   }
-  newSection.level = targetSection.level;
   onMutation?.('ai-edit:section');
   const insertIndex = request.position === 'before' ? targetLocation.index : targetLocation.index + 1;
   targetLocation.container.splice(insertIndex, 0, newSection);
@@ -701,11 +683,11 @@ function insertSectionAtOptionalIndex(container: VisualSection[], section: Visua
   container.splice(index, 0, section);
 }
 
-function buildCreatedSection(request: Extract<DocumentEditToolRequest, { tool: 'create_section' }>, targetLevel: number, documentMeta: JsonObject): VisualSection {
+function buildCreatedSection(request: Extract<DocumentEditToolRequest, { tool: 'create_section' }>, documentMeta: JsonObject): VisualSection {
   const hvy = request.hvy?.trim();
   if (!hvy) {
     const title = request.title?.trim() || 'Untitled Section';
-    const section = createEmptySectionWithMeta(targetLevel, '', false, documentMeta);
+    const section = createEmptySectionWithMeta('', false, documentMeta);
     section.title = title;
     return section;
   }
@@ -733,22 +715,7 @@ function buildCreatedSection(request: Extract<DocumentEditToolRequest, { tool: '
   }
 
   const section = parsed.document.sections[0]!;
-  adjustSectionLevel(section, targetLevel);
   return section;
-}
-
-function adjustSectionLevel(section: VisualSection, targetLevel: number): void {
-  const delta = targetLevel - section.level;
-  visitSectionTree(section, (candidate) => {
-    candidate.level = Math.min(Math.max(candidate.level + delta, 1), 6);
-  });
-}
-
-function visitSectionTree(section: VisualSection, visitor: (section: VisualSection) => void): void {
-  visitor(section);
-  for (const child of section.children) {
-    visitSectionTree(child, visitor);
-  }
 }
 
 export function executeReorderSectionTool(
@@ -787,27 +754,6 @@ export function executeReorderSectionTool(
   return `Moved section "${sectionEntry.title}" ${request.position} "${targetEntry.title}".`;
 }
 
-function resolveNewSectionLevel(
-  request: Extract<DocumentEditToolRequest, { tool: 'create_section' }>,
-  snapshot: DocumentStructureSnapshot,
-  document: VisualDocument
-): number {
-  if (request.position === 'append-child') {
-    const parentRef = request.parent_section_ref?.trim();
-    const parentEntry = parentRef ? snapshot.sectionRefs.get(parentRef) : null;
-    const parent = parentEntry ? findSectionByKey(document.sections, parentEntry.key) : null;
-    return parent ? Math.min(parent.level + 1, 6) : 2;
-  }
-
-  if (request.position === 'before' || request.position === 'after') {
-    const targetRef = request.target_section_ref?.trim();
-    const targetEntry = targetRef ? snapshot.sectionRefs.get(targetRef) : null;
-    const target = targetEntry ? findSectionByKey(document.sections, targetEntry.key) : null;
-    return target?.level ?? 1;
-  }
-
-  return 1;
-}
 
 function resolveCssTargets(ids: string[], snapshot: DocumentStructureSnapshot, document: VisualDocument): CssTarget[] {
   const targets: CssTarget[] = [];

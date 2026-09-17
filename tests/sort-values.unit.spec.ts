@@ -66,9 +66,9 @@ test('syncs date annotations to canonical timezone-free sort keys', () => {
       name: 'application-entry', baseType: 'expandable', sortValueDefs: { Date: { type: 'date', format: 'MM/DD/YYYY' } },
     }] }, sections: [{
       key: 'section', customId: 'section', customIdGenerated: false, contained: true, editorOnly: false, lock: false,
-      idEditorOpen: false, isGhost: false, title: 'Section', level: 1, expanded: true, highlight: false, priority: false,
+      idEditorOpen: false, isGhost: false, title: 'Section', expanded: true, highlight: false, priority: false,
       css: '', tags: '', description: '', location: 'main', hideIfUnmodified: false, exclude_from_import: false,
-      protect_from_import: false, blocks: [list], children: [],
+      protect_from_import: false, blocks: [list],
     }],
   };
 
@@ -125,7 +125,6 @@ test('syncs nested sort value annotations to component-list item sort keys', () 
       idEditorOpen: false,
       isGhost: false,
       title: 'Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -137,7 +136,6 @@ test('syncs nested sort value annotations to component-list item sort keys', () 
       exclude_from_import: false,
       protect_from_import: false,
       blocks: [list],
-      children: [],
     }],
   };
 
@@ -177,7 +175,6 @@ test('syncs edited numeric sort value annotations to component-list item sort ke
       idEditorOpen: false,
       isGhost: false,
       title: 'Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -189,7 +186,6 @@ test('syncs edited numeric sort value annotations to component-list item sort ke
       exclude_from_import: false,
       protect_from_import: false,
       blocks: [list],
-      children: [],
     }],
   };
 
@@ -229,7 +225,6 @@ test('syncs plugin-declared sort values to component-list item sort keys', () =>
       idEditorOpen: false,
       isGhost: false,
       title: 'Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -241,7 +236,6 @@ test('syncs plugin-declared sort values to component-list item sort keys', () =>
       exclude_from_import: false,
       protect_from_import: false,
       blocks: [list],
-      children: [],
     }],
   };
 
@@ -282,7 +276,6 @@ test('clears stale source-backed sort values without removing manual sort keys',
       idEditorOpen: false,
       isGhost: false,
       title: 'Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -294,7 +287,6 @@ test('clears stale source-backed sort values without removing manual sort keys',
       exclude_from_import: false,
       protect_from_import: false,
       blocks: [list],
-      children: [],
     }],
   };
 
@@ -336,7 +328,6 @@ test('clears stale source-backed sort values when the source becomes invalid', (
       idEditorOpen: false,
       isGhost: false,
       title: 'Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -348,7 +339,6 @@ test('clears stale source-backed sort values when the source becomes invalid', (
       exclude_from_import: false,
       protect_from_import: false,
       blocks: [list],
-      children: [],
     }],
   };
 
@@ -389,7 +379,6 @@ test('applies plugin-declared sort values after moving into a sortable item', ()
       idEditorOpen: false,
       isGhost: false,
       title: 'Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -401,7 +390,6 @@ test('applies plugin-declared sort values after moving into a sortable item', ()
       exclude_from_import: false,
       protect_from_import: false,
       blocks: [rating, list],
-      children: [],
     }],
   };
 

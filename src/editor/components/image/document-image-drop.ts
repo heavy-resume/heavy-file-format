@@ -175,28 +175,11 @@ export function resolveDocumentImageDrop(
     const section = findSectionByKey(state.document.sections, sectionKey);
     const bounds = sectionInsertionElement.getBoundingClientRect();
     if (!section || section.lock || !containsX(bounds, clientX)) return null;
-    const isSubsectionGap = sectionInsertionElement.classList.contains('section-sequence-add-ghost');
     const previousVisualItem = getPreviousSectionVisualItem(sectionInsertionElement);
     return {
       placement: { kind: 'section-boundary', sectionKey, boundary: explicitSectionBoundary },
-      previewElement: isSubsectionGap ? sectionInsertionElement : previousVisualItem ?? sectionInsertionElement,
-      previewPosition: isSubsectionGap || previousVisualItem ? 'after' : 'before',
-    };
-  }
-
-  const subsectionHead = target.closest<HTMLElement>('.editor-subsection-card > .editor-section-head');
-  if (subsectionHead) {
-    const subsection = subsectionHead.closest<HTMLElement>('.editor-subsection-card[data-editor-section]');
-    const sectionKey = subsection?.dataset.editorSection ?? '';
-    const section = findSectionByKey(state.document.sections, sectionKey);
-    const bounds = subsection?.getBoundingClientRect();
-    const blocksHost = subsection ? Array.from(subsection.children).find((element) => element.classList.contains('editor-blocks')) : null;
-    if (!section || section.lock || !bounds || !(blocksHost instanceof HTMLElement) || !containsX(bounds, clientX)) return null;
-    const firstVisualItem = getFirstSectionVisualItem(blocksHost);
-    return {
-      placement: { kind: 'section-boundary', sectionKey, boundary: getSectionInsertionBoundary(section, 0) },
-      previewElement: firstVisualItem ?? blocksHost,
-      previewPosition: 'before',
+      previewElement: previousVisualItem ?? sectionInsertionElement,
+      previewPosition: previousVisualItem ? 'after' : 'before',
     };
   }
 
@@ -334,7 +317,7 @@ function getTopLevelSectionElements(body: HTMLElement): HTMLElement[] {
   return Array.from(body.children).filter(
     (element): element is HTMLElement => element instanceof HTMLElement && (
       Boolean(element.dataset.editorSection)
-      || (element.dataset.hvyVirtualKind === 'editor' && element.dataset.hvyVirtualSubsection === 'false')
+      || element.dataset.hvyVirtualKind === 'editor'
     ),
   );
 }
@@ -393,7 +376,7 @@ export async function insertDroppedImageFiles(
   if (placement.kind !== 'new-section' && !destination) return false;
   recordHistory();
   if (placement.kind === 'new-section') {
-    const section = createEmptySectionWithMeta(1, '', false, state.document.meta);
+    const section = createEmptySectionWithMeta('', false, state.document.meta);
     section.location = placement.location ?? 'main';
     const beforeIndex = placement.beforeSectionKey
       ? state.document.sections.findIndex((candidate) => candidate.key === placement.beforeSectionKey)

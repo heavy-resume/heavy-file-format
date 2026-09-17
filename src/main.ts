@@ -1427,9 +1427,7 @@ function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTML
   const parentLocked = section.lock || placeholder.dataset.parentLocked === 'true';
   if (placeholder.dataset.hvyVirtualKind === 'editor') {
     const scroller = placeholder.closest<HTMLElement>('.editor-tree');
-    const isSubsection = placeholder.dataset.hvyVirtualSubsection === 'true'
-      || !state.document.sections.some((candidate) => candidate === section);
-    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, isSubsection, scroller ? {
+    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, scroller ? {
       scrollTop: scroller.scrollTop,
       viewportHeight: scroller.clientHeight,
       layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 90,

@@ -125,7 +125,6 @@ function createSection(key: string, title: string): VisualSection {
     idEditorOpen: false,
     isGhost: false,
     title,
-    level: 1,
     expanded: true,
     highlight: false,
     css: '',
@@ -133,7 +132,6 @@ function createSection(key: string, title: string): VisualSection {
     description: '',
     location: 'main',
     blocks: [],
-    children: [],
   };
 }
 

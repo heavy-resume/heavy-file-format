@@ -60,7 +60,7 @@ test('core editor controls receive ownership classes without marking plugin cont
       import('/src/embed-full.ts'),
       import('/src/document-factory.ts'),
     ]);
-    const section = createEmptySection(1, 'Controls');
+    const section = createEmptySection('Controls');
     const grid = createEmptyBlock('grid');
     grid.id = 'core-grid';
     grid.schema.gridColumns = 4;

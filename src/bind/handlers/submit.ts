@@ -522,10 +522,6 @@ function findSectionOwningBlock(sections: VisualSection[], targetBlock: VisualBl
     if (findBlockInList(section.blocks, targetBlock.id) === targetBlock) {
       return section;
     }
-    const nested = findSectionOwningBlock(section.children, targetBlock);
-    if (nested) {
-      return nested;
-    }
   }
   return null;
 }
@@ -553,10 +549,6 @@ function findSectionById(sections: VisualSection[], sectionId: string): VisualSe
     if (section.customId === sectionId || section.key === sectionId) {
       return section;
     }
-    const nested = findSectionById(section.children, sectionId);
-    if (nested) {
-      return nested;
-    }
   }
   return null;
 }
@@ -566,10 +558,6 @@ function findBlockByIdInSections(sections: VisualSection[], blockId: string): Vi
     const block = findBlockInList(section.blocks, blockId) ?? findBlockBySchemaIdInList(section.blocks, blockId);
     if (block) {
       return block;
-    }
-    const nested = findBlockByIdInSections(section.children, blockId);
-    if (nested) {
-      return nested;
     }
   }
   return null;

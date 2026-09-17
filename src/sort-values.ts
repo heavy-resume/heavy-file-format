@@ -102,7 +102,6 @@ export function syncSortValuesForDocument(document: VisualDocument): boolean {
   const visitSections = (sections: typeof document.sections): void => {
     sections.forEach((section) => {
       section.blocks.forEach(visitBlock);
-      visitSections(section.children);
     });
   };
   visitSections(document.sections);
@@ -586,7 +585,6 @@ function findComponentListItemOwner(document: VisualDocument, blockId: string): 
   const visitSections = (sections: typeof document.sections): void => {
     sections.forEach((section) => {
       section.blocks.forEach(visitBlock);
-      visitSections(section.children);
     });
   };
   visitSections(document.sections);

@@ -733,7 +733,6 @@ section_defs:
   - name: Professional History
     template:
       title: Professional History
-      level: 1
       blocks:
         - text: "# Professional History"
           schema:
@@ -779,7 +778,6 @@ section_defs:
   - name: Professional History
     template:
       title: Professional History
-      level: 1
       blocks:
         - text: "# Professional History"
           schema:
@@ -1463,8 +1461,7 @@ importPreplan:
 <!--hvy: {"id":"protected-notes","protect_from_import":true}-->
 #! Protected Notes
 
-<!--hvy:subsection {"id":"protected-child"}-->
-#! Protected Child
+ <!--hvy:container {"id":"protected-child","containerTitle":"Protected Child"}-->
 `, '.hvy');
 
   const result = await buildImportPlanForDocument(document, {

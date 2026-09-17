@@ -330,7 +330,7 @@ test('active text editor wraps prose without widening the editor block', async (
     node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
   await page.keyboard.type(
-    ' Sections and components define consumable portions of information. Sections define the root document, subsections can live in sections, and components can live in sections and subsections.'
+    ' Sections and components define consumable portions of information. Sections define the document root and contain components. Containers group nested components within a section.'
   );
 
   await expect.poll(async () =>

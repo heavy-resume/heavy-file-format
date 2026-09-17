@@ -1372,7 +1372,6 @@ function renderAssistantHvyHtml(source: string): string | null {
 
     const content = [
       ...wrapperSection.blocks.map((block) => renderChatHvyBlock(block, document.meta)),
-      ...wrapperSection.children.map((section) => renderChatHvySection(section, document.meta)),
       ...document.sections.slice(1).map((section) => renderChatHvySection(section, document.meta)),
     ].join('');
 
@@ -1388,7 +1387,6 @@ function renderChatHvySection(section: VisualSection, documentMeta: VisualDocume
       <div class="chat-hvy-section-title">${escapeChatHtml(section.title)}</div>
       <div class="chat-hvy-section-body">
         ${section.blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join('')}
-        ${section.children.map((child) => renderChatHvySection(child, documentMeta)).join('')}
       </div>
     </section>
   `;
@@ -1461,7 +1459,7 @@ function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['me
 }
 
 function looksLikeHvyResponse(source: string): boolean {
-  return /<!--hvy:(?:[a-z]|subsection|doc|css)/i.test(source);
+  return /<!--hvy:(?:[a-z]|doc|css)/i.test(source);
 }
 
 function renderChatMarkdown(markdown: string): string {
@@ -1477,7 +1475,7 @@ function getChatReaderSection(): VisualSection {
     idEditorOpen: false,
     isGhost: false,
     title: 'Response',
-    level: 1,
+
     expanded: true,
     highlight: false,
     editorOnly: false,
@@ -1486,7 +1484,6 @@ function getChatReaderSection(): VisualSection {
     description: '',
     location: 'main',
     blocks: [],
-    children: [],
   };
 }
 

@@ -186,12 +186,11 @@ function snapshotSections(sections: VisualSection[]): Map<string, SectionChangeS
   const snapshots = new Map<string, SectionChangeSnapshot>();
   const visit = (nodes: VisualSection[], parentKey: string | null): void => {
     nodes.forEach((section, index) => {
-      const { children: _children, ...sectionContent } = section;
+      const sectionContent = section;
       snapshots.set(section.key, {
         title: formatChangedSectionTitle(section.title),
         fingerprint: JSON.stringify({ parentKey, index, ...sectionContent }),
       });
-      visit(section.children, section.key);
     });
   };
   visit(sections, null);

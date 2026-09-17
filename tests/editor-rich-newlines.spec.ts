@@ -171,7 +171,7 @@ hvy_version: 0.1
   expect(expectedResult).toEqual(['First line\n\nSecond line', 'Third line']);
 });
 
-test('expected result: Done splits text inside a subsection', async ({ page }) => {
+test('expected result: Done splits text inside a container', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
@@ -181,31 +181,30 @@ hvy_version: 0.1
 <!--hvy: {"id":"parent-section"}-->
 #! Parent section
 
-<!--hvy:subsection {"id":"nested-section"}-->
-#! Nested section
-
-<!--hvy:text {"id":"nested-text"}-->
- Starting text
+ <!--hvy:container {"id":"fake-group"}-->
+  <!--hvy:text {"id":"nested-text"}-->
+   Starting text
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
-  await page.locator('.editor-block-passive', { hasText: 'Starting text' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Starting text' }).last().click();
 
-  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
   const editor = activeBlock.locator('.rich-editor[data-field="block-rich"]');
-  await editor.fill('');
+  await editor.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await editor.press('Backspace');
   await editor.type('First paragraph');
   await editor.press('Enter');
   await editor.press('Enter');
   await editor.type('Second paragraph');
   await activeBlock.getByRole('button', { name: 'Done', exact: true }).click();
 
-  await expect(page.locator('.editor-block-passive', { hasText: 'First paragraph' })).toBeVisible();
-  await expect(page.locator('.editor-block-passive', { hasText: 'Second paragraph' })).toBeVisible();
+  await expect(page.locator('.editor-block-passive', { hasText: 'First paragraph' }).last()).toBeVisible();
+  await expect(page.locator('.editor-block-passive', { hasText: 'Second paragraph' }).last()).toBeVisible();
 
   const expectedResult = await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
-    return state.document.sections[0]!.children[0]!.blocks.map((block) => block.text);
+    return state.document.sections[0]!.blocks[0]!.schema.containerBlocks.map((block) => block.text);
   });
   expect(expectedResult).toEqual(['First paragraph', 'Second paragraph']);
 });

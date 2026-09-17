@@ -173,7 +173,6 @@ function collectReaderViewTargets(sections: VisualSection[]): {
     }
     add(section.customId, targetKey);
     visitBlocks(section.blocks, targetKey);
-    section.children.forEach((child) => visitSection(child, targetKey));
   };
   sections.forEach((section) => visitSection(section));
   return { idTargets, parentByTarget };

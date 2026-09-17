@@ -41,7 +41,6 @@ function estimateEditorSectionHeight(section: VisualSection): number {
     160,
     86
       + section.blocks.reduce((total, block) => total + estimateEditorBlockHeight(block), 0)
-      + section.children.reduce((total, child) => total + estimateEditorSectionHeight(child), 0)
   );
 }
 

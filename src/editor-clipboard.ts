@@ -140,13 +140,7 @@ function prepareSectionForPdfPaste(
   const preparedBlocks = pruneBlocksForPdfPaste(section.blocks, meta);
   section.blocks = preparedBlocks.blocks;
   let removedCount = preparedBlocks.removedCount;
-  section.children = section.children.map((child) => {
-    const prepared = prepareSectionForPdfPaste(document, child, meta);
-    removedCount += prepared.removedCount;
-    return prepared.section;
-  });
   if (isPdfDocument(document)) {
-    section.children = section.children.filter((child) => child.blocks.length > 0 || child.children.length > 0);
   }
   return { section, removedCount };
 }
@@ -169,10 +163,10 @@ export function prepareBlockForDocumentPasteWithResult(
   return { block: wrapMultipleBlocksForSingleBlockPaste(prepared.blocks), removedCount: prepared.removedCount };
 }
 
-export function cloneSectionFromEditorClipboard(targetLevel?: number): VisualSection | null {
+export function cloneSectionFromEditorClipboard(): VisualSection | null {
   const clipboard = readEditorClipboard();
   return clipboard?.kind === 'section'
-    ? cloneReusableSection(clipboard.section, targetLevel ?? clipboard.section.level)
+    ? cloneReusableSection(clipboard.section)
     : null;
 }
 
@@ -198,7 +192,6 @@ function cloneAttachments(attachments: DocumentAttachment[]): DocumentAttachment
 
 function collectSectionAttachmentIds(section: VisualSection, attachmentIds: Set<string>): void {
   section.blocks.forEach((block) => collectBlockAttachmentIds(block, attachmentIds));
-  section.children.forEach((child) => collectSectionAttachmentIds(child, attachmentIds));
 }
 
 function collectBlockAttachmentIds(block: VisualBlock, attachmentIds: Set<string>): void {

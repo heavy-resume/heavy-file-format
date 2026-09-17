@@ -55,7 +55,7 @@ const addSectionDef: AppActionHandler = () => {
   recordHistory();
   const defs = getSectionDefs();
   const name = getUniqueDefinitionName('section', defs.map((definition) => definition.name));
-  const template = createEmptySectionWithMeta(1, 'text', false, state.document.meta);
+  const template = createEmptySectionWithMeta('text', false, state.document.meta);
   template.title = name;
   defs.push({ name, template });
   state.document.meta.section_defs = defs;
@@ -333,7 +333,7 @@ const addTemplateField: AppActionHandler = ({ actionButton }) => {
   if (!field) {
     return;
   }
-  const newSection = createEmptySectionWithMeta(1, 'text', false, state.document.meta);
+  const newSection = createEmptySectionWithMeta('text', false, state.document.meta);
   newSection.title = field;
   if (newSection.blocks[0]) {
     newSection.blocks[0].text = `{{${field}}}`;

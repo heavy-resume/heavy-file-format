@@ -75,9 +75,6 @@ export function splitTextParagraphsOnCommit(
   if (location.directSectionBlock) {
     const lastId = splitBlocks.at(-1)?.id;
     if (lastId) {
-      section.children.forEach((child) => {
-        if (child.renderAfterBlockId === blockId) child.renderAfterBlockId = lastId;
-      });
     }
   }
   return splitBlocks;

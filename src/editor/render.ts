@@ -206,7 +206,7 @@ interface EditorRenderDeps {
   findSectionByKey: (sections: VisualSection[], key: string) => VisualSection | null;
   buildSectionRenderSequence: (
     section: VisualSection
-  ) => Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }>;
+  ) => Array<{ kind: 'block'; block: VisualBlock }>;
   getComponentDefs: () => ComponentDef[];
   getSectionDefs: () => SectionDef[];
   getThemeConfig: () => ThemeConfig;
@@ -216,7 +216,7 @@ interface EditorRenderDeps {
 
 export interface EditorRenderer {
   renderSectionEditorTree: (sections: VisualSection[], windowOptions?: EditorRenderTreeWindowOptions) => string;
-  renderEditorSection: (section: VisualSection, rootSections: VisualSection[], isSubsection?: boolean, windowOptions?: EditorRenderTreeWindowOptions) => string;
+  renderEditorSection: (section: VisualSection, rootSections: VisualSection[], windowOptions?: EditorRenderTreeWindowOptions) => string;
   renderTopLevelSectionInsertGutter: (section: VisualSection, acceptsImageDrop: boolean) => string;
   recordEditorSectionHeight: (sectionKey: string, height: number) => void;
   recordEditorBlockHeight: (sectionKey: string, blockId: string, height: number) => void;
@@ -322,10 +322,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ? renderEditorSection(
           section,
           sections,
-          false,
           createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop, 90)
         )
-        : renderEditorSectionPlaceholder(section, entry.estimatedHeight, false);
+        : renderEditorSectionPlaceholder(section, entry.estimatedHeight);
       return `${renderTopLevelSectionInsertGutter(section, index > 0)}${card}`;
     }).join('');
     const flatSections = deps.flattenSections(sections);
@@ -393,10 +392,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderEditorSectionPlaceholder(
     section: VisualSection,
-    estimatedHeight: number,
-    isSubsection: boolean
+    estimatedHeight: number
   ): string {
-    return `<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor" data-section-key="${deps.escapeAttr(section.key)}" data-hvy-virtual-subsection="${isSubsection ? 'true' : 'false'}" style="min-height: ${deps.escapeAttr(String(estimatedHeight))}px; margin: 0 0 0.55rem;" aria-hidden="true"></div>`;
+    return `<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor" data-section-key="${deps.escapeAttr(section.key)}" style="min-height: ${deps.escapeAttr(String(estimatedHeight))}px; margin: 0 0 0.55rem;" aria-hidden="true"></div>`;
   }
 
   function renderTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
@@ -428,7 +426,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderEditorSection(
     section: VisualSection,
     rootSections: VisualSection[],
-    isSubsection = false,
     windowOptions?: EditorRenderTreeWindowOptions
   ): string {
     const visibleTitle = deps.formatSectionTitle(section.title);
@@ -438,7 +435,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       !isUntitled
       && section.title.trim().length > 0
       && section.blocks.length === 0
-      && section.children.length === 0;
+     ;
     const emptyHeadingLevel = getEmptySectionHeadingLevel(section.key);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
       ? `<input autofocus class="section-title-input" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-title" value="${deps.escapeAttr(
@@ -447,13 +444,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : `<button type="button" class="section-title-passive${isUntitled ? ' section-title-placeholder' : ''}" data-action="activate-section-title" data-section-key="${deps.escapeAttr(
         section.key
       )}">${deps.escapeHtml(visibleTitle)}</button>`;
-    const hasActiveBlockInSelfOrDescendants = (s: VisualSection): boolean => {
-      if (state.activeEditorBlockSnapshots.some((active) => active.sectionKey === s.key)) return true;
-      return s.children.some(hasActiveBlockInSelfOrDescendants);
-    };
-    const subsectionToggle = isSubsection && !hasActiveBlockInSelfOrDescendants(section)
-      ? `<button type="button" class="section-nest-toggle" data-action="remove-subsection" data-section-key="${deps.escapeAttr(section.key)}" aria-label="Remove subsection" title="Remove subsection">‹</button>`
-      : '';
     const addComponentGhost = state.componentPlacement || state.mobileAdjustmentMode
       ? ''
       : `<div class="ghost-section-card add-ghost compact-add-component-ghost" data-section-insertion="true" data-section-before-kind="end">
@@ -470,8 +460,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       })}
               </div>`;
     return `
-      <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-hvy-virtual-section="editor" data-section-key="${deps.escapeAttr(section.key)}" data-editor-section="${deps.escapeAttr(section.key)}">
-        ${subsectionToggle}
+      <article class="editor-section-card" data-hvy-virtual-section="editor" data-section-key="${deps.escapeAttr(section.key)}" data-editor-section="${deps.escapeAttr(section.key)}">
         <div class="editor-section-head">
           <div class="section-drag-title" title="Drag to reorder section">
             <div class="editor-order-controls">
@@ -489,7 +478,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                    <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
         : ''
       }
-            ${isSubsection || isPdfEditorDocument() ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
+            ${isPdfEditorDocument() ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
             ${renderDeleteControl({
         className: 'editor-section-remove-button',
         label: `Remove ${visibleTitle} section`,
@@ -533,24 +522,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     rootSections: VisualSection[],
     windowOptions?: EditorRenderTreeWindowOptions
   ): string {
-    const items = deps.buildSectionRenderSequence(section).filter((item) => item.kind === 'block'
-      ? !isHiddenEditorOnlyScriptingBlock(item.block, section.key)
-        && (!isAnchoredButtonInSection(section, item.block) || deps.isActiveEditorBlock(section.key, item.block.id))
-      : !isHiddenEditorOnlySection(item.child, state.documentMeta, state.showAdvancedEditor)
-        || hasOpenEditorInSectionTree(item.child)
-    );
+    const items = section.blocks.filter((block) =>
+      !isHiddenEditorOnlyScriptingBlock(block, section.key)
+      && (!isAnchoredButtonInSection(section, block) || deps.isActiveEditorBlock(section.key, block.id))
+    ).map((block) => ({ kind: 'block' as const, block }));
     if (windowOptions && !state.componentPlacement && !state.mobileAdjustmentMode) {
       const activeBlockIds = state.activeEditorBlockSnapshots
         .filter((active) => active.sectionKey === section.key)
         .map((active) => active.blockId);
       const forceNodeKeys = new Set<string>();
       items.forEach((item) => {
-        if (item.kind === 'child') {
-          if (hasOpenEditorInSectionTree(item.child) || deps.isActiveEditorSectionTitle(item.child.key)) {
-            forceNodeKeys.add(item.child.key);
-          }
-          return;
-        }
         if (activeBlockIds.some((blockId) => item.block.id === blockId || isDescendantActive(item.block, blockId))) {
           forceNodeKeys.add(item.block.id);
         }
@@ -559,17 +540,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ...windowOptions,
         forceNodeKeys,
       };
-      const nodes = items.map((item) => item.kind === 'block'
-        ? createEditorBlockRenderTreeNode(item.block)
-        : createEditorSectionRenderTreeNode(item.child)
-      );
+      const nodes = items.map((item) => createEditorBlockRenderTreeNode(item.block));
       return renderEditorSectionItemPlan(
         section,
         rootSections,
         editorRenderTreeHeightLedger.plan(
           nodes,
           effectiveWindowOptions,
-          items.some((item) => item.kind === 'child') ? EDITOR_SECTION_TREE_LAYOUT : EDITOR_BLOCK_TREE_LAYOUT
+          EDITOR_BLOCK_TREE_LAYOUT
         ),
         effectiveWindowOptions
       );
@@ -579,9 +557,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index]!;
       const previous = items[index - 1];
-      const boundary = item.kind === 'block'
-        ? { beforeKind: 'block' as const, beforeId: item.block.id }
-        : { beforeKind: 'child' as const, beforeId: item.child.key };
+      const boundary = { beforeKind: 'block' as const, beforeId: item.block.id };
       if (state.componentPlacement && canPlaceInSection) {
         output.push(renderComponentPlacementTarget({
           container: 'section',
@@ -590,14 +566,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ...(previous?.kind === 'block' ? { targetBlockId: previous.block.id } : item.kind === 'block' ? { targetBlockId: item.block.id } : {}),
           sectionBoundary: boundary,
         }));
-      } else if (canPlaceInSection && previous?.kind === 'child' && item.kind === 'child') {
-        output.push(renderSectionSequenceAddGhost(section.key, boundary));
       }
-      if (item.kind === 'block') {
-        output.push(renderEditorBlock(section.key, item.block, rootSections, section.lock));
-      } else {
-        output.push(renderEditorSection(item.child, rootSections, true));
-      }
+      output.push(renderEditorBlock(section.key, item.block, rootSections, section.lock));
     }
     if (state.componentPlacement && canPlaceInSection) {
       const previous = items.at(-1);
@@ -612,26 +582,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return output.join('');
   }
 
-  function renderSectionSequenceAddGhost(
-    sectionKey: string,
-    boundary: { beforeKind: 'block' | 'child'; beforeId: string },
-  ): string {
-    return `<div class="ghost-section-card add-ghost compact-add-component-ghost section-sequence-add-ghost" data-section-insertion="true" data-section-before-kind="${boundary.beforeKind}" data-section-before-id="${deps.escapeAttr(boundary.beforeId)}">
-      ${renderComponentPicker({
-        id: `section-boundary:${sectionKey}:${boundary.beforeId}`,
-        action: 'add-block',
-        sectionKey,
-        label: 'Insert component between subsections',
-        extraAttrs: {
-          'data-section-insertion': 'true',
-          'data-section-before-kind': boundary.beforeKind,
-          'data-section-before-id': boundary.beforeId,
-        },
-        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
-      })}
-    </div>`;
-  }
-
   function renderEditorSectionItemPlan(
     section: VisualSection,
     rootSections: VisualSection[],
@@ -642,24 +592,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     for (let index = 0; index < entries.length;) {
       const entry = entries[index];
       if (!entry) break;
-      if (entry.node.kind === 'section') {
-        const child = entry.node.item as VisualSection;
-        const previous = entries[index - 1];
-        if (!section.lock && previous?.node.kind === 'section') {
-          output.push(renderSectionSequenceAddGhost(section.key, { beforeKind: 'child', beforeId: child.key }));
-        }
-        output.push(entry.shouldRender || hasOpenEditorInSectionTree(child)
-          ? renderEditorSection(
-            child,
-            rootSections,
-            true,
-            createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop, 90)
-          )
-          : renderEditorSectionPlaceholder(child, entry.estimatedHeight, true)
-        );
-        index += 1;
-        continue;
-      }
       if (entry.shouldRender) {
         output.push(withEditorRenderTreeWindow(entry, windowOptions, () => (
           renderEditorBlock(section.key, entry.node.item as VisualBlock, rootSections, section.lock)
@@ -1061,9 +993,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       ? null
       : next?.kind === 'block'
         ? { beforeKind: 'block', beforeId: next.block.id }
-        : next?.kind === 'child'
-          ? { beforeKind: 'child', beforeId: next.child.key }
-          : { beforeKind: 'end', beforeId: '' };
+        : { beforeKind: 'end', beforeId: '' };
     const sectionBoundaryAttrs = sectionBoundary
       ? ` data-section-insertion="true" data-section-before-kind="${sectionBoundary.beforeKind}"${sectionBoundary.beforeId ? ` data-section-before-id="${deps.escapeAttr(sectionBoundary.beforeId)}"` : ''}`
       : '';
@@ -1145,8 +1075,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function hasOpenEditorInSectionTree(section: VisualSection): boolean {
-    return state.activeEditorBlockSnapshots.some((active) => active.sectionKey === section.key)
-      || section.children.some(hasOpenEditorInSectionTree);
+    return state.activeEditorBlockSnapshots.some((active) => active.sectionKey === section.key);
   }
 
   function renderButtonAnchorAttrs(
@@ -1195,11 +1124,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return getSectionFilteredMoveAvailability(sections, sectionKey, isEditorOrderSibling);
   }
 
-  function isEditorOrderSibling(candidate: VisualSection, target: VisualSection, parent: VisualSection | null): boolean {
+  function isEditorOrderSibling(candidate: VisualSection, target: VisualSection): boolean {
     if (candidate.isGhost || isHiddenEditorOnlySection(candidate, state.documentMeta, state.showAdvancedEditor)) {
       return false;
     }
-    return parent !== null || candidate.location === target.location;
+    return candidate.location === target.location;
   }
 
   function getBlockMoveAvailability(
@@ -2917,10 +2846,6 @@ function findSectionForRenderKey(sections: VisualSection[], sectionKey: string):
   for (const section of sections) {
     if (section.key === sectionKey) {
       return section;
-    }
-    const nested = findSectionForRenderKey(section.children, sectionKey);
-    if (nested) {
-      return nested;
     }
   }
   return null;

@@ -502,7 +502,7 @@ test('serializes rich editor fill-in markers back to value comments', () => {
   ).toBe('Before <!-- value {"placeholder":"Summary"} --> after.');
 });
 
-test('converts markdown headings into HVY section hierarchy', () => {
+test('converts markdown headings into flat HVY sections and retains heading content', () => {
   const document = convertMarkdownToHvyDocument(`# Project Brief
 
 Intro text.
@@ -516,12 +516,14 @@ Intro text.
   expect(document.extension).toBe('.hvy');
   expect(document.meta.reader_max_width).toBe('60rem');
   expect(document.meta.title).toBe('Project Brief');
-  expect(document.sections).toHaveLength(1);
+  expect(document.sections).toHaveLength(2);
   expect(document.sections[0]?.title).toBe('Project Brief');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('# Project Brief');
+  expect(document.sections[1]?.blocks[0]?.text).toBe('## Goals');
   expect(document.sections[0]?.blocks[0]?.schema.component).toBe('text');
-  expect(document.sections[0]?.blocks[0]?.text).toBe('Intro text.');
-  expect(document.sections[0]?.children[0]?.title).toBe('Goals');
-  expect(document.sections[0]?.children[0]?.blocks[0]?.text).toBe('- Ship import\n- Preserve tables');
+  expect(document.sections[0]?.blocks[1]?.text).toBe('Intro text.');
+  expect(document.sections[1]?.title).toBe('Goals');
+  expect(document.sections[1]?.blocks[1]?.text).toBe('- Ship import\n- Preserve tables');
 });
 
 test('converts markdown tables to HVY tables and preserves fenced code as text markdown', () => {
@@ -537,7 +539,7 @@ SELECT * FROM items;
 \`\`\`
 `);
 
-  const blocks = document.sections[0]?.blocks ?? [];
+  const blocks = document.sections[0]?.blocks.slice(1) ?? [];
 
   expect(blocks[0]?.schema.component).toBe('table');
   expect(blocks[0]?.schema.tableColumns).toEqual(['Name', 'Count']);
@@ -555,7 +557,7 @@ Plain Markdown should not go blank.
   expect(document.extension).toBe('.hvy');
   expect(document.meta.reader_max_width).toBe('60rem');
   expect(document.sections[0]?.title).toBe('Notes');
-  expect(document.sections[0]?.blocks[0]?.text).toBe('Plain Markdown should not go blank.');
+  expect(document.sections[0]?.blocks[1]?.text).toBe('Plain Markdown should not go blank.');
 
   const expectedResult = serializeDocument(document);
   expect(expectedResult).toContain('<!--hvy: {"id":"notes"');

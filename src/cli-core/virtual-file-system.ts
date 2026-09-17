@@ -357,13 +357,10 @@ function addSectionLookup(
   lookup: Map<string, VisualSection>,
   section: VisualSection,
   sectionPath: string,
-  naming?: HvyVirtualPathNamingState
+  _naming?: HvyVirtualPathNamingState
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   lookup.set(sectionPath, section);
-  section.children
-    .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionLookup(entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
@@ -464,7 +461,6 @@ function addSection(entries: Map<string, HvyVirtualEntry>, document: VisualDocum
     read: () => formatSectionAbout(section),
   });
   addBlockList(entries, document, section.blocks, sectionPath, naming);
-  addSectionList(entries, document, section.children, sectionPath, naming);
 }
 
 function addSectionList(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, sections: VisualSection[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
@@ -616,7 +612,6 @@ function collectCanonicalIdAliases(document: VisualDocument): VirtualIdAlias[] {
         entries.set(sectionPath, { kind: 'dir', path: sectionPath });
         addAlias(getSectionId(section), sectionPath);
         visitBlocks(section.blocks, sectionPath);
-        visitSections(section.children, sectionPath);
       });
   };
   visitSections(document.sections, '/body');
@@ -789,9 +784,6 @@ function addSectionBlockLookup(
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   addBlockListLookup(meta, entries, lookup, section.blocks, sectionPath, naming);
-  section.children
-    .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionBlockLookup(meta, entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 function addBlockListLookup(
@@ -852,9 +844,6 @@ function addSectionInsertionTargets(
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   targets.set(sectionPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(section.blocks, block, index) });
   addBlockListInsertionTargets(meta, entries, targets, section.blocks, sectionPath, naming);
-  section.children
-    .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionInsertionTargets(meta, entries, targets, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 function addBlockListInsertionTargets(
@@ -945,7 +934,6 @@ function sectionToCliJson(section: VisualSection): JsonObject {
   return {
     id: getSectionId(section),
     title: section.title,
-    level: section.level,
     lock: section.lock,
     editorOnly: section.editorOnly,
     expanded: section.expanded,
@@ -968,7 +956,6 @@ function formatSectionInfo(section: VisualSection): string {
     'This section',
     `id: ${getSectionId(section) || '(none)'}`,
     `name: ${section.title || '(untitled)'}`,
-    `section nesting level: ${section.level}`,
     ...(section.description?.trim() ? [`description: ${section.description.trim()}`] : []),
     ...(section.tags?.trim() ? [`tags: ${section.tags.trim()}`] : []),
     ...(section.location ? [`location: ${section.location}`] : []),
@@ -993,7 +980,6 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
     section.customIdGenerated = false;
   }
   if (typeof value.title === 'string') section.title = value.title;
-  if (typeof value.level === 'number') section.level = Math.max(1, Math.min(6, Math.floor(value.level)));
   if (typeof value.lock === 'boolean') section.lock = value.lock;
   if (typeof value.editorOnly === 'boolean') section.editorOnly = value.editorOnly;
   if (typeof value.expanded === 'boolean') section.expanded = value.expanded;

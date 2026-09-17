@@ -78,12 +78,6 @@ const addBlock: ActionHandler = ({ app, actionButton, section }) => {
       return;
     }
   }
-  const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
-  for (const child of section.children) {
-    if (child.renderAfterBlockId == null) {
-      child.renderAfterBlockId = previousLastBlockId;
-    }
-  }
   section.blocks.push(newBlock);
   setActiveEditorBlock(section.key, newBlock.id);
   markActiveEditorBlockAsNew(newBlock.id);
@@ -91,7 +85,7 @@ const addBlock: ActionHandler = ({ app, actionButton, section }) => {
 };
 
 const addEmptySectionHeading: ActionHandler = ({ section }) => {
-  if (!section || section.lock || section.blocks.length > 0 || section.children.length > 0 || section.title.trim().length === 0) {
+  if (!section || section.lock || section.blocks.length > 0 || section.title.trim().length === 0) {
     return;
   }
   recordHistory();

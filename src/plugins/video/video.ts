@@ -411,7 +411,6 @@ function normalizeVideoBlocks(document: VisualDocument): boolean {
   const visitSections = (sections: VisualDocument['sections']) => {
     for (const section of sections) {
       visitBlocks(section.blocks);
-      visitSections(section.children);
     }
   };
   visitSections(document.sections);

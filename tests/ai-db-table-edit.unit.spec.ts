@@ -80,10 +80,10 @@ const SUMMARY_FIXTURE: DbTableAiSummary = {
   activeQuery: null,
 };
 
-test('getDocumentDbTableNames finds plugin blocks nested inside subsections', async () => {
+test('getDocumentDbTableNames finds plugin blocks nested inside containers', async () => {
   const { getDocumentDbTableNames } = await vi.importActual<typeof import('../src/plugins/db-table-model')>('../src/plugins/db-table-model');
   const nestedDoc = deserializeDocument(
-    `---\nhvy_version: 0.1\n---\n\n<!--hvy: {"id":"root"}-->\n#! Root\n\n <!--hvy:text {}-->\n  Intro\n\n<!--hvy:subsection {"id":"pipeline"}-->\n#! Pipeline\n\n <!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->\n`,
+    `---\nhvy_version: 0.1\n---\n\n<!--hvy: {"id":"root"}-->\n#! Root\n\n <!--hvy:text {}-->\n  Intro\n\n <!--hvy:container {"id":"pipeline"}-->\n  <!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->\n`,
     '.hvy'
   );
 

@@ -36,7 +36,6 @@ function collectBlockPaths(document: VisualDocument): Map<VisualBlock, string> {
     }
     const sectionPath = `${parentPath}/${section.customId || section.key}`;
     section.blocks.forEach((block) => visitBlock(block, sectionPath, paths));
-    section.children.forEach((child) => visitSection(child, sectionPath));
   };
   document.sections.forEach((section) => visitSection(section, '/body'));
   return paths;

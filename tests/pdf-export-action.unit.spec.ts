@@ -83,7 +83,7 @@ vi.mock('../src/ai-document-import', () => ({
 }));
 
 function createDocumentWithExportTemplate(): VisualDocument {
-  const section = createEmptySection(1, 'Summary');
+  const section = createEmptySection('Summary');
   section.key = 'section-summary';
   section.customId = 'summary';
   section.blocks = [createEmptyBlock('text')];

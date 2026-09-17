@@ -381,7 +381,7 @@ function executeHvyInsertCommand(ctx: HvyDocumentCommandContext, indexArg = '', 
     const name = rest.length === 2 && rest[0] === '--id' ? rest[1] : rest.length === 1 ? rest[0] : '';
     if (!name || name.startsWith('--')) throw new Error('hvy insert: definitions require PARENT_PATH --id NAME (or positional NAME).');
     if (kind !== 'section' && !isKnownComponent(ctx.document, kind)) throw new Error(`Unknown component: ${kind}`);
-    const node = kind === 'section' ? createSection('', name, 1, ctx.document.meta) : createBlockFromSchema(schemaFromUnknown({ component: kind }, new WeakSet<object>(), ctx.document.meta), '');
+    const node = kind === 'section' ? createSection('', name, ctx.document.meta) : createBlockFromSchema(schemaFromUnknown({ component: kind }, new WeakSet<object>(), ctx.document.meta), '');
     const path = insertTemplateDefinition(ctx.document, parent, name, index, node);
     return { output: path, mutated: true, cwd: path };
   }
@@ -426,14 +426,9 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyIn
   if (!parentPath || !id || !title) {
     throw new Error('hvy insert section: expected PARENT_PATH ID TITLE or PARENT_PATH --from-template TEMPLATE_KEY');
   }
-  const parent = findSectionParent(ctx, parentPath);
-  const section = createSection(id, decodeCliText(title), parent ? parent.level + 1 : 1, ctx.document.meta);
-  if (parent) {
-    insertChild(parent.children, section, index);
-    commitTemplateDirectory(ctx.document, resolveVirtualPath(ctx.fs, ctx.cwd, parentPath));
-  } else {
-    insertChild(ctx.document.sections, section, index);
-  }
+  requireSectionRoot(ctx, parentPath);
+  const section = createSection(id, decodeCliText(title), ctx.document.meta);
+  insertChild(ctx.document.sections, section, index);
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, parentPath);
   const path = resolvedParentPath === '/' || resolvedParentPath === '/body'
     ? `/body/${id}`
@@ -480,20 +475,15 @@ function addSectionFromTemplate(ctx: HvyDocumentCommandContext, args: string[], 
   if (definition.repeatable !== true && getUsedSectionTemplateKeys(ctx.document).has(key)) {
     throw new Error(`hvy insert section: section template "${key}" is non-repeatable and already used.`);
   }
-  const parent = findSectionParent(ctx, parentPath);
-  const section = cloneReusableSection(definition.template, parent ? parent.level + 1 : 1, ctx.document.meta);
+  requireSectionRoot(ctx, parentPath);
+  const section = cloneReusableSection(definition.template, ctx.document.meta);
   section.customId = definition.template.customId;
   section.customIdGenerated = definition.template.customIdGenerated;
   if (templateValues) {
     applyReusableSectionTemplateValues(section, templateValues, variables);
   }
   section.templateKey = key;
-  if (parent) {
-    insertChild(parent.children, section, index);
-    commitTemplateDirectory(ctx.document, resolveVirtualPath(ctx.fs, ctx.cwd, parentPath));
-  } else {
-    insertChild(ctx.document.sections, section, index);
-  }
+  insertChild(ctx.document.sections, section, index);
   const id = getSectionId(section);
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, parentPath);
   const path = resolvedParentPath === '/' || resolvedParentPath === '/body'
@@ -819,22 +809,11 @@ function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[], i
   return { output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedSectionPath, null, 'blocks'), mutated: true, cwd: path };
 }
 
-function findSectionParent(ctx: HvyDocumentCommandContext, path: string): VisualSection | null {
+function requireSectionRoot(ctx: HvyDocumentCommandContext, path: string): void {
   const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, path);
-  if (resolved === '/' || resolved === '/body') {
-    return null;
+  if (resolved !== '/' && resolved !== '/body') {
+    throw new Error('hvy insert section: sections must be added at /body. Use a container to group components inside a section.');
   }
-  const section = findSectionForVirtualDirectory(ctx.document, resolved, ctx.pathNaming);
-  if (section) {
-    return section;
-  }
-  const componentPath = findNearestComponentPath(ctx, resolved);
-  if (componentPath) {
-    throw new Error(
-      `hvy insert section: sections must be added at the root level or on top of an existing section. ${path} is a component, not a section.`
-    );
-  }
-  return requireSection(ctx, path, 'hvy insert section');
 }
 
 function requireSection(ctx: HvyDocumentCommandContext, path: string, command: string): VisualSection {
@@ -846,18 +825,8 @@ function requireSection(ctx: HvyDocumentCommandContext, path: string, command: s
   return section;
 }
 
-function findNearestComponentPath(ctx: HvyDocumentCommandContext, resolvedPath: string): string {
-  let candidate = resolvedPath;
-  while (candidate !== '/' && candidate !== '/body') {
-    if (findBlockForVirtualDirectory(ctx.document, candidate, ctx.pathNaming)) {
-      return candidate;
-    }
-    candidate = candidate.split('/').slice(0, -1).join('/') || '/';
-  }
-  return '';
-}
 
-function createSection(id: string, title: string, level: number, documentMeta: JsonObject): VisualSection {
+function createSection(id: string, title: string, documentMeta: JsonObject): VisualSection {
   return {
     key: makeId('section'),
     customId: id,
@@ -866,7 +835,6 @@ function createSection(id: string, title: string, level: number, documentMeta: J
     idEditorOpen: false,
     isGhost: false,
     title,
-    level,
     expanded: true,
     highlight: false,
     editorOnly: false,
@@ -876,7 +844,6 @@ function createSection(id: string, title: string, level: number, documentMeta: J
     location: 'main',
     hideIfUnmodified: false,
     blocks: [],
-    children: [],
   };
 }
 
@@ -906,7 +873,6 @@ function getUsedSectionTemplateKeys(document: VisualDocument): Set<string> {
       if (!section.isGhost && section.templateKey?.trim()) {
         used.add(section.templateKey.trim());
       }
-      visit(section.children);
     }
   };
   visit(document.sections);

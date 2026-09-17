@@ -69,7 +69,7 @@ export function buildDocumentWalkChunks(document: VisualDocument, snapshot: Docu
   let chunkStart = 0;
   for (let index = 0; index < bodyLines.length; index += 1) {
     const line = bodyLines[index] ?? '';
-    if (/^\s*<!--hvy:(?:subsection\s*)?\s*\{/.test(line)) {
+    if (/^\s*<!--hvy:\s*\{/.test(line)) {
       if (index > chunkStart) {
         chunks.push(formatDocumentWalkChunk(bodyLines, chunkStart, index - 1, currentSection));
       }

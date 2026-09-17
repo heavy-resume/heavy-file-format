@@ -168,7 +168,6 @@ function renderSection(
     : layout;
   const stack: HvyPdfMakeNode[] = [];
   stack.push(...renderBlocks(document, resolved, section.blocks, childLayout));
-  stack.push(...renderSections(document, resolved, section.children, childSidebar, childLayout));
   if (stack.length === 0) {
     return null;
   }

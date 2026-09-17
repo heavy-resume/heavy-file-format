@@ -63,7 +63,6 @@ function createSection(id: string, blocks: VisualBlock[] = []): VisualSection {
     idEditorOpen: false,
     isGhost: false,
     title: id,
-    level: 1,
     expanded: true,
     highlight: false,
     css: '',
@@ -71,7 +70,6 @@ function createSection(id: string, blocks: VisualBlock[] = []): VisualSection {
     description: '',
     location: 'main',
     blocks,
-    children: [],
   };
 }
 

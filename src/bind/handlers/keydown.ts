@@ -177,7 +177,7 @@ export function bindKeydown(app: HTMLElement): void {
       const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
       if (section) {
         assignSectionTitleAndGeneratedId(state.document.sections, section, target.value);
-        if ((event.metaKey || event.ctrlKey) && section.title.trim().length > 0 && section.blocks.length === 0 && section.children.length === 0) {
+        if ((event.metaKey || event.ctrlKey) && section.title.trim().length > 0 && section.blocks.length === 0) {
           recordHistory(`section-title-heading:${section.key}`);
           const newBlock = createEmptyBlock('text');
           const headingLevel = emptySectionHeadingLevelToNumber(rememberEmptySectionHeadingLevel(section.key, getEmptySectionHeadingLevel(section.key)));

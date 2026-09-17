@@ -323,7 +323,6 @@ function replaceTemplateStringsInSection(
     ? replaceTemplateStrings(section.templateKey, values, seen) as string
     : section.templateKey;
   section.blocks.forEach((block) => replaceTemplateStringsInBlock(block, values, labels, seen, urlVariables));
-  section.children.forEach((child) => replaceTemplateStringsInSection(child, values, labels, seen, urlVariables));
 }
 
 function getReusableTemplateVariableLabelMap(variables: ReusableTemplateVariable[]): Record<string, string> {
@@ -506,7 +505,6 @@ function normalizeTemplatePlaceholderTextBlocks(block: VisualBlock): void {
 
 function normalizeSectionTemplatePlaceholderTextBlocks(section: VisualSection): void {
   section.blocks.forEach(normalizeTemplatePlaceholderTextBlocks);
-  section.children.forEach(normalizeSectionTemplatePlaceholderTextBlocks);
 }
 
 function hasVisibleMarkdownText(text: string): boolean {

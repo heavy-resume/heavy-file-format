@@ -72,7 +72,6 @@ export const builtInSearchProvider: HvySearchProvider = (request) => {
       documentOrder,
       section.description.trim()
     );
-    section.children.forEach(visitSection);
   };
 
   request.document.sections.forEach(visitSection);

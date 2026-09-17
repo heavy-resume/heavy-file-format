@@ -40,7 +40,6 @@ function createDocument(text = 'First version'): VisualDocument {
           xrefDetail: '',
         },
       }],
-      children: [],
       contained: false,
       expanded: true,
       lock: false,

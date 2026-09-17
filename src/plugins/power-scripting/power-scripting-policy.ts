@@ -44,7 +44,6 @@ function collectPowerScriptSource(blocks: VisualBlock[], output: PowerScriptFing
 
 function collectSectionPowerScriptSource(section: VisualSection, output: PowerScriptFingerprintEntry[]): void {
   collectPowerScriptSource(section.blocks, output);
-  section.children.forEach((child) => collectSectionPowerScriptSource(child, output));
 }
 
 export function getPowerScriptFingerprint(document: VisualDocument): string {

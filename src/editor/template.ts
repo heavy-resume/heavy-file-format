@@ -23,7 +23,6 @@ export function hasTemplateFieldBlock(field: string, sections: VisualSection[]):
   const token = `{{${field}}}`;
   return sections.some((section) =>
     section.blocks.some((block) => blockContainsTemplateToken(block, token))
-    || section.children.some((child) => hasTemplateFieldBlock(field, [child]))
   );
 }
 

@@ -259,7 +259,6 @@ test('undo and redo keep image attachment bytes outside history snapshots', () =
     idEditorOpen: false,
     isGhost: false,
     title: 'Main',
-    level: 1,
     expanded: true,
     highlight: false,
     css: '',
@@ -267,7 +266,6 @@ test('undo and redo keep image attachment bytes outside history snapshots', () =
     description: '',
     location: 'main',
     blocks: [imageBlock],
-    children: [],
   }];
   state.document.attachments = [
     { id: 'image:photo.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([10, 20, 30]) },

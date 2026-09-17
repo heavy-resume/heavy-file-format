@@ -41,7 +41,6 @@ function estimateReaderSectionHeight(section: VisualSection): number {
     96,
     44
       + section.blocks.reduce((total, block) => total + estimateReaderBlockHeight(block), 0)
-      + section.children.reduce((total, child) => total + estimateReaderSectionHeight(child), 0)
   );
 }
 

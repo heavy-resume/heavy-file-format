@@ -4,10 +4,8 @@ export interface HvySection {
   id: string;
   idGenerated?: boolean;
   title: string;
-  level: number;
   contentMarkdown: string;
   meta: JsonObject;
-  children: HvySection[];
 }
 
 export interface HvyCssBlock {

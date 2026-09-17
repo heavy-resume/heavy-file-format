@@ -109,7 +109,6 @@ section_defs:
     template:
       id: projects
       title: Projects
-      level: 1
       lock: true
       description: Project portfolio
       hideIfUnmodified: true
@@ -139,14 +138,12 @@ section_defs:
             componentListItemLabel: project
             tags: project
             componentListBlocks: []
-      children: []
     flavors:
       - name: tableform
         description: Preferred for longer project lists
         template:
           id: projects
           title: Projects
-          level: 1
           lock: true
           description: Project portfolio
           hideIfUnmodified: true
@@ -176,13 +173,11 @@ section_defs:
                 componentListItemLabel: project
                 tags: project
                 componentListBlocks: []
-          children: []
       - name: linear
         description: Preferred for shorter project lists
         template:
           id: projects
           title: Projects
-          level: 1
           lock: true
           description: Project portfolio
           hideIfUnmodified: true
@@ -200,13 +195,11 @@ section_defs:
                 componentListItemLabel: project
                 tags: project
                 componentListBlocks: []
-          children: []
   - name: Publications
     key: resume-publications
     template:
       id: publications
       title: Publications
-      level: 1
       lock: true
       description: Publications
       hideIfUnmodified: true
@@ -237,14 +230,12 @@ section_defs:
             componentListItemLabel: publication
             tags: publication
             componentListBlocks: []
-      children: []
     flavors:
       - name: tableform
         description: Preferred for longer publication lists
         template:
           id: publications
           title: Publications
-          level: 1
           lock: true
           description: Publications
           hideIfUnmodified: true
@@ -275,13 +266,11 @@ section_defs:
                 componentListItemLabel: publication
                 tags: publication
                 componentListBlocks: []
-          children: []
       - name: linear
         description: Preferred for shorter publication lists
         template:
           id: publications
           title: Publications
-          level: 1
           lock: true
           description: Publications
           hideIfUnmodified: true
@@ -299,13 +288,11 @@ section_defs:
                 componentListItemLabel: publication
                 tags: publication
                 componentListBlocks: []
-          children: []
   - name: Awards
     key: resume-awards
     template:
       id: awards
       title: Awards
-      level: 1
       lock: true
       description: Awards
       hideIfUnmodified: true
@@ -336,13 +323,11 @@ section_defs:
             componentListItemLabel: award
             tags: award
             componentListBlocks: []
-      children: []
   - name: Certifications
     key: resume-certifications
     template:
       id: certifications
       title: Certifications
-      level: 1
       lock: false
       description: Certifications
       hideIfUnmodified: true
@@ -373,13 +358,11 @@ section_defs:
             componentListItemLabel: certification
             tags: certification
             componentListBlocks: []
-      children: []
   - name: Languages
     key: resume-languages
     template:
       id: languages
       title: Languages
-      level: 1
       lock: false
       expanded: false
       location: sidebar
@@ -399,7 +382,6 @@ section_defs:
             componentListItemLabel: language
             tags: language
             componentListBlocks: []
-      children: []
   - name: Tabular Resume Section
     key: tabular-resume-section
     repeatable: true
@@ -414,7 +396,6 @@ section_defs:
         label: Row details
     template:
       title: Tabular Resume Section
-      level: 1
       lock: false
       description: An additional resume section with a table with expandable rows.
       hideIfUnmodified: true
@@ -469,14 +450,12 @@ section_defs:
                           component: text
                           editorOnly: true
                           css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
-      children: []
   - name: History
     key: resume-history
     repeatable: false
     template:
       id: history
       title: Professional History
-      level: 1
       lock: true
       description: Work history
       hideIfUnmodified: true
@@ -505,14 +484,12 @@ section_defs:
             componentListItemLabel: job
             tags: history
             componentListBlocks: []
-      children: []
     flavors:
       - name: tableform
         description: Preferred for longer histories (4 or more)
         template:
           id: history
           title: Professional History
-          level: 1
           lock: true
           description: Work history
           hideIfUnmodified: true
@@ -541,13 +518,11 @@ section_defs:
                 componentListItemLabel: job
                 tags: history
                 componentListBlocks: []
-          children: []
       - name: linear
         description: Preferred for shorter histories (3 or less)
         template:
           id: history
           title: Professional History
-          level: 1
           lock: true
           description: Work history
           hideIfUnmodified: true
@@ -566,7 +541,6 @@ section_defs:
                 componentListItemLabel: job
                 tags: history
                 componentListBlocks: []
-          children: []
 component_defs:
   - name: resume-section-row
     baseType: expandable

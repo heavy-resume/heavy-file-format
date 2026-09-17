@@ -179,7 +179,7 @@ export function insertTemplateDefinition(document: VisualDocument, parent: strin
   if (offset < 0 || offset > existing.length) throw new Error(`hvy insert: index ${index} is out of range for ${existing.length} definitions.`);
   const copiedMetadata = metadata ? JSON.parse(JSON.stringify(metadata)) as Record<string, unknown> : {};
   const value: Record<string, unknown> = section
-    ? { ...copiedMetadata, name, ...(!owner ? { key: name, repeatable: metadata?.repeatable === true } : {}), template: parseVisualSection(JSON.parse(JSON.stringify(node)), 1, new WeakSet<object>(), document.meta) }
+    ? { ...copiedMetadata, name, ...(!owner ? { key: name, repeatable: metadata?.repeatable === true } : {}), template: parseVisualSection(JSON.parse(JSON.stringify(node)), new WeakSet<object>(), document.meta) }
     : { ...copiedMetadata, name, ...(!owner ? { baseType: resolveBaseComponentFromMeta((node as VisualBlock).schema.component, document.meta) } : {}), template: parseVisualBlock(JSON.parse(JSON.stringify(node)), new WeakSet<object>(), document.meta) };
   if (!section) {
     const block = value.template as VisualBlock;

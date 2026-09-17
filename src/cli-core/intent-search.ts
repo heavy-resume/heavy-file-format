@@ -385,7 +385,6 @@ function getUsedSectionTemplateKeys(document: VisualDocument): Set<string> {
       if (!section.isGhost && section.templateKey?.trim()) {
         used.add(section.templateKey.trim());
       }
-      visit(section.children);
     }
   };
   visit(document.sections);

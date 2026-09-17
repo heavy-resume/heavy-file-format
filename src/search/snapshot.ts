@@ -247,10 +247,6 @@ function findSectionByPredicate(sections: VisualSection[], predicate: (section: 
     if (predicate(section)) {
       return section;
     }
-    const child = findSectionByPredicate(section.children, predicate);
-    if (child) {
-      return child;
-    }
   }
   return null;
 }

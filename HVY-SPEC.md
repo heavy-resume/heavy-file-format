@@ -895,6 +895,7 @@ Authoring clients SHOULD provide a visual template-definition surface using the 
 Template value notes:
 - `{% name %}` is equivalent to `{% name | text %}`.
 - `text` values are single-line values; `block` values may contain multiple lines.
+- When a multiline value is substituted on a Markdown line beginning with a `^name^` text line style marker, subsequent plain paragraphs in that value MUST inherit the same marker unless they supply an explicit marker. Soft-wrapped lines remain one paragraph. This substitution MUST preserve structural Markdown such as lists, tables, and code blocks, and MUST NOT propagate literal markers from code blocks or escaped markers. The inherited style applies only within the substituted value, not to following template content.
 - `isempty` resolves to `yes` when the value is empty or whitespace-only, and `no` otherwise. It does not change the variable's text/block validation type.
 - Variable names MUST be identifier-like strings: letters, numbers, underscores, and hyphens, starting with a letter or underscore.
 - Repeated variables use the same value; conflicting types for the same variable are invalid.

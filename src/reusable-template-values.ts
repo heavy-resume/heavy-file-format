@@ -1,6 +1,7 @@
 import { normalizeLinkInputValue, serializeMarkdownLinkDestination } from './link-value';
 import type { VisualBlock, VisualSection } from './editor/types';
 import { createTextFillInMarker } from './text-fill-in';
+import { inheritTemplateParagraphStyle } from './template-paragraph-styles';
 import type { ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, ReusableTemplateVariableConfig } from './types';
 
 export type ReusableTemplateVariableType = 'text' | 'block' | 'url';
@@ -447,7 +448,7 @@ function replaceTemplateString(
   urlVariables: Set<string>
 ): { text: string; fillIn: boolean } {
   let fillIn = false;
-  const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string, rawFilter: ReusableTemplateFilter | undefined) => {
+  const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string, rawFilter: ReusableTemplateFilter | undefined, offset: number) => {
     const value = values[name] ?? '';
     if (rawFilter === 'isempty') {
       return value.trim().length === 0 ? 'yes' : 'no';
@@ -457,7 +458,7 @@ function replaceTemplateString(
       fillIn = true;
       return createTextFillInMarker(Object.prototype.hasOwnProperty.call(labels, name) ? labels[name] || humanizeTemplateVariableName(name) : humanizeTemplateVariableName(name));
     }
-    return value;
+    return blankAsFillIn ? inheritTemplateParagraphStyle(text, offset, value) : value;
   });
   return { text: replaced, fillIn };
 }

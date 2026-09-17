@@ -117,3 +117,5 @@ Don't make changes that would possibly undo a performance refactor. We are no lo
 where we want lazily thought out changes quickly and need quality changes now.
 
 Always repro before fixing! Always test adjacent tests when changing things!
+
+Don't make README.md changes unless explicilty instructed. If you want to update things for future agents update README.foragents.md instead

@@ -6,7 +6,6 @@ import type { HvyVirtualPathNamingState } from '../../cli-core/virtual-file-syst
 import type { VisualBlock, VisualSection } from '../../editor/types';
 import type { HvyChatContextPreparationProgress } from '../../types';
 import { recordMeasurement } from '../../perf-trace';
-import { isLikelyInformationalAnswerRequest } from '../../ai-document-tool-parsing';
 import { getPendingChatAttachments } from '../../chat/chat-attachments';
 import { applyInlineAnswerTypeChoice } from '../../block-ops';
 
@@ -151,9 +150,9 @@ export function bindSubmit(app: HTMLElement): void {
       const abortController = new AbortController();
       state.chat.abortController = abortController;
       const isDocumentEditChat = state.currentView !== 'viewer';
-      const answerDocumentEditChatAsQuestion = isDocumentEditChat
-        && pendingAttachments.length === 0
-        && isLikelyInformationalAnswerRequest(question);
+      // Editable chat keeps its tools for questions and follow-ups too.
+      // Retain this dispatch flag for the existing request diagnostics.
+      const answerDocumentEditChatAsQuestion = false;
       const useDocumentEditTurn = isDocumentEditChat && !answerDocumentEditChatAsQuestion;
       state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Waiting for answer...';
       const saveChatOrSessionState = (): void => {

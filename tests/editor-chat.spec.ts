@@ -296,33 +296,54 @@ test('Viewer follow-up inspects a known path inside the cache-stable read-only a
   expect(JSON.stringify(chatRequests[2]?.toolState)).toContain('Component preview');
 });
 
-test('AI mode informational question uses QA chat instead of document edit CLI', async ({ page }) => {
-  const chatRequests: Array<{ mode?: string; messages?: Array<{ content?: string }> }> = [];
-  await page.route('**/api/chat', async (route) => {
-    const body = route.request().postDataJSON() as { mode?: string; messages?: Array<{ content?: string }> };
-    chatRequests.push(body);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        output: 'James has used Python on automation and data projects.',
-        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
-      }),
+for (const view of ['editor', 'ai']) {
+  test(`${view} chat retains editing tools for questions and follow-up requests`, async ({ page }) => {
+    test.setTimeout(5_000);
+    const chatRequests: Array<{
+      mode?: string;
+      tools?: Array<{ name: string }>;
+      messages?: Array<{ role?: string; content?: string }>;
+    }> = [];
+    await page.route('**/api/chat', async (route) => {
+      chatRequests.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          output: 'done Request handled.',
+          reasoningSummary: '',
+          toolCalls: [],
+          nativeMessages: [],
+          toolState: { provider: 'openai', input: [] },
+        }),
+      });
     });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByRole('button', { name: 'HVY Document', exact: true }).click();
+    await page.locator(`[data-action="switch-view"][data-view="${view}"]`).click();
+    await page.getByRole('button', { name: 'Open chat' }).click();
+    await page.locator('[data-field="chat-input"]').fill('What color is the heading?');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page.locator('.chat-bubble', { hasText: 'Request handled.' })).toHaveCount(1);
+    expect(chatRequests).toHaveLength(1);
+    expect(chatRequests[0]?.mode).toBe('document-edit');
+    expect(chatRequests[0]?.tools?.map((tool) => tool.name)).toContain('apply_hvy_patch');
+
+    await page.locator('[data-field="chat-input"]').fill('Can we give it the same font color too');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page.locator('.chat-bubble', { hasText: 'Request handled.' })).toHaveCount(2);
+    expect(chatRequests).toHaveLength(2);
+    expect(chatRequests[1]?.mode).toBe('document-edit');
+    expect(chatRequests[1]?.tools?.map((tool) => tool.name)).toContain('apply_hvy_patch');
+    expect(chatRequests[1]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', content: 'What color is the heading?' }),
+      expect.objectContaining({ role: 'assistant', content: 'Request handled.' }),
+      expect.objectContaining({ role: 'user', content: 'Can we give it the same font color too' }),
+    ]));
   });
-
-  await page.goto('/');
-  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.getByRole('button', { name: 'Open chat' }).click();
-  await page.locator('[data-field="chat-input"]').fill('What projects has James done with Python?');
-  await page.getByRole('button', { name: 'Send' }).click();
-
-  await expect(page.locator('.chat-bubble', { hasText: 'James has used Python on automation and data projects.' })).toBeVisible();
-  expect(chatRequests).toHaveLength(1);
-  expect(chatRequests[0]?.mode).toBe('qa');
-  expect(chatRequests[0]?.messages?.at(-1)?.content).toBe('What projects has James done with Python?');
-  await expect(page.locator('.chat-cli-sim')).toHaveCount(0);
-});
+}
 
 test('AI mode informational question with a chat attachment uses the attachment-capable CLI loop', async ({ page }) => {
   const rawJobDescription = `Job description\n${'Restaurant service requirement. '.repeat(80)}`;

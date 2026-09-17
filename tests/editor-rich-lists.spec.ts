@@ -707,6 +707,10 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
   await page.locator('.editor-block-passive', { hasText: 'Existing' }).click();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
+  // The collapse animation moves the picker anchor; finish it before opening
+  // the menu so this test exercises checkbox insertion in the settled layout.
+  await expect.poll(() => page.locator('.editor-block-passive', { hasText: 'Existing' })
+    .evaluate((node) => node.getAnimations().length)).toBe(0);
   await page.getByRole('button', { name: 'Section component type' }).click();
   await page.getByRole('button', { name: 'Text multipurpose' }).click();
 

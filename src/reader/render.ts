@@ -1838,7 +1838,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         const labelHead = `<span class="template-field-label-row"><span>${label}</span>${generatorButton}</span>`;
         if (xrefTargetTagFilter) {
           hasTargetPicker = true;
-          const targetOptions = deps.getComponentRenderHelpers().getXrefTargetOptions(xrefTargetTagFilter);
+          const insertionTarget = state.reusableTemplateModal!.target;
+          const list = insertionTarget.kind === 'component-list'
+            ? deps.findBlockByIds(insertionTarget.sectionKey, insertionTarget.blockId) ?? undefined
+            : undefined;
+          const targetOptions = deps.getComponentRenderHelpers().getXrefTargetOptions(xrefTargetTagFilter, { list });
           if (targetOptions.length === 0) {
             hasUnavailablePicker = true;
           }

@@ -1,6 +1,7 @@
 import type { TableColumnAlignment, TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import { scheduleButtonVisibilityScripts } from './editor/components/button/button-visibility-scheduler';
+import { refreshXrefTargetPicker } from './editor/components/xref-card/xref-card';
 import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState, SortValueDefinition, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
@@ -9,7 +10,7 @@ import { getReusableNameFromSectionKey, getComponentDefs, getSectionDefs, render
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
-import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
+import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, isXrefTargetAvailable, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumnProperties, getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumnProperties, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
 import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeInlineAnswerControls, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
@@ -408,9 +409,17 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
 
   if (field === 'block-xref-target' && (target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
     const previousTarget = block.schema.xrefTarget;
+    if (!isXrefTargetAvailable(state.document, target.value, { block })) {
+      target.value = normalizeXrefTarget(previousTarget);
+      return true;
+    }
     block.schema.xrefTarget = normalizeXrefTarget(target.value);
     applyXrefTargetDefaults(block, previousTarget);
     syncXrefEditorAfterTargetInput(target, block);
+    target.closest('.hvy-document')?.querySelectorAll<HTMLSelectElement>('select[data-field="block-xref-target"]').forEach((picker) => {
+      const context = resolveBlockContext(picker);
+      if (context) refreshXrefTargetPicker(picker, context.block, getCachedComponentRenderHelpers());
+    });
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     return true;
   }

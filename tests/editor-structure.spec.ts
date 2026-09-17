@@ -630,7 +630,7 @@ test('canceling a newly added featured xref removes it without opening list edit
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-xref-card');
-  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveText('Software Engineering');
+  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="skill-reverse-engineering"]')).toHaveText('Reverse Engineering');
   await activeEditor.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(page.locator('[data-component-id="top-skills-list"]')).not.toContainText('Untitled');
@@ -646,11 +646,11 @@ test('new featured xref populates title from target defaults', async ({ page }) 
   await topSkillsList.locator('[data-action="add-component-list-item"]').click();
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
-  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveCount(1);
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-reverse-engineering"]')).toHaveCount(1);
   await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-python"]')).toHaveCount(0);
-  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-software-engineering');
+  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-reverse-engineering');
 
-  await expect(activeEditor.locator('[data-field="block-xref-title"]')).toHaveText('Software Engineering');
+  await expect(activeEditor.locator('[data-field="block-xref-title"]')).toHaveText('Reverse Engineering');
 });
 
 test('new nested resume tool xref filters targets to tools', async ({ page }) => {
@@ -662,14 +662,14 @@ test('new nested resume tool xref filters targets to tools', async ({ page }) =>
   await page.getByRole('button', { name: /Expanded/ }).first().click();
   await page.locator('[data-component-id="history-tools-technologies-list"] [data-action="add-component-list-item"]', { hasText: 'Add Tool / Tech Reference' }).click();
 
-  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]').last();
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('tool-tech-xref-card');
-  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-python"]')).toHaveCount(1);
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-c-cpp"]')).toHaveCount(1);
   await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveCount(0);
-  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('tool-python');
+  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('tool-c-cpp');
   await activeEditor.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Raw', exact: true }).click();
-  await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"tool-python"');
+  await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"tool-c-cpp"');
   await expect(page.locator('#rawEditor')).toContainText('reciprocal-xref-generated');
   await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"history-northwind-labs-senior-software-engineer"');
 });
@@ -699,7 +699,7 @@ component_defs:
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
 
   await expect(activeEditor.locator('[data-field="block-xref-target"]')).toBeDisabled();
-  await expect(activeEditor).toContainText('No skill targets available yet.');
+  await expect(activeEditor).toContainText('No skill targets available.');
 });
 
 test('ai done on an xref without a target removes the draft xref', async ({ page }) => {

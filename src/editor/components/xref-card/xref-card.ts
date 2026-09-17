@@ -5,8 +5,8 @@ import { classifyXrefTarget } from '../../../workspace-links';
 export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const targetTagFilter = getEffectiveTargetTagFilter(block, helpers);
   const hasTarget = normalizeTargetValue(block.schema.xrefTarget).length > 0;
-  const targetOptions = helpers.getXrefTargetOptions(targetTagFilter);
-  const hasNoFilteredTargets = !hasTarget && targetTagFilter.length > 0 && targetOptions.length === 0;
+  const targetOptions = helpers.getXrefTargetOptions(targetTagFilter, { block });
+  const hasNoFilteredTargets = !hasTarget && targetOptions.length === 0;
   const titleOverride = block.schema.xrefTitle.trim().length > 0;
   const detailOverride = block.schema.xrefDetail.trim().length > 0;
   return `
@@ -21,7 +21,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
       >
         ${renderTargetOptions(helpers, targetOptions, normalizeTargetValue(block.schema.xrefTarget))}
       </select>
-      ${hasNoFilteredTargets ? `<p class="xref-target-empty">No ${helpers.escapeHtml(targetTagFilter)} targets available yet.</p>` : ''}
+      <p class="xref-target-empty" ${hasNoFilteredTargets ? '' : 'hidden'}>No ${targetTagFilter ? `${helpers.escapeHtml(targetTagFilter)} ` : ''}targets available.</p>
     </label>
     <span class="xref-override-label">Title override</span>
     <strong
@@ -47,6 +47,19 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
   </div>
 `;
 };
+
+export function refreshXrefTargetPicker(
+  picker: HTMLSelectElement,
+  block: Parameters<ComponentEditorRenderer>[1],
+  helpers: ComponentRenderHelpers,
+): void {
+  const selected = normalizeTargetValue(block.schema.xrefTarget);
+  const options = helpers.getXrefTargetOptions(getEffectiveTargetTagFilter(block, helpers), { block });
+  picker.innerHTML = renderTargetOptions(helpers, options, selected);
+  picker.disabled = !selected && options.length === 0;
+  const message = picker.closest('.xref-target-picker')?.querySelector<HTMLElement>('.xref-target-empty');
+  if (message) message.hidden = !picker.disabled;
+}
 
 export const renderXrefCardReader: ComponentReaderRenderer = (_section, block, helpers) =>
   renderXrefCardPreview(

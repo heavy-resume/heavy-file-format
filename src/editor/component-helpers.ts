@@ -65,7 +65,7 @@ export interface ComponentRenderHelpers {
   renderComponentPlacementTarget: (options: ComponentPlacementTargetOptions) => string;
   renderOption: (value: string, selected: string) => string;
   getDocumentComponentCss: (componentName: string) => string;
-  getXrefTargetOptions: (tagFilter?: string) => XrefTargetOption[];
+  getXrefTargetOptions: (tagFilter?: string, context?: import('../xref-ops').XrefPickerContext) => XrefTargetOption[];
   isXrefTargetValid: (target: string, tagFilter?: string) => boolean;
   getEffectiveXrefTargetTagFilter?: (block: VisualBlock) => string;
   isCrossDocumentLinksEnabled?: () => boolean;

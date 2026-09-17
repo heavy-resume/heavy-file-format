@@ -20,6 +20,43 @@ Beta mentoring claim.
 `, '.hvy');
 }
 
+test('expected result: patch renames a section through section.json without changing its id', async () => {
+  const document = createPatchDocument();
+  const session = createHvyCliSession();
+  expect((await executeHvyCliCommand(document, session, 'cat /id/summary/section.json')).output).toContain('"title": "Summary"');
+
+  const expectedResult = applyHvyPatch(document, session, `*** Begin Patch
+*** Update File: /id/summary/section.json
+@@
+-  "title": "Summary",
++  "title": "Renamed Sample",
+*** End Patch`);
+
+  expect(expectedResult.appliedFileCount).toBe(1);
+  expect(expectedResult.failedFileCount).toBe(0);
+  expect((await executeHvyCliCommand(document, session, 'cat /id/summary/section.json')).output).toContain('"title": "Renamed Sample"');
+  expect((await executeHvyCliCommand(document, session, 'cat /id/summary/raw.hvy')).output).toContain('#! Renamed Sample');
+  expect((await executeHvyCliCommand(document, session, 'cat /id/delivery/text.txt')).output).toBe('Alpha speed claim.');
+});
+
+test('expected result: patch renames a section through raw.hvy without changing its id', async () => {
+  const document = createPatchDocument();
+  const session = createHvyCliSession();
+  expect((await executeHvyCliCommand(document, session, 'cat /id/summary/raw.hvy')).output).toContain('#! Summary');
+
+  const expectedResult = applyHvyPatch(document, session, `*** Begin Patch
+*** Update File: /id/summary/raw.hvy
+@@
+-#! Summary
++#! Renamed Sample
+*** End Patch`);
+
+  expect(expectedResult.appliedFileCount).toBe(1);
+  expect(expectedResult.failedFileCount).toBe(0);
+  expect((await executeHvyCliCommand(document, session, 'cat /id/summary/section.json')).output).toContain('"title": "Renamed Sample"');
+  expect((await executeHvyCliCommand(document, session, 'cat /id/delivery/text.txt')).output).toBe('Alpha speed claim.');
+});
+
 test('expected result: one patch updates several virtual files atomically per file', async () => {
   const document = createPatchDocument();
   const session = createHvyCliSession();

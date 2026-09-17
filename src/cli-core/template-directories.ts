@@ -11,6 +11,7 @@ export interface TemplateDirectory {
   path: string;
   contentPath: string;
   metadata: Record<string, unknown>;
+  identityField: 'name' | 'key';
   block?: VisualBlock;
   section?: VisualSection;
   commit: () => void;
@@ -57,7 +58,7 @@ export function getTemplateDirectories(document: VisualDocument): TemplateDirect
     const add = (value: ComponentDefinition | ComponentTemplateFlavor, directory: string, remove: () => void) => {
       const block = componentTree(document, definition, value);
       result.push({
-        path: directory, contentPath: `${directory}/schema`, metadata: value as unknown as Record<string, unknown>, block,
+        path: directory, contentPath: `${directory}/schema`, metadata: value as unknown as Record<string, unknown>, identityField: 'name', block,
         commit: () => {
           value.schema = block.schema;
           if (block.text) value.text = block.text;
@@ -78,7 +79,11 @@ export function getTemplateDirectories(document: VisualDocument): TemplateDirect
   for (const definition of getSectionDefsFromMeta(document.meta)) {
     const path = `/templates/sections/${templatePathSegment(definition.key || definition.name)}`;
     const add = (value: SectionDefinition | NonNullable<SectionDefinition['flavors']>[number], directory: string, remove: () => void) => {
-      result.push({ path: directory, contentPath: `${directory}/template`, metadata: value as unknown as Record<string, unknown>, section: value.template, commit: () => {}, remove });
+      result.push({
+        path: directory, contentPath: `${directory}/template`, metadata: value as unknown as Record<string, unknown>,
+        identityField: value === definition && definition.key?.trim() ? 'key' : 'name',
+        section: value.template, commit: () => {}, remove,
+      });
     };
     add(definition, path, () => removeValue(document.meta.section_defs as unknown[], definition));
     for (const flavor of definition.flavors ?? []) {
@@ -118,8 +123,18 @@ export function addTemplateMetadataFiles(entries: Map<string, HvyVirtualEntry>, 
           if (field in next) throw new Error(`${field} has its own virtual directory; edit it there.`);
         }
         // Identity and base type determine paths and child schemas. Do not silently orphan references.
-        for (const field of ['name', 'key', 'baseType']) {
+        // A keyed section definition's name is a label, independent of its stable identity.
+        for (const field of new Set([root.identityField, 'key', 'baseType'])) {
           if (next[field] !== root.metadata[field]) throw new Error(`${field} must remain unchanged. Create a new definition to change its identity or base type.`);
+        }
+        if (typeof next.name !== 'string' || !next.name.trim() || next.name !== next.name.trim()) {
+          throw new Error('Template definitions require a non-empty name without surrounding whitespace.');
+        }
+        if (next.name !== root.metadata.name && roots.some((other) =>
+          other !== root && other.path.slice(0, other.path.lastIndexOf('/')) === root.path.slice(0, root.path.lastIndexOf('/')) &&
+          (other.metadata.name === next.name || other.metadata.key === next.name)
+        )) {
+          throw new Error(`Template definition already exists: ${next.name}`);
         }
         for (const field of ['description', 'tags']) {
           if (field in next && typeof next[field] !== 'string') throw new Error(`${field} must be a string.`);

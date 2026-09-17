@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { createHvyCliSession, executeHvyCliCommand } from '../src/cli-core/commands';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../src/component-defs';
+import { applyHvyPatch } from '../src/chat-cli/hvy-patch';
 
 function templateDocument() {
   return deserializeDocument(`---
@@ -41,6 +42,75 @@ section_defs:
    Fake original
 `, '.thvy');
 }
+
+test('expected result: a patch renames a keyed section template and edits its contents while preserving references', async () => {
+  const document = templateDocument();
+  const session = createHvyCliSession();
+  await executeHvyCliCommand(document, session, 'hvy insert -1 text /templates/sections/fake-section/template --id fake-text');
+  await executeHvyCliCommand(document, session, 'echo "# Fake Section" > /templates/sections/fake-section/template/fake-text/text.txt');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template fake-section');
+  expect(getSectionDefsFromMeta(document.meta)[0].name).toBe('Fake Section');
+  expect(document.sections[1].templateKey).toBe('fake-section');
+
+  const expectedResult = applyHvyPatch(document, session, `*** Begin Patch
+*** Update File: /templates/sections/fake-section/definition.json
+@@
+-  "name": "Fake Section",
++  "name": "Fake Renamed Section",
+*** Update File: /templates/sections/fake-section/template/section.json
+@@
+-  "title": "Fake Title",
++  "title": "Fake Renamed Section",
+*** Update File: /templates/sections/fake-section/template/fake-text/text.txt
+@@
+-# Fake Section
++# Fake Renamed Section
+*** End Patch`);
+
+  expect(expectedResult.failedFileCount).toBe(0);
+  expect(expectedResult.appliedFileCount).toBe(3);
+  expect((await executeHvyCliCommand(document, session, 'cat /templates/sections/fake-section/definition.json')).output).toContain('"name": "Fake Renamed Section"');
+  const reopened = deserializeDocument(serializeDocument(document), '.thvy');
+  expect(getSectionDefsFromMeta(reopened.meta)[0]).toMatchObject({
+    name: 'Fake Renamed Section', key: 'fake-section',
+    template: { title: 'Fake Renamed Section', blocks: [{ text: '# Fake Renamed Section\n' }] },
+  });
+  expect(reopened.sections[1].templateKey).toBe('fake-section');
+  expect(reopened.sections[1].title).toBe('Fake Title');
+  await executeHvyCliCommand(reopened, createHvyCliSession(), 'hvy insert -1 section /body --from-template fake-section');
+  expect(reopened.sections[2].title).toBe('Fake Renamed Section');
+});
+
+test('expected result: invalid section definition renames preserve the document', async () => {
+  const document = templateDocument();
+  const session = createHvyCliSession();
+  await executeHvyCliCommand(document, session, 'hvy insert -1 section /templates/sections --id fake-other');
+  const before = serializeDocument(document);
+
+  for (const name of ['', '   ', ' Fake Changed', 'fake-other']) {
+    await expect(executeHvyCliCommand(document, session, `echo '${JSON.stringify({ name, key: 'fake-section', repeatable: true })}' > /templates/sections/fake-section/definition.json`)).rejects.toThrow(/non-empty name|already exists/);
+    expect(serializeDocument(document)).toBe(before);
+  }
+  await expect(executeHvyCliCommand(document, session, `echo '{"name":"Fake Renamed Section","key":"fake-changed"}' > /templates/sections/fake-section/definition.json`)).rejects.toThrow('key must remain unchanged');
+  expect(serializeDocument(document)).toBe(before);
+});
+
+test('expected result: an unkeyed section definition name remains its identity', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: fake-unkeyed
+    template:
+      title: Fake Title
+      blocks: []
+---
+`, '.thvy');
+  const before = serializeDocument(document);
+
+  await expect(executeHvyCliCommand(document, createHvyCliSession(), `echo '{"name":"fake-renamed"}' > /templates/sections/fake-unkeyed/definition.json`)).rejects.toThrow('name must remain unchanged');
+
+  expect(serializeDocument(document)).toBe(before);
+});
 
 test('expected result: definitions are discoverable without expanding their contents or changing the document', async () => {
   const document = templateDocument();

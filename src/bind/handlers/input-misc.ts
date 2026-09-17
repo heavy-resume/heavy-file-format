@@ -10,11 +10,7 @@ import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabil
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { clearSortValueValidation } from '../../sort-value-validation';
 import { REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT } from '../../reusable-template-values';
-
-const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
-  const actions = await import('../../editor/components/button/button-actions');
-  await actions.runButtonVisibilityScripts(root);
-};
+import { scheduleButtonVisibilityScripts } from '../../editor/components/button/button-visibility-scheduler';
 
 function isSearchQueryControl(target: HTMLElement): target is HTMLInputElement | HTMLTextAreaElement {
   return target.dataset.field === 'search-query'
@@ -574,7 +570,7 @@ export function bindInputMisc(app: HTMLElement): void {
       context.block.schema.visibleScript = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
-      void runButtonVisibilityScripts(app);
+      scheduleButtonVisibilityScripts(app);
       return;
     }
 
@@ -624,7 +620,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       syncReusableTemplateForBlock(sectionKey, block.id);
       refreshReaderPanelsOutsideActiveEditor(target);
-      void runButtonVisibilityScripts(app);
+      scheduleButtonVisibilityScripts(app);
       return;
     }
 
@@ -696,7 +692,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (field === 'block-rich' || field === 'text-fill-in-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'caption-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);
       }
-      void runButtonVisibilityScripts(app);
+      scheduleButtonVisibilityScripts(app);
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), handledBy: 'block-field' });
       return;
     }

@@ -218,7 +218,7 @@ const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }
   }
   if (richField !== 'caption-rich' || block.schema.kind === 'image') {
     syncReusableTemplateForBlock(sectionKey, block.id);
-    getRefreshReaderPanels()();
+    if (richField !== 'caption-rich') getRefreshReaderPanels()();
   }
   const selector = `[data-section-key="${sectionKey}"][data-block-id="${block.id}"][data-field="${richField}"]`;
   const editable = app.querySelector<HTMLElement>(selector);

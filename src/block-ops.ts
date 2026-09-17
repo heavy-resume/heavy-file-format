@@ -1,5 +1,6 @@
 import type { TableColumnAlignment, TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
+import { scheduleButtonVisibilityScripts } from './editor/components/button/button-visibility-scheduler';
 import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState, SortValueDefinition, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
@@ -305,10 +306,10 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     } else {
       return false;
     }
+    // The modal previews drafts locally; closing it refreshes readers and runs hooks.
     refreshCaptionModalPreview(target, nextCaption);
     if (block.schema.kind === 'image') {
       syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-      getRefreshReaderPanels()();
     }
     return true;
   }
@@ -740,7 +741,9 @@ function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
 
 export function refreshReaderPanelsOutsideActiveEditor(target: HTMLElement): void {
   const surface = getRefreshSurfaceOutsideActiveEditor(target);
-  getRefreshReaderPanels()({ ...(surface === 'all' ? {} : { surface }), runDocumentHooks: false });
+  const root = target.closest('.hvy-document');
+  getRefreshReaderPanels()({ ...(surface === 'all' ? {} : { surface }), runDocumentHooks: false, runVisibilityScripts: false });
+  if (root) scheduleButtonVisibilityScripts(root);
 }
 
 function getRefreshSurfaceOutsideActiveEditor(target: HTMLElement): ReaderPanelRefreshSurface {

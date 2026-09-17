@@ -6,6 +6,7 @@ import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
 import { getActiveStateRuntime, getRefreshReaderPanels, getRenderApp, runWithStateRuntime } from '../../../state';
 import type { ChatMessage } from '../../../types';
 import { clearButtonAiGenerateRunning, isButtonAiGenerateRunning, markButtonAiGenerateRunning } from './button-state';
+import { cancelScheduledButtonVisibility } from './button-visibility-scheduler';
 
 function coerceReturnedText(value: unknown): string {
   if (value === null || typeof value === 'undefined') {
@@ -41,6 +42,7 @@ function markVisibilityPending(element: HTMLElement): void {
 }
 
 export async function runButtonVisibilityScripts(root: ParentNode): Promise<void> {
+  cancelScheduledButtonVisibility(root);
   const startedAt = nowMs();
   const runtime = getActiveStateRuntime();
   const inVisibilityRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);

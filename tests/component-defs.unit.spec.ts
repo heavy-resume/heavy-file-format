@@ -39,6 +39,7 @@ section_defs:
   expect(expectedResult).toContain('value="blank"');
   expect(expectedResult).not.toContain('Projects');
   expect(expectedResult).toContain('Resume Section');
+  expect(renderReusableSectionOptions('section-def:Projects')).toContain('<option value="blank" selected>');
 });
 
 test('reusable section instantiation uses fill-in markers for blank template variables', () => {

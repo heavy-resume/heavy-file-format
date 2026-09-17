@@ -152,7 +152,7 @@
   }
 
   .hvy-document .ai-edit-popover {
-    width: calc(100% - 1rem);
+    width: min(26rem, calc(100% - 2rem));
   }
 
   .hvy-document .ai-view-hint {

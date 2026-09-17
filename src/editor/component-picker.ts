@@ -3,6 +3,7 @@ import type { ComponentDefinition } from '../types';
 import type { AddComponentPickerOptions } from './component-helpers';
 import { getRenderableHostPlugins } from '../plugins/registry';
 import { plusIcon } from '../icons';
+import { isReusableDefinitionSectionKey } from '../component-defs';
 
 interface RenderDeps {
   escapeAttr: (value: string) => string;
@@ -29,7 +30,7 @@ interface PickerGroup {
 }
 
 export function renderAddComponentPicker(options: AddComponentPickerOptions, deps: RenderDeps): string {
-  const visibleGroups = getPickerGroups(deps.getComponentDefs()).map((group) => ({
+  const visibleGroups = getPickerGroups(deps.getComponentDefs(), isReusableDefinitionSectionKey(options.sectionKey)).map((group) => ({
     ...group,
     items: orderPickerItems(group.id, group.items.map((item) => withPickerItemAvailability(options, item))),
   }));
@@ -181,7 +182,7 @@ function withPickerItemAvailability(options: AddComponentPickerOptions, item: Pi
   };
 }
 
-function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
+function getPickerGroups(componentDefs: ComponentDefinition[], isTemplateEditing: boolean): PickerGroup[] {
   const pluginItems = getRenderableHostPlugins().map((entry) => ({
     value: 'plugin',
     label: entry.displayName,
@@ -217,7 +218,7 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       items: [
         ...(areTablesEnabled() ? [{ value: 'table', label: 'Table', description: 'a static table of information' }] : []),
         { value: 'xref-card', label: 'Reference', description: 'reference another document item' },
-        { value: 'location-marker', label: 'Component Location', description: 'mark where plugin-supplied components can appear' },
+        ...(isTemplateEditing ? [{ value: 'location-marker', label: 'Component Location', description: 'mark where plugin-supplied components can appear' }] : []),
       ],
     },
   ];

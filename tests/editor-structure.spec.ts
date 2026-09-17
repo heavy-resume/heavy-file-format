@@ -535,15 +535,15 @@ hvy_version: 0.1
   await expect(activeTextEditor).toContainText('Summary');
 });
 
-test('ai resume summary placeholder expands parent before editing', async ({ page }) => {
+test('ai resume summary heading expands parent without entering editing', async ({ page }) => {
   await page.goto('/');
 
   await selectDocumentMenuItem(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
 
-  const summaryPlaceholder = page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first();
-  await expect(summaryPlaceholder).toHaveCSS('cursor', 'text');
-  await summaryPlaceholder.click();
+  const summaryHeading = page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first();
+  await expect(summaryHeading).toHaveCSS('cursor', 'pointer');
+  await summaryHeading.click();
 
   await expect(page.locator('#aiReaderDocument .reader-block-expandable[aria-expanded="true"]')).toHaveCount(1);
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
@@ -1022,7 +1022,7 @@ component_defs:
 test('ai context menu stays inside phone preview when opened near the edge', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1033,7 +1033,7 @@ hvy_version: 0.1
  Edge-aware summary words
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'AI' }).click();
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
   await page.getByRole('button', { name: 'Phone 390' }).click();
 
   const shell = page.locator('.viewer-shell').first();
@@ -1060,6 +1060,32 @@ hvy_version: 0.1
   expect(requestBox).not.toBeNull();
   expect((requestBox?.x ?? 0) + (requestBox?.width ?? 0)).toBeLessThanOrEqual((shellBox?.x ?? 0) + (shellBox?.width ?? 0) + 1);
   expect(requestBox?.x ?? 0).toBeGreaterThanOrEqual((shellBox?.x ?? 0) - 1);
+});
+
+test('ai request popover is centered inside a narrow mobile parent', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
+  const shell = page.locator('.viewer-shell').first();
+  const shellBox = await shell.boundingBox();
+  expect(shellBox).not.toBeNull();
+
+  await page.locator('#aiReaderDocument .reader-block').first().dispatchEvent('contextmenu', {
+    clientX: (shellBox?.x ?? 0) + (shellBox?.width ?? 0) - 4,
+    clientY: (shellBox?.y ?? 0) + 80,
+    button: 2,
+  });
+  await page.locator('.hvy-context-popover button', { hasText: 'Request changes' }).click();
+
+  const requestBox = await page.locator('.ai-edit-popover').boundingBox();
+  expect(requestBox).not.toBeNull();
+  const leftInset = (requestBox?.x ?? 0) - (shellBox?.x ?? 0);
+  const rightInset = ((shellBox?.x ?? 0) + (shellBox?.width ?? 0))
+    - ((requestBox?.x ?? 0) + (requestBox?.width ?? 0));
+  expect(leftInset).toBeGreaterThanOrEqual(15);
+  expect(rightInset).toBeGreaterThanOrEqual(15);
+  expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(1);
 });
 
 test('ai touch hint stays clear of lower right preview controls', async ({ page }) => {
@@ -3836,7 +3862,7 @@ test('default example preserves bottom scroll when adding and deleting text belo
 test('AI mode cancel does not scroll for components at different container positions', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

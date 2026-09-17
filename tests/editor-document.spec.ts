@@ -943,6 +943,8 @@ hvy_version: 0.1
       root: document.querySelector('#root') as HTMLElement,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'viewer',
+      semanticFilterMaxWindowCandidates: 1,
+      semanticFilterMaxWindowCandidateChars: 50_000,
       semanticFilterProvider(request) {
         testWindow.testSemanticProviderCalls?.push({
           prompt: request.prompt,
@@ -972,6 +974,7 @@ hvy_version: 0.1
     };
     return {
       providerCall: testWindow.testSemanticProviderCalls?.[0],
+      providerCandidateCounts: testWindow.testSemanticProviderCalls?.map((call) => call.candidateCount),
       visibleText: document.querySelector('#readerDocument')?.textContent ?? '',
       paletteInsideRoot: (() => {
         const rootBox = document.querySelector('#root')?.getBoundingClientRect();
@@ -983,6 +986,7 @@ hvy_version: 0.1
 
   expect(result.providerCall?.prompt).toBe('show TypeScript work!');
   expect(result.providerCall?.candidateCount).toBeGreaterThan(0);
+  expect(result.providerCandidateCounts).toEqual([1, 1]);
   expect(result.visibleText).toContain('TypeScript tooling');
   expect(result.visibleText).not.toContain('Release notes');
   expect(result.paletteInsideRoot).toBe(true);
@@ -1368,6 +1372,57 @@ test('reader block refresh preserves direct grid cell edge-margin trimming', asy
   });
 
   expect(result).toEqual({ trimVerticalEdgeMargin: true });
+});
+
+test('reader block refresh preserves contained section boundary margin trimming', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <section class="reader-section">
+        <div class="reader-section-content">
+          <div class="reader-block" data-section-key="section-a" data-block-id="block-a" data-reader-trim-vertical-start-margin="true"></div>
+          <div class="reader-block" data-section-key="section-a" data-block-id="block-b" data-reader-trim-vertical-end-margin="true"></div>
+        </div>
+      </section>
+    </div>`;
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const { refreshReaderBlockDom } = await import(/* @vite-ignore */ '/src/reader/block-refresh.ts');
+    state.document.sections = [{
+      key: 'section-a',
+      blocks: [
+        { id: 'block-a', schema: {} },
+        { id: 'block-b', schema: {} },
+      ],
+    }];
+    const receivedOptions: unknown[] = [];
+    const readerRenderer = {
+      renderReaderBlock: (_section, block, options) => {
+        receivedOptions.push(options);
+        return `<div class="reader-block" data-section-key="section-a" data-block-id="${block.id}"></div>`;
+      },
+    };
+    refreshReaderBlockDom({
+      root: document.querySelector('#root')!,
+      sections: state.document.sections,
+      sectionKey: 'section-a',
+      blockId: 'block-a',
+      readerRenderer,
+    });
+    refreshReaderBlockDom({
+      root: document.querySelector('#root')!,
+      sections: state.document.sections,
+      sectionKey: 'section-a',
+      blockId: 'block-b',
+      readerRenderer,
+    });
+    return receivedOptions;
+  });
+
+  expect(result).toEqual([
+    { trimVerticalStartMargin: true, trimVerticalEndMargin: false },
+    { trimVerticalStartMargin: false, trimVerticalEndMargin: true },
+  ]);
 });
 
 test('lightweight embedded viewer keeps a named radio group exclusive across grid cells', async ({ page }) => {
@@ -4981,7 +5036,7 @@ test('AI mode sidebar add section creates a sidebar section', async ({ page }) =
 test('AI mode opens added section templates with nested components editable', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 section_defs:
@@ -5444,6 +5499,30 @@ test('resume section templates hide already used non-repeatable sections', async
   expect(options).toEqual(['Blank', 'Awards', 'Tabular Resume Section']);
 });
 
+test('section template dropdown uses themed text when a light paper palette follows dark mode', async ({ page }) => {
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Resume Template');
+  await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const { applyTheme } = await import('/src/theme.ts');
+    state.paletteOverrideId = 'paper';
+    applyTheme();
+  });
+  await page.locator('#app').evaluate((root) => root.classList.add('theme-dark'));
+
+  const expectedResult = await page.locator('#app').evaluate((root) => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-text');
+    root.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+
+  await expect(page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"]')).toHaveCSS('color', expectedResult);
+});
+
 test('document meta exposes whether a section template allows multiple sections per document', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
@@ -5675,7 +5754,7 @@ section_defs:
 test('adding a section template with multiple flavors asks which flavor to use', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 section_defs:
@@ -5721,6 +5800,7 @@ section_defs:
   await expect(page.getByRole('button', { name: /Cards/ })).toContainText('Use when the section has several independent cards.');
   await page.getByRole('button', { name: /Linear/ }).click();
 
+  await expect(page.locator('.section-template-flavor-modal')).toHaveCount(0);
   await expect(page.locator('.editor-section-card', { hasText: 'Feature Linear' })).toBeVisible();
   await expect(page.locator('.editor-section-card', { hasText: 'Feature Cards' })).toHaveCount(0);
 });

@@ -15,7 +15,7 @@ beforeEach(() => {
   });
 });
 
-test('editing one component template instance does not rewrite sibling instances', () => {
+test.each([false, true])('instance edits preserve templates and siblings with advanced mode %s', (advanced) => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 component_defs:
@@ -66,17 +66,22 @@ component_defs:
       Description
 `, '.hvy');
   initState(createTestState(document));
-  state.showAdvancedEditor = true;
+  state.showAdvancedEditor = advanced;
 
   const records = document.sections[0]!.blocks[0]!.schema.componentListBlocks;
   const firstName = records[0]!.schema.expandableStubBlocks.children[0]!;
   const secondName = records[1]!.schema.expandableStubBlocks.children[0]!;
+
+  const expectedDefinitions = JSON.stringify(document.meta.component_defs);
+  expect(firstName.text).toBe('TypeScript');
+  expect(secondName.text).toBe('Python');
 
   firstName.text = 'TypeScripts';
   syncReusableTemplateForBlock(document.sections[0]!.key, firstName.id);
 
   expect(firstName.text).toBe('TypeScripts');
   expect(secondName.text).toBe('Python');
+  expect(JSON.stringify(document.meta.component_defs)).toBe(expectedDefinitions);
 });
 
 test('saving a new container component template preserves copied child blocks', () => {

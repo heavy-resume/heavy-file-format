@@ -4,7 +4,7 @@ test.setTimeout(5_000);
 
 async function loadDbTableCrm(page: Page, contacts = ['Jane Smith']): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 plugins:
@@ -41,7 +41,11 @@ plugins:
     setActiveEditorBlock(section.key, block.id);
     getRenderApp()();
   }, contacts);
-  await expect(page.locator('.hvy-database-table-editor [data-db-table-field="cell"][data-column-name="contact"]').first()).toHaveValue('Jane Smith');
+  if (contacts.length > 0) {
+    await expect(page.locator('.hvy-database-table-editor [data-db-table-field="cell"][data-column-name="contact"]').first()).toHaveValue(contacts[0]);
+  } else {
+    await expect(page.locator('.hvy-database-table-editor .db-table-empty')).toHaveText('No rows yet.');
+  }
 }
 
 test('database-table edits relationships, stages required rows, and controls column visibility', async ({ page }) => {
@@ -102,7 +106,9 @@ test('database-table carries forward schema editing, row attachments, and confir
   await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Notes"]')).toBeVisible();
   const notesCard = plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Notes"]').locator('xpath=ancestor::div[contains(@class,"db-table-column-card")]');
   await notesCard.getByRole('button', { name: 'Delete database column Notes' }).click();
-  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+  const tableColumnDialog = page.getByRole('dialog', { name: 'Confirm deletion?' });
+  await expect(tableColumnDialog).toContainText('This will modify database table "contacts" by deleting column "Notes" and all data stored in that column.');
+  await tableColumnDialog.getByRole('button', { name: 'Delete column', exact: true }).click();
   await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Notes"]')).toHaveCount(0);
 
   await plugin.getByRole('button', { name: 'Close column settings' }).click();
@@ -113,6 +119,55 @@ test('database-table carries forward schema editing, row attachments, and confir
   await plugin.getByRole('button', { name: 'Delete row' }).click();
   await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]')).toHaveCount(0);
+});
+
+test('database-table removes projected view columns and shows its checked wrap state', async ({ page }) => {
+  await loadDbTableCrm(page);
+  await page.evaluate(async () => {
+    const { state, getRenderApp } = await import('/src/state.ts');
+    const { createScriptingDbRuntime } = await import('/src/plugins/db-table.ts');
+    const runtime = await createScriptingDbRuntime(state.document);
+    try {
+      runtime.api.execute('CREATE VIEW contact_view AS SELECT * FROM contacts');
+    } finally {
+      runtime.dispose();
+    }
+    const block = state.document.sections[0]?.blocks[0];
+    if (!block) throw new Error('Expected the DB Table fixture block.');
+    block.schema.pluginConfig.table = 'contact_view';
+    getRenderApp()();
+  });
+  const plugin = page.locator('.hvy-database-table-editor');
+  await expect(plugin.locator('.db-table-table-heading')).toContainText('Database view · rows read-only');
+  await plugin.getByRole('button', { name: 'Columns' }).click();
+  const contactCard = plugin.locator('.db-table-column-card').filter({ hasText: 'contact' });
+  const wrap = contactCard.getByRole('checkbox', { name: 'Wrap values' });
+
+  // BEFORE
+  await expect(wrap).not.toBeChecked();
+  await expect(contactCard.getByRole('button', { name: 'Delete database column contact' })).toBeEnabled();
+
+  // TOOL CALL
+  await wrap.click();
+  await expect(wrap).toBeChecked();
+  expect(await wrap.evaluate((input) => getComputedStyle(input).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+  await contactCard.getByRole('button', { name: 'Delete database column contact' }).click();
+  const viewColumnDialog = page.getByRole('dialog', { name: 'Confirm deletion?' });
+  await expect(viewColumnDialog).toContainText('This will modify database view "contact_view" by rebuilding it without column "contact". Its source table(s) will not be modified.');
+  await viewColumnDialog.getByRole('button', { name: 'Delete column', exact: true }).click();
+
+  // AFTER
+  await expect(plugin.locator('[data-db-table-field="schema-column-name"][value="contact"]')).toHaveCount(0);
+  expect(await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const { createScriptingDbRuntime } = await import('/src/plugins/db-table.ts');
+    const runtime = await createScriptingDbRuntime(state.document);
+    try {
+      return runtime.api.query('PRAGMA table_info(contact_view)').map((column) => column.name);
+    } finally {
+      runtime.dispose();
+    }
+  })).toEqual(['id', 'relationship_id']);
 });
 
 test('database-table renames database columns directly from spreadsheet headers', async ({ page }) => {
@@ -150,16 +205,43 @@ test('database-table resizes columns and auto-fits data within the document maxi
   await loadDbTableCrm(page);
   const plugin = page.locator('.hvy-database-table-editor');
   const contactHeader = plugin.locator('.db-table-column-name-input[data-column-name="contact"]').locator('xpath=ancestor::th');
-  const resizeHandle = contactHeader.locator('.db-table-resize-handle');
+  const resizeHandle = plugin.locator('.db-table-resize-handle[data-column-name="contact"]');
   await page.evaluate(async () => {
-    const { state } = await import('/src/state.ts');
+    const { state, getRenderApp } = await import('/src/state.ts');
     state.document.meta.database_table_max_column_width = '30rem';
+    const block = state.document.sections[0]?.blocks[0];
+    if (!block) throw new Error('Expected the DB Table fixture block.');
+    block.schema.pluginConfig.columns = {
+      id: { visibility: 'compact', width: '20rem' },
+      contact: { width: '20rem' },
+      relationship_id: { label: 'Organization', width: '20rem', foreignDisplayColumn: 'organization' },
+    };
+    getRenderApp()();
   });
 
   // BEFORE
+  const tableFrame = plugin.locator('.db-table-table-frame');
+  const expectedScrollLeft = await tableFrame.evaluate((frame) => {
+    frame.scrollLeft = frame.scrollWidth;
+    return frame.scrollLeft;
+  });
+  expect(expectedScrollLeft).toBeGreaterThan(0);
   const initialWidth = (await contactHeader.boundingBox())?.width ?? 0;
   const handleBox = await resizeHandle.boundingBox();
   expect(handleBox).not.toBeNull();
+  const headerBox = await contactHeader.boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(await page.evaluate(({ x, y }) => (
+    document.elementFromPoint(x, y)?.closest('.db-table-resize-handle') !== null
+  ), {
+    x: headerBox!.x + headerBox!.width,
+    y: headerBox!.y + headerBox!.height / 2,
+  })).toBe(true);
+  const editorTree = page.locator('.editor-shell .editor-tree');
+  await editorTree.evaluate((tree) => {
+    tree.scrollTop = 120;
+  });
+  const expectedEditorScrollTop = await editorTree.evaluate((tree) => tree.scrollTop);
 
   // TOOL CALL
   await resizeHandle.dispatchEvent('pointerdown', { button: 0, clientX: handleBox!.x, pointerId: 7 });
@@ -172,6 +254,9 @@ test('database-table resizes columns and auto-fits data within the document maxi
     return String(state.document.sections[0]?.blocks[0]?.schema.pluginConfig.columns?.contact?.width ?? '');
   })).toMatch(/px$/u);
   expect((await contactHeader.boundingBox())?.width ?? 0).toBeGreaterThan(initialWidth);
+  expect(await tableFrame.evaluate((frame) => frame.scrollLeft)).toBe(expectedScrollLeft);
+  await page.waitForTimeout(50);
+  expect(await editorTree.evaluate((tree) => tree.scrollTop)).toBe(expectedEditorScrollTop);
 
   await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
@@ -185,6 +270,38 @@ test('database-table resizes columns and auto-fits data within the document maxi
     const { state } = await import('/src/state.ts');
     return state.document.sections[0]?.blocks[0]?.schema.pluginConfig.columns?.contact?.width;
   })).toBe('160px');
+});
+
+test('database-table passive editor rendering does not advertise editable column controls', async ({ page }) => {
+  await loadDbTableCrm(page);
+
+  // BEFORE
+  await page.getByRole('button', { name: 'Done' }).click();
+  const passiveTable = page.locator('.editor-block-passive .hvy-database-table-reader');
+  await expect(passiveTable).toBeVisible();
+
+  // TOOL CALL
+  const resizeHandles = passiveTable.locator('.db-table-resize-handle');
+
+  // AFTER
+  await expect(resizeHandles).toHaveCount(0);
+  await expect(passiveTable.locator('.db-table-column-name-input')).toHaveCount(0);
+});
+
+test('database-table keeps an empty row-actions column compact', async ({ page }) => {
+  await loadDbTableCrm(page, []);
+  const plugin = page.locator('.hvy-database-table-editor');
+
+  // BEFORE
+  await expect(plugin.locator('.db-table-empty')).toHaveText('No rows yet.');
+
+  // TOOL CALL
+  const actionsWidth = await plugin.locator('.db-table-actions-heading').evaluate((heading) => (
+    heading.getBoundingClientRect().width
+  ));
+
+  // AFTER
+  expect(actionsWidth).toBeLessThan(40);
 });
 
 test('database-table uses queryLimit as the single page size without changing an authored SQL limit', async ({ page }) => {
@@ -242,7 +359,7 @@ test('database-table cell and destructive schema edits share async document undo
   await plugin.getByRole('button', { name: 'Column', exact: true }).click();
   await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Column 1"]')).toBeVisible();
   await plugin.getByRole('button', { name: 'Delete database column Column 1' }).click();
-  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete column', exact: true }).click();
   await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Column 1"]')).toHaveCount(0);
   await page.evaluate(async () => {
     const { undoStateAsync } = await import('/src/history.ts');

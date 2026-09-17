@@ -1,3 +1,5 @@
+import { cliBlockMetadata } from './block-metadata-fields';
+import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment } from './template-directories';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
@@ -11,7 +13,6 @@ import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-h
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 import { getHvyReferenceDocs } from './reference-library';
 import { assertCssValueIsDeclarationString } from '../css-value-validation';
-import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
@@ -75,17 +76,20 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
 
   addFile(
     '/header.yaml',
-    () => stringifyYaml(omitComponentDefs(document.meta)).trimEnd(),
+    () => stringifyYaml(omitTemplateDefinitions(document.meta)).trimEnd(),
     (content) => {
       const parsed = parseYaml(content);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('/header.yaml must contain a YAML object.');
       }
       const componentDefs = document.meta.component_defs;
+      const sectionDefs = document.meta.section_defs;
+      if ('component_defs' in parsed || 'section_defs' in parsed) throw new Error('Edit reusable definitions under /templates, not /header.yaml.');
       validateHeaderCssValues(parsed as JsonObject);
       document.meta = {
         ...(parsed as JsonObject),
         ...(componentDefs ? { component_defs: componentDefs } : {}),
+        ...(sectionDefs ? { section_defs: sectionDefs } : {}),
       };
     }
   );
@@ -93,6 +97,7 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
   measurePhase('cli.fs.build.sections', {}, () => {
     addSectionList(entries, document, document.sections, '/body', naming);
   });
+  addTemplateFiles(entries, document, naming);
   measurePhase('cli.fs.build.docs', {}, () => {
     addDocsDirectory(entries, document.meta);
   });
@@ -109,6 +114,23 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
   });
 
   return { entries };
+}
+
+function addTemplateFiles(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, naming?: HvyVirtualPathNamingState): void {
+  const roots = getTemplateDirectories(document);
+  addTemplateMetadataFiles(entries, roots);
+  for (const root of roots) {
+    const subtree = new Map<string, HvyVirtualEntry>();
+    if (root.block) addBlock(subtree, document, root.block, root.contentPath, naming);
+    if (root.section) addSection(subtree, document, root.section, root.contentPath, naming);
+    for (const [path, entry] of subtree) {
+      if (entry.kind === 'file' && entry.write) {
+        const write = entry.write;
+        entry.write = (content) => { write(content); root.commit(); };
+      }
+      entries.set(path, entry);
+    }
+  }
 }
 
 function addDocsDirectory(entries: Map<string, HvyVirtualEntry>, meta: JsonObject): void {
@@ -192,6 +214,14 @@ function validateHeaderCssValues(meta: JsonObject): void {
 
 export function findBlockForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualBlock | null {
   const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+  if (normalized.startsWith('/templates/')) {
+    const root = findTemplateDirectory(document, normalized);
+    const blocks = new Map<string, VisualBlock>();
+    const entries = new Map<string, HvyVirtualEntry>();
+    if (root?.block) addBlockLookup(document.meta, entries, blocks, root.block, root.contentPath, naming);
+    if (root?.section) addSectionBlockLookup(document.meta, entries, blocks, root.section, root.contentPath, naming);
+    return blocks.get(normalized) ?? null;
+  }
   const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -204,6 +234,12 @@ export function findBlockForVirtualDirectory(document: VisualDocument, path: str
 
 export function findSectionForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualSection | null {
   const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+  if (normalized.startsWith('/templates/')) {
+    const root = findTemplateDirectory(document, normalized);
+    const sections = new Map<string, VisualSection>();
+    if (root?.section) addSectionLookup(new Map(), sections, root.section, root.contentPath, naming);
+    return sections.get(normalized) ?? null;
+  }
   const entries = new Map<string, HvyVirtualEntry>();
   const sections = new Map<string, VisualSection>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -333,6 +369,15 @@ function addSectionLookup(
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
   return measurePhase('cli.fs.findBlockInsertionTargetForVirtualDirectory', { path }, () => {
     const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+    if (normalized.startsWith('/templates/')) {
+      const root = findTemplateDirectory(document, normalized);
+      const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
+      const entries = new Map<string, HvyVirtualEntry>();
+      if (root?.block) addBlockInsertionTargets(document.meta, entries, targets, root.block, root.contentPath, naming);
+      if (root?.section) addSectionInsertionTargets(document.meta, entries, targets, root.section, root.contentPath, naming);
+      const target = targets.get(normalized);
+      return target && root ? { kind: target.kind, insert: (block, index) => { target.insert(block, index); root.commit(); } } : null;
+    }
     const entries = new Map<string, HvyVirtualEntry>();
     const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
     entries.set('/', { kind: 'dir', path: '/' });
@@ -966,70 +1011,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
 }
 
 function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject {
-  const baseComponent = resolveBaseComponentFromMeta(schema.component, meta);
-  const value: JsonObject = {
-    id: schema.id,
-    css: schema.css,
-    lock: schema.lock,
-    align: schema.align,
-    slot: schema.slot,
-    sortKeys: schema.sortKeys,
-    derivedSortKeyNames: schema.derivedSortKeyNames,
-    groupKeys: schema.groupKeys,
-    tags: schema.tags,
-    description: schema.description,
-    hideIfYes: schema.hideIfYes,
-    placeholder: schema.placeholder,
-    fillIn: schema.fillIn,
-  };
-  if (baseComponent === 'container') {
-    value.containerTitle = schema.containerTitle;
-    value.containerExpanded = schema.containerExpanded;
-    value.containerCollapsedPreviewRem = schema.containerCollapsedPreviewRem;
-  }
-  if (baseComponent === 'component-list') {
-    value.componentListComponent = schema.componentListComponent;
-    value.componentListItemLabel = schema.componentListItemLabel;
-    value.componentListDefaultSortKey = schema.componentListDefaultSortKey;
-    value.componentListDefaultSortDirection = schema.componentListDefaultSortDirection;
-    value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
-    value.componentListGroupsExpanded = schema.componentListGroupsExpanded;
-    value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
-  }
-  if (baseComponent === 'grid') {
-    value.gridColumns = schema.gridColumns;
-    value.gridStackWidth = schema.gridStackWidth;
-  }
-  if (baseComponent === 'xref-card') {
-    value.xrefTitle = schema.xrefTitle;
-    value.xrefDetail = schema.xrefDetail;
-    value.xrefTarget = schema.xrefTarget;
-    value.xrefTargetTagFilter = schema.xrefTargetTagFilter;
-  }
-  if (baseComponent === 'table') {
-    value.tableShowHeader = schema.tableShowHeader;
-  }
-  if (baseComponent === 'image') {
-    value.imageFile = schema.imageFile;
-    value.imageAlt = schema.imageAlt;
-    value.caption = schema.caption;
-    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
-  }
-  if (baseComponent === 'carousel') {
-    value.carouselImages = schema.carouselImages;
-    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
-    value.carouselDurationMs = schema.carouselDurationMs;
-    value.carouselPauseOnHover = schema.carouselPauseOnHover;
-    value.carouselShowControls = schema.carouselShowControls;
-    value.carouselShowIndicators = schema.carouselShowIndicators;
-    value.carouselShowFrame = schema.carouselShowFrame;
-  }
-  if (baseComponent === 'plugin') {
-    value.plugin = schema.plugin;
-    value.pluginConfig = schema.pluginConfig;
-    value.pluginSortValues = schema.pluginSortValues;
-  }
-  return value;
+  return cliBlockMetadata(schema, resolveBaseComponentFromMeta(schema.component, meta) as BuiltinComponentName);
 }
 
 function formatComponentAbout(meta: JsonObject, component: string): string {
@@ -1044,11 +1026,10 @@ function formatComponentAbout(meta: JsonObject, component: string): string {
     `About ${component}`,
     `component template: ${definition.name}`,
     definition.baseType ? `base component: ${definition.baseType}` : '',
-    'Edit this component template definition in /header.yaml under component_defs.',
-    'Component template YAML:',
-    '```yaml',
-    formatReusableDefinitionYaml(definition),
-    '```',
+    'Edit this reusable definition under /templates/components. Use ls to discover its directory, then edit definition.json or the nested schema files.',
+    `Definition metadata: /templates/components/${templatePathSegment(definition.name)}/definition.json`,
+    `Definition contents: /templates/components/${templatePathSegment(definition.name)}/schema/`,
+    definition.description ? `Description: ${definition.description}` : '',
     '',
     'Virtual directory mapping:',
     ...formatComponentDirectoryMapping(component, baseComponent),
@@ -1057,17 +1038,6 @@ function formatComponentAbout(meta: JsonObject, component: string): string {
     '',
   ].filter((line, index, all) => line || all[index - 1] !== '');
   return `${lines.join('\n').trimEnd()}\n`;
-}
-
-function formatReusableDefinitionYaml(definition: NonNullable<ReturnType<typeof getComponentDefsFromMeta>[number]>): string {
-  const value = serializeComponentDefinition({
-    name: definition.name,
-    baseType: definition.baseType,
-  } as JsonObject);
-  if (definition.description) value.description = definition.description;
-  if (definition.tags) value.tags = definition.tags;
-  if (definition.schema) value.schema = definition.schema as unknown as JsonObject;
-  return stringifyYaml([serializeComponentDefinition(value)]).trimEnd();
 }
 
 function formatComponentDirectoryMapping(component: string, baseComponent: string): string[] {
@@ -1109,60 +1079,16 @@ function applyBlockSchemaJson(
   value: JsonObject
 ): void {
   const defaults = defaultBlockSchema(component, baseComponent);
-  schema.component = component;
-  schema.id = defaults.id;
-  schema.css = defaults.css;
-  schema.lock = defaults.lock;
-  schema.align = defaults.align;
-  schema.slot = defaults.slot;
-  schema.sortKeys = defaults.sortKeys;
-  schema.derivedSortKeyNames = defaults.derivedSortKeyNames;
-  schema.groupKeys = defaults.groupKeys;
-  schema.tags = defaults.tags;
-  schema.description = defaults.description;
-  schema.hideIfYes = defaults.hideIfYes;
-  schema.placeholder = defaults.placeholder;
-  schema.fillIn = defaults.fillIn;
-  schema.xrefTitle = defaults.xrefTitle;
-  schema.xrefDetail = defaults.xrefDetail;
-  if (baseComponent === 'container') {
-    schema.containerTitle = defaults.containerTitle;
-    schema.containerExpanded = defaults.containerExpanded;
-    schema.containerCollapsedPreviewRem = defaults.containerCollapsedPreviewRem;
-  } else if (baseComponent === 'component-list') {
-    schema.componentListComponent = defaults.componentListComponent;
-    schema.componentListItemLabel = defaults.componentListItemLabel;
-    schema.componentListDefaultSortKey = defaults.componentListDefaultSortKey;
-    schema.componentListDefaultSortDirection = defaults.componentListDefaultSortDirection;
-    schema.componentListDefaultGroupKey = defaults.componentListDefaultGroupKey;
-    schema.componentListGroupsExpanded = defaults.componentListGroupsExpanded;
-    schema.componentListGroupCollapsedPreviewRem = defaults.componentListGroupCollapsedPreviewRem;
-  } else if (baseComponent === 'grid') {
-    schema.gridColumns = defaults.gridColumns;
-    schema.gridStackWidth = defaults.gridStackWidth;
-  } else if (baseComponent === 'xref-card') {
-    schema.xrefTarget = defaults.xrefTarget;
-    schema.xrefTargetTagFilter = defaults.xrefTargetTagFilter;
-  } else if (baseComponent === 'table') {
-    schema.tableShowHeader = defaults.tableShowHeader;
-  } else if (baseComponent === 'image') {
-    schema.imageFile = defaults.imageFile;
-    schema.imageAlt = defaults.imageAlt;
-    schema.caption = defaults.caption;
-    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
-  } else if (baseComponent === 'carousel') {
-    schema.carouselImages = defaults.carouselImages;
-    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
-    schema.carouselDurationMs = defaults.carouselDurationMs;
-    schema.carouselPauseOnHover = defaults.carouselPauseOnHover;
-    schema.carouselShowControls = defaults.carouselShowControls;
-    schema.carouselShowIndicators = defaults.carouselShowIndicators;
-    schema.carouselShowFrame = defaults.carouselShowFrame;
-  } else if (baseComponent === 'plugin') {
-    schema.plugin = defaults.plugin;
-    schema.pluginConfig = defaults.pluginConfig;
-    schema.pluginSortValues = defaults.pluginSortValues;
+  for (const field of ['expandableStubCss', 'expandableContentCss'] as const) {
+    if (baseComponent === 'expandable' && typeof value[field] === 'string') {
+      assertCssValueIsDeclarationString(value[field], `${component}.json ${field}`);
+    }
   }
+  if (baseComponent === 'button' && typeof value.buttonCss === 'string') {
+    assertCssValueIsDeclarationString(value.buttonCss, `${component}.json buttonCss`);
+  }
+  schema.component = component;
+  Object.assign(schema, cliBlockMetadata(defaults, baseComponent));
   if (typeof value.id === 'string') schema.id = value.id;
   if (typeof value.css === 'string') {
     assertCssValueIsDeclarationString(value.css, `${component}.json css`);
@@ -1177,6 +1103,8 @@ function applyBlockSchemaJson(
   if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
     schema.groupKeys = parseGroupKeys(value.groupKeys);
   }
+  if (typeof value.editorOnly === 'boolean') schema.editorOnly = value.editorOnly;
+  if (typeof value.visibleScript === 'string') schema.visibleScript = value.visibleScript;
   if (typeof value.lock === 'boolean') schema.lock = value.lock;
   if (value.align === 'left' || value.align === 'center' || value.align === 'right') schema.align = value.align;
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;
@@ -1185,6 +1113,17 @@ function applyBlockSchemaJson(
   if (typeof value.hideIfYes === 'string') schema.hideIfYes = value.hideIfYes;
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.fillIn === 'boolean') schema.fillIn = value.fillIn;
+  if (baseComponent === 'text' && typeof value.showCopy === 'boolean') schema.showCopy = value.showCopy;
+  if (baseComponent === 'code' && typeof value.codeLanguage === 'string') schema.codeLanguage = value.codeLanguage;
+  if (baseComponent === 'button') {
+    for (const field of ['buttonLabel', 'buttonVisibleScript', 'buttonSourceScript', 'buttonPrompt', 'buttonTargetScript', 'buttonPositionTargetId', 'buttonCss'] as const) {
+      if (typeof value[field] === 'string') schema[field] = value[field];
+    }
+    if (value.buttonAction === 'ai-generate') schema.buttonAction = value.buttonAction;
+    for (const field of ['buttonInputCharLimit', 'buttonOutputCharLimit'] as const) {
+      if (typeof value[field] === 'number' && Number.isFinite(value[field]) && value[field] > 0) schema[field] = value[field];
+    }
+  }
   if (typeof value.containerTitle === 'string') schema.containerTitle = value.containerTitle;
   if (typeof value.containerExpanded === 'boolean') schema.containerExpanded = value.containerExpanded;
   if (typeof value.containerCollapsedPreviewRem === 'number' && Number.isFinite(value.containerCollapsedPreviewRem) && value.containerCollapsedPreviewRem > 0) {
@@ -1245,8 +1184,14 @@ function applyBlockSchemaJson(
   if (value.pluginSortValues && typeof value.pluginSortValues === 'object' && !Array.isArray(value.pluginSortValues)) {
     schema.pluginSortValues = parseSortKeys(value.pluginSortValues);
   }
-  if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;
-  if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;
+  if (baseComponent === 'expandable') {
+    if (typeof value.expandableAlwaysShowStub === 'boolean') schema.expandableAlwaysShowStub = value.expandableAlwaysShowStub;
+    if (typeof value.expandableExpanded === 'boolean') schema.expandableExpanded = value.expandableExpanded;
+    if (typeof value.expandableStubCss === 'string') schema.expandableStubCss = value.expandableStubCss;
+    if (typeof value.expandableContentCss === 'string') schema.expandableContentCss = value.expandableContentCss;
+    if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;
+    if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;
+  }
 }
 
 function readBlockBodyText(block: VisualBlock, meta: JsonObject): string {
@@ -1461,8 +1406,8 @@ function parseJsonObject(content: string, path: string): JsonObject {
   return parsed as JsonObject;
 }
 
-function omitComponentDefs(meta: JsonObject): JsonObject {
-  const { component_defs: _componentDefs, ...rest } = meta;
+function omitTemplateDefinitions(meta: JsonObject): JsonObject {
+  const { component_defs: _componentDefs, section_defs: _sectionDefs, ...rest } = meta;
   return rest;
 }
 

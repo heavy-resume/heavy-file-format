@@ -5,7 +5,7 @@ import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
 import { renderCollapsedSearchBar, renderSearchModal } from '../src/search/render';
-import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows, buildSemanticRetrievalChunks } from '../src/search/semantic-candidates';
+import { buildSemanticFilterCandidates, buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows, buildSemanticRetrievalChunks } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { chatSemanticFilterProvider } from '../src/search/semantic-provider';
 import { requestSemanticFilterMatches } from '../src/search/semantic-response';
@@ -1314,6 +1314,40 @@ hvy_version: 0.1
   expect(expectedResult.instructionPrompt).not.toContain('/body/alpha/text-0');
 });
 
+test('semantic filter candidates path-qualify repeated reusable component ids', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"first-record"}-->
+#! First record
+
+<!--hvy:component-list {"id":"publication-relevant-skills-list"}-->
+ First skills.
+
+<!--hvy: {"id":"second-record"}-->
+#! Second record
+
+<!--hvy:component-list {"id":"publication-relevant-skills-list"}-->
+ Second skills.
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterCandidates(document);
+  const repeatedInstances = expectedResult.filter((candidate) =>
+    candidate.targetId === 'publication-relevant-skills-list'
+  );
+
+  expect(repeatedInstances).toHaveLength(2);
+  expect(repeatedInstances.map((candidate) => candidate.targetRef)).toEqual([
+    'publication-relevant-skills-list',
+    'publication-relevant-skills-list',
+  ]);
+  expect(new Set(repeatedInstances.map((candidate) => candidate.candidateId)).size).toBe(2);
+  expect(repeatedInstances.map((candidate) => candidate.candidateId)).toEqual(
+    repeatedInstances.map((candidate) => `component:${candidate.targetPath}`)
+  );
+});
+
 test('semantic filter request truncates large candidate payloads deterministically', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1371,6 +1405,29 @@ hvy_version: 0.1
   expect(expectedResult.windows).toHaveLength(1);
   expect(expectedResult.windows[0]!.candidates.map((candidate) => candidate.targetId)).toEqual(['typescript', 'react', 'notes']);
   expect(expectedResult.windows[0]!.candidates.every((candidate) => candidate.targetKind === 'block')).toBe(true);
+});
+
+test('semantic filter windows honor independent candidate count and character limits', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+${Array.from({ length: 7 }, (_, index) => `<!--hvy:text {"id":"skill-${index + 1}"}-->
+ Skill ${index + 1}.`).join('\n\n')}
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterWindows({
+    document,
+    prompt: 'Find skills',
+    maxWindowCandidates: 3,
+    maxWindowCandidateChars: 50_000,
+  });
+
+  expect(expectedResult.windows.map((window) => window.candidates.length)).toEqual([3, 3, 1]);
+  expect(expectedResult.windows.every((window) => window.candidateBudget.usedTotalCandidateChars <= 50_000)).toBe(true);
 });
 
 test('semantic filter window concurrency defaults to three and accepts an override', async () => {
@@ -2072,6 +2129,32 @@ hvy_version: 0.1
     readerRenderer: null as never,
   });
   expect(expectedMarkup).toContain('Server error');
+  expect(expectedMarkup).not.toContain('No semantic matches. Try a more specific prompt.');
+});
+
+test('semantic filtering does not report no matches without a completed request', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+`, '.hvy');
+
+  const expectedMarkup = renderSearchModal({
+    ...createDefaultSearchState(),
+    open: true,
+    activeTab: 'filter',
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    queryDraft: 'Find skills',
+    submittedQuery: 'Find skills',
+  }, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  });
+
   expect(expectedMarkup).not.toContain('No semantic matches. Try a more specific prompt.');
 });
 

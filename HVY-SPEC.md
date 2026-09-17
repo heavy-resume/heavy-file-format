@@ -854,10 +854,11 @@ component_defs:
 
 Notes:
 - `schema` is optional.
-- When present, use it as the default schema/template when creating a block with that component template.
+- `text` is an optional string containing the root component's default body text. It defaults to an empty string and MAY contain template value tokens. It is copied when creating an instance, alongside `schema`. Nested components continue to store their body text in their nested block `text` fields. Alternate component flavors MAY supply their own `text`; an omitted flavor `text` means an empty root body.
+- When `schema` is present, use it as the default schema when creating a block with that component template.
 - The `component` field MUST NOT appear inside `schema`; the component type is already captured by `baseType`.
 - A component definition name can be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
-- When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time.
+- When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time. When preserving a concrete nested component with its own IDs, text, styling, or other edited fields, use the full block form; serializers MUST NOT replace that block with shorthand if doing so would discard its authored values.
 - Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
 - Component template definitions MAY include `sortValueDefs`, keyed by human-readable sort key. Each definition has `type` (`"text"`, `"number"`, `"date"`, `"datetime"`, or `"enum"`). `text` writes trimmed visible text. `number` parses trimmed visible text as a finite number. `date` requires an explicit `format` of `"YYYY-MM-DD"`, `"MM/DD/YYYY"`, or `"DD/MM/YYYY"`; implementations MUST parse that format exactly, MUST reject impossible calendar dates, and MUST write the timezone-free canonical `YYYY-MM-DD` value to `sortKeys`. Date formats MUST use a four-digit year and implementations MUST NOT infer field order from locale. `datetime` parses visible text with an explicit timezone (`Z`, a numeric offset such as `-07:00`, a `GMT-7` style offset, an IANA timezone such as `America/Los_Angeles`, or a short timezone abbreviation such as `PDT` when the runtime can resolve it to a single UTC offset for that date) and writes the equivalent UTC ISO-8601 timestamp string to `sortKeys`. `enum` requires `options`, an ordered list of `{label, value}` objects where `label` is the visible canonical text and `value` is a string or finite number written to `sortKeys`.
 
@@ -903,6 +904,19 @@ Template value notes:
 - `isempty` resolves to `yes` when the value is empty or whitespace-only, and `no` otherwise. It does not change the variable's text/block validation type.
 - Variable names MUST be identifier-like strings: letters, numbers, underscores, and hyphens, starting with a letter or underscore.
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
+- `templateVariables.<name>.type` MAY declare `text`, `block`, or `url`. When present, this metadata takes precedence over the inline text/block type; otherwise inline declarations determine the type. The `url` type is declared in metadata, not as an inline filter. Flavor variable metadata overrides individual fields of the corresponding base variable; omitted fields retain their base values.
+- URL values use the same link-input normalization as the text editor: trim surrounding whitespace, prefix email addresses with `mailto:`, and prefix recognized bare web domains with `https://`. Other destinations, including relative paths and fragment targets, remain allowed; `url` does not require an absolute HTTP URL. URL values are single-line strings. Normalization MUST occur before substitution in component and section instances, including plugin and CLI creation.
+- When substituted in Markdown text bodies, URL values MUST use the same destination serialization as text-editor links: percent-encode whitespace and backslash-escape `<`, `>`, `(`, and `)`. Schema fields and non-Markdown bodies receive the normalized destination without Markdown escaping. Existing percent encoding MUST NOT be encoded again. Empty URL values remain empty and MUST NOT become text fill-in markers inside link destinations.
+
+```yaml
+templateVariables:
+  fake_link:
+    label: Fake link
+    type: url
+# In the template's text block:
+# text: "[Fake link]({% fake_link %})"
+```
+
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
 - Component template definitions and section template definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
@@ -1771,7 +1785,10 @@ Tail directive fields:
 
 Rules:
 - Tail payloads are NOT part of Markdown parsing.
-- Tail payloads are only valid for `.hvy`, not `.thvy`.
+- Tail payloads are valid for `.hvy` and `.thvy`. A `.thvy` template may carry
+  the same database, image, plugin, and other attachment data as an `.hvy`
+  document; the template extension is an authoring convention, not a reduced
+  storage format.
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
 - User-file attachment names MUST be unique according to §3.1. Replacing a
   user file SHOULD preserve its `id` and `name` while updating its `filename`,
@@ -1801,8 +1818,8 @@ document order. Vector data SHOULD be stored as contiguous little-endian float32
 values. Clients MUST treat embedding-index attachments as stale unless the model
 profile and chunk hashes match the current document-derived retrieval records.
 Deleting an embedding-index attachment MUST NOT change the document's authored
-content or meaning. Template files (`.thvy`) MUST NOT use tail attachments for
-embedding caches.
+content or meaning. Template files (`.thvy`) MAY use these derived tail
+attachments under the same rules as `.hvy` documents.
 
 ### 7.7 DB table plugin contract
 
@@ -1891,6 +1908,11 @@ presentation. `queryDynamicWindow` has no meaning and MUST be ignored.
 - Column presentation is scoped to the plugin block. Multiple database-table blocks MAY
   present the same backing table with different labels, visibility, widths,
   wrapping, and foreign display columns.
+- When an editable client deletes a column from a directly targeted SQLite
+  view, it MUST leave the source tables unchanged and rebuild the view with a
+  projection containing the remaining view columns. Query-result columns from
+  non-empty plugin block text remain read-only and MUST NOT be treated as view
+  schema columns.
 - Editable clients SHOULD allow authors to resize visible columns by dragging a
   heading edge and auto-fit a column to its rendered heading and data by double
   clicking that edge. Resized widths are stored in the block's column
@@ -2341,7 +2363,7 @@ Normative behavior:
 Document is valid HVY if:
 - It is parseable Markdown text.
 - Any `hvy:*` JSON directive is syntactically valid JSON.
-- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy`.
+- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy` or `.thvy`.
 
 Additional validity for `.thvy`:
 - If `schema` is present, it is valid against the supported subset.

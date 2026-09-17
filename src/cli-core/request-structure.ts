@@ -51,7 +51,7 @@ const COMPONENT_TYPE_CODES: Record<string, string> = {
 const STRUCTURE_PREVIEW_MAX_CHARS = 40;
 
 export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtualFileSystem, options: HvyRequestStructureOptions = {}): string {
-  const entries = collectHvyComponentStructureReferences(document, fs);
+  const entries = collectHvyComponentStructureReferences(document, fs, options.componentPath?.startsWith('/templates/') ? '/templates/' : '/body/');
   const scopedEntries = scopeEntries(entries, options.componentId, options.componentPath);
   return [
     'Effective style defaults:',
@@ -72,8 +72,8 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
   ].join('\n');
 }
 
-export function collectHvyComponentStructureReferences(document: VisualDocument, fs: HvyVirtualFileSystem): ComponentStructureEntry[] {
-  return collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
+export function collectHvyComponentStructureReferences(document: VisualDocument, fs: HvyVirtualFileSystem, root = '/body/'): ComponentStructureEntry[] {
+  return collectComponentStructureEntries(document, fs, root).map((entry, index) => withStableId(entry, index));
 }
 
 export function formatHvyRequestStructureForDirectory(
@@ -84,7 +84,7 @@ export function formatHvyRequestStructureForDirectory(
 ): string {
   const normalized = directoryPath.replace(/\/$/, '');
   const rootName = normalized.split('/').filter(Boolean).at(-1) ?? 'body';
-  const entries = collectHvyComponentStructureReferences(document, fs)
+  const entries = collectHvyComponentStructureReferences(document, fs, normalized.startsWith('/templates/') ? '/templates/' : '/body/')
     .filter((entry) => entry.directory === normalized || entry.directory.startsWith(`${normalized}/`))
     .map((entry) => ({
       ...entry,
@@ -127,12 +127,12 @@ export function extractVirtualPathsFromOutput(output: string): string[] {
     .filter(Boolean);
 }
 
-function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtualFileSystem): ComponentStructureEntry[] {
-  const directBodyFilesByDirectory = collectDirectBodyFilesByDirectory(fs);
+function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtualFileSystem, root: string): ComponentStructureEntry[] {
+  const directBodyFilesByDirectory = collectDirectBodyFilesByDirectory(fs, root);
   return [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
       entry.kind === 'file'
-      && entry.path.startsWith('/body/')
+      && entry.path.startsWith(root)
       && entry.path.endsWith('.json')
       && !entry.path.endsWith('/section.json')
       && !entry.path.endsWith('/children-order.json')
@@ -175,10 +175,10 @@ function componentEntryFromJsonFile(
   };
 }
 
-function collectDirectBodyFilesByDirectory(fs: HvyVirtualFileSystem): Map<string, string[]> {
+function collectDirectBodyFilesByDirectory(fs: HvyVirtualFileSystem, root: string): Map<string, string[]> {
   const bodyFilesByDirectory = new Map<string, string[]>();
   for (const entry of fs.entries.values()) {
-    if (entry.kind !== 'file' || !entry.path.startsWith('/body/')) {
+    if (entry.kind !== 'file' || !entry.path.startsWith(root)) {
       continue;
     }
     const filename = entry.path.split('/').pop() ?? '';

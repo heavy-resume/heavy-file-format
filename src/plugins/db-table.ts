@@ -3,6 +3,7 @@ import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '.
 import type { DocumentAttachment, VisualDocument } from '../types';
 import type { JsonObject } from '../hvy/types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
+import { materializeDocumentAttachment } from '../attachment-store';
 import { DB_TABLE_PLUGIN_ID } from './registry';
 import { validateAttachedComponentHvy } from './db-table-fragment';
 import { formatQueryResultTable } from './db-table-format';
@@ -244,8 +245,12 @@ async function getSqlJs(): Promise<SqlJsStatic> {
 }
 
 function locateSqlWasmFile(sqlWasmUrl: string): string {
-  if (typeof process !== 'undefined' && process.versions?.node) {
-    return new globalThis.URL('../../node_modules/sql.js/dist/sql-wasm.wasm', import.meta.url).pathname;
+  if (
+    typeof process !== 'undefined'
+    && process.versions?.node
+    && sqlWasmUrl.startsWith('/node_modules/')
+  ) {
+    return `${process.cwd()}${sqlWasmUrl}`;
   }
   return sqlWasmUrl;
 }
@@ -1038,7 +1043,12 @@ export function inferScriptingDatabaseMutationTables(
 
 async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {
   const SQL = await getSqlJs();
-  const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
+  const attachment = await materializeDocumentAttachment(
+    document,
+    DB_ATTACHMENT_ID,
+    document === state?.document ? state.attachmentHost : null,
+  );
+  const bytes = await getAttachmentDatabaseBytes(attachment);
   return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }
 

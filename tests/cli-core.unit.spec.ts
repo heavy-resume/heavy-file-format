@@ -346,11 +346,11 @@ test('cli exposes component template documentation in about files', async () => 
   expect(about.output).toContain('About skill-record');
   expect(about.output).toContain('component template: skill-record');
   expect(about.output).toContain('base component: expandable');
-  expect(about.output).toContain('Edit this component template definition in /header.yaml under component_defs.');
-  expect(about.output).toContain('Component template YAML:');
-  expect(about.output).toContain('```yaml');
-  expect(about.output).toContain('- name: skill-record');
-  expect(about.output).toContain('description: Skill details');
+  expect(about.output).toContain('Edit this reusable definition under /templates/components.');
+  expect(about.output).toContain('Definition metadata: /templates/components/skill-record/definition.json');
+  expect(about.output).toContain('Definition contents: /templates/components/skill-record/schema/');
+  expect(about.output).toContain('Description: Skill details');
+  expect(about.output).not.toContain('expandableStubBlocks:');
   expect(about.output).toContain('Virtual directory mapping:');
   expect(about.output).toContain('- /skill-record contains one skill-record component instance.');
   expect(about.output).toContain('- expandable-stub/ contains the always-visible summary children.');
@@ -636,7 +636,7 @@ test('hvy insert can opt in to returning custom component about text on creation
   expect(skill.output).toContain('### END CREATED CUSTOM COMPONENT ###');
   expect(skill.output).toContain('### ABOUT CUSTOM COMPONENT ###');
   expect(skill.output).toContain('About skill-record');
-  expect(skill.output).toContain('Component template YAML:');
+  expect(skill.output).toContain('Definition contents: /templates/components/skill-record/schema/');
   expect(skill.output).toContain('### END ABOUT CUSTOM COMPONENT ###');
   expect(skill.output).not.toContain('### ABOUT COMPONENT FILE ###');
   expect(skill.output).not.toContain('CMD: cat');
@@ -2478,7 +2478,7 @@ test('hvy search finds reusable section templates before they exist in the body'
 
   const result = await executeHvyCliCommand(document, session, 'hvy search "add a Certifications section" --max 5');
 
-  expect(result.output).toContain('/section_defs/resume-certifications id=resume-certifications kind=section-template type=section-template');
+  expect(result.output).toContain('/templates/sections/resume-certifications/template id=resume-certifications kind=section-template type=section-template');
   expect(result.output).toContain('description: Certifications');
 });
 

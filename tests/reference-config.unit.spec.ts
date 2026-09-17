@@ -7,6 +7,7 @@ import {
   setReferenceAppConfig,
   setRuntimeSemanticFilterConcurrency,
   setRuntimeSemanticFilterMaxAttempts,
+  setRuntimeSemanticFilterWindowLimits,
 } from '../src/reference-config';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
@@ -15,6 +16,7 @@ registerSerializationTestState();
 afterEach(() => {
   setRuntimeSemanticFilterConcurrency(null);
   setRuntimeSemanticFilterMaxAttempts(null);
+  setRuntimeSemanticFilterWindowLimits({ maxCandidateChars: null, maxCandidates: null });
   setReferenceAppConfig(null);
 });
 
@@ -98,4 +100,14 @@ test('semantic filter maximum attempts default to one and can be runtime scoped'
 
   setRuntimeSemanticFilterMaxAttempts(null);
   expect(getReferenceAppConfig().semanticFilterMaxAttempts).toBe(1);
+});
+
+test('semantic filter window limits have defaults and can be runtime scoped', () => {
+  expect(getReferenceAppConfig().semanticFilterMaxWindowCandidateChars).toBe(10_000);
+  expect(getReferenceAppConfig().semanticFilterMaxWindowCandidates).toBe(Number.MAX_SAFE_INTEGER);
+
+  setRuntimeSemanticFilterWindowLimits({ maxCandidateChars: 50_000, maxCandidates: 50 });
+
+  expect(getReferenceAppConfig().semanticFilterMaxWindowCandidateChars).toBe(50_000);
+  expect(getReferenceAppConfig().semanticFilterMaxWindowCandidates).toBe(50);
 });

@@ -4,7 +4,7 @@ import { strToU8, zipSync } from 'fflate';
 test('document Brython preserves callbacks for JavaScript and Brython plugin methods', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).waitFor();
+  await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
   const manifest = {
     formatVersion: '0.2',
     id: 'com.example.fake-python-callback',

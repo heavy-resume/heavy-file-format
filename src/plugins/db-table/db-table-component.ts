@@ -45,6 +45,7 @@ import {
 import dbTableDocumentation from './about-db-table.txt?raw';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from '../../document-change';
 import { clampTableColumnWidth, measureTableColumnTextSamples, type TableColumnTextSample } from '../../table-column-sizing';
+import { captureElementScrollAnchor, restoreElementScrollAnchor, type ElementScrollAnchor } from '../../scroll';
 
 import './db-table-component.css';
 
@@ -52,6 +53,7 @@ interface DbTableUiState {
   offset: number;
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc' | null;
+  tableScrollLeft: number;
   settingsOpen: boolean;
   draftActive: boolean;
   error: string;
@@ -68,6 +70,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     offset: 0,
     sortColumn: null,
     sortDirection: null,
+    tableScrollLeft: 0,
     settingsOpen: false,
     draftActive: false,
     error: '',
@@ -80,6 +83,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let unsubscribeQueue = () => { };
   let stopColumnResize = () => { };
   let columnEditor: HTMLElement | null = null;
+  let resizeScrollAnchor: ElementScrollAnchor | null = null;
+
+  root.dataset.dbTablePluginRoot = 'true';
+  root.dataset.sectionKey = ctx.sectionKey;
+  root.dataset.blockId = ctx.block.id;
+
+  const captureResizeScrollAnchor = () => {
+    resizeScrollAnchor = captureElementScrollAnchor(
+      ctx.hostRoot,
+      root,
+      `[data-db-table-plugin-root="true"][data-section-key="${CSS.escape(ctx.sectionKey)}"][data-block-id="${CSS.escape(ctx.block.id)}"]`,
+    );
+  };
 
   const closeColumnEditor = () => {
     columnEditor?.remove();
@@ -106,8 +122,16 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const config = (): DbTableConfig => readDbTableConfig(ctx.block.schema.pluginConfig);
 
   const renderCurrent = () => {
+    const previousFrame = root.querySelector<HTMLElement>('.db-table-table-frame');
+    if (previousFrame) ui.tableScrollLeft = previousFrame.scrollLeft;
     closeColumnEditor();
     root.innerHTML = renderDbTable(ctx, config(), snapshot, ui);
+    const nextFrame = root.querySelector<HTMLElement>('.db-table-table-frame');
+    if (nextFrame) nextFrame.scrollLeft = ui.tableScrollLeft;
+    if (resizeScrollAnchor) {
+      restoreElementScrollAnchor(ctx.hostRoot, resizeScrollAnchor);
+      resizeScrollAnchor = null;
+    }
   };
 
   const refresh = () => {
@@ -235,14 +259,18 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (action === 'delete-column') {
       const columnName = button.dataset.columnName ?? '';
       if (!columnName) return;
+      const tableName = config().table;
+      const objectLabel = snapshot?.objectType === 'view' ? 'database view' : 'database table';
+      const description = snapshot?.objectType === 'view'
+        ? `This will modify ${objectLabel} "${tableName}" by rebuilding it without column "${columnName}". Its source table(s) will not be modified.`
+        : `This will modify ${objectLabel} "${tableName}" by deleting column "${columnName}" and all data stored in that column.`;
       openRemoveConfirmationModal(() => {
-        const tableName = config().table;
         void runDbTableMutation(ctx, 'Delete database column', irreversibleUndoMode(config()), async () => {
           await requireWriter(config()).dropColumn({ document: ctx.rawDocument, table: tableName }, columnName);
           ctx.setConfig(removeDbTableColumnConfig(config(), columnName));
         }).then(() => refreshDatabasePlugins())
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the column.'));
-      }, ctx.hostRoot);
+      }, ctx.hostRoot, { description, confirmLabel: 'Delete column' });
       return;
     }
     if (action === 'delete-row') {
@@ -262,6 +290,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-table-column-name-input');
     if (input) openColumnEditor(input);
   });
+
+  root.addEventListener('scroll', (event) => {
+    const frame = (event.target as Element | null)?.closest<HTMLElement>('.db-table-table-frame');
+    if (frame) ui.tableScrollLeft = frame.scrollLeft;
+  }, true);
 
   root.addEventListener('focusout', () => {
     window.setTimeout(() => {
@@ -291,6 +324,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     event.preventDefault();
     event.stopPropagation();
     stopColumnResize();
+    captureResizeScrollAnchor();
     const startX = event.clientX;
     const startWidth = header.getBoundingClientRect().width;
     const maximumWidth = resolveDbTableMaximumColumnWidth(root, ctx.header.get('database_table_max_column_width'));
@@ -324,6 +358,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (!handle || ctx.mode !== 'editor') return;
     event.preventDefault();
     event.stopPropagation();
+    captureResizeScrollAnchor();
     const columnName = handle.dataset.columnName ?? '';
     const width = measureDbTableColumnContent(root, columnName, ctx.header.get('database_table_max_column_width'));
     if (width !== null) ctx.setConfig(updateDbTableColumnConfig(config(), columnName, { width: `${width}px` }));
@@ -494,6 +529,7 @@ function renderEditorToolbar(
 }
 
 function renderColumnSettings(config: DbTableConfig, snapshot: DbTableSourcePage): string {
+  const canDeleteSourceColumns = !snapshot.queryActive && getDbTableWriter(config) !== null;
   return `<section class="db-table-column-settings" aria-label="Column settings">
     <div class="db-table-settings-heading"><div><strong>Column management</strong><span>Database column changes affect the table. Presentation settings affect only this component.</span></div><button type="button" class="ghost db-table-settings-close" data-db-table-action="toggle-columns" aria-label="Close column settings">${closeIcon()}</button></div>
     <div class="db-table-settings-list">
@@ -525,7 +561,7 @@ function renderColumnSettings(config: DbTableConfig, snapshot: DbTableSourcePage
         ...column.foreignKey.displayColumnOptions.map((name) => ({ value: name, label: humanizeDbColumnName(name) })),
       ]
     )}</label>` : ''}
-          <button type="button" class="ghost db-table-delete-column" data-db-table-action="delete-column" data-column-name="${escapeAttr(column.name)}" aria-label="Delete database column ${escapeAttr(column.name)}" ${!snapshot.editable || snapshot.columns.length <= 1 ? 'disabled' : ''}>${closeIcon()}<span>Delete column</span></button>
+          <button type="button" class="danger db-table-delete-column" data-db-table-action="delete-column" data-column-name="${escapeAttr(column.name)}" aria-label="Delete database column ${escapeAttr(column.name)}" ${!canDeleteSourceColumns || snapshot.columns.length <= 1 ? 'disabled' : ''}>${closeIcon()}<span>Delete column</span></button>
         </div>`;
   }).join('')}
     </div>
@@ -545,13 +581,20 @@ function renderTable(ctx: HvyPluginContext, config: DbTableConfig, snapshot: DbT
   const showRowActions = editable || snapshot.rows.some((row) => row.hasAttachedComponent);
   return `<div class="db-table-table-shell">
     <div class="db-table-table-heading">
-      <div><strong>${escapeHtml(config.table)}</strong><span>${snapshot.queryActive ? 'Query result · read-only' : snapshot.objectType === 'view' ? 'Database view · read-only' : snapshot.editable ? 'Database table · editable' : 'Database table · read-only'}</span></div>
+      <div><strong>${escapeHtml(config.table)}</strong><span>${snapshot.queryActive ? 'Query result · read-only' : snapshot.objectType === 'view' ? 'Database view · rows read-only' : snapshot.editable ? 'Database table · editable' : 'Database table · read-only'}</span></div>
       ${snapshot.offset > 0 || snapshot.hasNextPage ? renderPager(snapshot) : ''}
     </div>
     <div class="db-table-table-frame">
       <table class="db-table-table${editable ? ' is-editable' : ''}">
         <colgroup>${visibleColumns.map((column) => renderColumnElement(config, column)).join('')}${showRowActions ? '<col class="db-table-actions-column">' : ''}</colgroup>
-        <thead><tr>${visibleColumns.map((column) => renderHeader(config, column, snapshot, ui)).join('')}${showRowActions ? '<th class="db-table-actions-heading"><span class="db-table-screen-reader">Actions</span></th>' : ''}</tr></thead>
+        <thead><tr>${visibleColumns.map((column, index) => renderHeader(
+    config,
+    column,
+    ui,
+    editable,
+    visibleColumns[index - 1]?.name ?? null,
+    index === visibleColumns.length - 1 && !showRowActions,
+  )).join('')}${showRowActions ? `<th class="db-table-actions-heading">${editable && visibleColumns.length > 0 ? renderResizeHandle(visibleColumns[visibleColumns.length - 1]!.name, 'leading') : ''}<span class="db-table-screen-reader">Actions</span></th>` : ''}</tr></thead>
         <tbody>
           ${snapshot.rows.map((row) => `<tr class="${row.hasAttachedComponent ? 'has-attached-component' : ''}">${visibleColumns.map((column) => renderCell(config, column, row.values[column.name] ?? null, row.rowId, editable)).join('')}${showRowActions ? renderRowActions(ctx, config, row.rowId, row.hasAttachedComponent, editable) : ''}</tr>`).join('')}
           ${ui.draftActive && editable ? renderDraftRow(config, visibleColumns) : ''}
@@ -591,15 +634,21 @@ function renderColumnElement(config: DbTableConfig, column: DbTableColumnSchema)
 function renderHeader(
   config: DbTableConfig,
   column: DbTableColumnSchema,
-  snapshot: DbTableSourcePage,
-  ui: DbTableUiState
+  ui: DbTableUiState,
+  editable: boolean,
+  previousColumnName: string | null,
+  lastColumn: boolean,
 ): string {
   const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
   const sortIcon = ui.sortColumn === column.name && ui.sortDirection === 'desc' ? arrowDownIcon() : arrowUpIcon();
-  const heading = snapshot.editable
+  const heading = editable
     ? `<input class="db-table-column-name-input" data-db-table-field="column-label" data-column-edit-mode="display" data-column-name="${escapeAttr(column.name)}" data-display-name="${escapeAttr(presentation.label)}" value="${escapeAttr(presentation.label)}" aria-label="Display name for ${escapeAttr(column.name)}" title="Edit display or DB column name">`
     : `<span>${escapeHtml(presentation.label)}</span>`;
-  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}"><div class="db-table-header-content">${heading}${snapshot.editable ? `<button type="button" class="ghost db-table-sort" data-db-table-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button><span class="db-table-resize-handle" data-column-name="${escapeAttr(column.name)}" title="Drag to resize; double-click to fit data" aria-hidden="true"></span>` : ''}</div></th>`;
+  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}">${editable && previousColumnName ? renderResizeHandle(previousColumnName, 'leading') : ''}<div class="db-table-header-content">${heading}${editable ? `<button type="button" class="ghost db-table-sort" data-db-table-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button>${lastColumn ? renderResizeHandle(column.name, 'trailing') : ''}` : ''}</div></th>`;
+}
+
+function renderResizeHandle(columnName: string, edge: 'leading' | 'trailing'): string {
+  return `<span class="db-table-resize-handle is-${edge}" data-column-name="${escapeAttr(columnName)}" title="Drag to resize; double-click to fit data" aria-hidden="true"></span>`;
 }
 
 function resolveDbTableMaximumColumnWidth(root: HTMLElement, configured: unknown): number {

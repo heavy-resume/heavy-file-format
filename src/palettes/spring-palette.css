@@ -40,6 +40,8 @@
   --hvy-shadow-lg: rgba(34, 34, 34, 0.2);
   --hvy-overlay: rgba(50, 50, 50, 0.25);
   --hvy-danger: rgb(200, 20, 0);
+  --hvy-danger-button-bg: rgb(200, 20, 0);
+  --hvy-danger-button-text: #ffffff;
   --hvy-warning: #e5e900;
   --hvy-warning-bg: #fffbd1;
   --hvy-warning-border: rgb(255, 221, 26);

@@ -13,7 +13,7 @@ import {
   type MaybePromise,
 } from './attachment-store';
 import { makeId, sanitizeOptionalId } from './utils';
-import { resolveBaseComponentFromMeta, isBuiltinComponentName } from './component-defs';
+import { resolveBaseComponentFromMeta, isBuiltinComponentName, getComponentDefsFromMeta } from './component-defs';
 import {
   DEFAULT_READER_MAX_WIDTH,
   DEFAULT_SIDEBAR_MAX_WIDTH,
@@ -635,7 +635,8 @@ function parseBlocks(
           const componentName = typeof parsed.component === 'string' ? parsed.component : 'text';
           openOrQueueBlock(schemaFromDirectivePayload(componentName, parsed), getCurrentAttach());
         } else {
-          openOrQueueBlock(schemaFromDirectivePayload(directive, parsed), getCurrentAttach());
+          const componentName = isBuiltinComponentName(directive) ? directive : (match[1] ?? directive);
+          openOrQueueBlock(schemaFromDirectivePayload(componentName, parsed), getCurrentAttach());
         }
       }
     } catch {
@@ -864,53 +865,63 @@ const SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS = new Set(['code']);
 
 // Serialize a component def to clean YAML format:
 // - strips `component` from the root schema (redundant with `baseType`)
-// - strips `template` (runtime-only)
-// - uses { component: name } shorthand for custom component blocks in nested lists
-export function serializeComponentDefinition(raw: JsonObject): JsonObject {
+// - stores root body text in `text` and strips `template` (runtime-only)
+// - preserves concrete nested component snapshots and explicit shorthand references
+export function serializeComponentDefinition(raw: JsonObject, documentMeta: JsonObject | null = null): JsonObject {
   const result: JsonObject = {};
   const baseType = typeof raw.baseType === 'string' ? raw.baseType : undefined;
   for (const [key, value] of Object.entries(raw)) {
     if (key === 'template') continue; // runtime-only; derived from schema
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType, documentMeta);
       }
     } else if (key === 'flavors' && Array.isArray(value)) {
-      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject, baseType));
+      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject, baseType, documentMeta));
     } else {
       result[key] = value;
     }
   }
+  const text = (raw.template as JsonObject | undefined)?.text ?? raw.text;
+  if (typeof text === 'string' && text.length > 0) result.text = text;
+  else delete result.text;
   return result;
 }
 
-function cleanComponentDefFlavor(flavor: JsonObject, baseType?: string): JsonObject {
+function cleanComponentDefFlavor(flavor: JsonObject, baseType?: string, documentMeta: JsonObject | null = null): JsonObject {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(flavor)) {
     if (key === 'template') continue;
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType, documentMeta);
       }
     } else {
       result[key] = value;
     }
   }
+  const text = (flavor.template as JsonObject | undefined)?.text ?? flavor.text;
+  if (typeof text === 'string' && text.length > 0) result.text = text;
+  else delete result.text;
   return result;
 }
 
-function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false, componentHint?: string): JsonObject {
+function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false, componentHint?: string, documentMeta: JsonObject | null = null): JsonObject {
   const componentName = stripRootComponent && componentHint
     ? componentHint
     : typeof schema.component === 'string'
       ? schema.component
       : componentHint ?? 'text';
-  const parsed = schemaFromUnknown({ ...schema, component: componentName });
-  const result = serializeBlockSchema(parsed, { omitComponent: stripRootComponent });
-  const baseComponent = resolveBaseComponentFromMeta(parsed.component, null);
+  const parsed = schemaFromUnknown({ ...schema, component: componentName }, new WeakSet<object>(), documentMeta);
+  // Definition trees contain concrete editable snapshots. Resolve custom types, but do not
+  // subtract another definition's defaults: nested schema readers expect complete values.
+  const typeMeta: JsonObject = { component_defs: Array.isArray(documentMeta?.component_defs)
+    ? (documentMeta.component_defs as JsonObject[]).map((definition) => ({ name: definition.name, baseType: definition.baseType })) : [] };
+  const result = serializeBlockSchema(parsed, { omitComponent: stripRootComponent }, typeMeta);
+  const baseComponent = resolveBaseComponentFromMeta(parsed.component, documentMeta);
   if (baseComponent === 'expandable') {
-    addCleanExpandablePart(result, 'expandableStubBlocks', parsed.expandableStubBlocks, parsed.expandableStubCss, parsed.expandableStubDescription);
-    addCleanExpandablePart(result, 'expandableContentBlocks', parsed.expandableContentBlocks, parsed.expandableContentCss, parsed.expandableContentDescription);
+    addCleanExpandablePart(result, 'expandableStubBlocks', parsed.expandableStubBlocks, parsed.expandableStubCss, parsed.expandableStubDescription, documentMeta);
+    addCleanExpandablePart(result, 'expandableContentBlocks', parsed.expandableContentBlocks, parsed.expandableContentCss, parsed.expandableContentDescription, documentMeta);
   }
   return result;
 }
@@ -920,9 +931,10 @@ function addCleanExpandablePart(
   key: 'expandableStubBlocks' | 'expandableContentBlocks',
   part: BlockSchema['expandableStubBlocks'],
   css: string,
-  description: string
+  description: string,
+  documentMeta: JsonObject | null
 ): void {
-  const children = part.children.map((block) => cleanComponentDefBlock(block as unknown as JsonObject));
+  const children = part.children.map((block) => cleanComponentDefBlock(block as unknown as JsonObject, documentMeta));
   if (children.length === 0 && part.lock !== true && css.trim().length === 0 && description.trim().length === 0) {
     return;
   }
@@ -939,7 +951,7 @@ function addCleanExpandablePart(
   result[key] = cleanPart;
 }
 
-function cleanComponentDefBlock(block: JsonObject): JsonObject {
+function cleanComponentDefBlock(block: JsonObject, documentMeta: JsonObject | null): JsonObject {
   // Determine component from either the shorthand { component } or { schema: { component } } format
   const component = (() => {
     if (block.schema && typeof block.schema === 'object') {
@@ -950,18 +962,37 @@ function cleanComponentDefBlock(block: JsonObject): JsonObject {
     return undefined;
   })();
 
-  if (component && !isBuiltinComponentName(component)) {
-    // Custom component: use shorthand — the template defines everything else
+  if (component && !block.schema) {
+    // Preserve an explicit shorthand reference; concrete snapshots retain their edits.
     return { component };
   }
 
-  // Builtin component: keep text + recursively clean schema
+  if (component && !isBuiltinComponentName(component) && matchesComponentDefinition(block, component, documentMeta)) {
+    return { component };
+  }
+
+  // Concrete component: keep text and recursively clean its schema
   const result: JsonObject = {};
   if (typeof block.text === 'string') result.text = block.text;
   if (block.schema && typeof block.schema === 'object') {
-    result.schema = cleanComponentDefSchema(block.schema as JsonObject, false);
+    result.schema = cleanComponentDefSchema(block.schema as JsonObject, false, undefined, documentMeta);
   }
   return result;
+}
+
+function matchesComponentDefinition(block: JsonObject, component: string, documentMeta: JsonObject | null): boolean {
+  const schema = block.schema as JsonObject | undefined;
+  if (!schema || (typeof schema.id === 'string' && schema.id.trim())) return false;
+  const definition = getComponentDefsFromMeta(documentMeta).find((candidate) => candidate.name === component);
+  if (!definition) return false;
+  const source = definition.template;
+  const expectedText = source?.text ?? definition.text ?? '';
+  if ((block.text ?? '') !== expectedText) return false;
+  const typeMeta: JsonObject = { component_defs: getComponentDefsFromMeta(documentMeta)
+    .map((candidate) => ({ name: candidate.name, baseType: candidate.baseType })) };
+  const actualSchema = schemaFromUnknown(schema, new WeakSet<object>(), documentMeta);
+  const expectedSchema = schemaFromUnknown({ ...(source?.schema ?? definition.schema ?? {}), component }, new WeakSet<object>(), documentMeta);
+  return JSON.stringify(serializeBlockSchema(actualSchema, {}, typeMeta)) === JSON.stringify(serializeBlockSchema(expectedSchema, {}, typeMeta));
 }
 
 export function serializeDocument(document: VisualDocument): string {
@@ -1029,12 +1060,12 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
-      .map((def) => serializeComponentDefinition(def));
+      .map((def) => serializeComponentDefinition(def, document.meta));
   }
   if (Array.isArray(serializedMeta.section_defs)) {
     serializedMeta.section_defs = (serializedMeta.section_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
-      .map((def) => serializeSectionDef(def));
+      .map((def) => serializeSectionDef(def, document.meta));
   }
   const headerMeta = stripEditorStateFromSerializedValue({
     ...serializedMeta,
@@ -1058,7 +1089,7 @@ function collectBuiltInPluginDeclarations(document: VisualDocument): JsonObject[
   return declarations;
 }
 
-function serializeSectionDef(raw: JsonObject): JsonObject {
+function serializeSectionDef(raw: JsonObject, documentMeta: JsonObject | null): JsonObject {
   const result: JsonObject = {};
   if (typeof raw.name === 'string') {
     result.name = raw.name;
@@ -1069,8 +1100,9 @@ function serializeSectionDef(raw: JsonObject): JsonObject {
   if (raw.repeatable === true) {
     result.repeatable = true;
   }
+  if (raw.templateVariables && typeof raw.templateVariables === 'object') result.templateVariables = raw.templateVariables;
   if (raw.template && typeof raw.template === 'object') {
-    result.template = cleanSectionTemplate(raw.template as Partial<VisualSection> & JsonObject);
+    result.template = cleanSectionTemplate(raw.template as Partial<VisualSection> & JsonObject, documentMeta);
   }
   if (Array.isArray(raw.flavors)) {
     const flavors = raw.flavors
@@ -1087,7 +1119,7 @@ function serializeSectionDef(raw: JsonObject): JsonObject {
           cleaned.templateVariables = flavor.templateVariables;
         }
         if (flavor.template && typeof flavor.template === 'object') {
-          cleaned.template = cleanSectionTemplate(flavor.template as Partial<VisualSection> & JsonObject);
+          cleaned.template = cleanSectionTemplate(flavor.template as Partial<VisualSection> & JsonObject, documentMeta);
         }
         return cleaned;
       })
@@ -1099,7 +1131,7 @@ function serializeSectionDef(raw: JsonObject): JsonObject {
   return result;
 }
 
-function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject): JsonObject {
+function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject, documentMeta: JsonObject | null): JsonObject {
   const result: JsonObject = {};
   const id = typeof section.customId === 'string' ? section.customId : typeof section.id === 'string' ? section.id : '';
   if (id.trim().length > 0) {
@@ -1146,9 +1178,9 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject): Jso
   if (section.protect_from_import === true) {
     result.protect_from_import = true;
   }
-  result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject)) : [];
+  result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject, documentMeta)) : [];
   result.children = Array.isArray(section.children)
-    ? section.children.map((child) => cleanSectionTemplate(child as Partial<VisualSection> & JsonObject))
+    ? section.children.map((child) => cleanSectionTemplate(child as Partial<VisualSection> & JsonObject, documentMeta))
     : [];
   return result;
 }

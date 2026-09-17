@@ -476,8 +476,13 @@ export function refreshSearchFilterButton(app: ParentNode): void {
     return;
   }
   const applied = isSearchFilterApplied();
+  const semanticProgress = state.search.semanticProgress ?? null;
+  const requestCompleted = state.search.filterQueryMode !== 'semantic'
+    || semanticProgress !== null
+      && semanticProgress.completedWindows >= semanticProgress.totalWindows;
   const noResults = !state.search.isLoading
     && !state.search.error
+    && requestCompleted
     && !applied
     && state.search.submittedQuery.trim().length > 0
     && state.search.queryDraft.trim() === state.search.submittedQuery.trim()

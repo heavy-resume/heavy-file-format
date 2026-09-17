@@ -26,6 +26,8 @@ import {
 } from './form-photo-field/form-photo-field';
 import formDocumentation from './form.about.txt?raw';
 
+import { createLiveState, reconcileLiveState, reconcileSelectValue, type LiveFormState } from './form-live-state/form-live-state';
+
 import './form.css';
 
 export const FORM_PLUGIN_VERSION = '0.1';
@@ -102,13 +104,7 @@ export interface ParsedFormSpec {
   error: string | null;
 }
 
-type FormFieldValue = string | boolean | FormPhotoValue | null;
-
-interface LiveFormState {
-  values: Record<string, FormFieldValue>;
-  options: Record<string, FormOption[]>;
-  errors: Record<string, string>;
-}
+export type FormFieldValue = string | boolean | FormPhotoValue | null;
 
 function defaultFormSpec(): FormSpec {
   return {
@@ -449,31 +445,12 @@ function formatOptionsText(options: FormOption[]): string {
   return options.map((option) => (option.value === option.label ? option.label : `${option.label} | ${option.value}`)).join('\n');
 }
 
-function reconcileSelectValue(value: FormFieldValue, options: FormOption[]): string {
-  const current = String(value ?? '');
-  return options.some((option) => option.value === current)
-    ? current
-    : options[0]?.value ?? '';
-}
-
 function normalizePhotoValue(value: unknown): FormPhotoValue | null {
   if (!isObject(value)) return null;
   const attachmentId = typeof value.attachmentId === 'string' ? value.attachmentId : '';
   const imageFile = typeof value.imageFile === 'string' ? value.imageFile : '';
   const mediaType = typeof value.mediaType === 'string' ? value.mediaType : '';
   return attachmentId && imageFile && mediaType ? { attachmentId, imageFile, mediaType } : null;
-}
-
-function createLiveState(spec: FormSpec): LiveFormState {
-  const values: Record<string, FormFieldValue> = {};
-  const options: Record<string, FormOption[]> = {};
-  for (const field of spec.fields) {
-    options[field.label] = field.options.map((option) => ({ ...option }));
-    values[field.label] = field.type === 'select'
-      ? reconcileSelectValue(field.value, options[field.label]!)
-      : field.value;
-  }
-  return { values, options, errors: {} };
 }
 
 interface FormLifecycleState {
@@ -511,28 +488,6 @@ export function claimFormInitialization(document: VisualDocument, block: VisualB
   if (lifecycle.initialized) return false;
   lifecycle.initialized = true;
   return true;
-}
-
-function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
-  const fieldLabels = new Set(spec.fields.map((field) => field.label));
-  for (const field of spec.fields) {
-    if (!(field.label in live.values)) {
-      live.values[field.label] = field.value;
-    }
-    if (!(field.label in live.options)) {
-      live.options[field.label] = field.options.map((option) => ({ ...option }));
-    }
-    if (field.type === 'select') {
-      live.values[field.label] = reconcileSelectValue(live.values[field.label]!, live.options[field.label]!);
-    }
-  }
-  for (const label of Object.keys(live.values)) {
-    if (!fieldLabels.has(label)) {
-      delete live.values[label];
-      delete live.options[label];
-      delete live.errors[label];
-    }
-  }
 }
 
 function resultText(result: ScriptingRunResult): string {

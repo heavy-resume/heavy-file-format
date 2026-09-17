@@ -1,3 +1,4 @@
+import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
 import './default-theme.css';
 import {
   getBlockAnswerGroups,
@@ -111,7 +112,7 @@ import { addExternalLinkTargets, markdownToReaderHtml, normalizeMarkdownIndentat
 import { renderUserFileAttachmentLinksInHtml } from './document-attachment-links';
 import { bindUserFileAttachmentLinks } from './document-attachment-links';
 import { removeTextFillInMarkers } from './text-fill-in';
-import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider } from './reference-config';
+import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider, setRuntimeSemanticFilterWindowLimits } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
@@ -119,7 +120,7 @@ import type { UserFileAttachmentLimits } from './document-attachments';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
-import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { bindCarouselInteractions, initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { renderTextToolbarDismissButton, syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
@@ -141,6 +142,7 @@ export type {
 export type { HvyDatabaseTableSource } from './plugins/database-table-source';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
+export type HvyEditorMode = 'basic' | 'advanced' | 'mobile-adjustment';
 
 export interface HvyMountOptions {
   root: HTMLElement;
@@ -158,6 +160,8 @@ export interface HvyMountOptions {
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   semanticFilterConcurrency?: number;
   semanticFilterMaxAttempts?: number;
+  semanticFilterMaxWindowCandidateChars?: number;
+  semanticFilterMaxWindowCandidates?: number;
   linkObserver?: HvyLinkObserver | null;
   crossDocumentLinks?: boolean;
   controls?: boolean;
@@ -204,11 +208,18 @@ export interface HvyMount {
   redo(): Promise<void>;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
+  /** Switch document views in place; await loading when promoting a lightweight viewer. */
+  setMode(mode: HvyEmbedMode): Promise<void>;
+  /** Switch an editor mount in place; calls during bundle loading are queued. */
+  setEditorMode(mode: HvyEditorMode): void;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
   setThemeOverrides(overrides: HvyThemeOverrides | null): void;
   setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
   getSearchSnapshot(): HvySearchSnapshot;
+  isDocumentMetaOpen(): boolean;
+  closeDocumentMeta(): void;
+  openDocumentMeta(): void;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
 }
@@ -653,6 +664,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       void runButtonVisibilityScriptsIfNeeded(scope);
     }),
@@ -736,6 +748,7 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       if (options.runVisibilityScripts !== false) {
         void runButtonVisibilityScriptsIfNeeded(scope);
@@ -885,21 +898,6 @@ async function runButtonVisibilityScriptsIfNeeded(root: ParentNode): Promise<voi
   await runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
 }
 
-function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
-  root.addEventListener('click', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('dblclick', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('mousedown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('mouseup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('pointerdown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('pointerup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('contextmenu', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('input', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('change', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('keydown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('keyup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('focusin', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('submit', () => activateStateRuntime(runtime), { capture: true });
-}
 
 function ensureEmbedRuntime(
   plugins: HvyPluginInput[],
@@ -990,17 +988,20 @@ async function loadFullEmbed(): Promise<FullEmbedModule> {
 
 function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
   let mounted: HvyMount | null = null;
+  let destroyed = false;
   let queuedSearchSnapshot = options.searchSnapshot ?? null;
   const pending: Array<(mount: HvyMount) => void> = [];
   options.root.classList.add('hvy-document');
   options.root.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane hvy-full-pane"><p>Loading HVY...</p></section></main>';
   const ready = loadFullEmbed().then((module) => {
+    if (destroyed) throw new Error('HVY mount has been destroyed.');
     mounted = module.mountHvy(options);
     for (const action of pending.splice(0)) {
       action(mounted);
     }
     return mounted;
   });
+  void ready.catch(() => {});
   const withMount = (action: (mount: HvyMount) => void): void => {
     if (mounted) {
       action(mounted);
@@ -1021,6 +1022,8 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
   };
   return {
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       if (mounted) {
         mounted.destroy();
       } else {
@@ -1080,6 +1083,17 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     importFromText(importOptions) {
       return ready.then((mount) => mount.importFromText(importOptions));
     },
+    setMode(mode) {
+      if (destroyed) return Promise.reject(new Error('HVY mount has been destroyed.'));
+      if (mounted) return mounted.setMode(mode);
+      return new Promise<void>((resolve, reject) => {
+        pending.push((mount) => { void mount.setMode(mode).then(resolve, reject); });
+        void ready.catch(reject);
+      });
+    },
+    setEditorMode(mode) {
+      withMount((mount) => mount.setEditorMode(mode));
+    },
     setLinkObserver(observer) {
       withMount((mount) => mount.setLinkObserver(observer));
     },
@@ -1097,6 +1111,15 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     },
     getSearchSnapshot() {
       return mounted?.getSearchSnapshot() ?? normalizeSearchSnapshotInput(queuedSearchSnapshot);
+    },
+    isDocumentMetaOpen() {
+      return mounted?.isDocumentMetaOpen() ?? false;
+    },
+    closeDocumentMeta() {
+      withMount((mount) => mount.closeDocumentMeta());
+    },
+    openDocumentMeta() {
+      withMount((mount) => mount.openDocumentMeta());
     },
     openThemeEditor(themeOptions) {
       renderQueuedThemeModal();
@@ -1221,6 +1244,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterMaxAttempts' in options) {
     setRuntimeSemanticFilterMaxAttempts(options.semanticFilterMaxAttempts ?? null);
   }
+  setRuntimeSemanticFilterWindowLimits({
+    maxCandidateChars: options.semanticFilterMaxWindowCandidateChars ?? null,
+    maxCandidates: options.semanticFilterMaxWindowCandidates ?? null,
+  });
   setEditorClipboardHost(options.editorClipboard ?? null);
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
@@ -1236,7 +1263,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
-  bindRuntimeActivation(options.root, runtime);
+  bindEmbedRuntimeActivation(options.root, runtime);
   // Built-in plugins are opt-in per mount: some of them execute document-supplied
   // code, so a host that asks for nothing gets nothing.
   ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver);
@@ -1259,9 +1286,49 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   // Only re-render when there was actually something encrypted to reveal.
   void decryptEncryptedComponents(state.document, options.encryption ?? null)
     .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
-  return {
+  let promoted: HvyMount | null = null;
+  let promotion: Promise<HvyMount> | null = null;
+  let destroyed = false;
+  let modeTransition: Promise<void> = Promise.resolve();
+  const ensureFullMount = (): Promise<HvyMount> => {
+    if (!promotion) {
+      promotion = loadFullEmbed().then((module) => {
+        if (destroyed) throw new Error('HVY mount has been destroyed.');
+        promoted = module.promoteHvyRuntime({ ...options, linkObserver }, runtime, documentChangeApi);
+        return promoted;
+      });
+    }
+    return promotion;
+  };
+  const setMode = (mode: HvyEmbedMode): Promise<void> => {
+    const transition = modeTransition.then(async () => {
+      if (destroyed) throw new Error('HVY mount has been destroyed.');
+      if (mode !== 'viewer' && mode !== 'editor' && mode !== 'ai') {
+        throw new Error(`Unsupported HVY mode: ${mode}`);
+      }
+      if (runtime.state.currentView === mode) return;
+      const fullMount = await ensureFullMount();
+      if (destroyed) throw new Error('HVY mount has been destroyed.');
+      await fullMount.setMode(mode);
+    });
+    modeTransition = transition.catch(() => {});
+    return transition;
+  };
+  const mount: HvyMount = {
+    setMode,
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
+
       webMcpRegistration?.destroy();
+      if (promoted) {
+        promoted.destroy();
+        if (currentRoot === options.root) {
+          currentRoot = null;
+          currentLinkObserver = null;
+        }
+        return;
+      }
       runWithStateRuntime(runtime, () => {
         releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
@@ -1362,6 +1429,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     importFromText(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => importFromText(importOptions));
     },
+    setEditorMode() {
+      throw new Error('setEditorMode requires an editor mount.');
+    },
     setLinkObserver(observer) {
       runWithStateRuntime(runtime, () => {
         linkObserver = observer;
@@ -1397,43 +1467,36 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     getSearchSnapshot() {
       return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
     },
+    isDocumentMetaOpen() {
+      return promoted?.isDocumentMetaOpen() ?? false;
+    },
+    closeDocumentMeta() {
+      promoted?.closeDocumentMeta();
+    },
+    openDocumentMeta() {
+      void setMode('editor').then(() => promoted!.openDocumentMeta());
+    },
     openThemeEditor(themeOptions = {}) {
-      void loadFullEmbed().then((module) => runWithStateRuntime(runtime, () => {
-        const fullMount = module.mountHvy({
-          root: options.root,
-          document: state.document,
-          mode: 'editor',
-          showComponentEncryptionControls: state.showComponentEncryptionControls,
-          imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
-          attachmentStore: state.attachmentHost,
-          serializer: options.serializer ?? null,
-          encryption: state.encryption,
-          storageKey: state.sessionStorageKey,
-          persistSessionState: options.persistSessionState,
-          onDocumentChange: options.onDocumentChange,
-        });
-        fullMount.openThemeEditor(themeOptions);
-      }));
+      void setMode('editor').then(() => promoted!.openThemeEditor(themeOptions));
     },
     mountThemeEditor(root, themeOptions = {}) {
-      void loadFullEmbed().then((module) => runWithStateRuntime(runtime, () => {
-        const fullMount = module.mountHvy({
-          root: options.root,
-          document: state.document,
-          mode: 'editor',
-          showComponentEncryptionControls: state.showComponentEncryptionControls,
-          imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
-          attachmentStore: state.attachmentHost,
-          serializer: options.serializer ?? null,
-          encryption: state.encryption,
-          storageKey: state.sessionStorageKey,
-          persistSessionState: options.persistSessionState,
-          onDocumentChange: options.onDocumentChange,
-        });
-        fullMount.mountThemeEditor(root, themeOptions);
-      }));
+      void setMode('editor').then(() => promoted!.mountThemeEditor(root, themeOptions));
     },
   };
+  // Keep the host's original handle usable after its rendering capabilities expand.
+  return new Proxy(mount, {
+    get(target, property, receiver) {
+      if (property === 'setMode' || property === 'destroy') {
+        return Reflect.get(target, property, receiver);
+      }
+      const value = Reflect.get(promoted ?? target, property);
+      if (typeof value !== 'function') return value;
+      return (...args: unknown[]) => {
+        const activeMount = promoted ?? target;
+        return Reflect.apply(Reflect.get(activeMount, property), activeMount, args);
+      };
+    },
+  });
 }
 
 export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount {

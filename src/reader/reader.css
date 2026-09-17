@@ -77,7 +77,7 @@
   border: 1px solid var(--hvy-border-input);
   border-radius: 10px;
   background: var(--hvy-surface);
-  padding: 0.55rem;
+  padding: 0.9rem;
   position: relative;
 }
 

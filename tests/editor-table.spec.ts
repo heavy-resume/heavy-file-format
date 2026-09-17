@@ -39,7 +39,7 @@ async function scrollDownUntilVisible(page: Page, scroller: Locator, target: Loc
 
 test('entering and canceling a static table edit keeps the document saved', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -49,8 +49,8 @@ hvy_version: 0.1
 
 <!--hvy:table {"tableColumns":["Name","Status"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.evaluate(async () => {
     const { resetReferenceDocumentDirtyBaseline } = await import('/src/reference-document-dirty.ts');
     resetReferenceDocumentDirtyBaseline();
@@ -83,7 +83,7 @@ hvy_version: 0.1
 
 test('canceling an untouched static table restores its pre-activation viewport position', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -108,8 +108,8 @@ ${Array.from({ length: 24 }, (_item, index) => `  Spacer paragraph ${index + 1}.
 <!--hvy:text {}-->
 ${Array.from({ length: 24 }, (_item, index) => `  Trailing paragraph ${index + 1}.\n`).join('\n')}
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   const passiveTable = page.locator('.editor-block-passive', { hasText: 'Formally Opposed' });
   await passiveTable.evaluate((element) => element.scrollIntoView({ block: 'center' }));
@@ -146,7 +146,7 @@ ${Array.from({ length: 24 }, (_item, index) => `  Trailing paragraph ${index + 1
 
 test('static table columns resize, auto-fit, reset, and contain wide overflow', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -159,8 +159,8 @@ hvy_version: 0.1
 | --- | --- | --- |
 | Alpha | Deliberately long details for automatic sizing | Open |
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   const passive = page.locator('.editor-block-passive', { hasText: 'Deliberately long details' }).first();
   await expect.poll(() => passive.locator('.reader-table-frame').evaluate((frame) => frame.scrollWidth > frame.clientWidth)).toBe(true);
@@ -237,7 +237,7 @@ hvy_version: 0.1
 test('active table editor shows placeholders only for wholly empty rows', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -247,8 +247,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Notes"],"tableRows":[{"cells":["Alpha",""]},{"cells":["",""]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   const passiveTable = page.locator('.editor-block-passive', { hasText: 'Alpha' }).first();
   const passiveFirstRowNotes = passiveTable.locator('.reader-table tbody tr').nth(0).locator('td').nth(1);
@@ -294,7 +294,7 @@ hvy_version: 0.1
 test('static table row delete button is centered in the row utility cell', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -304,8 +304,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
 
@@ -360,8 +360,8 @@ hvy_version: 0.1
 
 <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
 
   // BEFORE: the table has its two original rows and columns, with no insertion menu open.
@@ -401,7 +401,7 @@ hvy_version: 0.1
 
 test('table row drag previews matching before or after insertion edges without a custom cursor ghost', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -411,8 +411,8 @@ hvy_version: 0.1
 
 <!--hvy:table {"tableColumns":["Name","Status"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]},{"cells":["Gamma","Pending"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
 
   // BEFORE: rows have no drag-source or insertion-edge treatment.
@@ -475,7 +475,7 @@ hvy_version: 0.1
 
 test('table column drag previews matching before or after insertion boundaries without a custom cursor ghost', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -485,8 +485,8 @@ hvy_version: 0.1
 
 <!--hvy:table {"tableColumns":["Name","Status"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
 
   // BEFORE: no table cell carries a column insertion boundary.
@@ -537,7 +537,7 @@ hvy_version: 0.1
 test('empty static table rows delete without confirmation while filled rows still confirm', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -547,8 +547,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["",""]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
 
@@ -564,7 +564,7 @@ hvy_version: 0.1
 test('filled static table row delete opens confirmation from an active cell on the first click', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -574,8 +574,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
   const firstCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
@@ -591,7 +591,7 @@ hvy_version: 0.1
 test('active table editor tabs through cells before row controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -601,8 +601,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
   const firstCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
@@ -650,7 +650,7 @@ test('AI static table activation preserves scroll and Tab advances to the next c
 test('clicking a static table cell opens that cell in place', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -669,8 +669,8 @@ ${Array.from({ length: 12 }, (_item, index) => `  | Generic row ${index + 1} | $
  <!--hvy:text {}-->
   ${'Generic content below the table. '.repeat(40)}
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   const passiveCell = page.getByRole('cell', { name: 'Clicked cell target', exact: true });
   await passiveCell.scrollIntoViewIfNeeded();
@@ -690,7 +690,7 @@ ${Array.from({ length: 12 }, (_item, index) => `  | Generic row ${index + 1} | $
 test('active table editor Enter advances rows and Shift Enter inserts a cell line break', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -700,8 +700,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
   const firstCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
@@ -726,10 +726,48 @@ hvy_version: 0.1
   await expect(addedRowFirstCell).toContainText('Beta');
 });
 
+test('static table cells keep blank lines between paragraphs and enable spell check', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-blank-line-test"}-->
+#! Table Blank Line Test
+
+ <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha\\n\\nBeta","Open"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+
+  await expect(page.locator('.editor-block-passive td').first()).toHaveJSProperty('innerHTML', 'Alpha<br><br>Beta');
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+  const loadedCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
+  await expect(loadedCell).toHaveJSProperty('innerHTML', 'Alpha<br><br>Beta');
+  await expect(loadedCell).toHaveAttribute('spellcheck', 'true');
+  await expect(page.locator('[data-field="table-column"][data-column-index="0"]')).toHaveAttribute('spellcheck', 'true');
+
+  const typedCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="1"]');
+  await typedCell.click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.type('Second paragraph');
+  await loadedCell.click();
+  await loadedCell.evaluate((cell) => window.getSelection()?.selectAllChildren(cell));
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type(' edited');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/\| Alpha&#10;&#10;Beta edited \| Open&#10;&#10;Second paragraph \|/);
+});
+
 test('select all and delete keeps a static table cell canonically empty and undoes once', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -742,8 +780,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.getByRole('cell', { name: 'Open', exact: true }).click();
   const cell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="1"]');
@@ -790,7 +828,7 @@ hvy_version: 0.1
 test('static table Done does not persist untouched Enter-created rows', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -800,8 +838,8 @@ hvy_version: 0.1
 
  <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
   const firstCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
@@ -826,7 +864,7 @@ hvy_version: 0.1
   const passiveTable = page.locator('.editor-block-passive', { hasText: 'Alpha' }).first();
   await expect(passiveTable.locator('.reader-table tbody tr')).toHaveCount(1);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toHaveValue(/\| Alpha \| Open \|/);
   await expect(page.locator('#rawEditor')).not.toHaveValue(/"cells":\["",""\]/);
 });
@@ -834,7 +872,7 @@ hvy_version: 0.1
 test('static table Done keeps a newly added bottom row anchored in the viewport', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -846,8 +884,8 @@ hvy_version: 0.1
     cells: [`Example issue ${index + 1}: ${'placeholder details '.repeat(5)}`, index % 5 === 0 ? 'Example note' : ''],
   })))} }-->
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   const passiveFirstRow = page.getByRole('row', { name: /Example issue 1:/ });
   await passiveFirstRow.scrollIntoViewIfNeeded();

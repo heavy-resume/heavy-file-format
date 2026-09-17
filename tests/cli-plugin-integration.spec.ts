@@ -608,7 +608,7 @@ Blocked visible text
 
 test('scripting and form scripts allow return to stop execution', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -649,7 +649,7 @@ scripts:
 
 test('form initial scripts accept tuple-shaped dynamic options', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

@@ -31,6 +31,8 @@ export interface HvyDocumentFilterSnapshotRequest {
   semanticFilterMaxAttempts?: number;
   maxCandidateSummaryChars?: number;
   maxTotalCandidateChars?: number;
+  maxWindowCandidateChars?: number;
+  maxWindowCandidates?: number;
   traceRunId?: string;
   signal?: AbortSignal;
   onSemanticProgress?: (progress: {
@@ -104,11 +106,14 @@ async function createSemanticDocumentFilterSnapshot(
   }
 
   const document = getFilterDocument(request.document, request.view ?? 'viewer');
+  const referenceConfig = getReferenceAppConfig();
   const packet = buildSemanticFilterWindows({
     document,
     prompt: query,
     ...(request.maxCandidateSummaryChars !== undefined ? { maxCandidateSummaryChars: request.maxCandidateSummaryChars } : {}),
     ...(request.maxTotalCandidateChars !== undefined ? { maxTotalCandidateChars: request.maxTotalCandidateChars } : {}),
+    maxWindowCandidateChars: request.maxWindowCandidateChars ?? referenceConfig.semanticFilterMaxWindowCandidateChars,
+    maxWindowCandidates: request.maxWindowCandidates ?? referenceConfig.semanticFilterMaxWindowCandidates,
     ...(request.signal ? { signal: request.signal } : {}),
   });
   request.onSemanticProgress?.({
@@ -125,8 +130,8 @@ async function createSemanticDocumentFilterSnapshot(
     documentTitle: typeof document.meta.title === 'string' ? document.meta.title : undefined,
     ...(request.traceRunId ? { traceRunId: request.traceRunId } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
-    concurrency: request.semanticFilterConcurrency ?? getReferenceAppConfig().semanticFilterConcurrency,
-    maxAttempts: request.semanticFilterMaxAttempts ?? getReferenceAppConfig().semanticFilterMaxAttempts,
+    concurrency: request.semanticFilterConcurrency ?? referenceConfig.semanticFilterConcurrency,
+    maxAttempts: request.semanticFilterMaxAttempts ?? referenceConfig.semanticFilterMaxAttempts,
     onWindowComplete: (progress) => request.onSemanticProgress?.({
       completedWindows: progress.completedWindows,
       totalWindows: packet.windows.length,

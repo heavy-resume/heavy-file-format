@@ -512,8 +512,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         continue;
       }
       if (entry.shouldRender) {
+        const renderOptions = section.contained
+          ? {
+            trimVerticalStartMargin: index === 0,
+            trimVerticalEndMargin: index === entries.length - 1,
+          }
+          : undefined;
         output.push(withReaderRenderTreeWindow(entry, effectiveWindowOptions, () => (
-          renderReaderBlock(section, entry.node.item as VisualBlock)
+          renderReaderBlock(section, entry.node.item as VisualBlock, renderOptions)
         )));
         index += 1;
         continue;
@@ -563,7 +569,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (base === 'location-marker') {
       return '';
     }
-    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && (isAiEditorHostSection(section.key) || isAiEditorHostBlock(section.key, block.id))) {
+    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
       return deps.renderEditorBlock(section.key, block);
     }
     if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
@@ -610,9 +616,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockStyle = base === 'image'
       ? ''
       : sanitizeReaderBlockCss(responsiveCss.inlineCss, options);
-    const refreshRenderContextAttrs = options.trimVerticalEdgeMargin
-      ? ' data-reader-trim-vertical-edge-margin="true"'
-      : '';
+    const refreshRenderContextAttrs = [
+      options.trimVerticalEdgeMargin ? ' data-reader-trim-vertical-edge-margin="true"' : '',
+      options.trimVerticalStartMargin ? ' data-reader-trim-vertical-start-margin="true"' : '',
+      options.trimVerticalEndMargin ? ' data-reader-trim-vertical-end-margin="true"' : '',
+    ].join('');
     const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
     const helpers = deps.getComponentRenderHelpers();
     type BlockShellPresentation = {
@@ -738,10 +746,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function sanitizeReaderBlockCss(css: string, options: ReaderBlockRenderOptions): string {
     const sanitized = sanitizeInlineCss(css);
-    if (!options.trimVerticalEdgeMargin) {
+    const trimStart = options.trimVerticalEdgeMargin || options.trimVerticalStartMargin;
+    const trimEnd = options.trimVerticalEdgeMargin || options.trimVerticalEndMargin;
+    if (!trimStart && !trimEnd) {
       return sanitized;
     }
-    return `${sanitized}${sanitized.trim().endsWith(';') || !sanitized.trim() ? '' : ';'} margin-top: 0; margin-bottom: 0;`;
+    const separator = sanitized.trim().endsWith(';') || !sanitized.trim() ? '' : ';';
+    return `${sanitized}${separator}${trimStart ? ' margin-top: 0;' : ''}${trimEnd ? ' margin-bottom: 0;' : ''}`;
   }
 
   function isAiEditorHostBlock(sectionKey: string, blockId: string): boolean {
@@ -889,10 +900,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderPreviewBlocks(section: VisualSection, blocks: VisualBlock[]): string {
-    return orderReaderBlocks(blocks)
+    const previewBlocks = orderReaderBlocks(blocks)
       .filter((block) => !isAnchoredReaderButton(section, block))
       .slice(0, 3)
-      .map((block) => renderReaderBlock(section, block))
+    return previewBlocks
+      .map((block, index) => renderReaderBlock(section, block, section.contained
+        ? {
+          trimVerticalStartMargin: index === 0,
+          trimVerticalEndMargin: index === previewBlocks.length - 1,
+        }
+        : undefined))
       .join('');
   }
 
@@ -1881,7 +1898,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </label>`
           : `<label>
               ${labelHead}
-              <input id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" />
+              <input id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}"${variable.type === 'url' ? ' inputmode="url" spellcheck="false"' : ''} />
               ${status}
             </label>`;
       }).join('');
@@ -2004,9 +2021,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <div class="modal-head">
               <h3>${deps.escapeHtml(title)}</h3>
               <div class="modal-head-actions">
-                <button type="button" class="ghost remove-x" data-modal-action="reusable-definition-cancel" aria-label="Cancel ${deps.escapeAttr(title)}" title="Cancel">${closeIcon()}</button>
+                <button type="button" class="ghost remove-x" data-modal-action="reusable-definition-close" aria-label="Close ${deps.escapeAttr(title)}" title="Close">${closeIcon()}</button>
               </div>
             </div>
+            <div class="reusable-definition-scroll-body">
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
             ${activeFlavorIndex === null ? '' : `<div class="reusable-definition-flavor-settings">
               <label><span>Description</span><input data-field="builder-flavor-description" value="${deps.escapeAttr((componentFlavor ?? sectionFlavor)?.description ?? '')}" /></label>
@@ -2058,7 +2076,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     ${displayedVariables.length === 0 ? '<div class="muted">No template values yet.</div>' : displayedVariables.map((variable) => `<div class="template-variable-card${variable.referenced ? '' : ' is-unreferenced'}" data-template-variable-card="${deps.escapeAttr(variable.name)}">
                       <span class="template-variable-unreferenced-label">template value will be deleted on save</span>
                       <label><span>Name</span><input data-field="builder-template-variable-name" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'} /></label>
-                      <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'}><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option></select></label>
+                      <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'}><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option><option value="url"${variable.type === 'url' ? ' selected' : ''}>URL</option></select></label>
                       <label><span>Label</span><input data-field="builder-template-variable-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.label)}"${variable.referenced ? '' : ' disabled'} /></label>
                       <section class="template-variable-generator-config">
                         <div class="template-variable-generator-head"><strong>Generator</strong><span class="muted">Optional AI value generator</span></div>
@@ -2070,7 +2088,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     </div>`).join('')}
                   </aside>
                 </div>
-            <div class="link-inline-actions reusable-save-actions">
+            </div>
+            <div class="link-inline-actions reusable-save-actions reusable-definition-footer">
               <button type="button" class="ghost" data-modal-action="reusable-definition-cancel">Cancel</button>
               <button type="button" class="secondary" data-modal-action="save-reusable-definition-close">Save Template</button>
             </div>

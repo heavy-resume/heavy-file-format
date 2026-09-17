@@ -209,14 +209,17 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
     && search.queryDraft.trim() === search.submittedQuery.trim()
     && search.filterQueryMode === search.submittedFilterQueryMode
     && (search.excludeTags ?? '').trim() === (search.submittedExcludeTags ?? '').trim();
+  const semanticProgress = search.filterQueryMode === 'semantic' ? search.semanticProgress ?? null : null;
+  const requestCompleted = search.filterQueryMode !== 'semantic'
+    || semanticProgress !== null && semanticProgress.completedWindows >= semanticProgress.totalWindows;
   const noResults = !search.isLoading
     && !search.error
+    && requestCompleted
     && !applied
     && search.submittedQuery.trim().length > 0
     && search.queryDraft.trim() === search.submittedQuery.trim()
     && search.filterQueryMode === search.submittedFilterQueryMode
     && search.results.length === 0;
-  const semanticProgress = search.filterQueryMode === 'semantic' ? search.semanticProgress ?? null : null;
   const status = search.isLoading
     ? search.filterQueryMode === 'semantic' ? '' : 'Searching...'
     : search.error

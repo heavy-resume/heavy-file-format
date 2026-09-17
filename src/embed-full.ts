@@ -1,3 +1,8 @@
+import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
+import { changeDocumentView } from './document-view';
+import type { HvyDocumentChangeApi } from './document-change';
+import type { HvyEditorMode } from './embed';
+import { changeEditorMode } from './editor-mode';
 import './default-theme.css';
 import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
@@ -92,7 +97,7 @@ import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingInd
 import { createHvyAgentTools } from './agent-tools';
 import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
 import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
-import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider } from './reference-config';
+import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider, setRuntimeSemanticFilterWindowLimits } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
@@ -124,6 +129,7 @@ import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { releasePdfPreviewRuntime, renderPdfPreviewPlaceholder, syncActivePdfPreview } from './pdf-preview/pdf-preview-controller';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { bindLazyImageHydration } from './editor/components/image/image';
+import { bindCarouselInteractions, initializeCarouselReaders } from './editor/components/carousel/carousel';
 import {
   buildImportPlanForDocument,
   importTextIntoDocument,
@@ -187,6 +193,8 @@ export interface HvyMountOptions {
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   semanticFilterConcurrency?: number;
   semanticFilterMaxAttempts?: number;
+  semanticFilterMaxWindowCandidateChars?: number;
+  semanticFilterMaxWindowCandidates?: number;
   linkObserver?: HvyLinkObserver | null;
   crossDocumentLinks?: boolean;
   controls?: boolean;
@@ -233,6 +241,8 @@ export interface HvyMount {
   redo(): Promise<void>;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
+  setMode(mode: HvyEmbedMode): Promise<void>;
+  setEditorMode(mode: HvyEditorMode): void;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
   setThemeOverrides(overrides: HvyThemeOverrides | null): void;
@@ -242,6 +252,8 @@ export interface HvyMount {
   setChatState(chatState: HvyChatSessionState | null | undefined): void;
   getRecoveryState(): string | null;
   applyRecoveryState(payload: string | null | undefined): void;
+  isDocumentMetaOpen(): boolean;
+  closeDocumentMeta(): void;
   openDocumentMeta(): boolean;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
@@ -730,12 +742,15 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       void runButtonVisibilityScripts(scope);
     }),
   });
+  bindCarouselInteractions(root);
   bindLazyImageHydration(root);
   centerPendingEditorSection(root);
+  scrollPendingEditorActivation(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
   logPerfTrace('renderApp', {
@@ -746,24 +761,6 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   });
 }
 
-function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
-  root.addEventListener('click', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('dblclick', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('mousedown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('mouseup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('pointerdown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('pointerup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('contextmenu', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('input', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('change', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('keydown', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('keyup', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('focusin', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('submit', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('dragstart', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('dragover', () => activateStateRuntime(runtime), { capture: true });
-  root.addEventListener('drop', () => activateStateRuntime(runtime), { capture: true });
-}
 
 function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
   const bindGeneration = (embedUiBindGenerations.get(root) ?? 0) + 1;
@@ -907,6 +904,7 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
+      initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
       if (options.runVisibilityScripts !== false) {
         void runButtonVisibilityScripts(scope);
@@ -914,6 +912,7 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     }),
   });
   lazyMs = elapsedMs(lazyStartedAt);
+  initializeCarouselReaders(currentRoot);
   bindLazyImageHydration(currentRoot);
   syncTextToolbarLayout(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
@@ -951,6 +950,7 @@ function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: strin
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
@@ -982,6 +982,7 @@ function refreshReaderSection(root: ParentNode, sectionKey: string, options: { r
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
@@ -1014,6 +1015,7 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
@@ -1029,6 +1031,7 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
       afterRestore: (scope) => runWithStateRuntime(runtime, () => {
         reconcilePluginMounts(scope, { prune: false });
         syncTextToolbarLayout(scope);
+        initializeCarouselReaders(scope);
         bindLazyImageHydration(scope);
         if (options.runVisibilityScripts !== false) {
           void runButtonVisibilityScripts(scope);
@@ -1052,6 +1055,7 @@ function insertEditorTopLevelSection(sectionKey: string, location: SectionLocati
     afterInsert: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       void runButtonVisibilityScripts(element);
       observeRenderedLinks(element, currentLinkObserver);
@@ -1079,6 +1083,7 @@ function refreshEditorBlock(sectionKey: string, blockId: string, options: Editor
   return refreshEditorBlockDom({
     root: currentRoot,
     editorRenderer,
+    readerRenderer,
     sections: state.document.sections,
     sectionKey,
     block,
@@ -1086,6 +1091,7 @@ function refreshEditorBlock(sectionKey: string, blockId: string, options: Editor
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
+      initializeCarouselReaders(element);
       bindLazyImageHydration(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
@@ -1241,7 +1247,8 @@ function ensureEmbedRuntime(
   databaseSources: HvyDatabaseTableSource[],
   runtime: StateRuntime,
   root: HTMLElement,
-  getLinkObserver: () => HvyLinkObserver | null
+  getLinkObserver: () => HvyLinkObserver | null,
+  preserveRuntimeServices = false
 ): void {
   ensureRenderers();
   initCallbacks({
@@ -1312,13 +1319,15 @@ function ensureEmbedRuntime(
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer,
   });
-  setHostPlugins(plugins);
-  setHostDatabaseTableSources(databaseSources);
-  resetPluginDocumentHookState();
+  if (!preserveRuntimeServices) {
+    setHostPlugins(plugins);
+    setHostDatabaseTableSources(databaseSources);
+    resetPluginDocumentHookState();
+  }
   initColorModeSync();
 }
 
-export function mountHvy(options: HvyMountOptions): HvyMount {
+function createFullEmbedRuntime(options: HvyMountOptions): StateRuntime {
   hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
   const persistSessionState = options.persistSessionState === true;
   const sessionStorageKey = persistSessionState ? options.storageKey : null;
@@ -1378,41 +1387,60 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         ),
       })
     : null, runtime);
+  return runtime;
+}
+
+/** Internal promotion: reuse runtime services and the original dirty baseline. */
+export function promoteHvyRuntime(options: HvyMountOptions, runtime: StateRuntime, documentChangeApi: HvyDocumentChangeApi): HvyMount {
+  return attachFullEmbed(options, { runtime, documentChangeApi });
+}
+
+export function mountHvy(options: HvyMountOptions): HvyMount {
+  return attachFullEmbed(options);
+}
+
+function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRuntime; documentChangeApi: HvyDocumentChangeApi }): HvyMount {
+  const runtime = existing?.runtime ?? createFullEmbedRuntime(options);
+  const persistSessionState = options.persistSessionState === true;
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
-  setRuntimeThemeOverrides(options.themeOverrides);
+  if (!existing) setRuntimeThemeOverrides(options.themeOverrides);
   const sessionPersistence = persistSessionState ? bindSessionPersistence(runtime) : null;
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
   currentLinkObserver = linkObserver;
-  if ('paletteId' in options) {
+  if (!existing && 'paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
   }
-  if ('pdfStylePresets' in options) {
+  if (!existing && 'pdfStylePresets' in options) {
     state.pdfStylePresets = normalizePdfStylePresets(options.pdfStylePresets ?? null);
     state.pdfStylePresetId = null;
   }
-  if ('searchSnapshot' in options) {
+  if (!existing && 'searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
   setEditorClipboardHost(options.editorClipboard ?? null);
-  if ('semanticFilterProvider' in options) {
+  if (!existing && 'semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
-  if ('semanticFilterConcurrency' in options) {
+  if (!existing && 'semanticFilterConcurrency' in options) {
     setRuntimeSemanticFilterConcurrency(options.semanticFilterConcurrency ?? null);
   }
-  if ('semanticFilterMaxAttempts' in options) {
+  if (!existing && 'semanticFilterMaxAttempts' in options) {
     setRuntimeSemanticFilterMaxAttempts(options.semanticFilterMaxAttempts ?? null);
   }
-  bindRuntimeActivation(options.root, runtime);
+  if (!existing) setRuntimeSemanticFilterWindowLimits({
+    maxCandidateChars: options.semanticFilterMaxWindowCandidateChars ?? null,
+    maxCandidates: options.semanticFilterMaxWindowCandidates ?? null,
+  });
+  bindEmbedRuntimeActivation(options.root, runtime);
   // Built-in plugins are opt-in per mount: some of them execute document-supplied
   // code, so a host that asks for nothing gets nothing.
-  ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver);
-  const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
-  const webMcpRegistration = options.webMcp
+  ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver, Boolean(existing));
+  const documentChangeApi = existing?.documentChangeApi ?? createDocumentChangeApi(runtime, options.onDocumentChange);
+  const webMcpRegistration = !existing && options.webMcp
     ? registerHvyWebMcpTools(options.webMcp === true ? {} : options.webMcp, {
         getDocument: () => runtime.state.document,
         embeddingProvider: options.embeddingProvider,
@@ -1425,13 +1453,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         }),
       })
     : null;
-  runtime.callbacks.renderApp();
-  void runPluginDocumentHooks('load');
-  // Only re-render when there was actually something encrypted to reveal.
-  void decryptEncryptedComponents(state.document, options.encryption ?? null)
-    .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
+  if (!existing) {
+    runtime.callbacks.renderApp();
+    void runPluginDocumentHooks('load');
+    // Only re-render when there was actually something encrypted to reveal.
+    void decryptEncryptedComponents(state.document, options.encryption ?? null)
+      .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
+  }
+  let destroyed = false;
   return {
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       webMcpRegistration?.destroy();
       runWithStateRuntime(runtime, () => {
         releasePdfPreviewRuntime(runtime);
@@ -1536,6 +1569,27 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     importFromText(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => importFromText(importOptions));
     },
+    async setMode(mode) {
+      if (destroyed) throw new Error('HVY mount has been destroyed.');
+      if (mode !== 'viewer' && mode !== 'editor' && mode !== 'ai') {
+        throw new Error(`Unsupported HVY mode: ${mode}`);
+      }
+      runWithStateRuntime(runtime, () => {
+        state.persistDocumentState = persistSessionState && mode !== 'viewer';
+        changeDocumentView(mode, options.root);
+      });
+    },
+    setEditorMode(mode) {
+      runWithStateRuntime(runtime, () => {
+        if (state.currentView !== 'editor') {
+          throw new Error('setEditorMode requires an editor mount.');
+        }
+        if (mode !== 'basic' && mode !== 'advanced' && mode !== 'mobile-adjustment') {
+          throw new Error(`Unsupported embedded editor mode: ${mode}`);
+        }
+        changeEditorMode(mode);
+      });
+    },
     setLinkObserver(observer) {
       runWithStateRuntime(runtime, () => {
         linkObserver = observer;
@@ -1586,6 +1640,15 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     applyRecoveryState(payload) {
       runWithStateRuntime(runtime, () => {
         applyRecoveryStatePayload(state, payload);
+        runtime.callbacks.renderApp();
+      });
+    },
+    isDocumentMetaOpen() {
+      return state.currentView === 'editor' && state.showAdvancedEditor && state.metaPanelOpen;
+    },
+    closeDocumentMeta() {
+      runWithStateRuntime(runtime, () => {
+        state.metaPanelOpen = false;
         runtime.callbacks.renderApp();
       });
     },

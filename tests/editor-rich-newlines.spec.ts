@@ -39,7 +39,7 @@ test('expected result: new lines in an empty embedded text editor keep uniform p
 
 test('expected result: Done splits rich-text paragraphs and preserves configured blank-line spacing', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 typography:
@@ -138,7 +138,7 @@ test('expected result: paragraph spacing is editable as document configuration',
 
 test('expected result: Done splits only at double newlines', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -173,7 +173,7 @@ hvy_version: 0.1
 
 test('expected result: Done splits text inside a subsection', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -213,7 +213,7 @@ hvy_version: 0.1
 test('expected result: inserting text and pressing Done preserve editor scroll', async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 560 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

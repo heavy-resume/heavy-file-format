@@ -142,6 +142,28 @@
   display: flex;
   flex-direction: column;
   scrollbar-gutter: stable;
+  overflow: hidden;
+}
+
+.hvy-document .reusable-definition-modal > .modal-head,
+.hvy-document .reusable-definition-footer {
+  flex-shrink: 0;
+}
+
+.hvy-document .reusable-definition-scroll-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.hvy-document .reusable-definition-modal > .reusable-definition-footer {
+  justify-content: center;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--hvy-border);
+  background: var(--hvy-surface);
 }
 
 .hvy-document .remove-confirmation-modal-root {
@@ -487,6 +509,14 @@
 
 .hvy-document .remove-confirmation-modal .modal-head {
   justify-content: center;
+}
+
+.hvy-document .remove-confirmation-description {
+  margin: 0.7rem 0 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .hvy-document .remove-confirmation-modal .modal-head-actions {

@@ -352,7 +352,7 @@
 .hvy-document .editor-block:has(.component-picker:focus-within),
 .hvy-document .editor-block:has(.component-picker[data-open="true"]) {
   position: relative;
-  z-index: 9998;
+  z-index: 9999;
 }
 
 .hvy-document .ghost-plus-big,
@@ -503,4 +503,5 @@
   border-radius: 8px;
   padding: 0.35rem 0.4rem;
   background: var(--hvy-surface);
+  color: var(--hvy-text);
 }

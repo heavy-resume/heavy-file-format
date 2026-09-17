@@ -247,12 +247,86 @@ export async function renameDbTableColumn(
 export async function dropDbTableColumn(document: VisualDocument, tableName: string, columnName: string): Promise<void> {
   assertTableName(tableName);
   await withDatabase(document, (db) => {
-    requireWritableTable(db, tableName);
+    const objectType = getObjectType(db, tableName);
+    if (!objectType) throw new Error(`Table or view "${tableName}" does not exist.`);
     const names = readColumnSchema(db, tableName).map((column) => column.name);
     if (!names.includes(columnName)) return;
     if (names.length <= 1) throw new Error('Cannot delete the last remaining column.');
-    db.execute(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`);
+    if (objectType === 'table') {
+      db.execute(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`);
+      return;
+    }
+    rebuildViewWithoutColumn(db, tableName, names.filter((name) => name !== columnName));
   });
+}
+
+function rebuildViewWithoutColumn(db: ScriptingDbApi, viewName: string, retainedColumns: string[]): void {
+  const schemaRow = db.query("SELECT sql FROM sqlite_schema WHERE type = 'view' AND name = ? LIMIT 1", [viewName])[0];
+  const definition = String(schemaRow?.sql ?? '').trim();
+  const query = readCreateViewQuery(definition);
+  if (!query) throw new Error(`Cannot read database view definition for "${viewName}".`);
+  const triggers = db.query(
+    "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND tbl_name = ? AND sql IS NOT NULL ORDER BY name",
+    [viewName]
+  ).map((row) => String(row.sql));
+  const projection = retainedColumns.map(quoteIdentifier).join(', ');
+  db.execute([
+    'BEGIN',
+    `DROP VIEW ${quoteIdentifier(viewName)}`,
+    `CREATE VIEW ${quoteIdentifier(viewName)} AS SELECT ${projection} FROM (${query}) AS "__hvy_view_source"`,
+    ...triggers,
+    'COMMIT',
+  ].join(';\n'));
+}
+
+function readCreateViewQuery(definition: string): string {
+  let quote = '';
+  let depth = 0;
+  for (let index = 0; index < definition.length; index += 1) {
+    const char = definition[index] ?? '';
+    const next = definition[index + 1] ?? '';
+    if (quote) {
+      if (char === quote) {
+        if (next === quote) index += 1;
+        else quote = '';
+      } else if (quote === ']' && char === ']') {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '-' && next === '-') {
+      const newline = definition.indexOf('\n', index + 2);
+      index = newline < 0 ? definition.length : newline;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      const commentEnd = definition.indexOf('*/', index + 2);
+      index = commentEnd < 0 ? definition.length : commentEnd + 1;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '[') {
+      quote = ']';
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char === ')') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth !== 0 || definition.slice(index, index + 2).toUpperCase() !== 'AS') continue;
+    const before = definition[index - 1] ?? ' ';
+    const after = definition[index + 2] ?? ' ';
+    if (/\w/u.test(before) || /\w/u.test(after)) continue;
+    return definition.slice(index + 2).trim().replace(/;$/u, '').trim();
+  }
+  return '';
 }
 
 export async function deleteDbTableRow(document: VisualDocument, tableName: string, rowId: number): Promise<void> {

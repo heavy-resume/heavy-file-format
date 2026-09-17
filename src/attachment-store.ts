@@ -199,6 +199,49 @@ export function normalizeAttachmentBytes(value: Uint8Array | Blob | ArrayBuffer)
   return value.arrayBuffer().then((buffer) => new Uint8Array(buffer));
 }
 
+const pendingHostAttachmentRecalls = new WeakMap<AttachmentStore, Map<string, Promise<DocumentAttachment | null>>>();
+
+export async function materializeDocumentAttachment(
+  document: VisualDocument,
+  id: string,
+  host: HvyAttachmentHostAdapter | null | undefined,
+): Promise<DocumentAttachment | null> {
+  const store = ensureDocumentAttachmentStore(document);
+  const attachment = store.get(id);
+  if (!attachment || attachment.bytes.length > 0 || !host) {
+    return attachment;
+  }
+
+  let pendingById = pendingHostAttachmentRecalls.get(store);
+  if (!pendingById) {
+    pendingById = new Map();
+    pendingHostAttachmentRecalls.set(store, pendingById);
+  }
+  const pending = pendingById.get(id);
+  if (pending) {
+    return pending;
+  }
+
+  const recall = (async () => {
+    const recalled = await host.recall(id);
+    if (recalled === null || recalled === undefined) {
+      return store.get(id);
+    }
+    const bytes = await normalizeAttachmentBytes(recalled);
+    store.set(id, attachment.meta, bytes);
+    return store.get(id);
+  })();
+  pendingById.set(id, recall);
+  try {
+    return await recall;
+  } finally {
+    pendingById.delete(id);
+    if (pendingById.size === 0) {
+      pendingHostAttachmentRecalls.delete(store);
+    }
+  }
+}
+
 export function hydrateHostAttachmentDescriptorsSync(
   document: VisualDocument,
   host: HvyAttachmentHostAdapter | null | undefined

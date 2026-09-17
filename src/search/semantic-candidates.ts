@@ -19,7 +19,7 @@ import type { VisualDocument } from '../types';
 
 const DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS = 800;
 const DEFAULT_MAX_TOTAL_CANDIDATE_CHARS = 80_000;
-const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 10_000;
+export const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 10_000;
 const UNLIMITED_CANDIDATE_SUMMARY_CHARS = Number.MAX_SAFE_INTEGER;
 const SEMANTIC_FILTER_CHUNK_OVERLAP_CHARS = 400;
 const RETRIEVAL_CHUNK_OVERLAP_CHARS = 200;
@@ -40,8 +40,9 @@ export interface HvySemanticFilterCandidateWindow {
   candidateBudget: HvySemanticFilterCandidateBudget;
 }
 
-interface BuildSemanticFilterWindowsOptions extends BuildSemanticFilterRequestOptions {
+export interface BuildSemanticFilterWindowsOptions extends BuildSemanticFilterRequestOptions {
   maxWindowCandidateChars?: number;
+  maxWindowCandidates?: number;
 }
 
 export function buildSemanticFilterRequest(options: BuildSemanticFilterRequestOptions): HvySemanticFilterRequest {
@@ -70,7 +71,11 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
 } {
   const maxCandidateSummaryChars = UNLIMITED_CANDIDATE_SUMMARY_CHARS;
   const maxTotalCandidateChars = options.maxTotalCandidateChars ?? DEFAULT_MAX_TOTAL_CANDIDATE_CHARS;
-  const maxWindowCandidateChars = options.maxWindowCandidateChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS;
+  const maxWindowCandidateChars = normalizeSemanticWindowLimit(
+    options.maxWindowCandidateChars,
+    DEFAULT_MAX_WINDOW_CANDIDATE_CHARS,
+  );
+  const maxWindowCandidates = normalizeSemanticWindowLimit(options.maxWindowCandidates, Number.MAX_SAFE_INTEGER);
   const candidates = buildSemanticFilterCandidates(options.document, { maxCandidateSummaryChars })
     .sort((left, right) => left.documentOrder - right.documentOrder);
   const candidateIdsWithDescendants = getCandidateIdsWithDescendants(candidates);
@@ -82,6 +87,7 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
   const windows = packSemanticCandidateWindows(windowCandidates, {
     maxCandidateSummaryChars,
     maxWindowCandidateChars,
+    maxWindowCandidates,
     overallCandidateBudget: candidateBudget,
   });
   return { candidates, candidateBudget, windows };
@@ -187,6 +193,7 @@ export function buildSemanticFilterCandidates(
   const targetRefs = buildSemanticTargetRefs(document);
   const sectionPaths = reverseVirtualDirectoryLookup(buildVirtualDirectorySectionLookup(document));
   const blockPaths = reverseVirtualDirectoryLookup(buildVirtualDirectoryBlockLookup(document));
+  const componentTargetRefCounts = countSemanticBlockTargetRefs(document, blockPaths, targetRefs.componentRefsByPath);
   let documentOrder = 0;
 
   const visitSection = (section: VisualSection, ancestors: string[]): void => {
@@ -237,7 +244,10 @@ export function buildSemanticFilterCandidates(
     const label = getBlockLabel(block) || nearestLocationLabel;
     const locationLabel = (block.schema.description ?? '').trim() || nearestLocationLabel;
     const targetPath = blockPaths.get(block);
-    const targetRef = (targetPath ? targetRefs.componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
+    const targetRef = getSemanticBlockTargetRef(block, targetPath, targetRefs.componentRefsByPath);
+    const candidateRef = targetPath && (componentTargetRefCounts.get(targetRef) ?? 0) > 1
+      ? targetPath
+      : targetRef;
     const summaryResult = truncateSummary(
       buildBlockSummary(document, block, baseComponent),
       maxCandidateSummaryChars,
@@ -245,7 +255,7 @@ export function buildSemanticFilterCandidates(
     );
     const contextLabel = contextTrail.filter((part) => part && part !== label).slice(-3).join(' / ');
     blockCandidates.push({
-      candidateId: `component:${targetRef}`,
+      candidateId: `component:${candidateRef}`,
       targetKind: 'block',
       parentCandidateId,
       sectionKey: section.key,
@@ -265,7 +275,7 @@ export function buildSemanticFilterCandidates(
     });
     const childTrail = appendContext(contextTrail, getBlockContextLabel(block));
     const childLocation = locationLabel || nearestLocationLabel;
-    const childParentCandidateId = `component:${targetRef}`;
+    const childParentCandidateId = `component:${candidateRef}`;
     for (const child of block.schema.containerBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation, childParentCandidateId);
     for (const child of block.schema.componentListBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation, childParentCandidateId);
     for (const child of block.schema.expandableStubBlocks?.children ?? []) {
@@ -285,6 +295,38 @@ export function buildSemanticFilterCandidates(
 
 function reverseVirtualDirectoryLookup<T extends object>(lookup: Map<string, T>): Map<T, string> {
   return new Map([...lookup].map(([path, value]) => [value, path]));
+}
+
+function countSemanticBlockTargetRefs(
+  document: VisualDocument,
+  blockPaths: Map<VisualBlock, string>,
+  componentRefsByPath: Map<string, string>
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  const visitBlock = (block: VisualBlock): void => {
+    const targetRef = getSemanticBlockTargetRef(block, blockPaths.get(block), componentRefsByPath);
+    counts.set(targetRef, (counts.get(targetRef) ?? 0) + 1);
+    for (const child of block.schema.containerBlocks ?? []) visitBlock(child);
+    for (const child of block.schema.componentListBlocks ?? []) visitBlock(child);
+    for (const child of block.schema.expandableStubBlocks?.children ?? []) visitBlock(child);
+    for (const child of block.schema.expandableContentBlocks?.children ?? []) visitBlock(child);
+    for (const item of block.schema.gridItems ?? []) visitBlock(item.block);
+  };
+  const visitSection = (section: VisualSection): void => {
+    if (section.isGhost) return;
+    for (const block of section.blocks) visitBlock(block);
+    for (const child of section.children) visitSection(child);
+  };
+  for (const section of document.sections) visitSection(section);
+  return counts;
+}
+
+function getSemanticBlockTargetRef(
+  block: VisualBlock,
+  targetPath: string | undefined,
+  componentRefsByPath: Map<string, string>
+): string {
+  return (targetPath ? componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
 }
 
 function buildSemanticTargetRefs(document: VisualDocument): { componentRefsByPath: Map<string, string> } {
@@ -444,6 +486,7 @@ function packSemanticCandidateWindows(
   options: {
     maxCandidateSummaryChars: number;
     maxWindowCandidateChars: number;
+    maxWindowCandidates: number;
     overallCandidateBudget: HvySemanticFilterCandidateBudget;
   }
 ): HvySemanticFilterCandidateWindow[] {
@@ -468,7 +511,8 @@ function packSemanticCandidateWindows(
     const candidateChars = getSemanticCandidatePromptChars(candidate);
     const startsSectionWindow = candidate.targetKind === 'section' && current.length > 0;
     const exceedsWindow = current.length > 0 && currentChars + candidateChars > options.maxWindowCandidateChars;
-    if (startsSectionWindow || exceedsWindow) {
+    const exceedsCandidateCount = current.length >= options.maxWindowCandidates;
+    if (startsSectionWindow || exceedsWindow || exceedsCandidateCount) {
       flush();
     }
     current.push(candidate);
@@ -496,6 +540,12 @@ function packSemanticCandidateWindows(
       truncated: options.overallCandidateBudget.truncated,
     },
   }));
+}
+
+export function normalizeSemanticWindowLimit(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : fallback;
 }
 
 function getCandidateIdsWithDescendants(candidates: HvySemanticFilterCandidate[]): Set<string> {

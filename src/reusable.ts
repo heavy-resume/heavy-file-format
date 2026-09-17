@@ -60,11 +60,6 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
       advanced: state.showAdvancedEditor,
     });
   };
-  if (!state.showAdvancedEditor) {
-    skipped = 'basic-editor';
-    log();
-    return;
-  }
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   if (!reusableName) {
     skipped = 'document-instance';
@@ -99,7 +94,11 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
   state.document.meta.component_defs = defs;
   cloneMs = performance.now() - stepStartedAt;
   stepStartedAt = performance.now();
-  applyReusableTemplateToDocument(def.name, def.template, null);
+  if (state.reusableDefinitionEditModal) {
+    state.reusableDefinitionEditModal.pendingDocumentSync = true;
+  } else {
+    applyReusableTemplateToDocument(def.name, def.template, null);
+  }
   applyMs = performance.now() - stepStartedAt;
   log();
 }

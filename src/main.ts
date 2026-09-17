@@ -1401,6 +1401,7 @@ function refreshEditorBlock(sectionKey: string, blockId: string, options: Editor
   return refreshEditorBlockDom({
     root: app,
     editorRenderer,
+    readerRenderer,
     sections: state.document.sections,
     sectionKey,
     block,

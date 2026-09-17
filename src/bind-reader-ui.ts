@@ -1,10 +1,5 @@
+import { bindSharedControlEvents } from './bind/shared-control-events';
 import { findBlockByIds } from './block-ops';
-import { bindChangeControls } from './bind/handlers/change-controls';
-import { bindInputBlock } from './bind/handlers/input-block';
-import { bindInputMisc } from './bind/handlers/input-misc';
-import { bindKeydown } from './bind/handlers/keydown';
-import { bindScrollHandler } from './bind/handlers/scroll';
-import { bindSubmit } from './bind/handlers/submit';
 import {
   encodeComponentListRuntimeView,
   getComponentListDisplayState,
@@ -15,6 +10,7 @@ import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
 import { applyPersistedAnswerSelection } from './persisted-answer-selection';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
+import { isPressSelectingText, trackPressToggleIntent } from './reader/press-toggle-intent';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
@@ -32,12 +28,7 @@ function bindReaderAppControls(app: HTMLElement): void {
     return;
   }
   readerAppControlsBound.add(app);
-  bindInputBlock(app);
-  bindInputMisc(app);
-  bindChangeControls(app);
-  bindSubmit(app);
-  bindKeydown(app);
-  bindScrollHandler(app);
+  bindSharedControlEvents(app);
 
   app.addEventListener('click', (event) => {
     if (!app.querySelector('#readerDocument')) {
@@ -294,6 +285,9 @@ export function bindReaderUi(app: HTMLElement): void {
         return;
       }
       event.stopPropagation();
+      if (isPressSelectingText(event, expandable)) {
+        return;
+      }
       const sectionKey = expandable.dataset.sectionKey;
       const blockId = expandable.dataset.blockId;
       if (!sectionKey || !blockId) {
@@ -430,6 +424,7 @@ export function bindReaderUi(app: HTMLElement): void {
     }
   };
 
+  trackPressToggleIntent(app);
   readerDocuments.forEach((readerDocument) => {
     readerDocument.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
     readerDocument.addEventListener('click', handleReaderAreaClick);

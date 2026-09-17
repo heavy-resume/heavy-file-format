@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX } from '../../state';
+import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
 import { findBlockContainerById, findBlockContainerInList, findSectionByKey, insertBlockAtSectionInsertionBoundary, removeBlockFromSectionRenderSequence } from '../../section-ops';
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
@@ -20,7 +20,7 @@ import {
   prepareBlockForDocumentPasteWithResult,
 } from '../../editor-clipboard';
 import { showTransientNotice } from '../../transient-notice';
-import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
+import { getComponentDefsFromMeta, isReusableDefinitionSectionKey, resolveBaseComponent } from '../../component-defs';
 import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { normalizeTextCaption, updateTextCaptionAlign } from '../../caption';
@@ -715,14 +715,7 @@ function shouldConfirmReusableDefinitionPhvyPaste(sectionKey: string, actionButt
   ) {
     return false;
   }
-  if (sectionKey.startsWith(REUSABLE_SECTION_PREFIX) || sectionKey.startsWith(REUSABLE_SECTION_DEF_PREFIX)) {
-    return true;
-  }
-  if (state.reusableDefinitionEditModal.kind !== 'section') {
-    return false;
-  }
-  const definition = getSectionDefsFromMeta(state.document.meta)[state.reusableDefinitionEditModal.index];
-  return Boolean(definition?.template?.key && definition.template.key === sectionKey);
+  return isReusableDefinitionSectionKey(sectionKey);
 }
 
 export const blockActions: Record<string, ActionHandler> = {

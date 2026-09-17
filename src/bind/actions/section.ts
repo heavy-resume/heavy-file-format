@@ -4,7 +4,7 @@ import { clearOpenEditorSection, setActiveEditorBlock, setAiEditorHostBlock } fr
 import { createEmptySectionWithMeta, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
-import { getSectionDefs, getSectionTemplateKey } from '../../component-defs';
+import { getAvailableSectionDefs, getSectionTemplateKey } from '../../component-defs';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import {
   cloneSectionFromEditorClipboard,
@@ -44,6 +44,9 @@ export function insertTopLevelSection(
   beforeSectionKey?: string
 ): void {
   if (isPdfDocument(state.document) && location === 'sidebar') {
+    return;
+  }
+  if (starter !== 'blank' && !getSelectedSectionDefinition(starter)) {
     return;
   }
   recordHistory();
@@ -96,7 +99,7 @@ function openSectionFlavorChooserIfNeeded(starter: string, location: SectionLoca
 
 function getSelectedSectionDefinition(starter: string) {
   const normalizedName = starter.startsWith(REUSABLE_SECTION_DEF_PREFIX) ? starter.slice(REUSABLE_SECTION_DEF_PREFIX.length) : starter;
-  return getSectionDefs().find((item) => item.name === normalizedName || getSectionTemplateKey(item) === normalizedName) ?? null;
+  return getAvailableSectionDefs().find((item) => item.name === normalizedName || getSectionTemplateKey(item) === normalizedName) ?? null;
 }
 
 function getSelectableSectionFlavors(definition: ReturnType<typeof getSelectedSectionDefinition>) {

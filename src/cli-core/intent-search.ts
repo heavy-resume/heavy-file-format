@@ -1,3 +1,4 @@
+import { templatePathSegment } from './template-directories';
 import { Index } from 'flexsearch';
 
 import { resolveBaseComponentFromMeta } from '../component-defs';
@@ -101,7 +102,7 @@ function buildSemanticRecords(document: VisualDocument, fs: HvyVirtualFileSystem
       }));
       continue;
     }
-    if (path.endsWith('/section.json')) {
+    if (path.startsWith('/body/') && path.endsWith('/section.json')) {
       const config = readJson(fs, path);
       const sectionPath = path.replace(/\/section\.json$/, '');
       const id = stringField(config.id) || sectionPath.split('/').pop() || sectionPath;
@@ -177,7 +178,7 @@ function buildSectionTemplateRecords(document: VisualDocument): SemanticRecord[]
     const variables = extractReusableTemplateVariablesFromSectionDefinition(definition).map((variable) => variable.name);
     return makeRecord({
       key: `section-template:${key}`,
-      path: `/section_defs/${key}`,
+      path: `/templates/sections/${templatePathSegment(key)}/template`,
       id: key,
       kind: 'section-template',
       type: 'section-template',

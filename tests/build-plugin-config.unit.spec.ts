@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { build, type Rollup } from 'vite';
 
 import { createBrythonMinimalVfsPlugin } from '../src/plugins/scripting/brython-minimal-vfs-plugin';
-import { createHvyBuiltInPluginsModuleSource, createLazyHvyBuiltInPluginsModuleSource, HVY_BUILT_IN_PLUGIN_IDS, resolveBuiltInPluginIds } from '../vite.config';
+import { createHvyBuiltInPluginsModuleSource, createLazyHvyBuiltInPluginsModuleSource, HVY_BUILT_IN_PLUGIN_IDS, resolveBuiltInPluginIds } from '../vite-built-in-plugins';
 
 test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
   expect(resolveBuiltInPluginIds(undefined)).toEqual([...HVY_BUILT_IN_PLUGIN_IDS]);

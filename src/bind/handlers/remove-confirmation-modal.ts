@@ -1,6 +1,17 @@
 let pendingConfirmDeletion: (() => void) | null = null;
 
-export function openRemoveConfirmationModal(onConfirm: () => void, root: HTMLElement = document.body): void {
+export interface RemoveConfirmationOptions {
+  title?: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+}
+
+export function openRemoveConfirmationModal(
+  onConfirm: () => void,
+  root: HTMLElement = document.body,
+  options: RemoveConfirmationOptions = {}
+): void {
   closeRemoveConfirmationModal(false);
   pendingConfirmDeletion = onConfirm;
   const modal = document.createElement('div');
@@ -11,12 +22,24 @@ export function openRemoveConfirmationModal(onConfirm: () => void, root: HTMLEle
       <div class="modal-head">
         <h3 id="removeConfirmationTitle">Confirm deletion?</h3>
       </div>
+      <p class="remove-confirmation-description" data-remove-confirmation-description hidden></p>
       <div class="modal-head-actions">
         <button type="button" class="ghost" data-remove-modal-action="cancel">Cancel</button>
         <button type="button" class="danger" data-remove-modal-action="confirm">Delete</button>
       </div>
     </section>
   `;
+  const title = modal.querySelector<HTMLElement>('#removeConfirmationTitle');
+  if (title && options.title?.trim()) title.textContent = options.title.trim();
+  const cancel = modal.querySelector<HTMLButtonElement>('button[data-remove-modal-action="cancel"]');
+  if (cancel && options.cancelLabel?.trim()) cancel.textContent = options.cancelLabel.trim();
+  const description = modal.querySelector<HTMLElement>('[data-remove-confirmation-description]');
+  if (description && options.description?.trim()) {
+    description.textContent = options.description.trim();
+    description.hidden = false;
+  }
+  const confirm = modal.querySelector<HTMLButtonElement>('[data-remove-modal-action="confirm"]');
+  if (confirm && options.confirmLabel?.trim()) confirm.textContent = options.confirmLabel.trim();
   modal.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const removeModalAction = target.closest<HTMLElement>('[data-remove-modal-action]');
@@ -33,9 +56,15 @@ export function openRemoveConfirmationModal(onConfirm: () => void, root: HTMLEle
     }
     closeRemoveConfirmationModal();
   });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeRemoveConfirmationModal();
+  });
   const mount = root.querySelector<HTMLElement>('.hvy-embed-layout') ?? root;
   mount.appendChild(modal);
-  modal.querySelector<HTMLButtonElement>('[data-remove-modal-action="cancel"]')?.focus();
+  cancel?.focus();
 }
 
 export function closeRemoveConfirmationModal(clearPending = true): void {

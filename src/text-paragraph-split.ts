@@ -24,36 +24,39 @@ export function splitTextParagraphsOnCommit(
   const topLevel = Array.from(editable.childNodes).filter(
     (node) => node.nodeType !== Node.TEXT_NODE || (node.textContent ?? '').trim().length > 0
   );
-  if (topLevel.length < 2 || topLevel.some((node) => !(node instanceof HTMLParagraphElement))) {
-    return null;
-  }
-  if (topLevel.some((node) => (node as HTMLParagraphElement).querySelector('.hvy-inline-checkbox'))) {
-    return null;
-  }
+  if (topLevel.length < 2) return null;
+  // Answer controls carry component-local indexes and implicit radio groups.
+  // Preserve their existing commit behavior until splitting can remap that state.
+  if (editable.querySelector('.hvy-inline-checkbox, [data-hvy-radio-group]')) return null;
 
-  const paragraphEntries = topLevel.map((node) => ({
-    node: node as HTMLParagraphElement,
-    markdown: serializeParagraph(node as HTMLParagraphElement),
-  }));
-  const paragraphGroups: Array<{ markdown: string; gapBefore: number }> = [];
+  // Turndown currently flattens tables; a structural commit must not do so.
+  if (editable.querySelector('table')) return null;
+
+  const nodeGroups: Array<{ nodes: Node[]; gapBefore: number }> = [];
   let pendingEmptyParagraphs = 0;
-  for (const entry of paragraphEntries) {
-    if (isEmptyParagraph(entry.node) || entry.markdown.trim().length === 0) {
-      if (paragraphGroups.length > 0) pendingEmptyParagraphs += 1;
+  for (const node of topLevel) {
+    if (node instanceof HTMLParagraphElement && isEmptyParagraph(node)) {
+      if (nodeGroups.length > 0) pendingEmptyParagraphs += 1;
       continue;
     }
-    if (paragraphGroups.length === 0 || pendingEmptyParagraphs > 0) {
-      paragraphGroups.push({
-        markdown: entry.markdown,
-        gapBefore: paragraphGroups.length === 0 ? 0 : pendingEmptyParagraphs + 1,
+    if (nodeGroups.length === 0 || pendingEmptyParagraphs > 0) {
+      nodeGroups.push({
+        nodes: [node],
+        gapBefore: nodeGroups.length === 0 ? 0 : pendingEmptyParagraphs + 1,
       });
     } else {
-      const current = paragraphGroups.at(-1)!;
-      current.markdown = `${current.markdown}\n\n${entry.markdown}`;
+      nodeGroups.at(-1)!.nodes.push(node);
     }
     pendingEmptyParagraphs = 0;
   }
-  if (paragraphGroups.length < 2) return null;
+  if (nodeGroups.length < 2) return null;
+  // Serialize each intact run together so nested Markdown structures and inline
+  // relationships survive. Only empty top-level paragraphs are split boundaries.
+  const paragraphGroups = nodeGroups.map(group => ({
+    markdown: serializeParagraphRun(editable.ownerDocument, group.nodes),
+    gapBefore: group.gapBefore,
+  }));
+  if (paragraphGroups.some(group => group.markdown.trim().length === 0)) return null;
 
   const splitBlocks = paragraphGroups.map((group, index) => {
     if (index === 0) {
@@ -80,9 +83,9 @@ export function splitTextParagraphsOnCommit(
   return splitBlocks;
 }
 
-function serializeParagraph(paragraph: HTMLParagraphElement): string {
-  const shell = paragraph.ownerDocument.createElement('div');
-  shell.appendChild(paragraph.cloneNode(true));
+function serializeParagraphRun(ownerDocument: Document, nodes: Node[]): string {
+  const shell = ownerDocument.createElement('div');
+  nodes.forEach(node => shell.appendChild(node.cloneNode(true)));
   return normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(
     turndown.turndown(getRichEditorSerializableHtml(shell))
   ));

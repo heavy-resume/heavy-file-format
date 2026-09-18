@@ -191,6 +191,7 @@ hvy_version: 0.1
 
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
   const editor = activeBlock.locator('.rich-editor[data-field="block-rich"]');
+  await editor.click();
   await editor.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await editor.press('Backspace');
   await editor.type('First paragraph');
@@ -248,3 +249,52 @@ ${Array.from({ length: 24 }, (_item, index) => `<!--hvy:text {"id":"spacer-${ind
   await expect(section.locator('.editor-block-passive', { hasText: 'Second paragraph' })).toBeVisible();
   await expect.poll(() => editorTree.evaluate((node) => node.scrollTop)).toBeGreaterThanOrEqual(beforeDone - 2);
 });
+
+for (const content of [
+  { name: 'heading', markdown: '# Fake heading\n\nBefore gap.' },
+  { name: 'list', markdown: '- Fake first item\n- Fake second item\n\nBefore gap.' },
+  { name: 'quote', markdown: '> Fake first paragraph.\n>\n> Fake second paragraph.\n\nBefore gap.' },
+  { name: 'code', markdown: '```text\nFake first line\n\nFake second line\n```\n\nBefore gap.' },
+  { name: 'checkbox controls', preserveComponent: true, markdown: '[ ] Fake choice\n\nBefore gap.' },
+  { name: 'radio controls', preserveComponent: true, markdown: '( ) Fake first choice\n( ) Fake second choice\n\nBefore gap.' },
+  { name: 'nested empty paragraphs', preserveComponent: true, noGap: true, markdown: '> Fake first paragraph.\n>\n> Fake second paragraph.\n\nBefore gap.' },
+  { name: 'table', preserveComponent: true, markdown: '| Fake column |\n| --- |\n| Fake value |\n\nBefore gap.' },
+]) {
+  test(`expected result: ${content.preserveComponent ? 'Done preserves a component containing' : 'Done splits around a blank paragraph while preserving a'} ${content.name}`, async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Raw', exact: true }).click();
+    await page.locator('#rawEditor').fill(`---\nhvy_version: 0.1\n---\n\n<!--hvy: {"id":"fake-section"}-->\n#! Fake section\n\n<!--hvy:text {"id":"fake-text"}-->\n${content.markdown.split('\n').map(line => ` ${line}`).join('\n')}\n\n After gap.\n`);
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
+    await page.getByRole('button', { name: 'Basic', exact: true }).click();
+    await page.locator('.editor-block-passive', { hasText: 'Before gap.' }).click();
+    const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+    const editor = activeBlock.locator('.rich-editor[data-field="block-rich"]');
+    await editor.click();
+    await editor.evaluate(node => {
+      const range = document.createRange();
+      range.selectNodeContents([...node.querySelectorAll('p')].find(p => p.textContent === 'Before gap.')!);
+      range.collapse(false);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      (node as HTMLElement).focus();
+    });
+    if (!content.noGap) {
+      await editor.press('Enter');
+      await editor.press('Enter');
+    }
+    const expectedContent = await editor.evaluate(async (node, preserveComponent) => {
+      const { getRichEditorSerializableHtml, turndown, normalizeMarkdownLists, normalizeEditorMarkdownWhitespace } = await import('/src/markdown.ts');
+      const shell = node.cloneNode(true) as HTMLElement;
+      if (!preserveComponent) shell.lastElementChild!.remove();
+      return normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(shell))));
+    }, Boolean(content.preserveComponent));
+    await activeBlock.getByRole('button', { name: 'Done', exact: true }).click();
+    const expectedResult = await page.evaluate(async () => {
+      const { state } = await import('/src/state.ts');
+      return state.document.sections[0]!.blocks.map(block => block.text);
+    });
+    expect(expectedResult).toEqual(content.noGap
+      ? [`${content.markdown}\n\nAfter gap.`]
+      : content.preserveComponent ? [expectedContent] : [expectedContent, 'After gap.']);
+  });
+}

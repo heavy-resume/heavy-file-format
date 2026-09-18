@@ -383,6 +383,40 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   expect(expectedResult.serialized).toContain('Edited from viewer.');
 });
 
+test('wrapped plugin placeholder grows the empty editor at narrow widths', async ({ page }) => {
+  await page.goto('/examples/lightweight-viewer-text-editor.html');
+
+  const editor = page.locator('#lightweightViewerOnlyMount [data-field="hvy-plugin-text-editor"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '';
+    node.dataset.placeholder = 'Enter contact info here. When you share your resume, visitors will need to request contact info access separately.';
+    node.style.width = '10rem';
+    node.style.minHeight = '0';
+    node.style.fontSize = '1.5rem';
+  });
+
+  const emptyExpectedResult = await editor.evaluate((node) => ({
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  expect(emptyExpectedResult.clientHeight).toBeGreaterThan(150);
+  expect(emptyExpectedResult.scrollHeight).toBe(emptyExpectedResult.clientHeight);
+
+  await editor.click();
+  await page.keyboard.type('First line');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Second line wraps across the narrow editor width.');
+
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText('First line');
+  await expect(editor).toContainText('Second line wraps across the narrow editor width.');
+  const contentExpectedResult = await editor.evaluate((node) => ({
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  expect(contentExpectedResult.scrollHeight).toBe(contentExpectedResult.clientHeight);
+});
+
 test('plugins can mount the shared text editor helper', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();

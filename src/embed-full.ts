@@ -1,3 +1,4 @@
+import { runImportOperation } from './import-errors';
 import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
 import { changeDocumentView } from './document-view';
 import type { HvyDocumentChangeApi } from './document-change';
@@ -1182,7 +1183,11 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
   });
 }
 
-async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+  return runImportOperation(() => importFromTextInternal({ ...options, onError: undefined }), options.onError);
+}
+
+async function importFromTextInternal(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
   const refreshAfterImportMutation = async (): Promise<void> => {
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;

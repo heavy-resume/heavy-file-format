@@ -1,3 +1,4 @@
+import { createChatRequestError } from './request-error';
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
 import type { ChatAttachmentReference, ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
@@ -768,7 +769,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     payload,
   }));
   if (!response.ok) {
-    throw new Error(extractProxyError(payload, 'Chat request failed.'));
+    throw createChatRequestError(response, payload, 'Chat request failed.');
   }
 
   if (typeof (payload as ProxyChatResponse | null)?.output !== 'string' || (payload as ProxyChatResponse).output.trim().length === 0) {
@@ -859,7 +860,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     payload,
   }));
   if (!response.ok) {
-    throw new Error(extractProxyError(payload, 'Chat tool request failed.'));
+    throw createChatRequestError(response, payload, 'Chat tool request failed.');
   }
 
   const typed = payload as ProxyChatResponse | null;
@@ -1148,17 +1149,6 @@ async function readJsonResponse(response: Response): Promise<unknown> {
   } catch {
     return null;
   }
-}
-
-function extractProxyError(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== 'object') {
-    return fallback;
-  }
-  const record = payload as { error?: unknown };
-  if (typeof record.error === 'string' && record.error.trim().length > 0) {
-    return record.error;
-  }
-  return fallback;
 }
 
 function firstNonEmptyString(...values: Array<string | undefined>): string {

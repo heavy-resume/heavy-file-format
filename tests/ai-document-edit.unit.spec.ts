@@ -882,6 +882,7 @@ hvy_version: 0.1
   expect(result).toEqual({
     status: 'error',
     message: 'The import planner did not return a usable plan.',
+    error: { message: 'The import planner did not return a usable plan.' },
   });
 });
 
@@ -2017,6 +2018,7 @@ hvy_version: 0.1
   expect(result).toEqual({
     status: 'error',
     message: 't is not iterable',
+    error: { message: 't is not iterable' },
   });
   expect(consoleError).toHaveBeenCalledWith('[hvy:import] import failed', expect.objectContaining({
     operation: 'execute',
@@ -3856,6 +3858,7 @@ test('importTextIntoDocument returns error for empty approved steps without call
   expect(result).toEqual({
     status: 'error',
     message: 'Import requires at least one approved plan step.',
+    error: { message: 'Import requires at least one approved plan step.' },
   });
   expect(requestProxyCompletionMock).not.toHaveBeenCalled();
 });

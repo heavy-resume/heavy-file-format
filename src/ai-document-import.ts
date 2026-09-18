@@ -1,3 +1,5 @@
+import { normalizeImportError, runImportOperation, type HvyImportError } from './import-errors';
+export type { HvyImportError } from './import-errors';
 import { requestProxyCompletion, type HostChatClient, type ProxyCompletionParams } from './chat/chat';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
 import type { BlockSchema, GridItem, VisualBlock, VisualSection } from './editor/types';
@@ -118,11 +120,14 @@ export interface BuildImportPlanOptions {
   onTokenUsage?: (event: HvyImportTokenUsageEvent) => void;
   beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
+  /** Called once for a terminal failure; cancellations do not invoke this callback. */
+  onError?: (error: HvyImportError) => void;
   signal?: AbortSignal;
 }
 
 export interface BuildImportPlanResult {
   status: 'ready' | 'aborted' | 'error';
+  error?: HvyImportError;
   steps?: ImportPlanStep[];
   message?: string;
   trace?: HvyImportTraceRun;
@@ -288,11 +293,14 @@ export interface ImportFromTextOptions {
   onTokenUsage?: (event: HvyImportTokenUsageEvent) => void;
   beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
+  /** Called once for a terminal failure; cancellations do not invoke this callback. */
+  onError?: (error: HvyImportError) => void;
   signal?: AbortSignal;
 }
 
 export interface ImportFromTextResult {
   status: 'complete' | 'aborted' | 'error';
+  error?: HvyImportError;
   message?: string;
   trace?: HvyImportTraceRun;
 }
@@ -307,7 +315,21 @@ function resolveImportSourceOptions<T extends { sourceText: string; sourceDocume
   };
 }
 
-export async function buildImportPlanForDocument(
+export function buildImportPlanForDocument(
+  document: VisualDocument,
+  options: BuildImportPlanOptions,
+): Promise<BuildImportPlanResult> {
+  return runImportOperation(() => buildImportPlanForDocumentInternal(document, options), options.onError);
+}
+
+export function importTextIntoDocument(
+  document: VisualDocument,
+  options: Parameters<typeof importTextIntoDocumentInternal>[1],
+): Promise<ImportFromTextResult> {
+  return runImportOperation(() => importTextIntoDocumentInternal(document, options), options.onError);
+}
+
+async function buildImportPlanForDocumentInternal(
   document: VisualDocument,
   options: BuildImportPlanOptions
 ): Promise<BuildImportPlanResult> {
@@ -382,11 +404,12 @@ export async function buildImportPlanForDocument(
       return withImportTrace({ status: 'aborted', message: 'Import planning was aborted.' }, options, traceRecorder);
     }
     logImportFailure('plan', error, options, traceRecorder);
-    return withImportTrace({ status: 'error', message: error instanceof Error ? error.message : 'Import planning failed.' }, options, traceRecorder);
+    const details = normalizeImportError(error, 'Import planning failed.');
+    return withImportTrace({ status: 'error', message: details.message, error: details }, options, traceRecorder);
   }
 }
 
-export async function importTextIntoDocument(
+async function importTextIntoDocumentInternal(
   document: VisualDocument,
   options: ImportFromTextOptions & {
     onMutation?: (group?: string) => void;
@@ -630,7 +653,8 @@ export async function importTextIntoDocument(
       return withImportTrace({ status: 'aborted', message: 'Import was aborted.' }, options, traceRecorder);
     }
     logImportFailure('execute', error, options, traceRecorder, steps);
-    return withImportTrace({ status: 'error', message: error instanceof Error ? error.message : 'Import failed.' }, options, traceRecorder);
+    const details = normalizeImportError(error, 'Import failed.');
+    return withImportTrace({ status: 'error', message: details.message, error: details }, options, traceRecorder);
   }
 }
 

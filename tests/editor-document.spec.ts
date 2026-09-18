@@ -4383,6 +4383,7 @@ hvy_version: 0.1
     ];
     const calls: unknown[] = [];
     const progress: string[] = [];
+    const errors: unknown[] = [];
     const mount = mountHvy({
       root,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
@@ -4405,12 +4406,14 @@ hvy_version: 0.1
           },
         },
       },
+      onError(error) { errors.push(error); },
       onProgress(event) {
         progress.push(event.phase);
       },
     });
     return {
       result: importResult,
+      errors,
       calls: calls.length,
       progress,
       html: root.textContent,
@@ -4420,6 +4423,7 @@ hvy_version: 0.1
   expect(result.calls).toBe(2);
   expect(result.progress).toContain('linting');
   expect(result.result.status).toBe('error');
+  expect(result.errors).toEqual([result.result.error]);
   expect(result.result.message).toContain('expandable block is missing');
   expect(result.html).toContain('Existing content');
   expect(result.html).toContain('Imported despite diagnostic');

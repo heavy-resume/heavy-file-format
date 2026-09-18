@@ -1,3 +1,4 @@
+import { runImportOperation } from './import-errors';
 import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
 import './default-theme.css';
 import {
@@ -1142,7 +1143,11 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
   });
 }
 
-async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+  return runImportOperation(() => importFromTextInternal({ ...options, onError: undefined }), options.onError);
+}
+
+async function importFromTextInternal(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
   const { deserializeDocumentWithDiagnostics } = await import('./serialization');
   const { importTextIntoDocument } = await import('./ai-document-edit');
   const refreshAfterImportMutation = (): void => {
@@ -1557,6 +1562,7 @@ export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter'
 export type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
+  HvyImportError,
   HvyImportLlmStepEvent,
   HvyImportLlmOptions,
   HvyImportProgressEvent,

@@ -1214,6 +1214,21 @@ if (plan.status === 'ready') {
 }
 ```
 
+Both import methods return `status: 'error'` with `message` and a serializable
+`error` object for terminal failures. They also accept `onError(error)`, called
+once before the promise resolves, including validation and finalization failures.
+The error contains `message` and, when supplied, `status` (HTTP status), `code`,
+`quota` (host-defined string), and `retryAfter` (Retry-After header value).
+Host chat clients should reject with an Error carrying those fields to preserve
+them through import. The built-in HTTP transport preserves them automatically.
+Cancellation returns `status: 'aborted'` without invoking `onError`.
+
+Use `onError` to update UI immediately; callbacks should not throw and their
+returned promises are not awaited. Hosts should still catch rejected promises
+for lifecycle/loading failures or exceptions in their own callbacks. `onProgress`
+reports work phases, not terminal errors. Imports may have applied earlier
+sections before failing; errors do not roll those changes back.
+
 Set `newSectionsOnly: true` on both calls when import should append blank
 sections or instantiate reusable section templates without replacing existing
 body sections. Individual body sections can also set `protect_from_import: true`

@@ -32,11 +32,7 @@ export function renderAiEditPopover(state: AppState, deps: AiModeUiDeps): string
     ? `<div class="ai-edit-settings">
          <label class="chat-setting">
            <span>Provider</span>
-           <select data-field="ai-provider" aria-label="AI edit provider">
-             <option value="openai"${state.chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-             <option value="anthropic"${state.chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-             <option value="qwen"${state.chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
-           </select>
+           <input type="text" data-field="ai-provider" aria-label="AI edit provider" value="${deps.escapeAttr(state.chat.settings.provider)}" autocapitalize="off" autocomplete="off" spellcheck="false" />
          </label>
 
          <label class="chat-setting">
@@ -55,10 +51,7 @@ export function renderAiEditPopover(state: AppState, deps: AiModeUiDeps): string
 
          <label class="chat-setting">
            <span>Compaction provider</span>
-           <select data-field="chat-compaction-provider" aria-label="AI edit compaction provider">
-             <option value="openai"${(state.chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
-             <option value="anthropic"${state.chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-           </select>
+           <input type="text" data-field="chat-compaction-provider" aria-label="AI edit compaction provider" value="${deps.escapeAttr(state.chat.settings.compactionProvider ?? 'openai')}" autocapitalize="off" autocomplete="off" spellcheck="false" />
          </label>
 
          <label class="chat-setting">

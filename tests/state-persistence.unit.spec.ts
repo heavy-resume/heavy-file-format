@@ -254,7 +254,9 @@ test('saveChatSessionState stores chat updates separately without rewriting the 
   });
   const state = createPersistenceTestState('Chat Delta', '');
   state.chat.panelOpen = false;
+  state.chat.settings = { provider: 'fake-chat-provider', model: 'fake-chat-model', compactionProvider: 'fake-compact-provider', compactionModel: 'fake-compact-model' };
   saveSessionState(state);
+  expect(loadSessionState()?.chat.settings).toEqual(state.chat.settings);
   const originalMainPayload = storage.get('hvy-editor-session-state-v1');
   expect(JSON.parse(originalMainPayload ?? '{}')).toHaveProperty('documentBase64');
 
@@ -270,6 +272,7 @@ test('saveChatSessionState stores chat updates separately without rewriting the 
   expect(chatPayload).toContain('Only chat changed.');
   expect(JSON.parse(chatPayload ?? '{}')).not.toHaveProperty('documentBase64');
   const loaded = loadSessionState();
+  expect(loaded?.chat.settings).toEqual(state.chat.settings);
   expect(loaded?.document?.sections[0]?.title).toBe('Chat Delta');
   expect(loaded?.chat.panelOpen).toBe(true);
   expect(loaded?.chat.messages).toEqual([

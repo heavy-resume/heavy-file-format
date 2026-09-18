@@ -9,19 +9,14 @@ export function renderTextAiSettings(settings: ChatSettings): string {
   const model = settings.textProcessingModel ?? '';
   return `<details class="text-ai-settings"${getTextProcessingSettings(settings) ? '' : ' open'}><summary>Model settings</summary>
     <div class="chat-settings">
-      <label class="chat-setting"><span>Provider</span><select data-text-processing-provider aria-label="Text processing provider">
-        <option value=""${!provider ? ' selected' : ''}>Not set</option>
-        <option value="openai"${provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-        <option value="anthropic"${provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-        <option value="qwen"${provider === 'qwen' ? ' selected' : ''}>Qwen</option>
-      </select></label>
+      <label class="chat-setting"><span>Provider</span><input data-text-processing-provider aria-label="Text processing provider" value="${escapeAttr(provider ?? '')}" placeholder="Not set" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
       <label class="chat-setting"><span>Model</span><input data-text-processing-model aria-label="Text processing model" value="${escapeAttr(model)}" placeholder="Not set" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
     </div>
   </details>`;
 }
 
 export function bindTextAiSettings(modal: HTMLElement, runtime: StateRuntime, onChange: () => void): void {
-  const provider = modal.querySelector<HTMLSelectElement>('[data-text-processing-provider]');
+  const provider = modal.querySelector<HTMLInputElement>('[data-text-processing-provider]');
   const model = modal.querySelector<HTMLInputElement>('[data-text-processing-model]');
   if (!provider || !model) return;
   model.addEventListener('input', () => runWithStateRuntime(runtime, () => {
@@ -29,11 +24,9 @@ export function bindTextAiSettings(modal: HTMLElement, runtime: StateRuntime, on
     persistChatSettings(runtime.state.chat.settings);
     onChange();
   }));
-  provider.addEventListener('change', () => runWithStateRuntime(runtime, () => {
+  provider.addEventListener('input', () => runWithStateRuntime(runtime, () => {
     const settings = runtime.state.chat.settings;
-    settings.textProcessingProvider = provider.value ? provider.value as ChatSettings['provider'] : null;
-    model.value = '';
-    settings.textProcessingModel = null;
+    settings.textProcessingProvider = provider.value.trim() || null;
     persistChatSettings(settings);
     onChange();
   }));

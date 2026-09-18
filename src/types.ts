@@ -41,7 +41,7 @@ export interface ImageAttachmentMaxDimensions {
   height?: number;
 }
 
-export type ChatProvider = 'openai' | 'anthropic' | 'qwen';
+export type ChatProvider = string;
 
 export interface ChatAttachmentReference {
   id: string;

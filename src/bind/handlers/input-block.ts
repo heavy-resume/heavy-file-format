@@ -109,6 +109,19 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (target instanceof HTMLInputElement && ['chat-provider', 'ai-provider', 'chat-compaction-provider'].includes(field ?? '')) {
+      if (state.chat.isSending || state.aiEdit.isSending) return;
+      if (field === 'chat-compaction-provider') {
+        state.chat.settings.compactionProvider = target.value;
+      } else {
+        state.chat.settings.provider = target.value;
+      }
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      state.aiEdit.error = null;
+      return;
+    }
+
     if (field === 'chat-model' && target instanceof HTMLInputElement) {
       state.chat.settings.model = target.value;
       persistChatSettings(state.chat.settings);

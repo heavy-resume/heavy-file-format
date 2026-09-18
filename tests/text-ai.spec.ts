@@ -111,7 +111,9 @@ test('text processing model controls persist independently and select the reques
   });
   const modal = page.getByRole('dialog', { name: 'AI Clean-up' });
   await modal.getByText('Model settings', { exact: true }).click();
-  await modal.getByRole('combobox', { name: 'Text processing provider' }).selectOption('qwen');
+  await modal.getByRole('textbox', { name: 'Text processing provider' }).fill('');
+  await modal.getByRole('textbox', { name: 'Text processing provider' }).pressSequentially('fake-text-provider');
+  await expect(modal.getByRole('textbox', { name: 'Text processing provider' })).toBeFocused();
   await modal.getByRole('textbox', { name: 'Text processing model' }).fill('');
   await modal.getByRole('textbox', { name: 'Text processing model' }).pressSequentially('fake-text-model');
   await expect(modal.getByRole('textbox', { name: 'Text processing model' })).toBeFocused();
@@ -119,7 +121,7 @@ test('text processing model controls persist independently and select the reques
     const { loadChatSettings } = await import('/src/chat/chat.ts');
     const settings = loadChatSettings();
     return { provider: settings.provider, model: settings.model, textProcessingProvider: settings.textProcessingProvider, textProcessingModel: settings.textProcessingModel };
-  })).toEqual({ ...originalChatSettings, textProcessingProvider: 'qwen', textProcessingModel: 'fake-text-model' });
+  })).toEqual({ ...originalChatSettings, textProcessingProvider: 'fake-text-provider', textProcessingModel: 'fake-text-model' });
   let payload: { provider?: string; model?: string } = {};
   await page.route('**/api/chat', async route => {
     payload = route.request().postDataJSON();
@@ -127,7 +129,7 @@ test('text processing model controls persist independently and select the reques
   });
   await modal.getByRole('button', { name: 'Clean Up', exact: true }).click();
   await expect(modal).toHaveCount(0);
-  expect(payload.provider).toBe('qwen');
+  expect(payload.provider).toBe('fake-text-provider');
   expect(payload.model).toBe('fake-text-model');
   expect(await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
@@ -138,8 +140,8 @@ test('text processing model controls persist independently and select the reques
 test('not set blocks processing and clearing the provider persists without a default', async ({ page }) => {
   const modal = page.getByRole('dialog', { name: 'AI Clean-up' });
   await modal.getByText('Model settings', { exact: true }).click();
-  await modal.getByRole('combobox', { name: 'Text processing provider' }).selectOption('');
-  await expect(modal.getByRole('textbox', { name: 'Text processing model' })).toHaveValue('');
+  await modal.getByRole('textbox', { name: 'Text processing provider' }).fill('');
+  await modal.getByRole('textbox', { name: 'Text processing model' }).fill('');
   await expect(modal.getByRole('status')).toContainText('Select a provider and model');
   await expect(modal.getByRole('button', { name: 'Clean Up', exact: true })).toBeDisabled();
   await modal.getByText('Custom Instructions', { exact: true }).click();
@@ -152,8 +154,8 @@ test('not set blocks processing and clearing the provider persists without a def
   })).toEqual([null, null]);
   await modal.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: 'Process with AI', exact: true }).click();
-  await expect(modal.getByRole('combobox', { name: 'Text processing provider' })).toHaveValue('');
-  await modal.getByRole('combobox', { name: 'Text processing provider' }).selectOption('openai');
+  await expect(modal.getByRole('textbox', { name: 'Text processing provider' })).toHaveValue('');
+  await modal.getByRole('textbox', { name: 'Text processing provider' }).fill('openai');
   await expect(modal.getByRole('textbox', { name: 'Text processing model' })).toHaveValue('');
   await expect(modal.getByRole('button', { name: 'Clean Up', exact: true })).toBeDisabled();
   await modal.getByRole('textbox', { name: 'Text processing model' }).fill('fake-explicit-model');

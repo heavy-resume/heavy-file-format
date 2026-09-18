@@ -339,11 +339,7 @@ export function renderChatPanel(
     ? `<div class="chat-settings">
          <label class="chat-setting">
            <span>Provider</span>
-           <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
-             <option value="openai"${chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-             <option value="anthropic"${chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-             <option value="qwen"${chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
-           </select>
+           <input type="text" data-field="chat-provider" aria-label="Chat provider" value="${deps.escapeAttr(chat.settings.provider)}" autocapitalize="off" autocomplete="off" spellcheck="false" ${chat.isSending ? 'disabled' : ''} />
          </label>
 
          <label class="chat-setting">
@@ -363,10 +359,7 @@ export function renderChatPanel(
 
          <label class="chat-setting">
            <span>Compaction provider</span>
-           <select data-field="chat-compaction-provider" aria-label="Chat compaction provider" ${chat.isSending ? 'disabled' : ''}>
-             <option value="openai"${(chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
-             <option value="anthropic"${chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-           </select>
+           <input type="text" data-field="chat-compaction-provider" aria-label="Chat compaction provider" value="${deps.escapeAttr(chat.settings.compactionProvider ?? 'openai')}" autocapitalize="off" autocomplete="off" spellcheck="false" ${chat.isSending ? 'disabled' : ''} />
          </label>
 
          <label class="chat-setting">
@@ -998,7 +991,7 @@ export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {
 }
 
 interface ChatSettingsEnvironment {
-  VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
+  VITE_HVY_CHAT_PROVIDER?: string;
   VITE_HVY_CHAT_MODEL?: string;
   VITE_HVY_TEXT_PROCESSING_PROVIDER?: ChatSettings['provider'];
   VITE_HVY_TEXT_PROCESSING_MODEL?: string;
@@ -1014,18 +1007,18 @@ interface ChatSettingsEnvironment {
 }
 
 export function getEnvChatSettings(env: ChatSettingsEnvironment): ChatSettings {
-  const provider = env.VITE_HVY_CHAT_PROVIDER === 'anthropic' || env.VITE_HVY_CHAT_PROVIDER === 'qwen' ? env.VITE_HVY_CHAT_PROVIDER : 'openai';
+  const provider = normalizeProviderIdentifier(env.VITE_HVY_CHAT_PROVIDER) ?? 'openai';
   const providerDefaultModel = getDefaultModelForProvider(provider);
-  const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : provider === 'qwen' ? env.VITE_QWEN_MODEL : env.VITE_OPENAI_MODEL;
+  const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : provider === 'qwen' ? env.VITE_QWEN_MODEL : provider === 'openai' ? env.VITE_OPENAI_MODEL : undefined;
   const model = firstNonEmptyString(env.VITE_HVY_CHAT_MODEL, providerSpecificModel, providerDefaultModel);
-  const compactionProvider = env.VITE_HVY_CHAT_COMPACTION_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
+  const compactionProvider = normalizeProviderIdentifier(env.VITE_HVY_CHAT_COMPACTION_PROVIDER) ?? 'openai';
   const compactionModel = firstNonEmptyString(env.VITE_HVY_CHAT_COMPACTION_MODEL, DEFAULT_OPENAI_COMPACTION_MODEL);
   const toolLoopCompaction = readEnvToolLoopCompaction(env);
 
   return {
     provider,
     model,
-    textProcessingProvider: normalizeTextProcessingProvider(env.VITE_HVY_TEXT_PROCESSING_PROVIDER),
+    textProcessingProvider: normalizeProviderIdentifier(env.VITE_HVY_TEXT_PROCESSING_PROVIDER),
     textProcessingModel: env.VITE_HVY_TEXT_PROCESSING_MODEL?.trim() || null,
     compactionProvider,
     compactionModel,
@@ -1034,15 +1027,15 @@ export function getEnvChatSettings(env: ChatSettingsEnvironment): ChatSettings {
 }
 
 export function getDefaultModelForProvider(provider: ChatSettings['provider']): string {
-  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : provider === 'qwen' ? DEFAULT_QWEN_MODEL : DEFAULT_OPENAI_MODEL;
+  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : provider === 'qwen' ? DEFAULT_QWEN_MODEL : provider === 'openai' ? DEFAULT_OPENAI_MODEL : '';
 }
 
-function normalizeTextProcessingProvider(provider: unknown): ChatSettings['provider'] | null {
-  return provider === 'openai' || provider === 'anthropic' || provider === 'qwen' ? provider : null;
+function normalizeProviderIdentifier(provider: unknown): ChatSettings['provider'] | null {
+  return typeof provider === 'string' ? provider.trim() || null : null;
 }
 
 export function getTextProcessingSettings(settings: ChatSettings): ChatSettings | null {
-  const provider = normalizeTextProcessingProvider(settings.textProcessingProvider);
+  const provider = normalizeProviderIdentifier(settings.textProcessingProvider);
   const model = settings.textProcessingModel?.trim();
   if (!provider || !model) return null;
   return {
@@ -1072,15 +1065,15 @@ function getDefaultChatSettings(): ChatSettings {
 
 function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined, defaults: ChatSettings): ChatSettings {
   return {
-    provider: settings?.provider === 'anthropic' || settings?.provider === 'qwen' ? settings.provider : defaults.provider,
+    provider: normalizeProviderIdentifier(settings?.provider) ?? defaults.provider,
     model: typeof settings?.model === 'string' && settings.model.trim().length > 0 ? settings.model : defaults.model,
-    textProcessingProvider: normalizeTextProcessingProvider(settings?.textProcessingProvider === undefined
+    textProcessingProvider: normalizeProviderIdentifier(settings?.textProcessingProvider === undefined
       ? defaults.textProcessingProvider : settings.textProcessingProvider),
     textProcessingModel: (settings?.textProcessingModel === undefined
       ? settings?.textProcessingProvider !== undefined && settings.textProcessingProvider !== defaults.textProcessingProvider
         ? null : defaults.textProcessingModel
       : settings.textProcessingModel)?.trim() || null,
-    compactionProvider: settings?.compactionProvider === 'anthropic' ? 'anthropic' : defaults.compactionProvider ?? 'openai',
+    compactionProvider: normalizeProviderIdentifier(settings?.compactionProvider) ?? defaults.compactionProvider ?? 'openai',
     compactionModel: typeof settings?.compactionModel === 'string' && settings.compactionModel.trim().length > 0
       ? settings.compactionModel
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,

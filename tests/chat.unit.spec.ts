@@ -1370,3 +1370,25 @@ test('unconfigured text processing is explicitly unavailable', () => {
   expect(getTextProcessingSettings({ provider: 'openai', model: 'fake-chat-model', textProcessingProvider: 'qwen' })).toBeNull();
   expect(getTextProcessingSettings({ provider: 'openai', model: 'fake-chat-model', textProcessingModel: 'fake-text-model' })).toBeNull();
 });
+
+
+test('backend provider and model identifiers survive environment and host settings', () => {
+  const settings = {
+    provider: 'fake-chat-provider', model: 'fake-chat-model',
+    compactionProvider: 'fake-compact-provider', compactionModel: 'fake-compact-model',
+    textProcessingProvider: 'fake-text-provider', textProcessingModel: 'fake-text-model',
+  };
+  expect(getEnvChatSettings({
+    VITE_HVY_CHAT_PROVIDER: settings.provider,
+    VITE_HVY_CHAT_MODEL: settings.model,
+    VITE_HVY_CHAT_COMPACTION_PROVIDER: settings.compactionProvider,
+    VITE_HVY_CHAT_COMPACTION_MODEL: settings.compactionModel,
+    VITE_HVY_TEXT_PROCESSING_PROVIDER: settings.textProcessingProvider,
+    VITE_HVY_TEXT_PROCESSING_MODEL: settings.textProcessingModel,
+  })).toEqual(settings);
+  expect(mergeChatSettings(settings, getEnvChatSettings({}))).toEqual(settings);
+  expect(getTextProcessingSettings(settings)).toEqual({ provider: 'fake-text-provider', model: 'fake-text-model' });
+  expect(buildProxyChatRequest({ ...settings, mode: 'qa', messages: [], context: '' })).toMatchObject({
+    provider: 'fake-chat-provider', model: 'fake-chat-model',
+  });
+});

@@ -34,6 +34,8 @@ declare module 'virtual:hvy-built-in-plugins' {
 interface ImportMetaEnv {
   readonly VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
   readonly VITE_HVY_CHAT_MODEL?: string;
+  readonly VITE_HVY_TEXT_PROCESSING_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
+  readonly VITE_HVY_TEXT_PROCESSING_MODEL?: string;
   readonly VITE_HVY_CHAT_COMPACTION_PROVIDER?: 'openai' | 'anthropic';
   readonly VITE_HVY_CHAT_COMPACTION_MODEL?: string;
   readonly VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES?: string;

@@ -6,6 +6,7 @@ import {
   closeChatPanel,
   createDefaultChatState,
   getEnvChatSettings,
+  getTextProcessingSettings,
   MAX_PROXY_COMPLETION_CONTEXT_CHARS,
   mergeChatSettings,
   requestChatCompletion,
@@ -1164,6 +1165,8 @@ test('getEnvChatSettings prepopulates provider and model from vite env vars', ()
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-custom',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1182,6 +1185,8 @@ test('getEnvChatSettings exposes tool-loop compaction settings from vite env var
   ).toEqual({
     provider: 'openai',
     model: 'gpt-dev',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
     toolLoopCompaction: {
@@ -1202,6 +1207,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'openai',
     model: 'gpt-dev',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1213,6 +1220,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-sonnet-4-6',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1228,6 +1237,8 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
       {
         provider: 'openai',
         model: 'gpt-5.4-mini',
+        textProcessingProvider: null,
+        textProcessingModel: null,
         compactionProvider: 'openai',
         compactionModel: 'gpt-5.4-nano',
       }
@@ -1235,6 +1246,8 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
   ).toEqual({
     provider: 'openai',
     model: 'gpt-5.4-mini',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1322,3 +1335,38 @@ function getExpectedEmbeddingVector(text: string): number[] {
   }
   return [0, 0, 1];
 }
+
+test('text processing uses independent environment settings and preserves them through persistence merges', () => {
+  const defaults = getEnvChatSettings({
+    VITE_HVY_CHAT_PROVIDER: 'anthropic',
+    VITE_HVY_CHAT_MODEL: 'fake-chat-model',
+    VITE_HVY_TEXT_PROCESSING_PROVIDER: 'qwen',
+    VITE_HVY_TEXT_PROCESSING_MODEL: 'fake-text-model',
+  });
+  expect(getTextProcessingSettings(defaults)).toEqual({ provider: 'qwen', model: 'fake-text-model' });
+  const restored = mergeChatSettings({
+    ...defaults,
+    model: 'fake-changed-chat-model',
+    textProcessingProvider: 'openai',
+    textProcessingModel: 'fake-saved-text-model',
+  }, defaults);
+  expect(getTextProcessingSettings(restored)).toEqual({ provider: 'openai', model: 'fake-saved-text-model' });
+  expect(restored.model).toBe('fake-changed-chat-model');
+  expect(getTextProcessingSettings(mergeChatSettings({ textProcessingModel: '' }, defaults))).toBeNull();
+  expect(getTextProcessingSettings(mergeChatSettings({ textProcessingProvider: 'anthropic' }, defaults))).toBeNull();
+  expect(mergeChatSettings({ textProcessingProvider: null, textProcessingModel: null }, defaults))
+    .toMatchObject({ textProcessingProvider: null, textProcessingModel: null });
+});
+
+test('text processing does not inherit the chat provider or model', () => {
+  expect(getTextProcessingSettings({ provider: 'anthropic', model: 'fake-chat-model' }))
+    .toBeNull();
+  expect(getTextProcessingSettings(mergeChatSettings({ textProcessingProvider: 'anthropic' }, getEnvChatSettings({}))))
+    .toBeNull();
+});
+
+test('unconfigured text processing is explicitly unavailable', () => {
+  expect(getTextProcessingSettings(getEnvChatSettings({}))).toBeNull();
+  expect(getTextProcessingSettings({ provider: 'openai', model: 'fake-chat-model', textProcessingProvider: 'qwen' })).toBeNull();
+  expect(getTextProcessingSettings({ provider: 'openai', model: 'fake-chat-model', textProcessingModel: 'fake-text-model' })).toBeNull();
+});

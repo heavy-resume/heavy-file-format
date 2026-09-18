@@ -86,7 +86,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     : renderUseAsSelectionControl(sectionKey, block.id, sortValueDefs, helpers);
   const richToolbar = mobileAdjustment
     ? ''
-    : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles });
+    : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, includeTextAi: !block.schema.lock, align: block.schema.align, currentMarkdown: block.text, textLineStyles });
   return `
   <div class="text-editor-shell">
     ${richToolbar ? `<div class="text-editor-toolbar-bounds"><div class="text-editor-toolbar-slot">${richToolbar}</div></div><div class="text-editor-toolbar-spacer"></div>` : ''}

@@ -85,6 +85,9 @@ function syncCompactTextToolbar(shell: HTMLElement, toolbarSlot: HTMLElement): v
     toolbar.querySelector(':scope > [data-text-toolbar-dismiss]')?.after(compact);
   }
 
+  const aiControls = toolbar.querySelector<HTMLElement>(':scope > .text-ai-toolbar-segment');
+  if (aiControls) compact.querySelector('.text-toolbar-expand-left')?.after(aiControls);
+
   const revision = String(recentTextToolbarRevision);
   const contextActionKeys = readTextToolbarContextActionKeys(toolbar);
   const contextSignature = contextActionKeys.join(' ');

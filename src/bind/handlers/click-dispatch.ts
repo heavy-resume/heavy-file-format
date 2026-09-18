@@ -1,3 +1,4 @@
+import { openTextAiModal } from '../../editor/components/text-ai/text-ai-modal';
 import {
   state,
   findSectionByKey,
@@ -65,6 +66,10 @@ export function bindClickDispatch(app: HTMLElement): void {
 
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
+    if (target.closest('[data-text-ai]')) {
+      event.preventDefault();
+      return;
+    }
     const actionButton = target.closest<HTMLElement>('[data-action]');
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
     const useAsSelection = target.closest<HTMLElement>('.text-use-as-selection');
@@ -132,6 +137,12 @@ export function bindClickDispatch(app: HTMLElement): void {
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const textAiButton = target.closest<HTMLElement>('[data-text-ai]');
+    if (textAiButton) {
+      event.preventDefault();
+      openTextAiModal(app, textAiButton);
+      return;
+    }
     const actionButton = resolveAppActionTarget(target);
     logClickTrace(event, 'click-dispatch:bubble:enter', {
       action: actionButton?.dataset.action ?? null,

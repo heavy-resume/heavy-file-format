@@ -1000,6 +1000,8 @@ export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {
 interface ChatSettingsEnvironment {
   VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
   VITE_HVY_CHAT_MODEL?: string;
+  VITE_HVY_TEXT_PROCESSING_PROVIDER?: ChatSettings['provider'];
+  VITE_HVY_TEXT_PROCESSING_MODEL?: string;
   VITE_HVY_CHAT_COMPACTION_PROVIDER?: string;
   VITE_HVY_CHAT_COMPACTION_MODEL?: string;
   VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES?: string;
@@ -1023,6 +1025,8 @@ export function getEnvChatSettings(env: ChatSettingsEnvironment): ChatSettings {
   return {
     provider,
     model,
+    textProcessingProvider: normalizeTextProcessingProvider(env.VITE_HVY_TEXT_PROCESSING_PROVIDER),
+    textProcessingModel: env.VITE_HVY_TEXT_PROCESSING_MODEL?.trim() || null,
     compactionProvider,
     compactionModel,
     ...(toolLoopCompaction ? { toolLoopCompaction } : {}),
@@ -1033,10 +1037,27 @@ export function getDefaultModelForProvider(provider: ChatSettings['provider']): 
   return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : provider === 'qwen' ? DEFAULT_QWEN_MODEL : DEFAULT_OPENAI_MODEL;
 }
 
+function normalizeTextProcessingProvider(provider: unknown): ChatSettings['provider'] | null {
+  return provider === 'openai' || provider === 'anthropic' || provider === 'qwen' ? provider : null;
+}
+
+export function getTextProcessingSettings(settings: ChatSettings): ChatSettings | null {
+  const provider = normalizeTextProcessingProvider(settings.textProcessingProvider);
+  const model = settings.textProcessingModel?.trim();
+  if (!provider || !model) return null;
+  return {
+    provider,
+    model,
+    ...(settings.maxContextChars ? { maxContextChars: settings.maxContextChars } : {}),
+  };
+}
+
 function getDefaultChatSettings(): ChatSettings {
   return getEnvChatSettings({
     VITE_HVY_CHAT_PROVIDER: import.meta.env.VITE_HVY_CHAT_PROVIDER,
     VITE_HVY_CHAT_MODEL: import.meta.env.VITE_HVY_CHAT_MODEL,
+    VITE_HVY_TEXT_PROCESSING_PROVIDER: import.meta.env.VITE_HVY_TEXT_PROCESSING_PROVIDER,
+    VITE_HVY_TEXT_PROCESSING_MODEL: import.meta.env.VITE_HVY_TEXT_PROCESSING_MODEL,
     VITE_HVY_CHAT_COMPACTION_PROVIDER: import.meta.env.VITE_HVY_CHAT_COMPACTION_PROVIDER,
     VITE_HVY_CHAT_COMPACTION_MODEL: import.meta.env.VITE_HVY_CHAT_COMPACTION_MODEL,
     VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES,
@@ -1053,6 +1074,12 @@ function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined
   return {
     provider: settings?.provider === 'anthropic' || settings?.provider === 'qwen' ? settings.provider : defaults.provider,
     model: typeof settings?.model === 'string' && settings.model.trim().length > 0 ? settings.model : defaults.model,
+    textProcessingProvider: normalizeTextProcessingProvider(settings?.textProcessingProvider === undefined
+      ? defaults.textProcessingProvider : settings.textProcessingProvider),
+    textProcessingModel: (settings?.textProcessingModel === undefined
+      ? settings?.textProcessingProvider !== undefined && settings.textProcessingProvider !== defaults.textProcessingProvider
+        ? null : defaults.textProcessingModel
+      : settings.textProcessingModel)?.trim() || null,
     compactionProvider: settings?.compactionProvider === 'anthropic' ? 'anthropic' : defaults.compactionProvider ?? 'openai',
     compactionModel: typeof settings?.compactionModel === 'string' && settings.compactionModel.trim().length > 0
       ? settings.compactionModel
@@ -1068,6 +1095,8 @@ export function mergeChatSettings(settings: Partial<ChatSettings> | null | undef
   return {
     provider: sanitized.provider,
     model: sanitized.model.trim().length > 0 ? sanitized.model : defaults.model,
+    textProcessingProvider: sanitized.textProcessingProvider,
+    textProcessingModel: sanitized.textProcessingModel,
     compactionProvider: sanitized.compactionProvider ?? defaults.compactionProvider ?? 'openai',
     compactionModel: sanitized.compactionModel?.trim()
       ? sanitized.compactionModel

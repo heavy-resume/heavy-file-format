@@ -8,6 +8,7 @@ export interface RichToolbarOptions {
   includeDismiss?: boolean;
   includeAlign?: boolean;
   includeFillIn?: boolean;
+  includeTextAi?: boolean;
   align?: Align;
   currentMarkdown?: string;
   textLineStyles?: TextLineStyles;

@@ -1286,3 +1286,12 @@ HVY has a documented plugin block envelope plus a first plugin contract for `hvy
   `list()` exposes available templates and flavors, `variables(selection)` describes the required fields, `locations(selection)` returns the selected template's unique location-marker names, and `materialize(options)` returns a fresh filled `VisualBlock` clone when a plugin needs the derived value directly. The optional `locations` map replaces matching markers with fresh component clones. Plugins should call each returned instance's `unmount()` during their own cleanup.
 - The built-in `hvy.editable-text` plugin uses that editor as a permanently visible writable surface in Viewer mode. Its Markdown body is stored in `plugin.txt`; `pluginConfig.placeholder` optionally controls its empty-state prompt.
 - See [`examples/embed-text-editor-plugin.html`](examples/embed-text-editor-plugin.html) for an isolated embedded editor that places a normal text component next to a plugin using `ctx.textEditor.mount(...)` and `ctx.setText(...)`.
+
+Text quick-control AI processing has independent `ChatSettings.textProcessingProvider` and
+`textProcessingModel` settings. Environment defaults are `VITE_HVY_TEXT_PROCESSING_PROVIDER`
+and `VITE_HVY_TEXT_PROCESSING_MODEL`; neither has a built-in default. Both must be explicitly
+configured before text processing can send a request. `null` clears a saved field even when an
+environment value exists; omitted fields inherit explicitly supplied environment settings. Embedded hosts can pass these fields through `chatSettings`.
+The reference text-processing modal exposes Model settings when the model picker is enabled;
+these preferences persist with the existing chat settings storage. Host-managed clients keep control
+of configuration through mount options. Prompts live in `src/editor/components/text-ai/text-ai-request.ts`.

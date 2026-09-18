@@ -89,7 +89,7 @@ import {
   type HvyPluginAuthorizationMode,
 } from './plugins/authorization/plugin-authorization-policy';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { createDefaultChatState } from './chat/chat';
+import { createDefaultChatState, mergeChatSettings } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
 import { bindChatThreadUi, refreshRenderedChatSurface } from './chat/chat-thread-ui';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
@@ -1350,10 +1350,7 @@ function createFullEmbedRuntime(options: HvyMountOptions): StateRuntime {
   hydrateHostAttachmentDescriptorsSync(runtimeState.document, options.attachmentStore ?? null);
   applyChatSessionState(runtimeState, options.initialChatState ?? null);
   if (options.chatSettings) {
-    runtimeState.chat.settings = {
-      ...runtimeState.chat.settings,
-      ...options.chatSettings,
-    };
+    runtimeState.chat.settings = mergeChatSettings(options.chatSettings, runtimeState.chat.settings);
   }
   runtimeState.chatContext = options.chatContext ?? null;
   runtimeState.chatContextProvider = options.chatContextProvider ?? null;

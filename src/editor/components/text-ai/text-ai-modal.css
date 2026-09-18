@@ -1,0 +1,60 @@
+.hvy-document .rich-toolbar > .text-ai-toolbar-segment {
+  display: none;
+}
+.hvy-document .text-toolbar-compact > .text-ai-toolbar-segment {
+  flex: 0 0 auto;
+  margin-inline-end: 0.35rem;
+  padding-inline-end: 0.65rem;
+  border-inline-end: 1px solid var(--hvy-border-input);
+}
+.hvy-document .text-ai-modal {
+  width: min(28rem, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.hvy-document .text-ai-form {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.hvy-document .text-ai-custom textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 7rem;
+  resize: vertical;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 10px;
+  background: var(--hvy-input-bg);
+  color: var(--hvy-text);
+  font: inherit;
+}
+.hvy-document .text-ai-custom textarea:focus {
+  outline: 2px solid var(--hvy-accent-1);
+  outline-offset: 2px;
+}
+.hvy-document .text-ai-status {
+  color: var(--hvy-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.hvy-document .text-ai-settings summary,
+.hvy-document .text-ai-custom summary {
+  cursor: pointer;
+  color: var(--hvy-text-muted);
+  margin-block: 0.7rem;
+}
+
+.hvy-document .text-ai-body {
+  min-height: 0;
+  overflow: auto;
+}
+.hvy-document .text-ai-form > button,
+.hvy-document .text-ai-modal > .modal-head {
+  flex-shrink: 0;
+}
+.hvy-document .text-ai-status:empty {
+  display: none;
+}

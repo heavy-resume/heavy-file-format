@@ -111,6 +111,9 @@ export interface ChatCliSimState {
 export interface ChatSettings {
   provider: ChatProvider;
   model: string;
+  /** Independent provider/model for single text-value processing. */
+  textProcessingProvider?: ChatProvider | null;
+  textProcessingModel?: string | null;
   compactionProvider?: ChatProvider;
   compactionModel?: string;
   maxContextChars?: number;

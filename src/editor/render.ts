@@ -237,6 +237,7 @@ export interface EditorRenderer {
       includeDismiss?: boolean;
       includeAlign?: boolean;
       includeFillIn?: boolean;
+      includeTextAi?: boolean;
       align?: Align;
       currentMarkdown?: string;
       textLineStyles?: TextLineStyles;
@@ -1374,6 +1375,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       includeDismiss?: boolean;
       includeAlign?: boolean;
       includeFillIn?: boolean;
+      includeTextAi?: boolean;
       align?: Align;
       currentMarkdown?: string;
       textLineStyles?: TextLineStyles;
@@ -1423,6 +1425,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)" disabled><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
         </div>
         ${textLineStyleControls}
+        ${options?.includeTextAi ? `<div class="text-ai-toolbar-segment"><button type="button" class="ghost icon-button" data-text-ai="true" ${richButtonAttrs} aria-label="Process with AI" title="Process with AI">✨</button></div>` : ''}
       </div>
     `;
   }

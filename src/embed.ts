@@ -23,7 +23,7 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatProvider, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatProvider, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeOverrides as setRuntimeThemeOverrides, setThemeRoot } from './theme';
@@ -153,6 +153,7 @@ export interface HvyMountOptions {
   showAdvancedEditor?: boolean;
   showComponentEncryptionControls?: boolean;
   chatClient?: HostChatClient | null;
+  chatSettings?: Partial<ChatSettings> | null;
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
@@ -429,6 +430,7 @@ function renderLightweightRichToolbar(
     rowIndex?: number;
     includeAlign?: boolean;
     includeFillIn?: boolean;
+    includeTextAi?: boolean;
     align?: 'left' | 'center' | 'right';
     currentMarkdown?: string;
   } = {}
@@ -462,6 +464,7 @@ function renderLightweightRichToolbar(
         <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
         <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)" disabled><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
       </div>
+      ${options.includeTextAi ? `<div class="text-ai-toolbar-segment"><button type="button" class="ghost icon-button" data-text-ai="true" ${richButtonAttrs} aria-label="Process with AI" title="Process with AI">✨</button></div>` : ''}
     </div>
   `;
 }
@@ -1203,6 +1206,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.encryption ?? null,
     options.crossDocumentLinks === true
   ));
+  if (options.chatSettings) {
+    runtime.state.chat.settings = { ...runtime.state.chat.settings, ...options.chatSettings };
+  }
   configureDatabaseHistoryStore(runtime, options.historyStore);
   configureAttachmentHistoryStore(runtime, options.historyStore);
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);

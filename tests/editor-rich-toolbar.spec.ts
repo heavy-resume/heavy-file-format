@@ -1658,6 +1658,7 @@ test('plugin text editor hotkeys keep existing quick controls in place', async (
   const editorShell = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
   const editor = editorShell.locator('[data-field="hvy-plugin-text-editor"]');
   await editor.click();
+  await expect(editorShell.getByRole('button', { name: 'Process with AI' })).toBeVisible();
   await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+I`);
 
   const compactActions = editorShell.locator('.text-toolbar-compact-actions > button');
@@ -1669,6 +1670,62 @@ test('plugin text editor hotkeys keep existing quick controls in place', async (
     'italic',
     'underline',
   ]);
+  await editorShell.getByRole('button', { name: 'Process with AI' }).click();
+  const aiDialog = page.getByRole('dialog', { name: 'AI Clean-up' });
+  await expect(aiDialog).toBeVisible();
+  await aiDialog.getByRole('button', { name: 'Close' }).click();
+  await expect(editor).toBeFocused();
+});
+
+test('plugin styles do not change shared quick text controls', async ({ page }) => {
+  await page.goto('/examples/lightweight-viewer-text-editor.html');
+
+  const editorShell = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
+  await editorShell.evaluate((root) => {
+    const style = document.createElement('style');
+    style.textContent = `.hvy-editable-text-reader button {
+      font: 700 2rem/1.8 Georgia, serif;
+      letter-spacing: 0.4rem;
+      text-transform: uppercase;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-all;
+    }`;
+    document.head.append(style);
+    const pluginControl = document.createElement('button');
+    pluginControl.className = 'expected-plugin-control';
+    pluginControl.textContent = 'Plugin control';
+    root.append(pluginControl);
+  });
+
+  await editorShell.locator('[data-field="hvy-plugin-text-editor"]').click();
+  const heading = editorShell.locator('.text-toolbar-compact-actions > [data-rich-action="heading-1"]');
+  const expectedResult = await heading.evaluate((button) => {
+    const style = getComputedStyle(button);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      lineHeight: style.lineHeight,
+      letterSpacing: style.letterSpacing,
+      textTransform: style.textTransform,
+      whiteSpace: style.whiteSpace,
+      overflowWrap: style.overflowWrap,
+      wordBreak: style.wordBreak,
+    };
+  });
+  expect(expectedResult).toEqual({
+    fontFamily: 'Arial, sans-serif',
+    fontSize: '13.3333px',
+    fontWeight: '400',
+    lineHeight: '13.3333px',
+    letterSpacing: 'normal',
+    textTransform: 'none',
+    whiteSpace: 'nowrap',
+    overflowWrap: 'normal',
+    wordBreak: 'normal',
+  });
+  await expect(editorShell.locator('.expected-plugin-control')).toHaveCSS('font-size', '32px');
 });
 
 test('grid text editor uses an unsquashed floating toolbar without covering component controls', async ({ page }) => {

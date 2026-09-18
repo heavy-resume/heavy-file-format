@@ -18,9 +18,46 @@ export function openTextAiModal(app: HTMLElement, trigger: HTMLElement): void {
   const block = findBlockByIds(sectionKey, blockId);
   const editable = trigger.closest('.text-editor-shell')?.querySelector<HTMLElement>('[data-field="block-rich"]');
   if (!block || block.schema.kind !== 'text' || block.schema.lock || !editable || app.querySelector('[data-text-ai-modal]')) return;
-  const runtime = getActiveStateRuntime();
   const originalDocument = state.document;
   const original = block.text;
+  openTextAiEditorModal(app, trigger, {
+    editable,
+    original,
+    isCurrent: () => state.document === originalDocument
+      && findBlockByIds(sectionKey, blockId) === block
+      && block.text === original
+      && !block.schema.lock
+      && editable.isConnected,
+    apply: (output) => {
+      if (output === original) return;
+      recordHistory(`text-ai:${crypto.randomUUID()}`);
+      block.text = output;
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      syncSortValuesForDocument(state.document);
+      invalidateInlineAnswerGroupIndex();
+      editable.innerHTML = renderTextRichEditorContent(sectionKey, block, getCachedComponentRenderHelpers());
+      refreshRichToolbarState(editable);
+      refreshReaderPanelsOutsideActiveEditor(editable);
+    },
+  });
+}
+
+interface TextAiEditorTarget {
+  editable: HTMLElement;
+  original: string;
+  isCurrent(original: string): boolean;
+  apply(output: string): void;
+}
+
+export function openPluginTextAiModal(trigger: HTMLElement, target: TextAiEditorTarget): void {
+  const app = trigger.closest<HTMLElement>('.hvy-document');
+  if (!app || app.querySelector('[data-text-ai-modal]')) return;
+  openTextAiEditorModal(app, trigger, target);
+}
+
+function openTextAiEditorModal(app: HTMLElement, trigger: HTMLElement, target: TextAiEditorTarget): void {
+  const runtime = getActiveStateRuntime();
+  const { editable, original } = target;
   const controller = new AbortController();
   const modal = document.createElement('div');
   modal.className = 'modal-root';
@@ -89,19 +126,10 @@ export function openTextAiModal(app: HTMLElement, trigger: HTMLElement): void {
       }));
       if (controller.signal.aborted || !modal.isConnected) return;
       runWithStateRuntime(runtime, () => {
-        if (state.document !== originalDocument || findBlockByIds(sectionKey, blockId) !== block || block.text !== original || block.schema.lock || !editable.isConnected) {
+        if (!target.isCurrent(original)) {
           throw new Error('This text changed while AI was processing. Close this dialog and try again.');
         }
-        if (output !== original) {
-          recordHistory(`text-ai:${crypto.randomUUID()}`);
-          block.text = output;
-          syncReusableTemplateForBlock(sectionKey, blockId);
-          syncSortValuesForDocument(state.document);
-          invalidateInlineAnswerGroupIndex();
-          editable.innerHTML = renderTextRichEditorContent(sectionKey, block, getCachedComponentRenderHelpers());
-          refreshRichToolbarState(editable);
-          refreshReaderPanelsOutsideActiveEditor(editable);
-        }
+        target.apply(output);
         close();
       });
     } catch (error) {

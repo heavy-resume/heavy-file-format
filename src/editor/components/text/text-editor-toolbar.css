@@ -39,6 +39,9 @@
 }
 
 .hvy-document .text-toolbar-compact-actions {
+  /* Keep hover lift and focus borders inside the scrolling clip without moving controls. */
+  padding: 0.35rem;
+  margin: -0.35rem;
   min-width: 0;
   overflow-x: auto;
   display: inline-flex;

@@ -1486,11 +1486,11 @@ test('floating text toolbar starts compact, expands from either side, and keeps 
   await compact.locator('[data-rich-action="underline"]').click();
   await expect(compactActions).toHaveCount(5);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'underline',
     'heading-1',
     'heading-2',
     'bold',
     'italic',
+    'underline',
   ]);
 
   await compact.locator('.text-toolbar-expand-left').click();
@@ -1504,10 +1504,10 @@ test('floating text toolbar starts compact, expands from either side, and keeps 
   await expect(compactActions).toHaveCount(5);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
     'quote',
-    'underline',
     'heading-1',
     'heading-2',
     'bold',
+    'underline',
   ]);
 
   await page.keyboard.press('Escape');
@@ -1576,7 +1576,7 @@ test('default compact history evicts underline first when it was not promoted', 
   ]);
 });
 
-test('format hotkeys promote while link remains outside compact history', async ({ page }) => {
+test('format hotkeys preserve visible order while link remains outside compact history', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, 'Expected result hotkey recent stack');
   await page.locator('[data-action="activate-block"]').first().click();
@@ -1588,20 +1588,20 @@ test('format hotkeys promote while link remains outside compact history', async 
 
   await page.keyboard.press(`${modifier}+U`);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'underline',
     'heading-1',
     'heading-2',
     'bold',
     'italic',
+    'underline',
   ]);
 
   await page.keyboard.press(`${modifier}+B`);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'bold',
-    'underline',
     'heading-1',
     'heading-2',
+    'bold',
     'italic',
+    'underline',
   ]);
 
   await editor.evaluate((node) => {
@@ -1618,11 +1618,11 @@ test('format hotkeys promote while link remains outside compact history', async 
   await page.keyboard.press(`${modifier}+K`);
   await expect(page.locator('#linkInlineModal')).toBeVisible();
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'bold',
-    'underline',
     'heading-1',
     'heading-2',
+    'bold',
     'italic',
+    'underline',
   ]);
   await page.locator('#linkInlineInput').fill('https://example.test/new');
   await page.locator('#linkInlineModal').getByRole('button', { name: 'Apply' }).click();
@@ -1644,15 +1644,15 @@ test('format hotkeys promote while link remains outside compact history', async 
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'bold',
-    'underline',
     'heading-1',
     'heading-2',
+    'bold',
     'italic',
+    'underline',
   ]);
 });
 
-test('plugin text editor hotkeys promote their actions in compact history', async ({ page }) => {
+test('plugin text editor hotkeys keep existing quick controls in place', async ({ page }) => {
   await page.goto('/examples/lightweight-viewer-text-editor.html');
 
   const editorShell = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
@@ -1663,10 +1663,10 @@ test('plugin text editor hotkeys promote their actions in compact history', asyn
   const compactActions = editorShell.locator('.text-toolbar-compact-actions > button');
   await expect(compactActions).toHaveCount(5);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'italic',
     'heading-1',
     'heading-2',
     'bold',
+    'italic',
     'underline',
   ]);
 });
@@ -2300,4 +2300,30 @@ test('toolbar buttons expose platform hotkeys in titles', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Italic' }).first()).toHaveAttribute('title', /Italic \((Cmd|Ctrl)\+I\)/);
   await expect(page.getByRole('button', { name: 'Underline' }).first()).toHaveAttribute('title', /Underline \((Cmd|Ctrl)\+U\)/);
   await expect(page.getByRole('button', { name: 'Link' }).first()).toHaveAttribute('title', /Link \((Cmd|Ctrl)\+K\)/);
+});
+
+test('existing quick buttons stay in place until a fresh toolbar draw', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result stable quick controls');
+  await page.locator('[data-action="activate-block"]').first().click();
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  const actions = toolbar.locator('.text-toolbar-compact-actions > button');
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['heading-1', 'heading-2', 'bold', 'italic', 'underline']);
+
+  await toolbar.locator('.text-toolbar-compact [data-rich-action="italic"]').click();
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['heading-1', 'heading-2', 'bold', 'italic', 'underline']);
+  await toolbar.locator('.text-toolbar-compact [data-rich-action="italic"]').click();
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['heading-1', 'heading-2', 'bold', 'italic', 'underline']);
+
+  await page.evaluate(async () => {
+    const { getRenderApp } = await import('/src/state.ts');
+    getRenderApp()();
+  });
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['italic', 'heading-1', 'heading-2', 'bold', 'underline']);
 });

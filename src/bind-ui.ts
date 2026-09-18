@@ -42,6 +42,7 @@ import { bindDocumentAttachmentManager } from './editor/components/document-atta
 import { bindUserFileAttachmentLinks } from './document-attachment-links';
 import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
 import { bindAppEvents } from './bind/app-events';
+import { AI_READER_CONTEXT_OPEN_EVENT } from './bind/handlers/contextmenu';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { saveSessionState, saveSessionStateAsync } from './state-persistence';
 import { createDocumentFilterSnapshot } from './search/document-filter';
@@ -1265,8 +1266,8 @@ export function bindUi(app: HTMLElement): void {
   aiReaderDocument?.addEventListener('change', handlePersistedAnswerChange);
   aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
   aiSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
-  aiReaderDocument?.addEventListener('dblclick', clearPendingAiReaderAction);
-  aiSidebarSections?.addEventListener('dblclick', clearPendingAiReaderAction);
+  aiReaderDocument?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
+  aiSidebarSections?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
 
   chatThread?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

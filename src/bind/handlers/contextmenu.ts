@@ -9,6 +9,8 @@ const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 const AI_LONG_PRESS_MS = 560;
 const AI_CONTEXT_CLICK_SUPPRESS_MS = 350;
 
+export const AI_READER_CONTEXT_OPEN_EVENT = 'hvy-ai-reader-context-open';
+
 let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
 let suppressNextAiContextClickUntil = 0;
 let aiLongPress: { pointerId: number; x: number; y: number; timer: number } | null = null;
@@ -299,6 +301,9 @@ function openReaderContextPopover(app: HTMLElement, event: MouseEvent | PointerE
   }
   if (state.currentView === 'ai' && !blockId) {
     return;
+  }
+  if (state.currentView === 'ai') {
+    target.dispatchEvent(new CustomEvent(AI_READER_CONTEXT_OPEN_EVENT, { bubbles: true }));
   }
   event.preventDefault();
   const fallbackRect = (blockElement ?? sectionElement)?.getBoundingClientRect();

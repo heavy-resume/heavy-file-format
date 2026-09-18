@@ -106,8 +106,13 @@
 
 .hvy-document .chat-panel-head-actions {
   display: flex;
+  flex-shrink: 0;
   gap: 0.45rem;
   flex-wrap: wrap;
+}
+
+.hvy-document .chat-panel-head-actions button {
+  white-space: nowrap;
 }
 
 .hvy-document .chat-panel-close {

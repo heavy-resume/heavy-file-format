@@ -36,8 +36,16 @@
   outline-offset: 2px;
 }
 .hvy-document .text-ai-status {
+  margin: 0.65rem 0 0;
+  border-radius: 8px;
   color: var(--hvy-text-muted);
   overflow-wrap: anywhere;
+}
+.hvy-document .text-ai-status.is-error {
+  border: 1px solid color-mix(in srgb, var(--hvy-danger) 65%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-danger) 12%, var(--hvy-surface));
+  padding: 0.65rem 0.75rem;
+  color: var(--hvy-danger);
 }
 
 .hvy-document .text-ai-settings summary,

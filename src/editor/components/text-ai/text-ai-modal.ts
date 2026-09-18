@@ -44,15 +44,32 @@ export function openTextAiModal(app: HTMLElement, trigger: HTMLElement): void {
   const status = modal.querySelector<HTMLElement>('[role="status"]')!;
   const clean = modal.querySelector<HTMLButtonElement>('[data-text-ai-clean]')!;
   let sending = false;
+  let requestError = false;
+  const setStatus = (message: string, kind: 'status' | 'error' = 'status'): void => {
+    requestError = kind === 'error';
+    status.textContent = message;
+    status.classList.toggle('is-error', requestError);
+    status.setAttribute('role', requestError ? 'alert' : 'status');
+    status.setAttribute('aria-live', requestError ? 'assertive' : 'polite');
+  };
+  const clearRequestError = (): void => {
+    if (!requestError) return;
+    setStatus('');
+    clean.textContent = 'Clean Up';
+  };
   const syncConfiguration = (updateStatus = true): void => {
     const configured = getTextProcessingSettings(runtime.state.chat.settings) !== null;
     clean.disabled = sending || !configured;
     if (!updateStatus) return;
-    status.textContent = configured ? '' : modal.querySelector('.text-ai-settings')
+    setStatus(configured ? '' : modal.querySelector('.text-ai-settings')
       ? 'Text processing is not configured. Select a provider and model to continue.'
-      : 'Text processing is not configured. The app host must set a provider and model.';
+      : 'Text processing is not configured. The app host must set a provider and model.');
   };
-  bindTextAiSettings(modal, runtime, syncConfiguration);
+  bindTextAiSettings(modal, runtime, () => {
+    clearRequestError();
+    syncConfiguration();
+  });
+  input.addEventListener('input', clearRequestError);
   syncConfiguration();
   const close = (): void => {
     controller.abort();
@@ -62,7 +79,9 @@ export function openTextAiModal(app: HTMLElement, trigger: HTMLElement): void {
   const submit = async (instructions: string): Promise<void> => {
     if (sending || !instructions.trim()) return;
     sending = true;
-    status.textContent = 'Processing…';
+    setStatus('Cleaning up…');
+    clean.textContent = 'Cleaning Up…';
+    form.setAttribute('aria-busy', 'true');
     modal.querySelectorAll<HTMLButtonElement | HTMLTextAreaElement | HTMLInputElement | HTMLSelectElement>('form button, textarea, .text-ai-settings input, .text-ai-settings select').forEach(element => { element.disabled = true; });
     try {
       const output = await runWithStateRuntime(runtime, () => requestTextAiOutput({
@@ -86,11 +105,16 @@ export function openTextAiModal(app: HTMLElement, trigger: HTMLElement): void {
         close();
       });
     } catch (error) {
-      if (!controller.signal.aborted) status.textContent = error instanceof Error ? error.message : 'Could not process this text. Try again.';
+      if (!controller.signal.aborted) {
+        setStatus(error instanceof Error ? error.message : 'AI Clean-up failed. Try again.', 'error');
+        clean.textContent = 'Try Again';
+      }
     } finally {
       sending = false;
+      form.removeAttribute('aria-busy');
       modal.querySelectorAll<HTMLButtonElement | HTMLTextAreaElement | HTMLInputElement | HTMLSelectElement>('form button, textarea, .text-ai-settings input, .text-ai-settings select').forEach(element => { element.disabled = false; });
       syncConfiguration(false);
+      if (requestError && modal.isConnected && !clean.disabled) clean.focus({ preventScroll: true });
     }
   };
   modal.addEventListener('click', event => {

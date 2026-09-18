@@ -92,16 +92,27 @@ test('closing a pending request leaves the original text intact', async ({ page 
   await expect(page.locator('[data-field="block-rich"]')).toHaveText('Thsi is teh original.');
 });
 
-test('request errors keep the custom draft available for retry', async ({ page }) => {
-  await page.route('**/api/chat', route => route.fulfill({ status: 500, json: { error: 'Expected service failure' } }));
+test('request errors show an alert and preserve the custom draft for retry', async ({ page }) => {
+  let requestCount = 0;
+  await page.route('**/api/chat', route => {
+    requestCount += 1;
+    return requestCount === 1
+      ? route.fulfill({ status: 500, json: { error: 'Expected service failure' } })
+      : route.fulfill({ json: { output: 'Expected retry result.' } });
+  });
   const modal = page.getByRole('dialog', { name: 'AI Clean-up' });
   await modal.getByText('Custom Instructions', { exact: true }).click();
   await modal.getByRole('textbox').fill('Preserve my wording.');
   await modal.getByRole('button', { name: 'Clean Up', exact: true }).click();
-  await expect(modal.getByRole('status')).toContainText('Expected service failure');
+  await expect(modal.getByRole('alert')).toContainText('Expected service failure');
   await expect(modal.getByRole('textbox')).toHaveValue('Preserve my wording.');
-  await expect(modal.getByRole('button', { name: 'Clean Up', exact: true })).toBeEnabled();
+  await expect(modal.getByRole('button', { name: 'Try Again', exact: true })).toBeEnabled();
   await expect(page.locator('[data-field="block-rich"]')).toHaveText('Thsi is teh original.');
+
+  await modal.getByRole('button', { name: 'Try Again', exact: true }).click();
+  await expect(modal).toHaveCount(0);
+  await expect(page.locator('[data-field="block-rich"]')).toHaveText('Expected retry result.');
+  expect(requestCount).toBe(2);
 });
 
 test('text processing model controls persist independently and select the request model', async ({ page }) => {

@@ -111,6 +111,7 @@ export async function runChatCliEditLoop(params: {
   embeddingProvider?: HvyEmbeddingProvider | null;
   onMutation?: (group?: string, mutation?: ChatCliMutationSummary) => void;
   onProgress?: (content: string) => void;
+  onCommandActivity?: (phase: 'started' | 'finished') => void;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
@@ -172,6 +173,7 @@ export async function runChatCliEditLoop(params: {
           turn: nativeTurn,
           signal: params.signal,
           onProgress: params.onProgress,
+          onCommandActivity: params.onCommandActivity,
           traceRunId,
           writeTrace: true,
           lastInputTokens: currentInputTokens,
@@ -185,6 +187,7 @@ export async function runChatCliEditLoop(params: {
           assistantOutput: nativeTurn.output,
           signal: params.signal,
           onProgress: params.onProgress,
+          onCommandActivity: params.onCommandActivity,
           traceRunId,
           writeTrace: true,
           lastInputTokens: currentInputTokens,
@@ -303,6 +306,7 @@ async function advanceChatCliNativeToolTurnState(params: {
   turn: ProxyToolTurn;
   signal?: AbortSignal;
   onProgress?: (content: string) => void;
+  onCommandActivity?: (phase: 'started' | 'finished') => void;
   traceRunId?: string;
   writeTrace?: boolean;
   lastInputTokens?: number;
@@ -339,174 +343,179 @@ async function advanceChatCliNativeToolTurnState(params: {
       results.push({ callId: call.id, output: JSON.stringify({ ok: true }) });
       continue;
     }
-    if (call.name === 'apply_hvy_patch') {
-      const patch = getStringToolArg(call, 'patch');
-      params.onProgress?.('Applying coordinated HVY file edits.');
-      try {
-        const { patchResult, modelResult } = await executeChatDocumentPatch(
-          params.document,
-          params.state.session,
-          patch
-        );
-        const patchMutated = patchResult.appliedFileCount > 0;
-        mutated ||= patchMutated;
-        if (patchMutated) {
-          mutatedPaths = mergeChatCliMutationPaths(mutatedPaths, patchResult.mutatedPaths);
-          refreshSectionPaths = mergeChatCliMutationPaths(refreshSectionPaths, patchResult.refreshSectionPaths);
-          mutationRequiresFullRefresh ||= Boolean(patchResult.requiresFullRefresh);
-          batchHadSuccess = true;
-        }
-        if (patchResult.failedFileCount > 0) {
+    params.onCommandActivity?.('started');
+    try {
+      if (call.name === 'apply_hvy_patch') {
+        const patch = getStringToolArg(call, 'patch');
+        params.onProgress?.('Applying coordinated HVY file edits.');
+        try {
+          const { patchResult, modelResult } = await executeChatDocumentPatch(
+            params.document,
+            params.state.session,
+            patch
+          );
+          const patchMutated = patchResult.appliedFileCount > 0;
+          mutated ||= patchMutated;
+          if (patchMutated) {
+            mutatedPaths = mergeChatCliMutationPaths(mutatedPaths, patchResult.mutatedPaths);
+            refreshSectionPaths = mergeChatCliMutationPaths(refreshSectionPaths, patchResult.refreshSectionPaths);
+            mutationRequiresFullRefresh ||= Boolean(patchResult.requiresFullRefresh);
+            batchHadSuccess = true;
+          }
+          if (patchResult.failedFileCount > 0) {
+            batchHadError = true;
+            lastFailedCommand = 'apply_hvy_patch';
+            lastCommandError = `${patchResult.failedFileCount} patch file update${patchResult.failedFileCount === 1 ? '' : 's'} failed.`;
+          }
+          results.push({
+            callId: call.id,
+            output: JSON.stringify(modelResult),
+            ...(patchResult.appliedFileCount === 0 && patchResult.failedFileCount > 0 ? { isError: true } : {}),
+          });
+          commandOutputs.push({
+            command: 'apply_hvy_patch',
+            output: formatOutputForModel(JSON.stringify(modelResult, null, 2), CHAT_CLI_MODEL_OUTPUT_MAX_LINES),
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          results.push({ callId: call.id, output: JSON.stringify({ error: message }), isError: true });
+          commandOutputs.push({ command: 'apply_hvy_patch', output: message });
           batchHadError = true;
           lastFailedCommand = 'apply_hvy_patch';
-          lastCommandError = `${patchResult.failedFileCount} patch file update${patchResult.failedFileCount === 1 ? '' : 's'} failed.`;
+          lastCommandError = message;
         }
-        results.push({
-          callId: call.id,
-          output: JSON.stringify(modelResult),
-          ...(patchResult.appliedFileCount === 0 && patchResult.failedFileCount > 0 ? { isError: true } : {}),
-        });
-        commandOutputs.push({
-          command: 'apply_hvy_patch',
-          output: formatOutputForModel(JSON.stringify(modelResult, null, 2), CHAT_CLI_MODEL_OUTPUT_MAX_LINES),
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        results.push({ callId: call.id, output: JSON.stringify({ error: message }), isError: true });
-        commandOutputs.push({ command: 'apply_hvy_patch', output: message });
-        batchHadError = true;
-        lastFailedCommand = 'apply_hvy_patch';
-        lastCommandError = message;
+        continue;
       }
-      continue;
-    }
-    if (call.name === 'search_hvy_document') {
-      const query = getStringToolArg(call, 'query').trim();
-      const limitArg = call.arguments.limit;
-      const limit = typeof limitArg === 'number' && Number.isFinite(limitArg) ? Math.floor(limitArg) : 5;
-      const cursor = getStringToolArg(call, 'cursor').trim();
-      params.onProgress?.(`Searching the HVY document for: ${query}`);
-      try {
-        const searchResult = await executeChatDocumentSearch({
-          document: params.document,
-          query,
-          limit,
-          ...(cursor ? { cursor } : {}),
-          chatContext: params.chatContext ?? params.state.chatContext,
-          embeddingProvider: params.embeddingProvider ?? params.state.embeddingProvider,
-          ...(params.signal ? { signal: params.signal } : {}),
-        });
-        results.push({ callId: call.id, output: JSON.stringify(searchResult) });
-        commandOutputs.push({
-          command: `search_hvy_document ${quoteChatCliShellArg(query)}`,
-          output: formatOutputForModel(JSON.stringify(searchResult, null, 2), CHAT_CLI_MODEL_OUTPUT_MAX_LINES),
-        });
-        batchHadSuccess = true;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        results.push({ callId: call.id, output: JSON.stringify({ error: message }), isError: true });
-        commandOutputs.push({ command: 'search_hvy_document', output: message });
-        batchHadError = true;
-        lastFailedCommand = 'search_hvy_document';
-        lastCommandError = message;
+      if (call.name === 'search_hvy_document') {
+        const query = getStringToolArg(call, 'query').trim();
+        const limitArg = call.arguments.limit;
+        const limit = typeof limitArg === 'number' && Number.isFinite(limitArg) ? Math.floor(limitArg) : 5;
+        const cursor = getStringToolArg(call, 'cursor').trim();
+        params.onProgress?.(`Searching the HVY document for: ${query}`);
+        try {
+          const searchResult = await executeChatDocumentSearch({
+            document: params.document,
+            query,
+            limit,
+            ...(cursor ? { cursor } : {}),
+            chatContext: params.chatContext ?? params.state.chatContext,
+            embeddingProvider: params.embeddingProvider ?? params.state.embeddingProvider,
+            ...(params.signal ? { signal: params.signal } : {}),
+          });
+          results.push({ callId: call.id, output: JSON.stringify(searchResult) });
+          commandOutputs.push({
+            command: `search_hvy_document ${quoteChatCliShellArg(query)}`,
+            output: formatOutputForModel(JSON.stringify(searchResult, null, 2), CHAT_CLI_MODEL_OUTPUT_MAX_LINES),
+          });
+          batchHadSuccess = true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          results.push({ callId: call.id, output: JSON.stringify({ error: message }), isError: true });
+          commandOutputs.push({ command: 'search_hvy_document', output: message });
+          batchHadError = true;
+          lastFailedCommand = 'search_hvy_document';
+          lastCommandError = message;
+        }
+        continue;
       }
-      continue;
-    }
-    if (call.name === 'walk_hvy_document') {
-      const limitArg = call.arguments.limit;
-      const limit = typeof limitArg === 'number' && Number.isFinite(limitArg) ? Math.floor(limitArg) : undefined;
-      const cursor = getStringToolArg(call, 'cursor').trim();
-      params.onProgress?.(cursor ? 'Continuing exhaustive HVY document review.' : 'Starting exhaustive HVY document review.');
-      try {
-        const walkResult = walkHvyDocument({
-          document: params.document,
-          ...(limit !== undefined ? { limit } : {}),
-          ...(cursor ? { cursor } : {}),
-        });
-        results.push({ callId: call.id, output: JSON.stringify(walkResult) });
-        commandOutputs.push({
-          command: 'walk_hvy_document',
-          output: formatOutputForModel(JSON.stringify(walkResult, null, 2), CHAT_CLI_MODEL_OUTPUT_MAX_LINES),
-        });
-        batchHadSuccess = true;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        results.push({ callId: call.id, output: JSON.stringify({ error: message }), isError: true });
-        commandOutputs.push({ command: 'walk_hvy_document', output: message });
-        batchHadError = true;
-        lastFailedCommand = 'walk_hvy_document';
-        lastCommandError = message;
+      if (call.name === 'walk_hvy_document') {
+        const limitArg = call.arguments.limit;
+        const limit = typeof limitArg === 'number' && Number.isFinite(limitArg) ? Math.floor(limitArg) : undefined;
+        const cursor = getStringToolArg(call, 'cursor').trim();
+        params.onProgress?.(cursor ? 'Continuing exhaustive HVY document review.' : 'Starting exhaustive HVY document review.');
+        try {
+          const walkResult = walkHvyDocument({
+            document: params.document,
+            ...(limit !== undefined ? { limit } : {}),
+            ...(cursor ? { cursor } : {}),
+          });
+          results.push({ callId: call.id, output: JSON.stringify(walkResult) });
+          commandOutputs.push({
+            command: 'walk_hvy_document',
+            output: formatOutputForModel(JSON.stringify(walkResult, null, 2), CHAT_CLI_MODEL_OUTPUT_MAX_LINES),
+          });
+          batchHadSuccess = true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          results.push({ callId: call.id, output: JSON.stringify({ error: message }), isError: true });
+          commandOutputs.push({ command: 'walk_hvy_document', output: message });
+          batchHadError = true;
+          lastFailedCommand = 'walk_hvy_document';
+          lastCommandError = message;
+        }
+        continue;
       }
-      continue;
-    }
-    if (call.name !== 'run_hvy_cli') {
-      const output = JSON.stringify({
-        stdout: '',
-        stderr: `Unknown tool: ${call.name}`,
-        exit_code: 1,
-        cwd: cli.snapshot().cwd,
-        mutated: false,
-      });
-      results.push({ callId: call.id, output, isError: true });
-      batchHadError = true;
-      lastFailedCommand = call.name;
-      lastCommandError = `Unknown tool: ${call.name}`;
-      continue;
-    }
+      if (call.name !== 'run_hvy_cli') {
+        const output = JSON.stringify({
+          stdout: '',
+          stderr: `Unknown tool: ${call.name}`,
+          exit_code: 1,
+          cwd: cli.snapshot().cwd,
+          mutated: false,
+        });
+        results.push({ callId: call.id, output, isError: true });
+        batchHadError = true;
+        lastFailedCommand = call.name;
+        lastCommandError = `Unknown tool: ${call.name}`;
+        continue;
+      }
 
-    const command = getStringToolArg(call, 'command').trim();
-    params.onProgress?.(`$ ${command}`);
-    let stdout = '';
-    let stderr = '';
-    let exitCode = 0;
-    let commandMutated = false;
-    try {
-      if (!command) {
-        throw new Error('run_hvy_cli requires a non-empty command.');
+      const command = getStringToolArg(call, 'command').trim();
+      params.onProgress?.(`$ ${command}`);
+      let stdout = '';
+      let stderr = '';
+      let exitCode = 0;
+      let commandMutated = false;
+      try {
+        if (!command) {
+          throw new Error('run_hvy_cli requires a non-empty command.');
+        }
+        if (/^\s*done(?:\s|$)/.test(command)) {
+          throw new Error('Native tool mode uses finish_task({ summary }), not run_hvy_cli with done.');
+        }
+        if (/^\s*ask(?:\s|$)/.test(command)) {
+          throw new Error('Native tool mode uses ask_user({ question }), not run_hvy_cli with ask.');
+        }
+        const execution = await measureAsyncPhase('chatCli.command.run', { command }, () => cli.run(command));
+        stdout = execution.output;
+        commandMutated = execution.mutated && !isSessionOnlyCommand(command);
+        mutated = mutated || commandMutated;
+        if (commandMutated) {
+          mutatedPaths = mergeChatCliMutationPaths(mutatedPaths, execution.mutatedPaths);
+          refreshSectionPaths = mergeChatCliMutationPaths(refreshSectionPaths, execution.refreshSectionPaths);
+          mutationRequiresFullRefresh = mutationRequiresFullRefresh || Boolean(execution.requiresFullRefresh || (!execution.mutatedPaths?.length && !execution.refreshSectionPaths?.length));
+        }
+        batchHadSuccess = true;
+        commandOutputs.push({ command, output: formatOutputForModel(stdout, CHAT_CLI_MODEL_OUTPUT_MAX_LINES) });
+        if (params.writeTrace && params.traceRunId) {
+          await writeChatCliCommandTrace(params.traceRunId, command, stdout, params.signal);
+        }
+      } catch (error) {
+        stderr = error instanceof Error ? error.message : String(error);
+        exitCode = 1;
+        batchHadError = true;
+        lastFailedCommand = command;
+        lastCommandError = stderr;
+        commandOutputs.push({ command, output: stderr });
+        if (params.writeTrace && params.traceRunId) {
+          await writeChatCliCommandTrace(params.traceRunId, command, stderr, params.signal);
+          await writeChatCliFailedCommandTrace(params.traceRunId, command, stderr, params.signal);
+        }
       }
-      if (/^\s*done(?:\s|$)/.test(command)) {
-        throw new Error('Native tool mode uses finish_task({ summary }), not run_hvy_cli with done.');
-      }
-      if (/^\s*ask(?:\s|$)/.test(command)) {
-        throw new Error('Native tool mode uses ask_user({ question }), not run_hvy_cli with ask.');
-      }
-      const execution = await measureAsyncPhase('chatCli.command.run', { command }, () => cli.run(command));
-      stdout = execution.output;
-      commandMutated = execution.mutated && !isSessionOnlyCommand(command);
-      mutated = mutated || commandMutated;
-      if (commandMutated) {
-        mutatedPaths = mergeChatCliMutationPaths(mutatedPaths, execution.mutatedPaths);
-        refreshSectionPaths = mergeChatCliMutationPaths(refreshSectionPaths, execution.refreshSectionPaths);
-        mutationRequiresFullRefresh = mutationRequiresFullRefresh || Boolean(execution.requiresFullRefresh || (!execution.mutatedPaths?.length && !execution.refreshSectionPaths?.length));
-      }
-      batchHadSuccess = true;
-      commandOutputs.push({ command, output: formatOutputForModel(stdout, CHAT_CLI_MODEL_OUTPUT_MAX_LINES) });
-      if (params.writeTrace && params.traceRunId) {
-        await writeChatCliCommandTrace(params.traceRunId, command, stdout, params.signal);
-      }
-    } catch (error) {
-      stderr = error instanceof Error ? error.message : String(error);
-      exitCode = 1;
-      batchHadError = true;
-      lastFailedCommand = command;
-      lastCommandError = stderr;
-      commandOutputs.push({ command, output: stderr });
-      if (params.writeTrace && params.traceRunId) {
-        await writeChatCliCommandTrace(params.traceRunId, command, stderr, params.signal);
-        await writeChatCliFailedCommandTrace(params.traceRunId, command, stderr, params.signal);
-      }
+      results.push({
+        callId: call.id,
+        output: JSON.stringify({
+          stdout,
+          stderr,
+          exit_code: exitCode,
+          cwd: cli.snapshot().cwd,
+          mutated: commandMutated,
+        }),
+        ...(exitCode === 0 ? {} : { isError: true }),
+      });
+    } finally {
+      params.onCommandActivity?.('finished');
     }
-    results.push({
-      callId: call.id,
-      output: JSON.stringify({
-        stdout,
-        stderr,
-        exit_code: exitCode,
-        cwd: cli.snapshot().cwd,
-        mutated: commandMutated,
-      }),
-      ...(exitCode === 0 ? {} : { isError: true }),
-    });
   }
 
   if (terminalSummary) {
@@ -630,6 +639,7 @@ async function advanceChatCliTurnState(params: {
   assistantOutput: string;
   signal?: AbortSignal;
   onProgress?: (content: string) => void;
+  onCommandActivity?: (phase: 'started' | 'finished') => void;
   traceRunId?: string;
   writeTrace?: boolean;
   lastInputTokens?: number;
@@ -637,7 +647,12 @@ async function advanceChatCliTurnState(params: {
   throwIfAborted(params.signal);
   const textToolCall = parseTextEncodedChatToolCall(params.assistantOutput);
   if (textToolCall) {
-    return advanceTextEncodedChatToolCall(params, textToolCall);
+    params.onCommandActivity?.('started');
+    try {
+      return await advanceTextEncodedChatToolCall(params, textToolCall);
+    } finally {
+      params.onCommandActivity?.('finished');
+    }
   }
   const action = parseChatCliAction(params.assistantOutput);
   if (action.kind === 'invalid') {
@@ -717,6 +732,7 @@ async function advanceChatCliTurnState(params: {
   let traceOutput = '';
   for (let commandIndex = 0; commandIndex < executableCommands.length; commandIndex += 1) {
     const command = executableCommands[commandIndex] ?? '';
+    params.onCommandActivity?.('started');
     params.onProgress?.(executableCommands.length > 1 ? `$ [${commandIndex + 1}/${executableCommands.length}] ${command}` : `$ ${command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
     try {
@@ -736,6 +752,8 @@ async function advanceChatCliTurnState(params: {
         output: lastCommandError,
         mutated: false,
       };
+    } finally {
+      params.onCommandActivity?.('finished');
     }
     traceOutput = result.output;
     commandOutputs.push({ command, output: formatOutputForModel(result.output, outputLineBudget) });

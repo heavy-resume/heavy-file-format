@@ -362,3 +362,35 @@ hvy_version: 0.1
   expect(html).toContain('data-action="run-chat-cli-sim-step"');
   expect(html).toContain('Run Commands And Prepare Next');
 });
+
+test('expected result: running work hides commands behind its activity expander', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [{ id: 'activity', role: 'assistant', content: '$ pwd', progress: true,
+    work: { status: 'running', lastCommand: 'pwd', details: ['$ pwd'], reasoning: [] } }];
+  const html = renderChatPanel(chat, deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy'), deps, 'document-edit');
+  expect(html).not.toContain('Last command:');
+  expect(html).toContain('Working');
+  expect(html).toMatch(/<details class="chat-work-details"[^>]*>\s*<summary[^>]*>.*Working/s);
+  expect(html).toContain('$ pwd</pre>');
+  expect(html).not.toContain('chat-work-pulse');
+});
+
+test('expected result: work dots advance with command activity and stop on completion', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [{ id: 'activity', role: 'assistant', content: 'Complete.', progress: true,
+    work: { status: 'running', details: ['$ pwd'], reasoning: [], activityRevision: 0 } }];
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  for (const [activityRevision, dots] of ['.', '..', '...', '.'].entries()) {
+    chat.messages[0].work!.activityRevision = activityRevision;
+    expect(renderChatPanel(chat, document, deps, 'document-edit')).toContain(`aria-hidden="true">${dots}</span>`);
+  }
+  for (const status of ['done', 'error'] as const) {
+    chat.messages[0].work!.status = status;
+    const html = renderChatPanel(chat, document, deps, 'document-edit');
+    expect(html).not.toContain('chat-work-indicator');
+    expect(html).toContain('Complete.');
+    expect(html).toContain('Show command history');
+  }
+});

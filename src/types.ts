@@ -75,6 +75,8 @@ export interface ChatTokenUsage {
 }
 
 export interface ChatWorkState {
+  /** Transient execution activity; advances only on command start or finish. */
+  activityRevision?: number;
   status: 'running' | 'done' | 'error';
   lastCommand?: string;
   details: string[];

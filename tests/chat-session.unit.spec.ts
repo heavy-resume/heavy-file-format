@@ -290,12 +290,13 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(result.error).toBeNull();
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ hvy insert 0 section /body chores "Chores"',
     '$ [1/2] hvy insert 0 text /body/chores note',
     '$ [2/2] echo "Weekly chore plan" > /body/chores/note/text.txt',
   ]);
   expect(onProgress.mock.calls[0]?.[0].work?.tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
+  expect(onProgress.mock.calls.map((call) => call[0].work.activityRevision)).toEqual([1, 2, 3, 4, 5, 6]);
   expect(result.messages.at(-1)?.work?.status).toBe('done');
   expect(result.messages.at(-1)?.work?.details).toEqual([
     '$ hvy insert 0 section /body chores "Chores"',
@@ -466,6 +467,7 @@ test('requestDocumentEditChatTurn can run native provider tool calls', async () 
     ]),
   }));
   expect(onProgress.mock.calls.map((call) => call[0].content)).toContain('$ hvy insert 0 section /body chores "Chores"');
+  expect(onProgress.mock.calls.map((call) => call[0].work.activityRevision)).toEqual([1, 2, 3, 4]);
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
     content: 'Created the chore section.',
@@ -1459,7 +1461,7 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ ls /',
     '$ ls /body',
     '$ pwd',
@@ -1488,7 +1490,7 @@ pwd
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     'Notes\nWhat you are doing: Inspecting the current directory.\nWhy you are doing it: I need to choose the right edit target.\nWhat you are unsure of: Whether the section already exists.',
     '$ pwd',
   ]);
@@ -1522,7 +1524,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/2] cat /body/summary/long/text.txt',
     '$ [2/2] pwd',
   ]);
@@ -1550,7 +1552,7 @@ test('requestDocumentEditChatTurn dedupes identical fenced commands in one respo
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['$ pwd']);
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual(['$ pwd']);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt.match(/CMD: pwd/g) ?? []).toHaveLength(1);
 });
@@ -1608,7 +1610,7 @@ done Created the chore section.`)
   expect(result.error).toBeNull();
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] hvy insert 0 section /body chores "Chores"',
     '$ [2/3] hvy insert 0 text /body/chores note',
     '$ [3/3] echo "Weekly chore plan" > /body/chores/note/text.txt',
@@ -1646,7 +1648,7 @@ cat /header.yaml
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] pwd',
     '$ [2/3] ls /body',
     '$ [3/3] cat /header.yaml',
@@ -1683,7 +1685,7 @@ cat /scratchpad.txt
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] pwd',
     "$ [2/3] cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT",
     '$ [3/3] cat /scratchpad.txt',
@@ -1725,7 +1727,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] cat /body/summary/long-a/text.txt',
     '$ [2/3] cat /body/summary/long-b/text.txt',
     '$ [3/3] cat /body/summary/long-c/text.txt',
@@ -1764,7 +1766,7 @@ true
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/4] pwd',
     '$ [2/4] ls /',
     '$ [3/4] cat /header.yaml',

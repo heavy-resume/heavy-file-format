@@ -1344,13 +1344,8 @@ function renderChatWorkMessageHtml(message: ChatMessage, deps: RenderChatPanelDe
     return renderStandardChatMessageHtml(message, deps);
   }
   const isRunning = work.status === 'running';
-  const summary = isRunning
-    ? deps.escapeHtml(work.lastCommand ? `Last command: ${work.lastCommand}` : message.content || 'Working through the request...')
-    : renderAssistantMessageHtml(message.content);
   return `
-    <div class="chat-bubble-body chat-work-body">
-      ${isRunning ? `<span class="chat-work-pulse" aria-hidden="true"></span><span>${summary}</span>` : summary}
-    </div>
+    ${isRunning ? '' : `<div class="chat-bubble-body chat-work-body">${renderAssistantMessageHtml(message.content)}</div>`}
     ${renderChatWorkDetails(work, deps, message.id)}
   `;
 }
@@ -1360,7 +1355,9 @@ function renderChatWorkDetails(work: ChatWorkState, deps: RenderChatPanelDeps, m
   const reasoningLines = work.reasoning.length > 0 ? work.reasoning : [];
   return `
     <details class="chat-work-details" data-chat-work-details="${deps.escapeAttr(`${messageId}:commands`)}">
-      <summary>Show command history</summary>
+      <summary>${work.status === 'running'
+        ? `<span class="chat-work-indicator" role="status" aria-label="Working; expand for command history">Working<span class="chat-work-dots" aria-hidden="true">${'.'.repeat(1 + (work.activityRevision ?? 0) % 3)}</span></span>`
+        : 'Show command history'}</summary>
       <div class="chat-work-detail-section">
         <pre class="chat-work-detail-scroll">${deps.escapeHtml(detailLines.join('\n'))}</pre>
       </div>

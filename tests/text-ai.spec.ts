@@ -39,7 +39,7 @@ test('cleanup sends only text guidance and selected value, replaces text, and su
   await expect(page.getByRole('textbox', { name: 'Custom Instructions' })).toHaveValue('');
   const placeholder = await page.getByRole('textbox', { name: 'Custom Instructions' }).getAttribute('placeholder');
   await page.getByRole('button', { name: 'Clean Up', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Process with AI' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'AI Clean-up' })).toHaveCount(0);
   expect(JSON.parse(payload).messages.find((message: { role: string }) => message.role === 'user').content).toBe(placeholder);
   await expect(page.locator('[data-field="block-rich"]')).toHaveText('This is the original.');
   expect(payload).toContain('Thsi is teh original.');
@@ -60,7 +60,7 @@ test('custom instructions retain focus and work inside a phone preview', async (
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: 'Phone 390', exact: true }).click();
   await page.getByRole('button', { name: 'Process with AI', exact: true }).click();
-  const modal = page.getByRole('dialog', { name: 'Process with AI' });
+  const modal = page.getByRole('dialog', { name: 'AI Clean-up' });
   await expect(modal.getByRole('textbox')).toBeHidden();
   await modal.getByText('Custom Instructions', { exact: true }).click();
   await modal.getByRole('textbox').pressSequentially('Make this concise.');
@@ -94,7 +94,7 @@ test('closing a pending request leaves the original text intact', async ({ page 
 
 test('request errors keep the custom draft available for retry', async ({ page }) => {
   await page.route('**/api/chat', route => route.fulfill({ status: 500, json: { error: 'Expected service failure' } }));
-  const modal = page.getByRole('dialog', { name: 'Process with AI' });
+  const modal = page.getByRole('dialog', { name: 'AI Clean-up' });
   await modal.getByText('Custom Instructions', { exact: true }).click();
   await modal.getByRole('textbox').fill('Preserve my wording.');
   await modal.getByRole('button', { name: 'Clean Up', exact: true }).click();
@@ -109,7 +109,7 @@ test('text processing model controls persist independently and select the reques
     const { state } = await import('/src/state.ts');
     return { provider: state.chat.settings.provider, model: state.chat.settings.model };
   });
-  const modal = page.getByRole('dialog', { name: 'Process with AI' });
+  const modal = page.getByRole('dialog', { name: 'AI Clean-up' });
   await modal.getByText('Model settings', { exact: true }).click();
   await modal.getByRole('combobox', { name: 'Text processing provider' }).selectOption('qwen');
   await modal.getByRole('textbox', { name: 'Text processing model' }).fill('');
@@ -136,7 +136,7 @@ test('text processing model controls persist independently and select the reques
 });
 
 test('not set blocks processing and clearing the provider persists without a default', async ({ page }) => {
-  const modal = page.getByRole('dialog', { name: 'Process with AI' });
+  const modal = page.getByRole('dialog', { name: 'AI Clean-up' });
   await modal.getByText('Model settings', { exact: true }).click();
   await modal.getByRole('combobox', { name: 'Text processing provider' }).selectOption('');
   await expect(modal.getByRole('textbox', { name: 'Text processing model' })).toHaveValue('');

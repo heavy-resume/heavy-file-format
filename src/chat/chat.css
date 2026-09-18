@@ -298,13 +298,16 @@
   font-size: 0.9rem;
 }
 
-.hvy-document .chat-work-pulse {
-  width: 0.55rem;
-  height: 0.55rem;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--hvy-button-bg);
-  animation: chat-work-pulse 1.4s ease-in-out infinite;
+.hvy-document .chat-work-dots {
+  display: inline-block;
+  min-width: 1.2em;
+  text-align: left;
+}
+
+.hvy-document .chat-bubble-progress .chat-work-details:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .hvy-document .chat-work-details {
@@ -334,20 +337,6 @@
   white-space: pre-wrap;
   word-break: break-word;
   font: 12px/1.45 "JetBrains Mono", "Fira Code", monospace;
-}
-
-@keyframes chat-work-pulse {
-
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.88);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 .hvy-document .chat-reasoning {

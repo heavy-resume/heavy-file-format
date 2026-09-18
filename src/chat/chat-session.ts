@@ -235,6 +235,12 @@ export async function requestDocumentEditChatTurn(params: {
       embeddingProvider: params.embeddingProvider,
       selectedComponent: params.selectedComponent,
       onMutation: params.onMutation,
+      onCommandActivity: (phase) => {
+        workState.activityRevision = (workState.activityRevision ?? 0) + 1;
+        if (phase === 'finished') {
+          emitProgress({ id: workMessageId, role: 'assistant', content: '', progress: true });
+        }
+      },
       onProgress: (content) =>
         emitProgress({
           id: crypto.randomUUID(),
@@ -497,6 +503,7 @@ function formatChatWorkMessageContent(work: ChatWorkState): string {
 function cloneChatWorkState(work: ChatWorkState): ChatWorkState {
   return {
     status: work.status,
+    activityRevision: work.activityRevision,
     ...(work.lastCommand ? { lastCommand: work.lastCommand } : {}),
     details: [...work.details],
     reasoning: [...work.reasoning],

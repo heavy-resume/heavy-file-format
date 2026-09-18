@@ -26,8 +26,8 @@ export function openTextAiModal(app: HTMLElement, trigger: HTMLElement): void {
   modal.className = 'modal-root';
   modal.dataset.textAiModal = 'true';
   modal.innerHTML = `<div class="modal-overlay" data-text-ai-close></div>
-    <section class="modal-panel text-ai-modal" role="dialog" aria-modal="true" aria-label="Process with AI">
-      <div class="modal-head"><h3>Process with AI</h3><button type="button" class="ghost remove-x" data-text-ai-close aria-label="Close">${closeIcon()}</button></div>
+    <section class="modal-panel text-ai-modal" role="dialog" aria-modal="true" aria-label="AI Clean-up">
+      <div class="modal-head"><h3>AI Clean-up</h3><button type="button" class="ghost remove-x" data-text-ai-close aria-label="Close">${closeIcon()}</button></div>
       <form class="text-ai-form">
         <div class="text-ai-body">
         ${renderTextAiSettings(state.chat.settings)}

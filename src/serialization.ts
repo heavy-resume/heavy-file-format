@@ -14,6 +14,7 @@ import {
 } from './attachment-store';
 import { makeId, sanitizeOptionalId } from './utils';
 import { resolveBaseComponentFromMeta, isBuiltinComponentName, getComponentDefsFromMeta } from './component-defs';
+import { resolveReusableTemplateTokensInBlock } from './reusable-template-values';
 import {
   DEFAULT_READER_MAX_WIDTH,
   DEFAULT_SIDEBAR_MAX_WIDTH,
@@ -271,6 +272,7 @@ function parseBlocks(
 
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
+  const definitionsByName = new Map(getComponentDefsFromMeta(documentMeta).map((item) => [item.name, item] as const));
   const componentListOrder = new WeakMap<VisualBlock, Array<{ block: VisualBlock; slotIndex: number | null; sequence: number }>>();
   const schemasWithInlineTableRows = new WeakSet<BlockSchema>();
   let currentText: string[] = [];
@@ -420,6 +422,14 @@ function parseBlocks(
   };
 
   const attachBlock = (block: VisualBlock, attach: BlockAttach): void => {
+    // A document instance never keeps unresolved template tokens: anything the instance did not
+    // override falls back to its definition, which still holds `{% variable %}` placeholders.
+    // Builtin blocks have no definition to inherit from, and nested ones are covered when their
+    // component-template ancestor is attached.
+    const definition = definitionsByName.get(block.schema.component);
+    if (definition) {
+      resolveReusableTemplateTokensInBlock(block, definition);
+    }
     if (attach.kind === 'expandable') {
       if (attach.part === 0) {
         attach.parent.schema.expandableStubBlocks.children.push(block);

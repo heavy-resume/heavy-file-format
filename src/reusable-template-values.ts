@@ -148,6 +148,49 @@ export function applyReusableSectionTemplateValues(
   return section;
 }
 
+/**
+ * Materialize an instance of a reusable template: apply the supplied values and resolve every
+ * remaining `{% variable %}` token as a blank value. Definitions keep their tokens; instances
+ * never do, so a variable the caller did not supply renders as a fill-in / empty field instead
+ * of leaking the literal token into the document.
+ */
+export function resolveReusableTemplateTokensInBlock(
+  block: VisualBlock,
+  definition: ComponentDefinition | ComponentTemplateFlavor | null | undefined = null,
+  values: Record<string, string> = {}
+): VisualBlock {
+  const variables = collectInstanceTemplateVariables(block, getReusableTemplateVariableConfig(definition));
+  return variables.length > 0 ? applyReusableTemplateValues(block, values, variables) : block;
+}
+
+// Instance materialization takes the variables from the tokens actually present, so flavors and
+// definition-inherited fields are covered without re-deriving them from the definition. Only the
+// declared `url` type and the label matter here; text/block affects validation, not substitution.
+function collectInstanceTemplateVariables(
+  block: VisualBlock,
+  config: Record<string, ReusableTemplateVariableConfig>
+): ReusableTemplateVariable[] {
+  const names = new Set<string>();
+  visitTemplateStrings(block, (text) => {
+    for (const match of text.matchAll(TEMPLATE_TOKEN_PATTERN)) {
+      names.add(match[1] ?? '');
+    }
+  });
+  return [...names].map((name) => ({
+    name,
+    type: config[name]?.type ?? 'text',
+    label: config[name]?.label || humanizeTemplateVariableName(name),
+  }));
+}
+
+export function resolveReusableTemplateTokensInSchema(
+  schema: VisualBlock['schema'],
+  definition: ComponentDefinition | ComponentTemplateFlavor | null | undefined = null,
+  values: Record<string, string> = {}
+): void {
+  resolveReusableTemplateTokensInBlock({ id: '', text: '', schema, schemaMode: false }, definition, values);
+}
+
 function normalizeTemplateLinkValues(values: Record<string, string>, variables: ReusableTemplateVariable[]): Record<string, string> {
   const normalized = { ...values };
   variables.filter((variable) => variable.type === 'url').forEach((variable) => {

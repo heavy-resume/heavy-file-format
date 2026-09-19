@@ -4,7 +4,7 @@ import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, parseGridItems as _parseGridItems } from './grid-ops';
-import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
+import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, resolveReusableTemplateTokensInBlock, resolveReusableTemplateTokensInSchema } from './reusable-template-values';
 import { getTableColumns, normalizeTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
@@ -640,10 +640,15 @@ function _createBlockSkip(component: string, _skip: boolean): VisualBlock {
   };
 }
 
-export function createEmptyBlock(component = 'text', skipComponentDefaults = false, documentMeta?: JsonObject | null): VisualBlock {
+export function createEmptyBlock(
+  component = 'text',
+  skipComponentDefaults = false,
+  documentMeta?: JsonObject | null,
+  templateValues: Record<string, string> = {}
+): VisualBlock {
   const reusableInstance = documentMeta
-    ? instantiateReusableBlockFromMeta(component, documentMeta)
-    : instantiateReusableBlock(component);
+    ? instantiateReusableBlockFromMeta(component, documentMeta, templateValues)
+    : instantiateReusableBlock(component, templateValues);
   if (reusableInstance) {
     return reusableInstance;
   }
@@ -837,7 +842,7 @@ export function getReusableTemplateByName(name: string): VisualBlock | null {
   return def ? getReusableTemplate(def) : null;
 }
 
-export function instantiateReusableBlock(componentName: string): VisualBlock | null {
+export function instantiateReusableBlock(componentName: string, templateValues: Record<string, string> = {}): VisualBlock | null {
   const def = getComponentDefs().find((item) => item.name === componentName);
   if (!def) {
     return null;
@@ -846,10 +851,11 @@ export function instantiateReusableBlock(componentName: string): VisualBlock | n
   const instance = cloneReusableBlock(template);
   instance.schema.component = componentName;
   instance.schemaMode = false;
+  resolveReusableTemplateTokensInBlock(instance, def, templateValues);
   return instance;
 }
 
-function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject): VisualBlock | null {
+function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject, templateValues: Record<string, string> = {}): VisualBlock | null {
   const def = getComponentDefsFromMeta(documentMeta).find((item) => item.name === componentName);
   if (!def) {
     return null;
@@ -866,6 +872,7 @@ function instantiateReusableBlockFromMeta(componentName: string, documentMeta: J
   const instance = cloneReusableBlockFromMeta(template, documentMeta);
   instance.schema.component = componentName;
   instance.schemaMode = false;
+  resolveReusableTemplateTokensInBlock(instance, def, templateValues);
   return instance;
 }
 
@@ -899,6 +906,7 @@ export function applyComponentDefaults(schema: BlockSchema, componentName: strin
       ? cloneReusableSchemaFromMeta(def.template.schema, componentName, documentMeta)
       : cloneReusableSchema(def.template.schema, componentName);
     Object.assign(schema, next);
+    resolveReusableTemplateTokensInSchema(schema, def);
     return;
   }
   if (def?.schema) {
@@ -906,6 +914,7 @@ export function applyComponentDefaults(schema: BlockSchema, componentName: strin
       ? cloneReusableSchemaFromMeta(schemaFromUnknown({ ...(def.schema as unknown as JsonObject), component: componentName }, new WeakSet<object>(), documentMeta), componentName, documentMeta)
       : cloneReusableSchema(def.schema, componentName)
     );
+    resolveReusableTemplateTokensInSchema(schema, def);
     return;
   }
   if (base === 'table' && schema.tableRows.length === 0) {

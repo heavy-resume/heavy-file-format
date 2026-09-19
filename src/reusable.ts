@@ -3,6 +3,7 @@ import { state, incrementSyncReusableCount, getRenderApp, getRefreshReaderPanels
 import { getComponentDefs, getReusableNameFromSectionKey, isBuiltinComponent, resolveBaseComponent, getSectionDefs } from './component-defs';
 import { findSectionByKey, visitBlocks } from './section-ops';
 import { cloneReusableBlock, cloneReusableSchema, getReusableTemplate, getReusableTemplateByName, cloneReusableSection } from './document-factory';
+import { resolveReusableTemplateTokensInBlock } from './reusable-template-values';
 import type { ComponentDefinition } from './types';
 import { stringify as stringifyYaml } from 'yaml';
 
@@ -104,11 +105,12 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
 }
 
 export function applyReusableTemplateToDocument(name: string, template: VisualBlock, excludeBlockId: string | null): void {
+  const definition = getComponentDefs().find((item) => item.name === name) ?? null;
   visitBlocks(state.document.sections, (block) => {
     if (block.schema.component !== name || block.id === excludeBlockId) {
       return;
     }
-    const next = cloneReusableBlock(template);
+    const next = resolveReusableTemplateTokensInBlock(cloneReusableBlock(template), definition);
     block.text = next.text;
     block.schema = next.schema;
     block.schema.component = name;
@@ -121,7 +123,7 @@ export function revertReusableComponent(def: ComponentDefinition): void {
     if (block.schema.component !== def.name) {
       return;
     }
-    const next = cloneReusableBlock(template);
+    const next = resolveReusableTemplateTokensInBlock(cloneReusableBlock(template), def);
     block.text = next.text;
     block.schema = next.schema;
     block.schema.component = def.baseType;

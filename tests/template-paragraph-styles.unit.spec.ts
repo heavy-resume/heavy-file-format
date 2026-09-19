@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
+import { getComponentDefsFromMeta } from '../src/component-defs';
 import { createEmptyBlock } from '../src/document-factory';
 import { markdownToReaderHtml } from '../src/markdown';
 import { applyReusableTemplateValues } from '../src/reusable-template-values';
@@ -7,10 +8,14 @@ import { deserializeDocument, deserializeDocumentBytes, serializeDocument } from
 
 test('expected result: every paragraph in a resume skill description inherits its template style', () => {
   const document = deserializeDocumentBytes(readFileSync(new URL('../examples/resume.hvy', import.meta.url)), '.hvy');
-  const block = createEmptyBlock('skill-record', false, document.meta);
-  expect(block.schema.expandableContentBlocks?.children[0].text).toContain('^detail-body^ {% description | block %}');
+  expect(getComponentDefsFromMeta(document.meta).find((definition) => definition.name === 'skill-record')
+    ?.schema?.expandableContentBlocks?.children[0].text).toContain('^detail-body^ {% description | block %}');
 
-  applyReusableTemplateValues(block, { skill: 'Fake Skill', description: 'Bar Moo cow\n\nThingamabob', notes: 'Fake notes' });
+  const block = createEmptyBlock('skill-record', false, document.meta, {
+    skill: 'Fake Skill',
+    description: 'Bar Moo cow\n\nThingamabob',
+    notes: 'Fake notes',
+  });
 
   const expectedResult = block.schema.expandableContentBlocks!.children[0].text;
   expect(expectedResult).toContain('^detail-body^ Bar Moo cow\n\n^detail-body^ Thingamabob');

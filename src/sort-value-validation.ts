@@ -1,4 +1,4 @@
-import { coerceSortValue } from './sort-values';
+import { coerceSortValue, listValueKindForElement } from './sort-values';
 import type { SortValueDefinition } from './types';
 
 const VALIDATION_CLASS = 'hvy-sort-value-invalid';
@@ -15,14 +15,18 @@ export function clearSortValueValidation(root: ParentNode): void {
 
 export function showInvalidSortValues(
   editorBlock: HTMLElement,
-  definitions: Record<string, SortValueDefinition>
+  definitions: Record<string, SortValueDefinition>,
+  groupDefinitions: Record<string, SortValueDefinition> = {}
 ): boolean {
   clearSortValueValidation(editorBlock);
   const invalid = [...editorBlock.querySelectorAll<HTMLElement>('[data-hvy-sort-value="true"]')]
-    .map((node) => ({ node, key: node.dataset.sortValueKey?.trim() ?? '' }))
-    .filter(({ node, key }) => {
+    .map((node) => {
+      const key = node.dataset.sortValueKey?.trim() ?? '';
+      return { node, key, definition: (listValueKindForElement(node) === 'group' ? groupDefinitions : definitions)[key] };
+    })
+    .filter(({ node, definition }) => {
       const text = node instanceof HTMLSelectElement ? node.value : node.textContent ?? '';
-      return Boolean(definitions[key]) && coerceSortValue(text, definitions[key]!) === null;
+      return Boolean(definition) && coerceSortValue(text, definition!) === null;
     });
   if (invalid.length === 0) {
     return false;
@@ -37,7 +41,7 @@ export function showInvalidSortValues(
       message.id = messageId;
       message.className = MESSAGE_CLASS;
       message.setAttribute('role', 'alert');
-      message.textContent = formatValidationMessage(key, definitions[key]!);
+      message.textContent = formatValidationMessage(key, invalid[0]!.definition!);
       node.setAttribute('aria-describedby', messageId);
       (node.closest('.text-editor-shell, .table-editor') ?? editorBlock.querySelector('.editor-block-content') ?? editorBlock).append(message);
     }

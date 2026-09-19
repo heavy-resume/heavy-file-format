@@ -1213,14 +1213,15 @@ component_defs:
 
   await page.locator('[data-action="activate-block"]').filter({ hasText: 'Temporary' }).first().dispatchEvent('click');
   const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await expect(editor).toBeFocused();
   await editor.locator('p').evaluate((node) => {
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
     const textNode = node.firstChild!;
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textNode);
     selection?.removeAllRanges();
     selection?.addRange(range);
-    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
   });
   await page.locator('.text-use-as-menu-item[data-sort-value-key="Name"]').evaluate((button) => {
     (button as HTMLButtonElement).click();

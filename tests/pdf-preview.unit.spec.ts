@@ -27,6 +27,7 @@ function createDocument(text = 'First version'): VisualDocument {
           css: '',
           sortKeys: {},
           derivedSortKeyNames: [],
+          derivedGroupKeyNames: [],
           groupKeys: {},
           tags: '',
           description: '',

@@ -1,3 +1,4 @@
+import { listValueKindForElement } from '../../sort-values';
 import { state, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
 import {
   encodeComponentListRuntimeView,
@@ -86,6 +87,7 @@ export function bindChangeControls(app: HTMLElement): void {
         const sectionKey = editor.dataset.sectionKey ?? '';
         const blockId = editor.dataset.blockId ?? '';
         const sortValueKey = target.dataset.sortValueKey ?? '';
+        const valueKind = listValueKindForElement(target);
         syncReusableTemplateForBlock(sectionKey, blockId);
         refreshReaderPanelsOutsideActiveEditor(editor);
         runDocumentEditHooksAfterCommit(null, () => {
@@ -97,9 +99,10 @@ export function bindChangeControls(app: HTMLElement): void {
               candidate.dataset.sectionKey === sectionKey
               && candidate.dataset.blockId === blockId
               && candidate.dataset.sortValueKey === sortValueKey
+              && listValueKindForElement(candidate) === valueKind
             );
           nextTarget?.focus({ preventScroll: true });
-        });
+        }, undefined, { preserveActiveEditor: true });
       }
       return;
     }

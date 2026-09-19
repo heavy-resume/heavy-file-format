@@ -670,10 +670,19 @@ class ScriptingComponentHandle {
   }
 
   set_sort_value(key: string, value: unknown): number {
+    return this.setAnnotatedValue(key, value, 'sort');
+  }
+
+  set_group_value(key: string, value: unknown): number {
+    return this.setAnnotatedValue(key, value, 'group');
+  }
+
+  private setAnnotatedValue(key: string, value: unknown, kind: 'sort' | 'group'): number {
     const replacements = setSortValueAnnotationText(
       this.location.block,
       String(key ?? ''),
-      String(value ?? '')
+      String(value ?? ''),
+      kind
     );
     if (replacements > 0) {
       this.markMutated();

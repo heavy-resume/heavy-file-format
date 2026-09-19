@@ -1463,6 +1463,9 @@ function serializeBlockSchema(
   if (schema.derivedSortKeyNames.length > 0) {
     payload.derivedSortKeyNames = schema.derivedSortKeyNames;
   }
+  if (schema.derivedGroupKeyNames.length > 0) {
+    payload.derivedGroupKeyNames = schema.derivedGroupKeyNames;
+  }
   if (Object.keys(schema.groupKeys).length > 0) {
     payload.groupKeys = schema.groupKeys;
   }
@@ -1524,6 +1527,9 @@ function serializeBlockSchema(
     }
     if (Object.keys(schema.pluginSortValues).length > 0) {
       payload.pluginSortValues = schema.pluginSortValues;
+    }
+    if (Object.keys(schema.pluginGroupValues).length > 0) {
+      payload.pluginGroupValues = schema.pluginGroupValues;
     }
   }
   if (component === 'expandable') {

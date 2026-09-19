@@ -1,6 +1,6 @@
 import type { SortKeyValue, VisualBlock } from './editor/types';
 import type { JsonObject } from './hvy/types';
-import type { ComponentDefinition, SortValueDateFormat, SortValueDefinition, SortValueEnumOption, VisualDocument } from './types';
+import type { ComponentDefinition, SectionDefinition, SortValueDateFormat, SortValueDefinition, SortValueEnumOption, VisualDocument } from './types';
 
 export interface SortValueAnnotation {
   key: string;
@@ -8,17 +8,30 @@ export interface SortValueAnnotation {
   rawPayload: JsonObject;
 }
 
+export type ListValueKind = 'sort' | 'group';
+
+export function listValueFields(kind: ListValueKind) {
+  return kind === 'group'
+    ? { definitions: 'groupValueDefs', keys: 'groupKeys', derived: 'derivedGroupKeyNames', plugin: 'pluginGroupValues' } as const
+    : { definitions: 'sortValueDefs', keys: 'sortKeys', derived: 'derivedSortKeyNames', plugin: 'pluginSortValues' } as const;
+}
+
+export function listValueKindForElement(element: HTMLElement): ListValueKind {
+  return element.closest<HTMLElement>('[data-value-kind]')?.dataset.valueKind === 'group' ? 'group' : 'sort';
+}
+
 export const SORT_VALUE_ANNOTATION_PATTERN = /<!--hvy:sort-value\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:sort-value-->/g;
 
-export function formatSortValueAnnotation(payload: JsonObject, text: string): string {
-  return `<!--hvy:sort-value ${JSON.stringify(payload)}-->${text}<!--/hvy:sort-value-->`;
+export function formatSortValueAnnotation(payload: JsonObject, text: string, kind: ListValueKind = 'sort'): string {
+  return `<!--hvy:${kind}-value ${JSON.stringify(payload)}-->${text}<!--/hvy:${kind}-value-->`;
 }
 
 export function replaceSortValueAnnotations(
   markdown: string,
-  replacement: (annotation: SortValueAnnotation) => string
+  replacement: (annotation: SortValueAnnotation) => string,
+  kind: ListValueKind = 'sort'
 ): string {
-  return (markdown || '').replace(SORT_VALUE_ANNOTATION_PATTERN, (_match, rawJson, text) => {
+  return (markdown || '').replace(annotationPattern(kind), (_match, rawJson, text) => {
     const payload = parseSortValuePayload(rawJson);
     const key = typeof payload?.key === 'string' ? payload.key.trim() : '';
     if (!payload || !key) {
@@ -28,30 +41,34 @@ export function replaceSortValueAnnotations(
   });
 }
 
-export function findSortValueAnnotations(markdown: string): SortValueAnnotation[] {
+function annotationPattern(kind: ListValueKind): RegExp {
+  return kind === 'sort' ? SORT_VALUE_ANNOTATION_PATTERN : /<!--hvy:group-value\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:group-value-->/g;
+}
+
+export function findSortValueAnnotations(markdown: string, kind: ListValueKind = 'sort'): SortValueAnnotation[] {
   const annotations: SortValueAnnotation[] = [];
   replaceSortValueAnnotations(markdown, (annotation) => {
     annotations.push(annotation);
     return annotation.text;
-  });
+  }, kind);
   return annotations;
 }
 
-export function setSortValueAnnotationText(block: VisualBlock, key: string, text: string): number {
+export function setSortValueAnnotationText(block: VisualBlock, key: string, text: string, kind: ListValueKind = 'sort'): number {
   const normalizedKey = key.trim();
   if (!normalizedKey) {
     return 0;
   }
   let replacements = 0;
   const replaceInMarkdown = (markdown: string): string => markdown.replace(
-    SORT_VALUE_ANNOTATION_PATTERN,
+    annotationPattern(kind),
     (match, rawJson: string) => {
       const payload = parseSortValuePayload(rawJson);
       if (!payload || typeof payload.key !== 'string' || payload.key.trim() !== normalizedKey) {
         return match;
       }
       replacements += 1;
-      return formatSortValueAnnotation(payload, text);
+      return formatSortValueAnnotation(payload, text, kind);
     }
   );
   if (block.schema.kind === 'text') {
@@ -63,26 +80,23 @@ export function setSortValueAnnotationText(block: VisualBlock, key: string, text
     });
   }
   getNestedBlocks(block).forEach((child) => {
-    replacements += setSortValueAnnotationText(child, normalizedKey, text);
+    replacements += setSortValueAnnotationText(child, normalizedKey, text, kind);
   });
   return replacements;
 }
 
 export function getComponentSortValueDefs(
   meta: Record<string, unknown> | null | undefined,
-  componentName: string
+  componentName: string,
+  kind: ListValueKind = 'sort'
 ): Record<string, SortValueDefinition> {
   const definition = getComponentDefinition(meta, componentName);
-  return definition ? normalizeSortValueDefs(definition.sortValueDefs) : {};
+  return definition ? normalizeSortValueDefs(definition[listValueFields(kind).definitions], kind) : {};
 }
 
-export function getSortValueDefsForBlock(document: VisualDocument, block: VisualBlock): Record<string, SortValueDefinition> {
-  const direct = getComponentSortValueDefs(document.meta, block.schema.component);
-  if (Object.keys(direct).length > 0) {
-    return direct;
-  }
+export function getSortValueDefsForBlock(document: VisualDocument, block: VisualBlock, kind: ListValueKind = 'sort'): Record<string, SortValueDefinition> {
   const owner = findSortValueOwnerBlock(document, block.id);
-  return owner ? getComponentSortValueDefs(document.meta, owner.schema.component) : {};
+  return getComponentSortValueDefs(document.meta, (owner ?? block).schema.component, kind);
 }
 
 export function findSortValueOwnerBlock(document: VisualDocument, blockId: string): VisualBlock | null {
@@ -109,36 +123,42 @@ export function syncSortValuesForDocument(document: VisualDocument): boolean {
 }
 
 export function syncSortValuesForListItem(meta: Record<string, unknown> | null | undefined, item: VisualBlock): boolean {
-  const defs = getComponentSortValueDefs(meta, item.schema.component);
-  if (Object.keys(defs).length === 0) {
-    return false;
-  }
+  const sortChanged = syncListItemValues(meta, item, 'sort');
+  const groupChanged = syncListItemValues(meta, item, 'group');
+  return sortChanged || groupChanged;
+}
+
+function syncListItemValues(meta: Record<string, unknown> | null | undefined, item: VisualBlock, kind: ListValueKind): boolean {
+  const fields = listValueFields(kind);
+  const defs = getComponentSortValueDefs(meta, item.schema.component, kind);
+  if (Object.keys(defs).length === 0 && item.schema[fields.derived].length === 0) return false;
+  const keys: Record<string, SortKeyValue> = item.schema[fields.keys];
   let changed = false;
-  const resolvedSources = collectSortValueSources(item, defs);
+  const resolvedSources = collectSortValueSources(item, defs, kind);
   const nextDerivedKeys = new Set<string>();
   resolvedSources.forEach((resolved, key) => {
     if (resolved === null) {
       return;
     }
     nextDerivedKeys.add(key);
-    if (Object.is(item.schema.sortKeys[key], resolved)) {
+    if (Object.is(keys[key], resolved)) {
       return;
     }
-    item.schema.sortKeys[key] = resolved;
+    keys[key] = resolved;
     changed = true;
   });
-  item.schema.derivedSortKeyNames.forEach((key) => {
+  item.schema[fields.derived].forEach((key) => {
     if (nextDerivedKeys.has(key)) {
       return;
     }
-    if (Object.prototype.hasOwnProperty.call(item.schema.sortKeys, key)) {
-      delete item.schema.sortKeys[key];
+    if (Object.prototype.hasOwnProperty.call(keys, key)) {
+      delete keys[key];
       changed = true;
     }
   });
   const nextDerivedKeyNames = [...nextDerivedKeys].sort((left, right) => left.localeCompare(right));
-  if (!arraysEqual(item.schema.derivedSortKeyNames, nextDerivedKeyNames)) {
-    item.schema.derivedSortKeyNames = nextDerivedKeyNames;
+  if (!arraysEqual(item.schema[fields.derived], nextDerivedKeyNames)) {
+    item.schema[fields.derived] = nextDerivedKeyNames;
     changed = true;
   }
   return changed;
@@ -168,17 +188,18 @@ export function coerceSortValue(text: string, definition: SortValueDefinition): 
 
 function collectSortValueSources(
   item: VisualBlock,
-  defs: Record<string, SortValueDefinition>
+  defs: Record<string, SortValueDefinition>,
+  kind: ListValueKind
 ): Map<string, SortKeyValue | null> {
   const sources = new Map<string, SortKeyValue | null>();
-  collectAnnotatedText(item).forEach((annotation) => {
+  collectAnnotatedText(item, kind).forEach((annotation) => {
     const definition = defs[annotation.key];
     if (!definition) {
       return;
     }
     sources.set(annotation.key, coerceSortValue(annotation.text, definition));
   });
-  collectPluginSortValues(item).forEach(({ key, value }) => {
+  collectPluginSortValues(item, kind).forEach(({ key, value }) => {
     const definition = defs[key];
     if (!definition) {
       return;
@@ -208,7 +229,7 @@ function arraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-export function normalizeSortValueDefs(value: unknown): Record<string, SortValueDefinition> {
+export function normalizeSortValueDefs(value: unknown, kind: ListValueKind = 'sort'): Record<string, SortValueDefinition> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
   }
@@ -219,11 +240,11 @@ export function normalizeSortValueDefs(value: unknown): Record<string, SortValue
     }
     const source = raw as Record<string, unknown>;
     const type = source.type === 'text' || source.type === 'number' || source.type === 'date' || source.type === 'datetime' || source.type === 'enum' ? source.type : null;
-    if (!type) {
+    if (!type || (kind === 'group' && type !== 'text' && type !== 'enum')) {
       return;
     }
     const options = Array.isArray(source.options)
-      ? source.options.map(normalizeEnumOption).filter((option): option is SortValueEnumOption => option !== null)
+      ? source.options.map(normalizeEnumOption).filter((option): option is SortValueEnumOption => option !== null && (kind === 'sort' || typeof option.value === 'string'))
       : undefined;
     if (type === 'enum' && (!options || options.length === 0)) {
       return;
@@ -518,30 +539,30 @@ function parseSortValuePayload(rawJson: string): JsonObject | null {
   }
 }
 
-function collectAnnotatedText(block: VisualBlock): SortValueAnnotation[] {
+function collectAnnotatedText(block: VisualBlock, kind: ListValueKind): SortValueAnnotation[] {
   const annotations: SortValueAnnotation[] = [];
   if (block.schema.kind === 'text') {
-    annotations.push(...findSortValueAnnotations(block.text));
+    annotations.push(...findSortValueAnnotations(block.text, kind));
   }
   if (block.schema.kind === 'table') {
     block.schema.tableRows.forEach((row) => {
-      row.cells.forEach((cell) => annotations.push(...findSortValueAnnotations(cell)));
+      row.cells.forEach((cell) => annotations.push(...findSortValueAnnotations(cell, kind)));
     });
   }
-  getNestedBlocks(block).forEach((child) => annotations.push(...collectAnnotatedText(child)));
+  if (block.schema.kind !== 'component-list') getNestedBlocks(block).forEach((child) => annotations.push(...collectAnnotatedText(child, kind)));
   return annotations;
 }
 
-function collectPluginSortValues(block: VisualBlock): Array<{ key: string; value: SortKeyValue }> {
+function collectPluginSortValues(block: VisualBlock, kind: ListValueKind): Array<{ key: string; value: SortKeyValue }> {
   const values: Array<{ key: string; value: SortKeyValue }> = [];
   if (block.schema.kind === 'plugin') {
-    Object.entries(block.schema.pluginSortValues).forEach(([key, value]) => {
+    Object.entries(block.schema[listValueFields(kind).plugin]).forEach(([key, value]) => {
       if (key.trim().length > 0) {
         values.push({ key, value });
       }
     });
   }
-  getNestedBlocks(block).forEach((child) => values.push(...collectPluginSortValues(child)));
+  if (block.schema.kind !== 'component-list') getNestedBlocks(block).forEach((child) => values.push(...collectPluginSortValues(child, kind)));
   return values;
 }
 
@@ -575,6 +596,9 @@ function findComponentListItemOwner(document: VisualDocument, blockId: string): 
     if (block.schema.kind === 'component-list') {
       for (const item of block.schema.componentListBlocks) {
         if (containsBlock(item, blockId)) {
+          // An inner list owns its own values even when its item is inside this item.
+          getNestedBlocks(item).forEach(visitBlock);
+          if (owner) return;
           owner = item;
           return;
         }
@@ -589,6 +613,66 @@ function findComponentListItemOwner(document: VisualDocument, blockId: string): 
   };
   visitSections(document.sections);
   return owner;
+}
+
+/** Rename a shared key and all its sources together, without replacing editor DOM. */
+export function renameListValueKey(document: VisualDocument, componentName: string, oldName: string, newName: string, kind: ListValueKind): boolean {
+  const fields = listValueFields(kind);
+  const definition = getComponentDefinition(document.meta, componentName);
+  const definitions = definition?.[fields.definitions];
+  if (!definition || !definitions?.[oldName] || !newName.trim() || (newName !== oldName && definitions[newName])) return false;
+  if (oldName === newName) return true;
+  definition[fields.definitions] = Object.fromEntries(Object.entries(definitions).map(([key, value]) => [key === oldName ? newName : key, value]));
+  const renameProperty = (values: Record<string, unknown>): void => {
+    if (Object.hasOwn(values, oldName)) {
+      values[newName] = values[oldName];
+      delete values[oldName];
+    }
+  };
+  const renameText = (text: string) => text.replace(annotationPattern(kind), (match, rawJson: string, body: string) => {
+    const payload = parseSortValuePayload(rawJson);
+    return typeof payload?.key === 'string' && payload.key.trim() === oldName
+      ? formatSortValueAnnotation({ ...payload, key: newName }, body, kind)
+      : match;
+  });
+  const renameSources = (block: VisualBlock): void => {
+    if (block.schema.kind === 'text') block.text = renameText(block.text);
+    if (block.schema.kind === 'table') block.schema.tableRows.forEach((row) => { row.cells = row.cells.map(renameText); });
+    if (block.schema.kind === 'plugin') renameProperty(block.schema[fields.plugin]);
+    if (block.schema.kind !== 'component-list') getNestedBlocks(block).forEach(renameSources);
+  };
+  const renameItem = (block: VisualBlock): void => {
+    renameProperty(block.schema[fields.keys]);
+    block.schema[fields.derived] = block.schema[fields.derived].map((key) => key === oldName ? newName : key);
+    renameSources(block);
+  };
+  const visit = (block: VisualBlock): void => {
+    if (block.schema.component === componentName) renameItem(block);
+    if (block.schema.kind === 'component-list' && block.schema.componentListComponent === componentName) {
+      const field = kind === 'group' ? 'componentListDefaultGroupKey' : 'componentListDefaultSortKey';
+      if (block.schema[field] === oldName) block.schema[field] = newName;
+    }
+    getNestedBlocks(block).forEach(visit);
+  };
+  document.sections.forEach((section) => section.blocks.forEach(visit));
+  // Definitions can also contain lists and instances of the renamed item type.
+  for (const component of document.meta.component_defs as unknown as ComponentDefinition[]) {
+    for (const value of [component, ...(component.flavors ?? [])]) {
+      const root = value.template ?? (value.schema ? { id: '', text: value.text ?? '', schema: value.schema, schemaMode: false } : null);
+      if (root) {
+        if (component === definition) renameItem(root);
+        visit(root);
+      }
+      if (component === definition && typeof value.text === 'string') value.text = renameText(value.text);
+    }
+  }
+  if (Array.isArray(document.meta.section_defs)) {
+    for (const section of document.meta.section_defs as unknown as SectionDefinition[]) {
+      for (const value of [section, ...(section.flavors ?? [])]) value.template.blocks.forEach(visit);
+    }
+  }
+  syncSortValuesForDocument(document);
+  return true;
 }
 
 function containsBlock(block: VisualBlock, blockId: string): boolean {

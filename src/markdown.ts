@@ -5,7 +5,7 @@ import TurndownService from 'turndown';
 import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } from './text-line-styles';
 import { createTextFillInMarker } from './text-fill-in';
 import { renderWorkspaceLinksInHtml } from './workspace-links';
-import { formatSortValueAnnotation, replaceSortValueAnnotations } from './sort-values';
+import { formatSortValueAnnotation, replaceSortValueAnnotations, listValueKindForElement, type ListValueKind } from './sort-values';
 import { normalizeRenderedMarkdownSoftBreaks } from './rendered-markdown-text';
 import {
   answerGroupInputName,
@@ -208,7 +208,7 @@ turndown.addRule('hvy-sort-value', {
         ?? element.getAttribute('value')?.trim()
         ?? content
       : (element.textContent ?? content).replaceAll('\u200b', '').trim();
-    return formatSortValueAnnotation({ key }, label);
+    return formatSortValueAnnotation({ key }, label, listValueKindForElement(element));
   },
 });
 
@@ -497,7 +497,11 @@ function extractResponsiveAnnotations(
   const withNowrap = withAlt.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
     makeToken(renderNowrapAnnotationHtml(text))
   );
-  const withSortValues = replaceSortValueAnnotations(withNowrap, (annotation) =>
+  const withGroupValues = replaceSortValueAnnotations(withNowrap, (annotation) =>
+    makeToken(options.editable || options.preserveSortValues
+      ? renderSortValueAnnotationHtml(annotation.key, annotation.text, 'group')
+      : escapeHtml(annotation.text)), 'group');
+  const withSortValues = replaceSortValueAnnotations(withGroupValues, (annotation) =>
     makeToken(options.editable || options.preserveSortValues
       ? renderSortValueAnnotationHtml(annotation.key, annotation.text)
       : escapeHtml(annotation.text))
@@ -511,8 +515,8 @@ function extractResponsiveAnnotations(
   };
 }
 
-function renderSortValueAnnotationHtml(key: string, text: string): string {
-  return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
+function renderSortValueAnnotationHtml(key: string, text: string, kind: ListValueKind = 'sort'): string {
+  return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-value-kind="${kind}" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
 let fallbackGroupSeed = 0;

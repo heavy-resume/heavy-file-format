@@ -255,6 +255,16 @@ function buildContext(
         })),
       }),
     },
+    groupValues: {
+      get: (key) => runWithStateRuntime(runtime, () => findBlockByIds(sectionKey, blockId)?.schema.pluginGroupValues[String(key ?? '')]),
+      set: (key, value) => syncPluginSortValue((current) => {
+        const normalizedKey = String(key ?? '').trim();
+        if (normalizedKey && typeof value === 'string') current.schema.pluginGroupValues[normalizedKey] = value;
+      }),
+      clear: (key) => syncPluginSortValue((current) => {
+        delete current.schema.pluginGroupValues[String(key ?? '').trim()];
+      }),
+    },
     sortValues: {
       get: (key) => {
         const current = findBlockByIds(sectionKey, blockId);

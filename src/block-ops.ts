@@ -38,7 +38,7 @@ import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } f
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
-import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
+import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDocument, syncSortValuesForListItem, listValueFields, type ListValueKind } from './sort-values';
 import { highlightSearchHtml } from './search/highlight';
 import { sanitizeInlineCss } from './css-sanitizer';
 import { syncTextToolbarContextActions } from './editor/components/text/text-toolbar-layout';
@@ -1392,7 +1392,7 @@ export function applyRichAction(
   action: string,
   editable: HTMLElement,
   value?: string,
-  options: { sortValueKey?: string; sortValueType?: string; templateVariableName?: string } = {}
+  options: { sortValueKey?: string; sortValueType?: string; templateVariableName?: string; valueKind?: ListValueKind } = {}
 ): void {
   if (action === 'template-value') {
     if (applyTemplateValueSelection(editable, options.templateVariableName)) {
@@ -1572,7 +1572,7 @@ function replaceRichSelectionWithText(
 
 function applySortValueAnnotation(
   editable: HTMLElement,
-  options: { sortValueKey?: string; sortValueType?: string }
+  options: { sortValueKey?: string; sortValueType?: string; valueKind?: ListValueKind }
 ): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range) {
@@ -1580,21 +1580,23 @@ function applySortValueAnnotation(
   }
   const key = (options.sortValueKey ?? '').trim() || inferSortValueKey(range.toString(), options.sortValueType);
   const type: SortValueType = options.sortValueType === 'number' || options.sortValueType === 'date' || options.sortValueType === 'datetime' || options.sortValueType === 'enum' ? options.sortValueType : 'text';
-  const definition = getEditableSortValueDefinition(editable, key);
+  const kind = options.valueKind ?? 'sort';
+  const definition = getEditableSortValueDefinition(editable, key, kind);
   if (definition?.type === 'enum') {
-    return applyEnumSortValueControl(editable, range, key, definition);
+    return applyEnumSortValueControl(editable, range, key, definition, kind);
   }
   if (range.collapsed || range.toString().trim().length === 0) {
     return false;
   }
-  ensureSortValueDefinition(editable, key, type);
+  ensureSortValueDefinition(editable, key, type, kind);
   const wrapper = document.createElement('span');
   wrapper.className = 'hvy-sort-value';
   wrapper.dataset.hvySortValue = 'true';
   wrapper.dataset.sortValueKey = key;
+  wrapper.dataset.valueKind = kind;
   const fragment = range.extractContents();
-  unwrapSortValueAnnotations(fragment, key);
-  unwrapSortValueAnnotations(editable, key);
+  unwrapSortValueAnnotations(fragment, key, kind);
+  unwrapSortValueAnnotations(editable, key, kind);
   wrapper.appendChild(fragment);
   range.insertNode(wrapper);
   moveCaretAfterElement(wrapper);
@@ -1605,7 +1607,8 @@ function applyEnumSortValueControl(
   editable: HTMLElement,
   range: Range,
   key: string,
-  definition: SortValueDefinition
+  definition: SortValueDefinition,
+  kind: ListValueKind
 ): boolean {
   const options = definition.options ?? [];
   if (options.length === 0) {
@@ -1614,12 +1617,13 @@ function applyEnumSortValueControl(
   const selectedText = range.toString().trim();
   const selectedOption = options.find((option) => option.label.trim() === selectedText) ?? options[0];
   range.deleteContents();
-  unwrapSortValueAnnotations(editable, key);
+  unwrapSortValueAnnotations(editable, key, kind);
   const select = document.createElement('select');
   select.className = 'hvy-sort-value hvy-sort-value-enum';
   select.contentEditable = 'false';
   select.dataset.hvySortValue = 'true';
   select.dataset.sortValueKey = key;
+  select.dataset.valueKind = kind;
   select.dataset.field = 'sort-value-enum';
   select.dataset.sectionKey = editable.dataset.sectionKey ?? '';
   select.dataset.blockId = editable.dataset.blockId ?? '';
@@ -1636,9 +1640,9 @@ function applyEnumSortValueControl(
   return true;
 }
 
-function getEditableSortValueDefinition(editable: HTMLElement, key: string): SortValueDefinition | undefined {
+function getEditableSortValueDefinition(editable: HTMLElement, key: string, kind: ListValueKind): SortValueDefinition | undefined {
   const block = findBlockByIds(editable.dataset.sectionKey ?? '', editable.dataset.blockId ?? '');
-  return block ? getSortValueDefsForBlock(state.document, block)[key] : undefined;
+  return block ? getSortValueDefsForBlock(state.document, block, kind)[key] : undefined;
 }
 
 function moveCaretAfterElement(element: HTMLElement): void {
@@ -1653,8 +1657,9 @@ function moveCaretAfterElement(element: HTMLElement): void {
   element.closest<HTMLElement>('[contenteditable="true"]')?.focus({ preventScroll: true });
 }
 
-function unwrapSortValueAnnotations(root: ParentNode, key: string): void {
+function unwrapSortValueAnnotations(root: ParentNode, key: string, kind: ListValueKind): void {
   root.querySelectorAll<HTMLElement>(`[data-hvy-sort-value="true"][data-sort-value-key="${cssEscapeForSelector(key)}"]`).forEach((node) => {
+    if ((node.dataset.valueKind === 'group' ? 'group' : 'sort') !== kind) return;
     const parent = node.parentNode;
     if (!parent) {
       return;
@@ -1677,7 +1682,7 @@ function inferSortValueKey(text: string, type: string | undefined): string {
   return 'Name';
 }
 
-function ensureSortValueDefinition(editable: HTMLElement, key: string, type: SortValueType): void {
+function ensureSortValueDefinition(editable: HTMLElement, key: string, type: SortValueType, kind: ListValueKind): void {
   const blockId = editable.dataset.blockId ?? '';
   if (!blockId) {
     return;
@@ -1691,18 +1696,19 @@ function ensureSortValueDefinition(editable: HTMLElement, key: string, type: Sor
     return;
   }
   const defs = Array.isArray(state.document.meta.component_defs) ? state.document.meta.component_defs : [];
-  const definition = defs.find((item): item is { name: string; sortValueDefs?: Record<string, unknown> } =>
+  const definition = defs.find((item): item is { name: string; sortValueDefs?: Record<string, unknown>; groupValueDefs?: Record<string, unknown> } =>
     !!item && typeof item === 'object' && (item as { name?: unknown }).name === componentName
   );
   if (!definition) {
     return;
   }
-  const sortValueDefs = definition.sortValueDefs && typeof definition.sortValueDefs === 'object' && !Array.isArray(definition.sortValueDefs)
-    ? definition.sortValueDefs
+  const field = listValueFields(kind).definitions;
+  const sortValueDefs = definition[field] && typeof definition[field] === 'object' && !Array.isArray(definition[field])
+    ? definition[field]
     : {};
   if (!sortValueDefs[key]) {
     sortValueDefs[key] = { type };
-    definition.sortValueDefs = sortValueDefs;
+    definition[field] = sortValueDefs;
   }
 }
 

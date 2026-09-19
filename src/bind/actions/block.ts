@@ -1,5 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
+import { syncSortValuesForDocument } from '../../sort-values';
 import { findBlockContainerById, findBlockContainerInList, findSectionByKey, insertBlockAtSectionInsertionBoundary, removeBlockFromSectionRenderSequence } from '../../section-ops';
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
@@ -371,6 +372,7 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
     }
   }
   syncReusableTemplateForBlock(sectionKey, reusableOwnerId ?? blockId);
+  syncSortValuesForDocument(state.document);
   if (activeIsAffected && activeBlockId) {
     clearActiveEditorBlock(activeBlockId);
   }
@@ -414,6 +416,7 @@ const moveBlock = (offset: -1 | 1): ActionHandler => ({ sectionKey, blockId }) =
     return;
   }
   if (moveBlockByOffset(sectionKey, blockId, offset)) {
+    syncSortValuesForDocument(state.document);
     getRenderApp()();
   }
 };
@@ -685,6 +688,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     }
   }
   syncReusableTemplateForBlock(sectionKey, syncBlockId);
+  syncSortValuesForDocument(state.document);
   state.componentPlacement = null;
   setActiveEditorBlock(sectionKey, activePlacedBlockId);
   state.pendingEditorActivation = null;

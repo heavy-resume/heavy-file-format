@@ -30,6 +30,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     css: DEFAULT_BLOCK_CSS,
     sortKeys: {},
     derivedSortKeyNames: [],
+    derivedGroupKeyNames: [],
     groupKeys: {},
     tags: '',
     description: '',
@@ -142,7 +143,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         encryptedError: '',
       } as unknown as BlockSchema;
     case 'plugin':
-      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {}, pluginSortValues: {} } as unknown as BlockSchema;
+      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {}, pluginSortValues: {}, pluginGroupValues: {} } as unknown as BlockSchema;
     case 'xref-card':
       return { ...base, kind: 'xref-card', xrefTarget: '', xrefTargetTagFilter: '' } as unknown as BlockSchema;
     default:
@@ -310,6 +311,12 @@ export function normalizeReusableComponentDefinitions(meta: JsonObject): void {
         baseType,
       };
       const sortValueDefs = normalizeSortValueDefs(raw.sortValueDefs);
+      const groupValueDefs = normalizeSortValueDefs(raw.groupValueDefs, 'group');
+      if (Object.keys(groupValueDefs).length > 0) {
+        normalized.groupValueDefs = groupValueDefs;
+      } else {
+        delete normalized.groupValueDefs;
+      }
       if (Object.keys(sortValueDefs).length > 0) {
         normalized.sortValueDefs = sortValueDefs;
       } else {
@@ -371,6 +378,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
     sortKeys: parseSortKeys(candidate.sortKeys),
     derivedSortKeyNames: parseStringList(candidate.derivedSortKeyNames),
+    derivedGroupKeyNames: parseStringList(candidate.derivedGroupKeyNames),
     groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
@@ -424,6 +432,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
         ? (candidate.pluginConfig as JsonObject)
         : schema.pluginConfig;
     schema.pluginSortValues = parseSortKeys(candidate.pluginSortValues);
+    schema.pluginGroupValues = parseGroupKeys(candidate.pluginGroupValues);
   }
   if (schema.kind === 'expandable') {
     schema.expandableStubComponent =

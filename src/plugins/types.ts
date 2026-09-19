@@ -159,6 +159,11 @@ export interface HvyPluginContext {
     set(key: string, value: SortKeyValue): boolean;
     clear(key: string): boolean;
   };
+  groupValues: {
+    get(key: string): string | undefined;
+    set(key: string, value: string): boolean;
+    clear(key: string): boolean;
+  };
   // Ask the host to re-render. Use sparingly for structural shell changes only;
   // setConfig/setText already refresh the mounted plugin and reader panels.
   requestRerender(): void;
@@ -250,7 +255,7 @@ export interface HvyPluginScriptingContext {
   pluginId: string;
   rawDocument: VisualDocument;
   // Call after directly mutating rawDocument so the scripting runtime performs
-  // its normal sort-value synchronization and render refresh.
+  // its normal sort/group value synchronization and render refresh.
   markMutated(): void;
 }
 

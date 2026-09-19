@@ -55,6 +55,7 @@ export interface BaseBlockSchema {
   css: string;
   sortKeys: Record<string, SortKeyValue>;
   derivedSortKeyNames: string[];
+  derivedGroupKeyNames: string[];
   groupKeys: Record<string, string>;
   tags: string;
   description: string;
@@ -196,6 +197,7 @@ export interface PluginBlockSchema extends BaseBlockSchema {
   plugin: string;
   pluginConfig: JsonObject;
   pluginSortValues: Record<string, SortKeyValue>;
+  pluginGroupValues: Record<string, string>;
 }
 
 export interface XrefCardBlockSchema extends BaseBlockSchema {
@@ -242,6 +244,7 @@ interface RuntimeSchemaFieldAccess {
   plugin: string;
   pluginConfig: JsonObject;
   pluginSortValues: Record<string, SortKeyValue>;
+  pluginGroupValues: Record<string, string>;
   expandableStubComponent: string;
   expandableContentComponent: string;
   expandableStub: string;

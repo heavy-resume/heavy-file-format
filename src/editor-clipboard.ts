@@ -501,8 +501,10 @@ function copyReusableSchemaFields(source: BlockSchema, target: BlockSchema): voi
   if (typeof source.css === 'string') target.css = source.css;
   if (source.sortKeys && typeof source.sortKeys === 'object') target.sortKeys = { ...source.sortKeys };
   if (Array.isArray(source.derivedSortKeyNames)) target.derivedSortKeyNames = [...source.derivedSortKeyNames];
+  if (Array.isArray(source.derivedGroupKeyNames)) target.derivedGroupKeyNames = [...source.derivedGroupKeyNames];
   if (source.groupKeys && typeof source.groupKeys === 'object') target.groupKeys = { ...source.groupKeys };
   if (source.pluginSortValues && typeof source.pluginSortValues === 'object') target.pluginSortValues = { ...source.pluginSortValues };
+  if (source.pluginGroupValues && typeof source.pluginGroupValues === 'object') target.pluginGroupValues = { ...source.pluginGroupValues };
   if (typeof source.tags === 'string') target.tags = source.tags;
   if (typeof source.description === 'string') target.description = source.description;
   if (typeof source.hideIfYes === 'string') target.hideIfYes = source.hideIfYes;

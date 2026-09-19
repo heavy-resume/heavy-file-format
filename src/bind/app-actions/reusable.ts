@@ -1,3 +1,4 @@
+import { listValueFields, syncSortValuesForDocument, listValueKindForElement } from '../../sort-values';
 import { state, getRenderApp } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { getComponentDefs, getSectionDefs, isBuiltinComponent } from '../../component-defs';
@@ -122,19 +123,20 @@ const addComponentSortValue: AppActionHandler = ({ actionButton }) => {
   if (!def) {
     return;
   }
-  const sortValueDefs = def.sortValueDefs ?? {};
+  const sortValueDefs = def[listValueFields(listValueKindForElement(actionButton)).definitions] ?? {};
   let suffix = Object.keys(sortValueDefs).length + 1;
-  let name = `Sort Value ${suffix}`;
+  let name = `${listValueKindForElement(actionButton) === 'group' ? 'Group' : 'Sort'} Value ${suffix}`;
   while (sortValueDefs[name]) {
     suffix += 1;
-    name = `Sort Value ${suffix}`;
+    name = `${listValueKindForElement(actionButton) === 'group' ? 'Group' : 'Sort'} Value ${suffix}`;
   }
   recordHistory(`def:${defIndex}:sort-value:add`);
   sortValueDefs[name] = { type: 'text' };
-  def.sortValueDefs = sortValueDefs;
+  def[listValueFields(listValueKindForElement(actionButton)).definitions] = sortValueDefs;
   keepTemplateDefinitionOpen('component', defIndex);
-  keepComponentSortValueOpen(defIndex, name);
+  keepComponentSortValueOpen(defIndex, name, listValueKindForElement(actionButton));
   state.document.meta.component_defs = defs;
+  syncSortValuesForDocument(state.document);
   getRenderApp()();
 };
 
@@ -143,16 +145,19 @@ const removeComponentSortValue: AppActionHandler = ({ actionButton }) => {
   const name = actionButton.dataset.sortValueName ?? '';
   const defs = getComponentDefs();
   const def = Number.isNaN(defIndex) ? null : defs[defIndex];
-  if (!def?.sortValueDefs?.[name]) {
+  const field = listValueFields(listValueKindForElement(actionButton)).definitions;
+  const definitions = def?.[field];
+  if (!def || !definitions?.[name]) {
     return;
   }
   recordHistory(`def:${defIndex}:sort-value:${name}:remove`);
-  delete def.sortValueDefs[name];
-  if (Object.keys(def.sortValueDefs).length === 0) {
-    delete def.sortValueDefs;
+  delete definitions[name];
+  if (Object.keys(definitions).length === 0) {
+    delete def[field];
   }
   keepTemplateDefinitionOpen('component', defIndex);
   state.document.meta.component_defs = defs;
+  syncSortValuesForDocument(state.document);
   getRenderApp()();
 };
 
@@ -160,7 +165,7 @@ const addComponentEnumOption: AppActionHandler = ({ actionButton }) => {
   const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
   const name = actionButton.dataset.sortValueName ?? '';
   const defs = getComponentDefs();
-  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.sortValueDefs?.[name];
+  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.[listValueFields(listValueKindForElement(actionButton)).definitions]?.[name];
   if (!definition || definition.type !== 'enum') {
     return;
   }
@@ -170,8 +175,9 @@ const addComponentEnumOption: AppActionHandler = ({ actionButton }) => {
   options.push({ label: `Option ${optionNumber}`, value: `option-${optionNumber}` });
   definition.options = options;
   keepTemplateDefinitionOpen('component', defIndex);
-  keepComponentSortValueOpen(defIndex, name);
+  keepComponentSortValueOpen(defIndex, name, listValueKindForElement(actionButton));
   state.document.meta.component_defs = defs;
+  syncSortValuesForDocument(state.document);
   getRenderApp()();
 };
 
@@ -180,15 +186,16 @@ const removeComponentEnumOption: AppActionHandler = ({ actionButton }) => {
   const optionIndex = Number.parseInt(actionButton.dataset.optionIndex ?? '', 10);
   const name = actionButton.dataset.sortValueName ?? '';
   const defs = getComponentDefs();
-  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.sortValueDefs?.[name];
+  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.[listValueFields(listValueKindForElement(actionButton)).definitions]?.[name];
   if (!definition || definition.type !== 'enum' || !definition.options?.[optionIndex]) {
     return;
   }
   recordHistory(`def:${defIndex}:sort-value:${name}:option:${optionIndex}:remove`);
   definition.options.splice(optionIndex, 1);
   keepTemplateDefinitionOpen('component', defIndex);
-  keepComponentSortValueOpen(defIndex, name);
+  keepComponentSortValueOpen(defIndex, name, listValueKindForElement(actionButton));
   state.document.meta.component_defs = defs;
+  syncSortValuesForDocument(state.document);
   getRenderApp()();
 };
 
@@ -229,8 +236,8 @@ function keepTemplateDefinitionOpen(kind: 'component' | 'section', index: number
   }
 }
 
-function keepComponentSortValueOpen(defIndex: number, name: string): void {
-  const key = componentSortValueDetailsKey(defIndex, name);
+function keepComponentSortValueOpen(defIndex: number, name: string, kind: 'sort' | 'group'): void {
+  const key = componentSortValueDetailsKey(defIndex, name, kind);
   if (!state.openTemplateDefinitionKeys.includes(key)) {
     state.openTemplateDefinitionKeys = [...state.openTemplateDefinitionKeys, key];
   }

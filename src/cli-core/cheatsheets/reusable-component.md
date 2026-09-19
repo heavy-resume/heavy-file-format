@@ -77,6 +77,10 @@ hvy insert -1 fake-card /body/fake-area --id fake-filled --using-template '{"fak
 
 Definition edits affect future instances; they do not replace existing `/body` contents. Edit an instance's own virtual files to change it.
 
+Shared `sortValueDefs` and `groupValueDefs` in the main component's `definition.json` also govern source-backed values on existing list items. For example, `"groupValueDefs":{"Fake Category":{"type":"text"},"Fake Status":{"type":"enum","options":[{"label":"Fake Ready","value":"ready"}]}}` defines two group keys. Bind a template's text or table cell using `<!--hvy:group-value {"key":"Fake Status"}-->Fake Ready<!--/hvy:group-value-->`; created items inherit that source. Existing items require edits to their own sources. Sorting uses the parallel `sortValueDefs`/`hvy:sort-value` mechanism. See the components cheatsheet for types and materialization.
+
+When renaming a key through file tools, update its definition, matching annotation payloads, plugin declarations, and list defaults explicitly. Definition JSON replacement does not infer a rename. Preserve unrelated definitions. For enum labels, update affected source text to a configured label and verify the item keys after editing.
+
 ## Remove and verify
 
 ```shell

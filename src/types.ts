@@ -484,6 +484,7 @@ export interface ComponentDefinition {
   tags?: string;
   description?: string;
   sortValueDefs?: Record<string, SortValueDefinition>;
+  groupValueDefs?: Record<string, SortValueDefinition>;
   templateVariables?: Record<string, ReusableTemplateVariableConfig>;
   schema?: BlockSchema;
   template?: VisualBlock;

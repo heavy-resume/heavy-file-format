@@ -1,0 +1,65 @@
+.hvy-document .text-editor-shell.is-use-as-open .text-use-as-selection {
+  display: inline-block;
+  /* The selection menu sits above the text toolbar (45). */
+  z-index: 46;
+}
+
+.hvy-document .text-use-as-menu {
+  box-sizing: border-box;
+  max-height: min(28rem, 65cqh);
+  overflow-y: auto;
+}
+
+.hvy-document .is-creating-list-value .text-use-as-menu > :not(.list-value-creation) {
+  display: none;
+}
+
+.hvy-document .list-value-creation {
+  display: flex;
+  flex-direction: column;
+  width: min(16rem, calc(100cqw - 3rem));
+  gap: 0.5rem;
+  padding: 0.45rem;
+  animation: hvy-choice-mode-pop 140ms ease-out;
+}
+
+.hvy-document .list-value-creation [hidden],
+.hvy-document .list-value-creation[hidden] {
+  display: none;
+}
+
+.hvy-document .list-value-creation label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.hvy-document .list-value-creation :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 0.45rem;
+  background: var(--hvy-input-bg);
+  color: var(--hvy-text);
+  font: inherit;
+}
+
+.hvy-document .list-value-creation :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--hvy-focus-ring);
+  box-shadow: 0 0 0 4px var(--hvy-focus-glow);
+}
+
+.hvy-document .list-value-creation p {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.hvy-document .list-value-creation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}

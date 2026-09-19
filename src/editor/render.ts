@@ -2325,8 +2325,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ? `<div class="component-list-shared-sort-values">
             <p class="component-list-shared-note">Shared by every list using <strong>${deps.escapeHtml(listItemDefinition.name)}</strong>.</p>
             ${renderComponentSortValueDefinitions(listItemDefinition, listItemDefIndex)}
+            ${renderComponentSortValueDefinitions(listItemDefinition, listItemDefIndex, 'group')}
           </div>`
-          : `<p class="component-list-shared-note">Typed sort values require a reusable component item type.</p>`}
+          : `<p class="component-list-shared-note">Automatic sort and group values require a reusable component item type.</p>`}
         </section>
         <label class="checkbox-label">
           <input
@@ -2488,20 +2489,22 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     </section>`;
   }
 
-  function renderComponentSortValueDefinitions(definition: ComponentDefinition, defIndex: number): string {
-    const entries = Object.entries(definition.sortValueDefs ?? {});
-    return `<section class="component-sort-value-editor" aria-label="Sort Values">
+  function renderComponentSortValueDefinitions(definition: ComponentDefinition, defIndex: number, kind: 'sort' | 'group' = 'sort'): string {
+    const label = kind === 'group' ? 'Group' : 'Sort';
+    const entries = Object.entries((kind === 'group' ? definition.groupValueDefs : definition.sortValueDefs) ?? {});
+    return `<section class="component-sort-value-editor" aria-label="${label} Values" data-value-kind="${kind}">
       <div class="meta-panel-head">
-        <strong>Sort Values</strong>
+        <strong>${label} Values</strong>
         <button type="button" class="ghost component-sort-value-action" data-action="add-component-sort-value" data-def-index="${defIndex}">
-          ${plusIcon()} Add Sort Value
+          ${plusIcon()} Add ${label} Value
         </button>
       </div>
+      <p class="component-list-shared-note">Name the shared ${kind} key here, then select text in an item and choose Use as… → ${label}: [key name]. You can also create and bind a key directly with Use as… → Create ${kind} key…. The selected value updates that item’s key automatically.</p>
       ${entries.length === 0
-        ? '<p class="muted component-sort-value-empty">No sort values defined.</p>'
+        ? `<p class="muted component-sort-value-empty">No ${kind} values defined.</p>`
         : entries.map(([name, sortDefinition], sortValueIndex) => {
           const options = sortDefinition.type === 'enum' ? sortDefinition.options ?? [] : [];
-          const openKey = componentSortValueDetailsKey(defIndex, name);
+          const openKey = componentSortValueDetailsKey(defIndex, name, kind);
           return `<details
             class="component-sort-value-card component-sort-value-details"
             data-def-index="${defIndex}"
@@ -2519,7 +2522,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <div class="component-sort-value-card-body">
               <div class="component-sort-value-fields">
               <label>
-                <span>Name</span>
+                <span>${label} key name</span>
                 <input
                   data-field="def-sort-value-name"
                   data-def-index="${defIndex}"
@@ -2534,7 +2537,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   data-def-index="${defIndex}"
                   data-sort-value-name="${deps.escapeAttr(name)}"
                 >
-                  ${(['text', 'number', 'date', 'datetime', 'enum'] as const).map((type) =>
+                  ${(kind === 'group' ? ['text', 'enum'] as const : ['text', 'number', 'date', 'datetime', 'enum'] as const).map((type) =>
                     `<option value="${type}"${sortDefinition.type === type ? ' selected' : ''}>${type === 'datetime' ? 'Date & Time' : type[0].toUpperCase() + type.slice(1)}</option>`
                   ).join('')}
                 </select>
@@ -2545,7 +2548,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 data-action="remove-component-sort-value"
                 data-def-index="${defIndex}"
                 data-sort-value-name="${deps.escapeAttr(name)}"
-                aria-label="Remove ${deps.escapeAttr(name)} sort value"
+                aria-label="Remove ${deps.escapeAttr(name)} ${kind} value"
               >${closeIcon()}</button>
               </div>
             ${sortDefinition.type === 'date'
@@ -2932,8 +2935,8 @@ export function templateDefinitionDetailsKey(kind: 'component' | 'section', inde
   return `${kind}:${index}`;
 }
 
-export function componentSortValueDetailsKey(defIndex: number, name: string): string {
-  return `component-sort-value:${defIndex}:${name}`;
+export function componentSortValueDetailsKey(defIndex: number, name: string, kind: 'sort' | 'group' = 'sort'): string {
+  return `component-${kind}-value:${defIndex}:${name}`;
 }
 
 function renderHeadingLevelOption(value: 'h1' | 'h2' | 'h3', selected: string, escapeAttr: (value: string) => string): string {

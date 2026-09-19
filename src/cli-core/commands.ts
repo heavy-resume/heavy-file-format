@@ -1,3 +1,4 @@
+import { syncSortValuesForDocument } from '../sort-values';
 import { findTemplateDirectory, insertTemplateDefinition } from './template-directories';
 import type { VisualDocument } from '../types';
 import {
@@ -171,6 +172,7 @@ export function writeHvyCliSessionVirtualFile(
   addSessionFiles(fs, document, session);
   const result = writeVirtualFile({ fs, cwd: session.cwd, session }, path, content, false, 'apply_hvy_patch');
   if (shouldInvalidateVirtualFileSystem(result)) {
+    if (result.mutated) syncSortValuesForDocument(document);
     invalidateHvyCliSessionVirtualFileSystem(session);
   }
   return {
@@ -225,6 +227,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
       refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
       requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
       if (shouldInvalidateVirtualFileSystem(result)) {
+        if (result.mutated) syncSortValuesForDocument(document);
         invalidateHvyCliSessionVirtualFileSystem(session);
       }
       scratchpadTouched = scratchpadTouched || heredoc.path === 'scratchpad.txt' || heredoc.path === '/scratchpad.txt';
@@ -290,6 +293,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, lastProcess.refreshSectionPaths);
     requiresFullRefresh = requiresFullRefresh || Boolean(lastProcess.requiresFullRefresh);
     if (shouldInvalidateVirtualFileSystem(lastProcess)) {
+      if (lastProcess.mutated) syncSortValuesForDocument(document);
       invalidateHvyCliSessionVirtualFileSystem(session);
     }
     scratchpadTouched = scratchpadTouched || pipeline.tokens.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
@@ -321,6 +325,12 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
 }
 
 export function executeHvyCliCommandSync(document: VisualDocument, input: string, cwd = '/'): HvyCliExecution {
+  const result = executeHvyCliCommandSyncImpl(document, input, cwd);
+  if (result.mutated && shouldInvalidateVirtualFileSystem(result)) syncSortValuesForDocument(document);
+  return result;
+}
+
+function executeHvyCliCommandSyncImpl(document: VisualDocument, input: string, cwd: string): HvyCliExecution {
   const expandedInput = expandShellSubstitutions(input, new Date());
   const args = tokenizeCommand(expandedInput);
   if (args.length === 0) {

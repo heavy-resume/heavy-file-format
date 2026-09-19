@@ -1,3 +1,5 @@
+import { listValueFields, listValueKindForElement } from '../../sort-values';
+import { closeListValueCreation, getListValueDefinitionOwner, openListValueCreation, placeUseAsMenu, readListValueCreation, updateListValueCreationType } from '../../editor/components/list-value-creation/list-value-creation';
 import { openTextAiModal } from '../../editor/components/text-ai/text-ai-modal';
 import {
   state,
@@ -28,6 +30,60 @@ interface RichToolbarSelection {
 const richToolbarSelections = new WeakMap<HTMLElement, RichToolbarSelection>();
 
 export function bindClickDispatch(app: HTMLElement): void {
+  app.addEventListener('scroll', (event) => {
+    if ((event.target as HTMLElement).closest?.('.text-use-as-menu')) return;
+    app.querySelectorAll<HTMLElement>('.text-use-as-selection.is-use-as-open').forEach(placeUseAsMenu);
+  }, true);
+  app.addEventListener('change', (event) => {
+    const form = (event.target as HTMLElement).closest<HTMLFormElement>('.list-value-creation');
+    if (form && (event.target as HTMLInputElement).name === 'type') updateListValueCreationType(form);
+  });
+  app.addEventListener('keydown', (event) => {
+    const control = (event.target as HTMLElement).closest<HTMLElement>('.text-use-as-selection');
+    if (event.key !== 'Escape' || !control) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeUseAsMenus(app);
+    const editable = control.closest('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
+    if (editable) {
+      editable.focus({ preventScroll: true });
+      restoreRichToolbarSelection(editable);
+    }
+  }, true);
+  app.addEventListener('submit', (event) => {
+    const form = (event.target as HTMLElement).closest<HTMLFormElement>('.list-value-creation');
+    if (!form) return;
+    event.preventDefault();
+    const editable = form.closest('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
+    if (!editable) return;
+    const owner = getListValueDefinitionOwner(editable.dataset.sectionKey ?? '', editable.dataset.blockId ?? '');
+    if (!owner) return;
+    const result = readListValueCreation(form, owner);
+    if (!result) return;
+    const selection = restoreRichToolbarSelection(editable);
+    if (!selection || selection.range.collapsed) return;
+    const field = listValueFields(result.kind).definitions;
+    owner[field] = { ...owner[field], [result.key]: result.definition };
+    applyRichAction('sort-value', editable, undefined, {
+      sortValueKey: result.key, valueKind: result.kind, sortValueType: result.definition.type,
+    });
+    // Keep the active editor and its selection intact; make the new key reusable
+    // immediately without replacing the editor DOM.
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ghost text-use-as-menu-item';
+    item.setAttribute('role', 'menuitem');
+    Object.assign(item.dataset, {
+      richAction: 'sort-value', valueKind: result.kind, sortValueKey: result.key,
+      sortValueType: result.definition.type, sectionKey: editable.dataset.sectionKey, blockId: editable.dataset.blockId,
+    });
+    item.textContent = `${result.kind === 'group' ? 'Group' : 'Sort'}: ${result.key}`;
+    form.before(item);
+    closeUseAsMenus(app);
+    clearHideIfUnmodifiedForSectionPath(state.document.sections, editable.dataset.sectionKey ?? '');
+    editable.focus({ preventScroll: true });
+    richToolbarSelections.delete(editable);
+  });
   app.addEventListener('click', (event) => {
     logClickTrace(event, 'click-dispatch:capture:enter', {
       currentView: state.currentView,
@@ -89,6 +145,7 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
     if (useAsSelection) {
+      if (target.closest('.list-value-creation')) return;
       const editable = useAsSelection.closest<HTMLElement>('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
       if (editable) {
         storeCurrentRichSelection(editable, { preserveExistingSelection: true });
@@ -172,6 +229,25 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
 
+    const createValue = target.closest<HTMLElement>('[data-create-list-value]');
+    if (createValue) {
+      event.preventDefault();
+      const control = createValue.closest<HTMLElement>('.text-use-as-selection')!;
+      const editable = control.closest('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
+      openListValueCreation(control, createValue.dataset.createListValue === 'group' ? 'group' : 'sort',
+        editable ? richToolbarSelections.get(editable)?.range.toString() ?? '' : '');
+      return;
+    }
+    if (target.closest('[data-cancel-list-value]')) {
+      event.preventDefault();
+      const control = target.closest<HTMLElement>('.text-use-as-selection')!;
+      closeListValueCreation(control);
+      placeUseAsMenu(control);
+      control.querySelector<HTMLElement>('.text-use-as-button')?.focus({ preventScroll: true });
+      return;
+    }
+    if (target.closest('.list-value-creation')) return;
+
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
     if (richButton) {
       event.preventDefault();
@@ -207,6 +283,7 @@ export function bindClickDispatch(app: HTMLElement): void {
           }
           applyRichAction(action, editable, richButton.dataset.textLineStyleName, {
             sortValueKey: richButton.dataset.sortValueKey,
+            valueKind: richButton.dataset.valueKind === 'group' ? 'group' : 'sort',
             sortValueType: richButton.dataset.sortValueType,
             templateVariableName: richButton.dataset.templateVariableName,
           });
@@ -297,10 +374,12 @@ function toggleUseAsMenu(app: HTMLElement, button: HTMLElement): void {
   selection.classList.toggle('is-use-as-open', shouldOpen);
   shell.classList.toggle('is-use-as-open', shouldOpen);
   button.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+  if (shouldOpen) placeUseAsMenu(selection);
 }
 
 function closeUseAsMenus(root: ParentNode): void {
-  root.querySelectorAll<HTMLElement>('.text-use-as-selection.is-use-as-open').forEach((selection) => {
+  root.querySelectorAll<HTMLElement>('.text-use-as-selection').forEach((selection) => {
+    closeListValueCreation(selection);
     selection.classList.remove('is-use-as-open');
     selection.querySelector<HTMLElement>('.text-use-as-button')?.setAttribute('aria-expanded', 'false');
   });
@@ -328,6 +407,7 @@ function handlePassiveEditorEnumActivationClick(app: HTMLElement, event: MouseEv
   const sectionKey = passiveBlock.dataset.sectionKey ?? '';
   const blockId = passiveBlock.dataset.blockId ?? '';
   const key = enumValue.dataset.sortValueKey ?? '';
+  const valueKind = listValueKindForElement(enumValue);
   if (!sectionKey || !blockId || !key) {
     return false;
   }
@@ -343,7 +423,7 @@ function handlePassiveEditorEnumActivationClick(app: HTMLElement, event: MouseEv
   const activeBlock = [...app.querySelectorAll<HTMLElement>('.editor-block[data-active-editor-block="true"]')]
     .find((candidate) => candidate.dataset.sectionKey === sectionKey && candidate.dataset.blockId === blockId);
   const select = [...(activeBlock?.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]') ?? [])]
-    .find((candidate) => candidate.dataset.sortValueKey === key);
+    .find((candidate) => candidate.dataset.sortValueKey === key && listValueKindForElement(candidate) === valueKind);
   let pickerResult: 'not-rendered' | 'opened' | 'rejected' = select ? 'rejected' : 'not-rendered';
   let pickerError: unknown = null;
   if (select) {

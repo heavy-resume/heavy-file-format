@@ -92,6 +92,9 @@ theme:
   - `handle.set_sort_value(key, value)` — update every matching annotated sort
     value within the component. This changes the annotation that owns the
     derived sort key instead of writing the derived `sortKeys` cache directly.
+  - `handle.set_group_value(key, value)` — update matching annotated group
+    values in text and table cells. Supply a configured label for enums. The
+    normal mutation synchronization updates `groupKeys` and `derivedGroupKeyNames`.
   - `handle.remove_children_by_tag(tag, slot="expandable-content")` — remove
    tagged child components from a child slot.
    - `handle.append_child(component, config=None, text="", slot="expandable-content")`

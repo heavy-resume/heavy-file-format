@@ -1,3 +1,4 @@
+import { findSortValueOwnerBlock, syncSortValuesForListItem, syncSortValuesForDocument } from '../sort-values';
 import { cliBlockMetadata } from './block-metadata-fields';
 import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment } from './template-directories';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -119,6 +120,13 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
 function addTemplateFiles(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, naming?: HvyVirtualPathNamingState): void {
   const roots = getTemplateDirectories(document);
   addTemplateMetadataFiles(entries, roots);
+  for (const root of roots) {
+    const entry = entries.get(`${root.path}/definition.json`);
+    if (entry?.kind === 'file' && entry.write) {
+      const write = entry.write;
+      entry.write = (content) => { write(content); syncSortValuesForDocument(document); };
+    }
+  }
   for (const root of roots) {
     const subtree = new Map<string, HvyVirtualEntry>();
     if (root.block) addBlock(subtree, document, root.block, root.contentPath, naming);
@@ -488,10 +496,11 @@ function addBlockList(entries: Map<string, HvyVirtualEntry>, document: VisualDoc
 
 function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, block: VisualBlock, blockPath: string, naming?: HvyVirtualPathNamingState): void {
   const meta = document.meta;
-  entries.set(blockPath, { kind: 'dir', path: blockPath });
+  const blockEntries = new Map<string, HvyVirtualEntry>();
+  blockEntries.set(blockPath, { kind: 'dir', path: blockPath });
   const baseComponent = getBlockBaseComponent(meta, block);
   const componentFile = `${blockPath}/${sanitizePathSegment(block.schema.component) || 'component'}.json`;
-  entries.set(componentFile, {
+  blockEntries.set(componentFile, {
     kind: 'file',
     path: componentFile,
     read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema, meta), null, 2)}\n`,
@@ -503,7 +512,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocumen
     ),
   });
   const componentName = sanitizePathSegment(block.schema.component) || 'component';
-  entries.set(`${blockPath}/${componentName}.css`, {
+  blockEntries.set(`${blockPath}/${componentName}.css`, {
     kind: 'file',
     path: `${blockPath}/${componentName}.css`,
     read: () => block.schema.css,
@@ -513,7 +522,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocumen
     },
   });
   const bodyTextFile = `${blockPath}/${bodyFileNameForBlock(block, meta)}`;
-  entries.set(bodyTextFile, {
+  blockEntries.set(bodyTextFile, {
     kind: 'file',
     path: bodyTextFile,
     read: () => readBlockBodyText(block, meta),
@@ -522,15 +531,27 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocumen
       writeBlockBodyText(block, meta, content);
     },
   });
-  entries.set(`${blockPath}/about-${componentName}.txt`, {
+  blockEntries.set(`${blockPath}/about-${componentName}.txt`, {
     kind: 'file',
     path: `${blockPath}/about-${componentName}.txt`,
     read: () => formatComponentAbout(meta, block.schema.component),
   });
-  addPluginDocumentationFile(entries, block, blockPath);
-  addPluginVisualDescriptionFile(entries, document, block, blockPath);
-  addTableDataFiles(entries, meta, block, blockPath);
-  addFormScriptFiles(entries, block, blockPath);
+  addPluginDocumentationFile(blockEntries, block, blockPath);
+  addPluginVisualDescriptionFile(blockEntries, document, block, blockPath);
+  addTableDataFiles(blockEntries, meta, block, blockPath);
+  addFormScriptFiles(blockEntries, block, blockPath);
+
+  for (const [path, entry] of blockEntries) {
+    if (entry.kind === 'file' && entry.write && !path.endsWith('.css')) {
+      const write = entry.write;
+      entry.write = (content) => {
+        write(content);
+        const owner = findSortValueOwnerBlock(document, block.id);
+        if (owner) syncSortValuesForListItem(document.meta, owner);
+      };
+    }
+    entries.set(path, entry);
+  }
 
   addNamedBlockChildren(entries, document, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
   if (baseComponent === 'component-list') {
@@ -1086,6 +1107,9 @@ function applyBlockSchemaJson(
   if (Array.isArray(value.derivedSortKeyNames)) {
     schema.derivedSortKeyNames = parseStringList(value.derivedSortKeyNames);
   }
+  if (Array.isArray(value.derivedGroupKeyNames)) {
+    schema.derivedGroupKeyNames = parseStringList(value.derivedGroupKeyNames);
+  }
   if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
     schema.groupKeys = parseGroupKeys(value.groupKeys);
   }
@@ -1169,6 +1193,9 @@ function applyBlockSchemaJson(
   }
   if (value.pluginSortValues && typeof value.pluginSortValues === 'object' && !Array.isArray(value.pluginSortValues)) {
     schema.pluginSortValues = parseSortKeys(value.pluginSortValues);
+  }
+  if (value.pluginGroupValues && typeof value.pluginGroupValues === 'object' && !Array.isArray(value.pluginGroupValues)) {
+    schema.pluginGroupValues = parseGroupKeys(value.pluginGroupValues);
   }
   if (baseComponent === 'expandable') {
     if (typeof value.expandableAlwaysShowStub === 'boolean') schema.expandableAlwaysShowStub = value.expandableAlwaysShowStub;

@@ -5,7 +5,7 @@ import { findSectionByKey, visitBlocks } from './section-ops';
 import { cloneReusableBlock, cloneReusableSchema, getReusableTemplate, getReusableTemplateByName, cloneReusableSection } from './document-factory';
 import { resolveReusableTemplateTokensInBlock } from './reusable-template-values';
 import type { ComponentDefinition } from './types';
-import { stringify as stringifyYaml } from 'yaml';
+import { stringifyYamlUnfolded } from './hvy/yaml-stringify';
 
 export function findReusableOwner(sectionKey: string, blockId: string): VisualBlock | null {
   const reusableName = getReusableNameFromSectionKey(sectionKey);
@@ -297,7 +297,7 @@ function saveReusableSection(
 function openSavedReusableDefinition(kind: 'component' | 'section', index: number): void {
   const definition = kind === 'component' ? getComponentDefs()[index] : getSectionDefs()[index];
   if (!definition || index < 0) return;
-  const raw = stringifyYaml(definition).trimEnd();
+  const raw = stringifyYamlUnfolded(definition).trimEnd();
   state.reusableDefinitionEditModal = {
     kind,
     index,

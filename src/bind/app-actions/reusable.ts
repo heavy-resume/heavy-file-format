@@ -10,7 +10,7 @@ import { createEmptySectionWithMeta } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { revertReusableComponent } from '../../reusable';
 import { componentSortValueDetailsKey, templateDefinitionDetailsKey } from '../../editor/render';
-import { stringify as stringifyYaml } from 'yaml';
+import { stringifyYamlUnfolded } from '../../hvy/yaml-stringify';
 import type { AppActionHandler } from './types';
 
 const tagStateHelpers = {
@@ -45,7 +45,7 @@ const addComponentDef: AppActionHandler = () => {
     index: defs.length - 1,
     error: null,
     activeFlavorIndex: null,
-    originalRaw: stringifyYaml(defs[defs.length - 1]).trimEnd(),
+    originalRaw: stringifyYamlUnfolded(defs[defs.length - 1]).trimEnd(),
     isNew: true,
     historyBeforeDraft: { history: [...state.history], future: [...state.future] },
   };
@@ -65,7 +65,7 @@ const addSectionDef: AppActionHandler = () => {
     index: defs.length - 1,
     error: null,
     activeFlavorIndex: null,
-    originalRaw: stringifyYaml(defs[defs.length - 1]).trimEnd(),
+    originalRaw: stringifyYamlUnfolded(defs[defs.length - 1]).trimEnd(),
     isNew: true,
     historyBeforeDraft: { history: [...state.history], future: [...state.future] },
   };
@@ -254,7 +254,7 @@ const openReusableDefinitionEditor: AppActionHandler = ({ actionButton }) => {
     return;
   }
   recordHistory(`edit-${kind}-template:${definition.name}`, { notify: false });
-  const raw = stringifyYaml(definition).trimEnd();
+  const raw = stringifyYamlUnfolded(definition).trimEnd();
   state.reusableDefinitionEditModal = {
     kind,
     index,

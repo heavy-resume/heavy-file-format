@@ -1,4 +1,4 @@
-import { stringify as stringifyYaml } from 'yaml';
+import { stringifyYamlUnfolded } from './hvy/yaml-stringify';
 import type { BlockSchema, GridItem, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { HvySection, JsonObject } from './hvy/types';
 import { parseHvy } from './hvy/parser';
@@ -161,7 +161,7 @@ export function wrapHvyFragmentAsDocument(
     },
     ...(options?.meta ?? {}),
   };
-  const frontMatter = stringifyYaml(meta).trimEnd();
+  const frontMatter = stringifyYamlUnfolded(meta).trimEnd();
   return `---
 ${frontMatter}
 ---
@@ -1072,7 +1072,7 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
     ...serializedMeta,
     hvy_version: document.meta.hvy_version ?? 0.1,
   }) as JsonObject;
-  return stringifyYaml(headerMeta).trim();
+  return stringifyYamlUnfolded(headerMeta).trim();
 }
 
 function collectBuiltInPluginDeclarations(document: VisualDocument): JsonObject[] {

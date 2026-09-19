@@ -235,4 +235,21 @@ scripts:
       { image_attachment_max_dimensions: { width: 1600, height: 900 } },
     )).toEqual({ width: 1600, height: 900 });
   });
+
+  test('keeps a script with a long line as a literal block instead of folding it', () => {
+    const parsed = parseFormSpec(`fields: []
+scripts:
+  grade: |
+    total = int(doc.form.get("a") or 0) + int(doc.form.get("b") or 0) + int(doc.form.get("c"))
+    if total > 10:
+        doc.form.set("note", "big")
+`);
+
+    const expectedResult = serializeFormSpec(parsed.spec);
+
+    expect(expectedResult).toContain('grade: |');
+    expect(expectedResult).not.toContain('grade: >');
+    expect(expectedResult).toContain('    total = int(doc.form.get("a") or 0) + int(doc.form.get("b") or 0) + int(doc.form.get("c"))');
+    expect(parseFormSpec(expectedResult).spec.scripts.grade).toBe(parsed.spec.scripts.grade);
+  });
 });

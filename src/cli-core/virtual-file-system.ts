@@ -1,7 +1,8 @@
 import { findSortValueOwnerBlock, syncSortValuesForListItem, syncSortValuesForDocument } from '../sort-values';
 import { cliBlockMetadata } from './block-metadata-fields';
 import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment } from './template-directories';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml } from 'yaml';
+import { stringifyYamlUnfolded } from '../hvy/yaml-stringify';
 import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
 import type { VisualDocument } from '../types';
@@ -77,7 +78,7 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
 
   addFile(
     '/header.yaml',
-    () => stringifyYaml(omitTemplateDefinitions(document.meta)).trimEnd(),
+    () => stringifyYamlUnfolded(omitTemplateDefinitions(document.meta)).trimEnd(),
     (content) => {
       const parsed = parseYaml(content);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {

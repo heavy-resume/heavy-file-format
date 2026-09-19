@@ -1850,3 +1850,39 @@ section_defs:
 
   expect(expectedResult).toContain('blocks:\n        - component: fake-reusable-text');
 });
+
+test('keeps a reusable form template script as a literal block through serialization', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.form
+component_defs:
+  - name: scored-form
+    baseType: plugin
+    schema:
+      component: plugin
+      plugin: hvy.form
+    text: |
+      fields: []
+      scripts:
+        grade: |
+          total = int(doc.form.get("a") or 0) + int(doc.form.get("b") or 0) + int(doc.form.get("c"))
+          if total > 10:
+              doc.form.set("note", "big")
+---
+
+<!--hvy: {"id":"intro"}-->
+#! Intro
+
+ <!--hvy:text {}-->
+  Body
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('    text: |');
+  expect(expectedResult).not.toContain('    text: >');
+  expect(expectedResult).toContain('        total = int(doc.form.get("a") or 0) + int(doc.form.get("b") or 0) + int(doc.form.get("c"))');
+  expect(deserializeDocument(expectedResult, '.hvy').meta.component_defs?.[0]?.text)
+    .toBe(document.meta.component_defs?.[0]?.text);
+});

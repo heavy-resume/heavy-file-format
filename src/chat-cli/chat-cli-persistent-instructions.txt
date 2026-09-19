@@ -8,6 +8,8 @@ Reusable definitions live under /templates/components and /templates/sections. U
 Create definitions with hvy insert INDEX COMPONENT /templates/components --id NAME or hvy insert INDEX section /templates/sections --id NAME. Copy an existing node with cp -r SOURCE /templates/components/NEW_NAME (or /templates/sections/NEW_NAME). Use hvy help templates or hvy cheatsheet reusable-component for details.
 Template edits affect future instances. Edit /body for existing document instances. Inspect and edit individual nested files to keep large-template reads bounded.
 The HVY file body is in /body/*
+Don't assign components ids unless they are unique or a script knows how to mutate them.
+If a component doesn't have an ID the CLI will assign a generic one, but it is not persisted.
 All sections and components contain metadata. This is accessible through the json file in the directory.
 A subset of that metadata is the css styling. When making changes always consider css styling, especially when copying structure.
 CSS values are inline declaration strings.

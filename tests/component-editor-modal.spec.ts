@@ -322,3 +322,50 @@ hvy_version: 0.1
   await expect(page.locator('.component-editor-compact-button:visible')).toHaveCount(0);
   await expect(page.locator('.component-editor-modal-probe')).toHaveCount(0);
 });
+
+test('xref card editors stay inline in a column the shared minimum would have gated', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-skill-xref-card
+    baseType: xref-card
+---
+
+<!--hvy: {"id":"fake-main"}-->
+#! Fake Main
+
+ <!--hvy:text {"id":"fake-target-topic"}-->
+  ### Fake Target Topic
+
+ <!--hvy:grid {"id":"fake-grid","gridColumns":3,"gridStackWidth":"never"}-->
+  <!--hvy:grid:0 {"id":"fake-first"}-->
+   <!--hvy:fake-skill-xref-card {"id":"fake-xref","xrefTitle":"Fake Target","xrefTarget":"fake-target-topic"}-->
+
+  <!--hvy:grid:1 {"id":"fake-second"}-->
+   <!--hvy:text {}-->
+    Second
+
+  <!--hvy:grid:2 {"id":"fake-third"}-->
+   <!--hvy:text {}-->
+    Third
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Fake Target' }).last().click();
+
+  const expectedResult = await page.locator('[data-hvy-component-editor-gate="true"][data-component-label="fake-skill-xref-card"]').last().evaluate((gate) => ({
+    width: gate.getBoundingClientRect().width,
+    declaredMinimum: gate.style.getPropertyValue('--hvy-component-editor-minimum-width'),
+    tooNarrow: gate.classList.contains('is-component-editor-too-narrow'),
+  }));
+  expect(expectedResult.width).toBeLessThan(300);
+  expect(expectedResult.declaredMinimum).toBe('180px');
+  expect(expectedResult.tooNarrow).toBe(false);
+  await expect(page.locator('.component-editor-compact-button:visible')).toHaveCount(0);
+  await expect(page.locator('[data-field="block-xref-target"]')).toBeVisible();
+});

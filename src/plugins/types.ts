@@ -308,6 +308,10 @@ export interface HvyPlugin {
   // available, the host offers the editor in its scrollable component modal.
   // Accepts CSS length units (for example, "24rem" or "420px").
   minimumEditorWidth?: string;
+  // Width this plugin's editor modal opens at, for editors that are intrinsically
+  // sized rather than fill-width. Defaults to the host's full modal width.
+  // Accepts CSS length units (for example, "18rem" or "320px").
+  preferredEditorWidth?: string;
   // Conditional registrations expose metadata without loading executable
   // plugin code. The host calls load only after per-file authorization.
   authorization?: 'required';

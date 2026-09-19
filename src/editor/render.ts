@@ -60,7 +60,7 @@ import { closeIcon, plusIcon, wrenchIcon } from '../icons';
 import { getEmptySectionHeadingLevel } from '../section-heading-memory';
 import { getDocumentParagraphSpacing, getDocumentRecolorStrikethrough } from '../document-typography';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
-import { getComponentEditorMinimumWidth } from './component-editor-width';
+import { getComponentEditorMinimumWidth, getComponentEditorPreferredWidth } from './component-editor-width';
 import {
   formatTextLineStyleCssLines,
   getTextLineStyleLabel,
@@ -848,6 +848,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const contentEditor = addCoreEditorControlClasses(renderBlockContentEditor(sectionKey, block));
     const componentHeaderControls = addCoreEditorControlClasses(renderBlockHeaderControls(sectionKey, block));
     const minimumEditorWidth = getComponentEditorMinimumWidth(block);
+    const preferredEditorWidth = getComponentEditorPreferredWidth(block);
     const activationPath = getActivationPathIds(sectionKey, rootSections ?? []);
     const activationPathIndex = activationPath.indexOf(block.id);
     const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey
@@ -941,7 +942,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
 
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
-          <div class="component-editor-width-gate" data-hvy-component-editor-gate="true" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-component-label="${deps.escapeAttr(componentLabel)}" style="--hvy-component-editor-minimum-width: ${deps.escapeAttr(minimumEditorWidth)};">
+          <div class="component-editor-width-gate" data-hvy-component-editor-gate="true" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-component-label="${deps.escapeAttr(componentLabel)}" style="--hvy-component-editor-minimum-width: ${deps.escapeAttr(minimumEditorWidth)}; --hvy-component-editor-preferred-width: ${deps.escapeAttr(preferredEditorWidth)};">
             <span class="component-editor-minimum-ruler" aria-hidden="true"></span>
             <button type="button" class="component-editor-compact-button" data-hvy-component-editor-action="open" aria-label="Edit ${deps.escapeAttr(componentLabel)}">${wrenchIcon()}<span>Edit</span></button>
             <div class="component-editor-inline-content">

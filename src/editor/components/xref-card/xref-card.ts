@@ -2,6 +2,12 @@ import './xref-card.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import { classifyXrefTarget } from '../../../workspace-links';
 
+/** The picker, title, and detail rows stay usable well below the shared component editor default. */
+export const XREF_CARD_EDITOR_MINIMUM_WIDTH = '180px';
+
+/** The card is a fixed-size card rather than a fill-width editor, so its modal opens at card width. */
+export const XREF_CARD_EDITOR_PREFERRED_WIDTH = '18rem';
+
 export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const targetTagFilter = getEffectiveTargetTagFilter(block, helpers);
   const hasTarget = normalizeTargetValue(block.schema.xrefTarget).length > 0;

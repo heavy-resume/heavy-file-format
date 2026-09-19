@@ -249,6 +249,8 @@ function portalGate(
   const layer = document.createElement('div');
   layer.className = 'component-editor-modal-layer';
   layer.style.setProperty('--hvy-component-editor-minimum-width', gate.style.getPropertyValue('--hvy-component-editor-minimum-width'));
+  modalRoot.querySelector<HTMLElement>('.component-editor-modal-panel')
+    ?.style.setProperty('--hvy-component-editor-preferred-width', gate.style.getPropertyValue('--hvy-component-editor-preferred-width'));
   layer.append(content);
   body.append(layer);
   controller.layers.push({

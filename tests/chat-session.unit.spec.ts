@@ -1,3 +1,4 @@
+import { setReferenceAppConfig } from '../src/reference-config';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
@@ -47,6 +48,7 @@ vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
 }));
 
 beforeEach(() => {
+  setReferenceAppConfig(null);
   requestProxyCompletionMock.mockReset();
   requestProxyToolTurnMock.mockReset();
   requestProxyToolTurnMock.mockImplementation(async (params: { settings: ChatSettings }) => ({
@@ -2527,4 +2529,75 @@ test('copyChatMessageToHvySection uses the supplied title and section id', () =>
   if (!result.ok) return;
   expect(result.section.customId).toBe('custom-id');
   expect(result.section.title).toBe('Custom title');
+});
+
+test('semantic provider recognizes completion prose before the editor retries', async () => {
+  setReferenceAppConfig({ semanticFilterProvider: () => [{ candidateId: 'response' }] });
+  requestProxyCompletionMock.mockResolvedValueOnce('I have checked the document. No changes were needed.');
+  requestProxyCompletionMock.mockRejectedValue(new Error('Tool choice is required, but model did not call a tool'));
+  const result = await requestDocumentEditChatTurn({
+    settings: { provider: 'openai', model: 'test-model' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy'),
+    messages: [],
+    request: 'Check the document.',
+  });
+  expect(result.error).toBeNull();
+  expect(requestProxyToolTurnMock).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ['progress', () => []],
+  ['invalid output', () => 'not valid JSON'],
+  ['unavailable evaluator', () => { throw new Error('Unavailable'); }],
+  ['unknown candidate', () => [{ candidateId: 'unknown' }]],
+] as const)('expected result: %s leaves protocol recovery active', async (_label, provider) => {
+  setReferenceAppConfig({ semanticFilterProvider: provider });
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('I need to inspect the document.')
+    .mockResolvedValueOnce('done Checked the document.');
+  const result = await requestDocumentEditChatTurn({
+    settings: { provider: 'openai', model: 'test-model' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy'),
+    messages: [], request: 'Check the document.',
+  });
+  expect(result.error).toBeNull();
+  expect(requestProxyToolTurnMock).toHaveBeenCalledTimes(2);
+});
+
+test('expected result: semantic completion preserves edits and still blocks introduced diagnostics', async () => {
+  setReferenceAppConfig({ semanticFilterProvider: () => '["response"]' });
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('hvy insert -1 xref-card /body/summary --id empty-ref')
+    .mockResolvedValueOnce('I have created the reference.')
+    .mockResolvedValueOnce('echo \'{"id":"empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/empty-ref/xref-card.json')
+    .mockResolvedValueOnce('I have repaired the reference.');
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n\n<!--hvy: {"id":"summary"}-->\n#! Summary\n', '.hvy');
+  const result = await requestDocumentEditChatTurn({
+    settings: { provider: 'openai', model: 'test-model' },
+    document, messages: [], request: 'Create a reference.',
+  });
+  expect(result.error).toBeNull();
+  expect(requestProxyToolTurnMock).toHaveBeenCalledTimes(4);
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
+  expect(serializeDocument(document)).toContain('"xrefTarget":"summary"');
+  expect(result.messages.at(-1)?.content).toBe('I have repaired the reference.');
+});
+
+test('expected result: simulator recognizes a native turn containing only completion prose', async () => {
+  setReferenceAppConfig({ semanticFilterProvider: () => '["response"]' });
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const settings: ChatSettings = { provider: 'openai', model: 'test-model' };
+  const initial = await buildDocumentEditCliSimRequest({
+    settings, document, messages: [], request: 'Check the document.',
+  });
+  const result = await advanceDocumentEditCliSimStep({
+    settings, document, turnState: initial.turnState,
+    assistantOutput: 'I have checked the document.',
+    toolTurn: {
+      output: 'I have checked the document.', reasoningSummary: '', toolCalls: [],
+      nativeMessages: [], toolState: { provider: 'openai', input: [] },
+    },
+  });
+  expect(result.terminalSummary).toBe('I have checked the document.');
+  expect(result.requestPayload).toBeNull();
 });

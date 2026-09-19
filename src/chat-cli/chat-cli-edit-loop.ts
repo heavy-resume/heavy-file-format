@@ -1,3 +1,4 @@
+import { isChatCliCompletionIntent } from './chat-cli-completion-intent';
 import { DEFAULT_OPENAI_COMPACTION_MODEL, requestProxyCompletion, requestProxyToolTurn, type ProxyToolTurn } from '../chat/chat';
 import {
   collectHvyCliDiagnostics,
@@ -294,7 +295,7 @@ export async function advanceChatCliSimTurnState(params: {
   toolTurn?: ProxyToolTurn;
   signal?: AbortSignal;
 }): Promise<ChatCliSimAdvanceResult> {
-  return params.toolTurn
+  return params.toolTurn?.toolCalls.length
     ? advanceChatCliNativeToolTurnState({ ...params, turn: params.toolTurn })
     : advanceChatCliTurnState(params);
 }
@@ -654,7 +655,10 @@ async function advanceChatCliTurnState(params: {
       params.onCommandActivity?.('finished');
     }
   }
-  const action = parseChatCliAction(params.assistantOutput);
+  let action = parseChatCliAction(params.assistantOutput);
+  if (action.kind === 'invalid' && await isChatCliCompletionIntent(params)) {
+    action = { kind: 'done', summary: params.assistantOutput.trim() };
+  }
   if (action.kind === 'invalid') {
     const messages = [
       ...params.state.messages,

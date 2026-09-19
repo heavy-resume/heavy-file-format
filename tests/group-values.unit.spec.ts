@@ -1,11 +1,27 @@
 import { expect, test } from 'vitest';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
-import { findSortValueOwnerBlock, normalizeSortValueDefs, renameListValueKey, setSortValueAnnotationText, syncSortValuesForDocument } from '../src/sort-values';
+import { findSortValueOwnerBlock, getListValueBindingChoices, normalizeSortValueDefs, renameListValueKey, setSortValueAnnotationText, syncSortValuesForDocument } from '../src/sort-values';
 import { markdownToReaderHtml } from '../src/markdown';
 import { createHvyCliSession, executeHvyCliCommand } from '../src/cli-core/commands';
 import { defaultBlockSchema } from '../src/document-factory';
 import { applyHvyPatch } from '../src/chat-cli/hvy-patch';
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
+
+test('binding choices expose manual keys without changing definitions or overriding configured types', () => {
+  const document = groupDocument();
+  const item = document.sections[0].blocks[0].schema.componentListBlocks[0];
+  item.schema.groupKeys.Status = 'waiting';
+  item.schema.sortKeys['Fake Rank'] = 12;
+  const before = serializeDocument(document);
+  expect(getListValueBindingChoices(document.meta, item, 'group')).toEqual({
+    Manual: { type: 'text' }, Category: { type: 'text' },
+    Status: { type: 'enum', options: [{ label: 'Fake Ready', value: 'ready' }, { label: 'Fake Waiting', value: 'waiting' }] },
+  });
+  expect(getListValueBindingChoices(document.meta, item, 'sort')).toEqual({
+    Category: { type: 'number' }, 'Fake Rank': { type: 'number' },
+  });
+  expect(serializeDocument(document)).toBe(before);
+});
 
 function groupDocument() {
   return deserializeDocument(`---

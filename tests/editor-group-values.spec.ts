@@ -1,13 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function loadGroupExample(page: Page, text = 'Fake Blue', withDefinitions = true) {
+async function loadGroupExample(page: Page, text = 'Fake Blue', withDefinitions = true, nested = false) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
   - name: fake-record
-    baseType: text
+    baseType: ${nested ? 'expandable' : 'text'}
 ${withDefinitions ? `    sortValueDefs:
       Category: {type: text}
     groupValueDefs:
@@ -25,11 +25,35 @@ ${withDefinitions ? `    sortValueDefs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:fake-record {"id":"fake-item","groupKeys":{"Category":"Fake Manual"}}-->
-    ${text}
+   <!--hvy:fake-record {"id":"fake-item","groupKeys":{"Category":"Fake Manual"}${nested ? ',"expandableAlwaysShowStub":true' : ''}}-->
+${nested ? `    <!--hvy:expandable:stub {}-->\n\n     <!--hvy:text {}-->\n      ${text}\n\n    <!--hvy:expandable:content {}-->\n\n     <!--hvy:text {}-->\n      Fake detail` : `    ${text}`}
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic', exact: true }).click();
+}
+
+for (const withDefinitions of [false, true]) {
+test(`existing ${withDefinitions ? 'defined' : 'manual'} group keys can bind selected text inside an expandable instance`, async ({ page }) => {
+  test.setTimeout(5000);
+  await loadGroupExample(page, 'Fake Blue', withDefinitions, true);
+  await page.locator('.editor-block-passive', { hasText: 'Fake Blue' }).first().click({ position: { x: 4, y: 4 } });
+  await page.locator('.editor-block-passive', { hasText: 'Fake Blue' }).last().dispatchEvent('click');
+  await page.locator('.editor-block-passive', { hasText: 'Fake Blue' }).last().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await expect(editor).toBeFocused();
+  await selectContents(page, '.editor-block[data-active-editor-block="true"] .rich-editor p');
+  await page.getByRole('button', { name: 'Use as...' }).click();
+  await page.getByRole('menuitem', { name: 'Group: Category', exact: true }).click();
+  await expect(editor.locator('[data-value-kind="group"]')).toHaveText('Fake Blue');
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0].blocks[0].schema.componentListBlocks[0].schema.groupKeys;
+  })).toEqual({ Category: 'Fake Blue' });
+  await expect(editor).toBeFocused();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await expect(page.locator('#rawEditor')).toContainText('groupValueDefs:');
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:group-value {"key":"Category"}-->Fake Blue<!--/hvy:group-value-->');
+});
 }
 
 test('a manually grouped item offers inline key creation without predefined value definitions', async ({ page }) => {
@@ -47,6 +71,7 @@ test('a manually grouped item offers inline key creation without predefined valu
   await form.getByRole('textbox', { name: 'Key name', exact: true }).pressSequentially('Category');
   await expect(form.getByRole('textbox', { name: 'Key name', exact: true })).toBeFocused();
   await form.getByRole('button', { name: 'Create and use', exact: true }).click();
+  await expect(page.locator('.text-use-as-menu-item[data-sort-value-key="Category"][data-value-kind="group"]')).toHaveCount(1);
   await expect(editor).toBeFocused();
   await expect(editor.locator('[data-value-kind="group"]')).toHaveText('Fake Blue');
   await expect.poll(() => page.evaluate(async () => {

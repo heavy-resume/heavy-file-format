@@ -69,7 +69,9 @@ export function bindClickDispatch(app: HTMLElement): void {
     });
     // Keep the active editor and its selection intact; make the new key reusable
     // immediately without replacing the editor DOM.
-    const item = document.createElement('button');
+    const item = Array.from(form.parentElement!.querySelectorAll<HTMLButtonElement>('[data-rich-action="sort-value"]'))
+      .find((button) => button.dataset.valueKind === result.kind && button.dataset.sortValueKey === result.key)
+      ?? document.createElement('button');
     item.type = 'button';
     item.className = 'ghost text-use-as-menu-item';
     item.setAttribute('role', 'menuitem');

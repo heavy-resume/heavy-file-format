@@ -99,6 +99,17 @@ export function getSortValueDefsForBlock(document: VisualDocument, block: Visual
   return getComponentSortValueDefs(document.meta, (owner ?? block).schema.component, kind);
 }
 
+/** Picker choices include manual keys; merely displaying them must not create definitions. */
+export function getListValueBindingChoices(meta: Record<string, unknown>, owner: VisualBlock, kind: ListValueKind): Record<string, SortValueDefinition> {
+  const definitions = getComponentSortValueDefs(meta, owner.schema.component, kind);
+  if (!getComponentDefinition(meta, owner.schema.component)) return definitions;
+  const manualChoices = Object.fromEntries(Object.entries(owner.schema[listValueFields(kind).keys] ?? {})
+    .filter(([key]) => key.trim())
+    .map(([key, value]) => [key, { type: kind === 'sort' && typeof value === 'number' ? 'number' : 'text' } as SortValueDefinition]));
+  // An explicitly configured enum/date/etc. always takes precedence over a cache value.
+  return { ...manualChoices, ...definitions };
+}
+
 export function findSortValueOwnerBlock(document: VisualDocument, blockId: string): VisualBlock | null {
   return findComponentListItemOwner(document, blockId);
 }

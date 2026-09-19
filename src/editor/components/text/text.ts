@@ -5,7 +5,7 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../com
 import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
 import { state } from '../../../state';
 import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../../../inline-answer-groups';
-import { findSortValueOwnerBlock, getComponentSortValueDefs, replaceSortValueAnnotations, type ListValueKind } from '../../../sort-values';
+import { findSortValueOwnerBlock, getListValueBindingChoices, replaceSortValueAnnotations, type ListValueKind } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { findReusableOwner } from '../../../reusable';
 import { getComponentDefs, getSectionDefs } from '../../../component-defs';
@@ -380,13 +380,13 @@ function getSortValueDefsForEditorBlock(sectionKey: string, block: Parameters<Co
       return {};
     }
     const listOwner = findSortValueOwnerBlock(state.document, block.id);
-    if (listOwner) return getComponentSortValueDefs(state.document.meta, listOwner.schema.component, kind);
-    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component, kind);
+    if (listOwner) return getListValueBindingChoices(state.document.meta, listOwner, kind);
+    const direct = getListValueBindingChoices(state.document.meta, block, kind);
     if (Object.keys(direct).length > 0) {
       return direct;
     }
     const owner = findReusableOwner(sectionKey, block.id);
-    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component, kind) : {};
+    return owner ? getListValueBindingChoices(state.document.meta, owner, kind) : {};
   } catch {
     return {};
   }

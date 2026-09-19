@@ -1565,9 +1565,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return 'paragraph';
   }
 
+  function templateDefDisplayName(def: { name?: string }): string {
+    return String(def.name ?? '').trim() || 'Untitled Template';
+  }
+
+  function sortedTemplateDefEntries<T extends { name?: string }>(sourceDefs: T[]): { def: T; index: number }[] {
+    return sourceDefs
+      .map((def, index) => ({ def, index }))
+      .sort((left, right) => templateDefDisplayName(left.def).localeCompare(templateDefDisplayName(right.def), undefined, { sensitivity: 'base' }));
+  }
+
   function renderMetaPanel(): string {
-    const defs = deps.getComponentDefs();
-    const sectionDefs = deps.getSectionDefs();
+    const defs = sortedTemplateDefEntries(deps.getComponentDefs());
+    const sectionDefs = sortedTemplateDefEntries(deps.getSectionDefs());
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
     const textLineStyles = getTextLineStylesFromMeta(state.documentMeta);
@@ -1776,19 +1786,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ? '<div class="muted template-def-empty">No component templates</div>'
         : defs
           .map(
-            (def, index) => {
+            ({ def, index }) => {
               const flavors = Array.isArray(def.flavors) ? def.flavors : [];
               return `<div class="component-def template-def-row" data-template-kind="component" data-def-index="${index}">
                 <div class="template-def-summary">
                   <span class="template-def-summary-text">
-                    <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
+                    <strong>${deps.escapeHtml(templateDefDisplayName(def))}</strong>
                     <span>${deps.escapeHtml(def.baseType)}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                   </span>
                   <span class="template-def-summary-actions">
                     <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
                     ${renderDeleteControl({
                       className: 'template-def-remove-button',
-                      label: `Remove ${def.name || 'Untitled Template'}`,
+                      label: `Remove ${templateDefDisplayName(def)}`,
                       title: 'Delete component template',
                       attributes: {
                         'data-action': 'remove-component-def',
@@ -1811,13 +1821,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ? '<div class="muted">Save a section as a template from its header to make it available here and in the add-section controls.</div>'
         : sectionDefs
           .map(
-            (def, index) => {
+            ({ def, index }) => {
               const flavors = Array.isArray(def.flavors) ? def.flavors : [];
               const detailsKey = templateDefinitionDetailsKey('section', index);
               return `<details class="component-def template-def-details" data-template-kind="section" data-section-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
                       <summary class="template-def-summary">
                         <span class="template-def-summary-text">
-                          <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
+                          <strong>${deps.escapeHtml(templateDefDisplayName(def))}</strong>
                           <span>Section template · ${def.repeatable === true ? 'multiple allowed' : 'one per document'}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                         </span>
                         <span class="template-def-summary-actions">

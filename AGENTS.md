@@ -119,3 +119,5 @@ where we want lazily thought out changes quickly and need quality changes now.
 Always repro before fixing! Always test adjacent tests when changing things!
 
 Don't make README.md changes unless explicilty instructed. If you want to update things for future agents update README.foragents.md instead
+
+Don't update HVY-SPEC.md with features of clients. Its defining the file format not the client.

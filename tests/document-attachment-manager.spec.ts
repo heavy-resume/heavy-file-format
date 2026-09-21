@@ -24,6 +24,37 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole('button', { name: 'Document Meta' }).click();
 });
 
+test('before, review unused files, tool call, expected result: modal lists candidates before deletion', async ({ page }) => {
+  const manager = page.locator('[data-document-attachment-manager="true"]');
+  await manager.locator('[data-document-attachment-upload="true"]').setInputFiles([
+    { name: 'unused-guide.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-unused') },
+    { name: 'unused-notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Unused notes') },
+  ]);
+  await expect(manager.getByRole('button', { name: 'Remove unused (2)' })).toBeVisible();
+
+  await manager.getByRole('button', { name: 'Remove unused (2)' }).click();
+  const modal = page.locator('.document-attachment-purge-modal');
+  await expect(modal.getByRole('heading', { name: 'Remove unused files?' })).toBeVisible();
+  await expect(modal.getByRole('listitem')).toHaveCount(2);
+  await expect(modal).toContainText('unused-guide');
+  await expect(modal).toContainText('unused-notes');
+  await expect(modal.locator('.document-attachment-purge-list')).toHaveCSS('overflow-y', 'auto');
+  await expect(modal.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+  await expect(modal.getByRole('button', { name: 'Delete 2 files' })).toBeVisible();
+
+  await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(manager.locator('[data-document-attachment-row="true"]')).toHaveCount(2);
+  await manager.getByRole('button', { name: 'Remove unused (2)' }).click();
+  await page.locator('.document-attachment-purge-modal').getByRole('button', { name: 'Delete 2 files' }).click();
+  await expect(manager.locator('[data-document-attachment-row="true"]')).toHaveCount(0);
+
+  await manager.getByRole('button', { name: 'Remove unused', exact: true }).click();
+  const emptyModal = page.locator('.document-attachment-purge-modal');
+  await expect(emptyModal).toContainText('No unused embedded files were found.');
+  await expect(emptyModal.getByRole('button', { name: 'Delete 0 files' })).toBeDisabled();
+  await expect(emptyModal.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+});
+
 test('before, upload files, expected result: attachments remain visible and can be named', async ({ page }) => {
   const manager = page.locator('[data-document-attachment-manager="true"]');
   await expect(manager).toContainText('No document attachments');

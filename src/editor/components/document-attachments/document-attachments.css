@@ -26,6 +26,13 @@
   gap: 0.15rem;
 }
 
+.hvy-document .document-attachment-manager-head > .document-attachment-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .hvy-document .document-attachment-manager-head > div > span,
 .hvy-document .document-attachment-manager-help,
 .hvy-document .document-attachment-file-meta,
@@ -123,6 +130,92 @@
   color: var(--hvy-button-text);
   background: var(--hvy-button-bg);
   border-color: var(--hvy-button-bg);
+}
+
+.hvy-document .document-attachment-purge-modal {
+  display: grid;
+  inline-size: min(34rem, calc(100% - 2rem));
+  max-block-size: min(38rem, calc(100% - 2rem));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  overflow: hidden;
+}
+
+.hvy-document .document-attachment-purge-modal .modal-head {
+  align-items: flex-start;
+  padding-block-end: 0.9rem;
+}
+
+.hvy-document .document-attachment-purge-modal .modal-head h3,
+.hvy-document .document-attachment-purge-modal .modal-head p {
+  margin: 0;
+}
+
+.hvy-document .document-attachment-purge-modal .modal-head p {
+  margin-block-start: 0.3rem;
+  color: var(--hvy-text-muted);
+  font-size: 0.85rem;
+}
+
+.hvy-document .document-attachment-purge-close .hvy-ui-icon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.hvy-document .document-attachment-purge-list {
+  display: grid;
+  min-block-size: 0;
+  max-block-size: 22rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-block: 1px solid var(--hvy-border);
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .document-attachment-purge-list.is-empty {
+  place-items: center;
+  min-block-size: 8rem;
+}
+
+.hvy-document .document-attachment-purge-empty {
+  padding: 1rem;
+  color: var(--hvy-text-muted);
+  text-align: center;
+}
+
+.hvy-document .document-attachment-purge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.2rem;
+  border-block-end: 1px solid var(--hvy-border);
+}
+
+.hvy-document .document-attachment-purge-row:last-child {
+  border-block-end: 0;
+}
+
+.hvy-document .document-attachment-purge-row > div:last-child {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0.18rem;
+}
+
+.hvy-document .document-attachment-purge-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvy-document .document-attachment-purge-row span {
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+}
+
+.hvy-document .document-attachment-purge-actions {
+  margin: 0;
+  padding-block-start: 0.9rem;
+  background: var(--hvy-surface);
 }
 
 .hvy-document .document-attachment-status:empty {

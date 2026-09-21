@@ -153,6 +153,7 @@ import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
 import type { UserFileAttachmentLimits } from './document-attachments';
+import { deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles, type UnusedEmbeddedFile } from './attachment-cleanup';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
@@ -228,6 +229,10 @@ export interface HvyMountOptions {
 export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
+  findUnusedEmbeddedFiles(): UnusedEmbeddedFile[];
+  purgeUnusedEmbeddedFiles(): Promise<UnusedEmbeddedFile[]>;
+  isEmbeddedSqliteDatabaseUnused(): boolean;
+  deleteUnusedEmbeddedSqliteDatabase(): Promise<boolean>;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
   exportDocumentSourceMarkdown(): string;
@@ -1497,6 +1502,18 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
     },
+    findUnusedEmbeddedFiles() {
+      return runWithStateRuntime(runtime, () => findUnusedEmbeddedFiles(state.document));
+    },
+    purgeUnusedEmbeddedFiles() {
+      return runWithStateRuntimeAsync(runtime, () => purgeUnusedEmbeddedFiles(state.document, state.attachmentHost));
+    },
+    isEmbeddedSqliteDatabaseUnused() {
+      return runWithStateRuntime(runtime, () => isEmbeddedSqliteDatabaseUnused(state.document));
+    },
+    deleteUnusedEmbeddedSqliteDatabase() {
+      return runWithStateRuntimeAsync(runtime, () => deleteUnusedEmbeddedSqliteDatabase(state.document, state.attachmentHost));
+    },
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => {
         if (state.document.encryption?.encrypted === true) {
@@ -1705,6 +1722,8 @@ export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HvyAttachmentAction, HvyAttachmentActionHandler, HvyAttachmentActionRequest, HvyAttachmentActionResult } from './document-attachment-actions';
 export type { UserFileAttachmentLimits } from './document-attachments';
+export { deleteUnusedEmbeddedFiles, deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles } from './attachment-cleanup';
+export type { UnusedEmbeddedFile, UnusedEmbeddedFileKind } from './attachment-cleanup';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';

@@ -110,3 +110,17 @@ export function componentLocationIcon(): string {
     <rect x="9" y="9" width="6" height="6" rx="1" />
   </svg>`;
 }
+
+export function downloadIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-download" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 4v10M8 10.5l4 4 4-4" />
+    <path d="M5 17v1.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V17" />
+  </svg>`;
+}
+
+export function cubeIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-cube" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3Z" />
+    <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
+  </svg>`;
+}

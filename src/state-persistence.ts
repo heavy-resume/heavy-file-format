@@ -637,6 +637,7 @@ function isSelectedExample(value: unknown): value is SelectedExample {
     || value === 'study-tools'
     || value === 'survey'
     || value === 'video-demo'
+    || value === 'model-3d-demo'
     || value === 'plugin-sort-values'
     || value === 'pdf-template'
     || value === 'sepa-recreation'

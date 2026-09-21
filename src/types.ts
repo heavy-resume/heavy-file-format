@@ -466,6 +466,7 @@ export type SelectedExample =
   | 'study-tools'
   | 'survey'
   | 'video-demo'
+  | 'model-3d-demo'
   | 'asteroids'
   | 'plugin-sort-values'
   | 'pdf-template'

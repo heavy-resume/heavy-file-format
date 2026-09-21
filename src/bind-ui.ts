@@ -10,6 +10,7 @@ import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
 import bundledMeetingMinutesThvy from '../examples/meeting-minutes.thvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
+import bundledModel3dDemoHvyUrl from '../examples/model-3d-demo.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
 import {
   state,
@@ -620,6 +621,20 @@ export function bindUi(app: HTMLElement): void {
   const videoDemoExampleBtn = app.querySelector<HTMLButtonElement>('#videoDemoExampleBtn');
   videoDemoExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledVideoDemoHvy, 'video-demo.hvy', 'video-demo');
+  });
+
+  const model3dDemoExampleBtn = app.querySelector<HTMLButtonElement>('#model3dDemoExampleBtn');
+  model3dDemoExampleBtn?.addEventListener('click', () => {
+    // Loaded as bytes, not raw text: the demo carries real tail attachments and
+    // reading it as text would leak --HVY-TAIL-- data into the document body.
+    void runInBoundRuntimeAsync(async () => {
+      await loadBundledBinaryDocument(
+        bundledModel3dDemoHvyUrl,
+        'model-3d-demo.hvy',
+        'model-3d-demo',
+        '3D model demo'
+      );
+    });
   });
 
   const asteroidsExampleBtn = app.querySelector<HTMLButtonElement>('#asteroidsExampleBtn');

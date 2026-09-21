@@ -16,6 +16,7 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.video',
   'hvy.editable-text',
   'hvy.canvas',
+  'hvy.model-3d',
   'hvy.power-scripting',
 ] as const;
 
@@ -109,6 +110,13 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     displayName: 'Canvas',
   },
   {
+    id: 'hvy.model-3d',
+    key: 'model3d',
+    exportName: 'model3dPlugin',
+    modulePath: 'src/plugins/model-3d/model-3d.ts',
+    displayName: '3D Model',
+  },
+  {
     id: 'hvy.power-scripting',
     key: 'powerScripting',
     exportName: 'powerScriptingPlugin',
@@ -180,8 +188,12 @@ function normalizeRuntimeEnv(env: Record<string, string>): Record<string, string
   return { ...runtimeEnv, ...env };
 }
 
+function resolveHvyBuildConfigPath(env: Record<string, string>): string {
+  return resolve(process.cwd(), env.HVY_BUILD_CONFIG || 'hvy.build.json');
+}
+
 function readHvyBuildConfig(env: Record<string, string>): unknown {
-  const configPath = resolve(process.cwd(), env.HVY_BUILD_CONFIG || 'hvy.build.json');
+  const configPath = resolveHvyBuildConfigPath(env);
   if (!existsSync(configPath)) {
     return undefined;
   }
@@ -196,6 +208,7 @@ export { createBrythonMinimalVfsPlugin } from './src/plugins/scripting/brython-m
 
 export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plugin {
   const resolvedEnv = normalizeRuntimeEnv(env);
+  const configPath = resolveHvyBuildConfigPath(resolvedEnv);
   const selectedIds = resolveBuiltInPluginIds(readHvyBuildConfig(resolvedEnv), resolvedEnv.HVY_BUILD_PLUGINS);
   const source = resolvedEnv.HVY_LAZY_BUILT_INS === 'true'
     ? createLazyHvyBuiltInPluginsModuleSource(selectedIds)
@@ -209,7 +222,20 @@ export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plug
       if (id !== BUILT_IN_PLUGINS_RESOLVED_ID) {
         return null;
       }
+      // The selected plugin list is baked into this module at server start, so
+      // the build config has to be a tracked dependency. Without it, adding a
+      // plugin to hvy.build.json leaves the running server serving a stale
+      // list and the plugin reports as unavailable until a manual restart.
+      this.addWatchFile(configPath);
       return source;
+    },
+    configureServer(server) {
+      server.watcher.add(configPath);
+      server.watcher.on('change', (changed) => {
+        if (resolve(changed) === configPath) {
+          void server.restart();
+        }
+      });
     },
   };
 }

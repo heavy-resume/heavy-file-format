@@ -26,6 +26,7 @@ declare module 'virtual:hvy-built-in-plugins' {
     video?: HvyPlugin;
     editableText?: HvyPlugin;
     canvas?: HvyPlugin;
+    model3d?: HvyPlugin;
     powerScripting?: HvyPlugin;
   }>;
   export const builtInPluginById: Readonly<Record<string, HvyPlugin | undefined>>;

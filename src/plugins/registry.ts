@@ -32,6 +32,7 @@ export const QR_CODE_PLUGIN_ID = 'hvy.qr-code';
 export const VIDEO_PLUGIN_ID = 'hvy.video';
 export const EDITABLE_TEXT_PLUGIN_ID = 'hvy.editable-text';
 export const CANVAS_PLUGIN_ID = 'hvy.canvas';
+export const MODEL_3D_PLUGIN_ID = 'hvy.model-3d';
 export const POWER_SCRIPTING_PLUGIN_ID = 'hvy.power-scripting';
 export function createBuiltInPluginMetadata(id: string, version = HVY_BUILT_IN_PLUGIN_VERSION): Pick<HvyPlugin, 'id' | 'version' | 'hvyApiVersion'> {
   return {

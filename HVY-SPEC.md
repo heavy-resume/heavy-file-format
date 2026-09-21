@@ -1774,7 +1774,7 @@ Tail format:
 3. All remaining bytes after the trailing newline of that sentinel are the concatenated attachment payloads, laid out in the order the directives appear. Each attachment's byte slice has length `length` from its directive.
 
 Tail directive fields:
-- `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload and `image:<filename>` for image component attachments.
+- `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload, `image:<filename>` for image component attachments, and `model-3d:<filename>` for 3D model plugin attachments.
 - `mediaType`: RECOMMENDED IANA media type of the decoded payload.
 - `role`: optional string describing the attachment's document role. The value
   `user-file` identifies an author-managed file that MAY be selected by a
@@ -2339,6 +2339,71 @@ Clients MAY persist a viewer's acceptance outside the document. Persisted
 acceptance SHOULD be keyed to a collision-resistant digest of the ordered
 identities and source of all power scripts so that adding, removing, renaming,
 reordering, or editing trusted code requires a new approval.
+
+### 7.15 3D model plugin contract
+
+The built-in 3D model plugin is `hvy.model-3d`. It renders an interactive 3D
+model whose bytes are stored as an HVY tail attachment, so documents containing
+a 3D model remain self-contained and render offline.
+
+```markdown
+---
+hvy_version: 1.0
+plugins:
+  - id: hvy.model-3d
+---
+
+<!--hvy:plugin {"id":"bracket","plugin":"hvy.model-3d","pluginConfig":{"modelFile":"bracket.stl","mediaType":"model/stl","title":"Mounting bracket","height":360,"showGrid":true,"autoRotate":false,"wireframe":false,"allowDownload":true}}-->
+3D model. Geometry is stored in the HVY tail attachment.
+```
+
+Normative configuration and data:
+
+- `pluginConfig.modelFile` is a REQUIRED string naming the attached model file.
+  The bytes MUST be stored in the tail attachment with `id`
+  `model-3d:<modelFile>` (see §7.6). When `modelFile` is absent, names an
+  unsupported extension, or has no matching attachment, clients MUST NOT render
+  a model and SHOULD surface the missing or unsupported file to authors.
+- `pluginConfig.mediaType` is an optional advisory media type recorded for the
+  attachment. Model media types are weakly standardized, so the `modelFile`
+  extension is authoritative for format selection.
+- `pluginConfig.title` is an optional accessible name for the viewer surface.
+- `pluginConfig.height` is an optional positive integer viewer height in CSS
+  pixels. Clients SHOULD default to `360` and SHOULD clamp to `160`-`1200`.
+- `pluginConfig.showGrid`, `pluginConfig.autoRotate`, and
+  `pluginConfig.wireframe` are optional booleans defaulting to `true`, `false`,
+  and `false`. Grid and background colors MUST be derived from the active
+  document theme roles rather than stored in plugin configuration.
+- `pluginConfig.allowDownload` is an optional boolean defaulting to `true`.
+  When true, clients SHOULD offer a control that saves the attached model bytes
+  under `modelFile`.
+- The plugin text body SHOULD contain only a concise human/AI-facing
+  description. Model geometry MUST NOT be authored as plugin text.
+
+Format support for version 0.1 is the set of formats parseable without a
+WebAssembly decoder: `.glb`, `.gltf`, `.obj`, `.stl`, `.ply`, `.fbx`, `.dae`,
+`.3mf`, `.amf`, `.vtk`, `.vtp`, `.pcd`, and `.xyz`. Clients MUST report an
+error rather than render partial geometry for formats they cannot fully parse,
+including Draco-compressed glTF and KTX2-textured glTF.
+
+Model files are untrusted content under §8. Clients MUST NOT fetch, resolve, or
+traverse external resource URLs referenced by a model, including relative
+texture and buffer paths, because doing so would let an attached file drive
+outbound requests from the reader. Clients MUST instead render the model
+without those resources and SHOULD report how many were withheld.
+
+Textures carried inside the model file MUST still render. This covers `data:`
+URIs and images packed into a glTF/GLB buffer view. A client that hands such an
+image to its loader through an in-memory handle, such as an object URL it
+created itself, MUST treat that handle as inline rather than external; refusing
+it would silently strip textures from self-contained `.glb` files. Such handles
+cannot reach the network, so permitting them does not weaken the rule above.
+Formats whose textures live in sidecar files, including `.obj` with a companion
+`.mtl` and `.dae` referencing external images, therefore render untextured.
+
+Clients SHOULD enforce an upper bound on accepted model bytes
+because model parsing is computationally unbounded, and SHOULD release GPU
+resources when the component is removed.
 
 ## 8. Security & Runtime Constraints
 

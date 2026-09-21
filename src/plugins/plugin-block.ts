@@ -1,8 +1,9 @@
 import type { VisualBlock } from '../editor/types';
 import { createQrCodePluginConfig, QR_CODE_DEFAULT_CSS, QR_CODE_PLUGIN_DEFAULT_TEXT } from './qr-code/qr-code-model';
 import { DEFAULT_DIAGRAM_SOURCE, DEFAULT_DIAGRAM_SYNTAX } from './diagram-defaults';
-import { CANVAS_PLUGIN_ID, DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, POWER_SCRIPTING_PLUGIN_ID, QR_CODE_PLUGIN_ID, SCRIPTING_PLUGIN_ID, VIDEO_PLUGIN_ID } from './registry';
+import { CANVAS_PLUGIN_ID, DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, MODEL_3D_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID, QR_CODE_PLUGIN_ID, SCRIPTING_PLUGIN_ID, VIDEO_PLUGIN_ID } from './registry';
 import { SCRIPTING_PLUGIN_VERSION } from './scripting/version';
+import { DEFAULT_MODEL_3D_CONFIG } from './model-3d/model-3d-config';
 import { DEFAULT_VIDEO_CONFIG } from './video/video-model';
 
 export function configurePluginBlock(block: VisualBlock, pluginId: string): void {
@@ -25,6 +26,8 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
       ? { ...DEFAULT_VIDEO_CONFIG }
     : nextId === CANVAS_PLUGIN_ID
       ? { width: 800, height: 450, viewerDrawing: false, strokeColor: '', strokeWidth: 4 }
+    : nextId === MODEL_3D_PLUGIN_ID
+      ? { ...DEFAULT_MODEL_3D_CONFIG }
     : nextId === POWER_SCRIPTING_PLUGIN_ID
       ? { version: '0.1' }
       : {};
@@ -36,6 +39,8 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
       ? QR_CODE_PLUGIN_DEFAULT_TEXT
     : nextId === CANVAS_PLUGIN_ID
       ? 'Canvas drawing. Vector artwork is stored in the HVY tail attachment.'
+    : nextId === MODEL_3D_PLUGIN_ID
+      ? '3D model. Geometry is stored in the HVY tail attachment.'
       : '';
   if (nextId === QR_CODE_PLUGIN_ID) {
     block.schema.css = QR_CODE_DEFAULT_CSS;

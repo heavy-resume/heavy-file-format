@@ -318,6 +318,7 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterComposer = app.querySelector<HTMLFormElement>('#metaFilterComposer');
   const metaFilterQuery = app.querySelector<HTMLInputElement>('#metaFilterQuery');
   const clearMetaFilterButton = app.querySelector<HTMLButtonElement>('[data-action="clear-meta-filter"]');
+  const referenceHeaderToggle = app.querySelector<HTMLButtonElement>('[data-action="toggle-reference-header"]');
   const rerenderSearchButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-search"]');
   const rerenderReaderButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-reader"]');
   const rerenderAppButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-app"]');
@@ -325,6 +326,12 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
   const metaFilterBehaviorButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]');
   let pendingAiReaderAction: number | null = null;
+
+  referenceHeaderToggle?.addEventListener('click', () => {
+    const expanded = referenceHeaderToggle.getAttribute('aria-expanded') !== 'true';
+    referenceHeaderToggle.setAttribute('aria-expanded', String(expanded));
+    referenceHeaderToggle.closest('.topbar')?.classList.toggle('is-reference-header-expanded', expanded);
+  });
 
   rerenderSearchButton?.addEventListener('click', () => {
     runInBoundRuntime(() => getRefreshSearchSurface()(app));

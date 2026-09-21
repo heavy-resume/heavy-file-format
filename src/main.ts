@@ -952,33 +952,39 @@ function renderApp(): void {
 function renderTopbar(): string {
   return `
     <header class="topbar">
-      <div class="title-block">
-        <h1 class="reference-title">HVY Reference Implementation</h1>
-        <p class="reference-subtitle">Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
-      </div>
-      <div class="reference-rerender-controls" role="group" aria-label="Reference rerender diagnostics">
-        <span class="reference-rerender-label">Rerender</span>
-        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-search">Search</button>
-        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-reader">Reader</button>
-        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-app">App</button>
-        <button type="button" class="hvy-button reference-rerender-button reference-hot-reload-button" data-action="reference-hot-reload" title="Save the current session and reload the page, matching Vite's full-page hot reload lifecycle">Hot Reload</button>
-      </div>
-      <div class="toolbar">
-        <div class="toolbar-section toolbar-section-documents">
-          <button id="newBtn" type="button" class="toolbar-primary-button toolbar-document-action">New</button>
-          ${renderDocumentMenu()}
+      <button type="button" class="reference-header-toggle" data-action="toggle-reference-header" aria-expanded="false" aria-controls="referenceHeaderContent">
+        <span>HVY Reference Implementation</span>
+        <svg class="reference-header-toggle-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
+      </button>
+      <div id="referenceHeaderContent" class="reference-header-content">
+        <div class="title-block">
+          <h1 class="reference-title">HVY Reference Implementation</h1>
+          <p class="reference-subtitle">Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
         </div>
-        <div class="toolbar-section toolbar-section-files">
-          <button id="openLocalFileBtn" type="button" class="hvy-button toolbar-file-action">Open Local</button>
-          <label class="file-picker toolbar-file-action">
-            Select File
-            <input id="fileInput" class="file-picker-input" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
-          </label>
-          <input id="downloadName" class="toolbar-filename-input" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
-          ${renderReferenceDocumentDirtyIndicator()}
-          <button id="saveFileBtn" type="button" class="hvy-button toolbar-file-action">Save File</button>
-          <button id="downloadBtn" type="button" class="hvy-button toolbar-file-action">Download File</button>
-          <button id="exportPdfBtn" type="button" class="hvy-button toolbar-file-action">Export PDF</button>
+        <div class="reference-rerender-controls" role="group" aria-label="Reference rerender diagnostics">
+          <span class="reference-rerender-label">Rerender</span>
+          <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-search">Search</button>
+          <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-reader">Reader</button>
+          <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-app">App</button>
+          <button type="button" class="hvy-button reference-rerender-button reference-hot-reload-button" data-action="reference-hot-reload" title="Save the current session and reload the page, matching Vite's full-page hot reload lifecycle">Hot Reload</button>
+        </div>
+        <div class="toolbar">
+          <div class="toolbar-section toolbar-section-documents">
+            <button id="newBtn" type="button" class="toolbar-primary-button toolbar-document-action">New</button>
+            ${renderDocumentMenu()}
+          </div>
+          <div class="toolbar-section toolbar-section-files">
+            <button id="openLocalFileBtn" type="button" class="hvy-button toolbar-file-action">Open Local</button>
+            <label class="file-picker toolbar-file-action">
+              Select File
+              <input id="fileInput" class="file-picker-input" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
+            </label>
+            <input id="downloadName" class="toolbar-filename-input" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
+            ${renderReferenceDocumentDirtyIndicator()}
+            <button id="saveFileBtn" type="button" class="hvy-button toolbar-file-action">Save File</button>
+            <button id="downloadBtn" type="button" class="hvy-button toolbar-file-action">Download File</button>
+            <button id="exportPdfBtn" type="button" class="hvy-button toolbar-file-action">Export PDF</button>
+          </div>
         </div>
       </div>
     </header>

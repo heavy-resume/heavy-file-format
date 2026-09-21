@@ -17,6 +17,10 @@ test('section add component affordance is a compact single row', async ({ page }
 
   await expect(addComponent.getByRole('button', { name: 'Section component type' })).toBeVisible();
   await expect(addComponent.locator('select')).toHaveCount(0);
+  await expect(addComponent).toHaveCSS(
+    '-webkit-tap-highlight-color',
+    'rgba(0, 0, 0, 0)',
+  );
   expect(box?.height ?? 0).toBeLessThanOrEqual(46);
 });
 

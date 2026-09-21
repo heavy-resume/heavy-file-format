@@ -380,6 +380,7 @@
   align-items: center;
   gap: 0.5rem;
   justify-self: stretch;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .hvy-document .compact-add-component-ghost .ghost-plus-small {

@@ -215,7 +215,7 @@ function openUnusedAttachmentReview(app: HTMLElement, unused: UnusedEmbeddedFile
     event.preventDefault();
     root.remove();
   });
-  (app.querySelector<HTMLElement>('.hvy-embed-layout') ?? app).append(root);
+  (app.querySelector<HTMLElement>('.document-meta-pane') ?? app).append(root);
   root.querySelector<HTMLButtonElement>('[data-document-attachment-purge-action="cancel"]')?.focus();
 }
 

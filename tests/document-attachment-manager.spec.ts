@@ -55,6 +55,29 @@ test('before, review unused files, tool call, expected result: modal lists candi
   await expect(emptyModal.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
 });
 
+test('before, open unused file review in phone preview, expected result: modal stays inside the emulated document frame', async ({ page }) => {
+  await page.getByRole('button', { name: 'Phone 390', exact: true }).click();
+  const manager = page.locator('[data-document-attachment-manager="true"]');
+  await manager.locator('[data-document-attachment-upload="true"]').setInputFiles({
+    name: 'unused-frame-check.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Unused frame check'),
+  });
+
+  await manager.getByRole('button', { name: 'Remove unused (1)' }).click();
+  const pane = page.locator('.document-meta-pane');
+  const modalRoot = pane.locator(':scope > .document-attachment-purge-modal-root');
+  await expect(modalRoot).toBeVisible();
+  const paneBox = await pane.boundingBox();
+  const modalRootBox = await modalRoot.boundingBox();
+  expect(paneBox).not.toBeNull();
+  expect(modalRootBox).not.toBeNull();
+  expect(Math.floor(modalRootBox!.x)).toBeGreaterThanOrEqual(Math.floor(paneBox!.x));
+  expect(Math.ceil(modalRootBox!.x + modalRootBox!.width)).toBeLessThanOrEqual(Math.ceil(paneBox!.x + paneBox!.width));
+  expect(Math.floor(modalRootBox!.y)).toBeGreaterThanOrEqual(Math.floor(paneBox!.y));
+  expect(Math.ceil(modalRootBox!.y + modalRootBox!.height)).toBeLessThanOrEqual(Math.ceil(paneBox!.y + paneBox!.height));
+});
+
 test('before, upload files, expected result: attachments remain visible and can be named', async ({ page }) => {
   const manager = page.locator('[data-document-attachment-manager="true"]');
   await expect(manager).toContainText('No document attachments');

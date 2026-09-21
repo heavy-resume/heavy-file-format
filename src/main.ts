@@ -771,7 +771,7 @@ function renderApp(): void {
     isRawEditor,
   })}
         </div>
-        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane${isCliEditor || isDocumentMetaView ? '' : ' workspace-content-pane'}`)}>
+        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane${isDocumentMetaView ? ' document-meta-pane' : ''}${isCliEditor || isDocumentMetaView ? '' : ' workspace-content-pane'}`)}>
           ${isCliEditor || isDocumentMetaView || !readerToolsAvailable ? '' : renderSearchCollapsedSurface()}
           ${isEditorView
       ? `${isRawEditor
@@ -812,7 +812,7 @@ function renderApp(): void {
             escapeAttr,
           })
           : isDocumentMetaView
-            ? `<div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div>`
+            ? `<div class="document-meta-scroll"><div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div></div>`
             : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                   ${renderTransientNotice()}

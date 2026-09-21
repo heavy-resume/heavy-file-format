@@ -5871,6 +5871,24 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
+for (const preview of ['Phone 390', 'Desktop']) {
+  test(`document meta scrolls in ${preview} preview`, async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Advanced' }).click();
+    await page.getByRole('button', { name: 'Document Meta' }).click();
+    await page.getByRole('button', { name: preview, exact: true }).click();
+
+    const scroller = page.locator('.document-meta-scroll');
+    await expect(scroller).toHaveCSS('overflow-y', 'auto');
+    expect(await scroller.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
+      await scroller.evaluate((element) => element.clientHeight)
+    );
+    await scroller.evaluate((element) => { element.scrollTop = 200; });
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(200);
+  });
+}
+
 test('responsive preview controls resize document frame without resizing app chrome', async ({ page }) => {
   await page.goto('/');
 

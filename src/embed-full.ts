@@ -669,11 +669,11 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         <button id="exportPdfBtn" type="button">Export PDF</button>
       </div>
       <section class="workspace-shell hvy-full-workspace-shell">
-        <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane hvy-full-pane${isDocumentMetaView ? '' : ' workspace-content-pane'}">
+        <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane hvy-full-pane${isDocumentMetaView ? ' document-meta-pane' : ' workspace-content-pane'}">
           ${
             isEditor
               ? isDocumentMetaView
-                ? `<div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div>`
+                ? `<div class="document-meta-scroll"><div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div></div>`
                 : `<div class="editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                   ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>

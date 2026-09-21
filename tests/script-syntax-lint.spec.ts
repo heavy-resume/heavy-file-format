@@ -47,3 +47,72 @@ return "valid"
   expect(result.runtimeResult.ok).toBe(true);
   expect(result.runtimeResult.returnValue).toBe(42);
 });
+
+test('cached script definitions are reused until their source changes', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    const { runUserScript } = await import(/* @vite-ignore */ '/src/plugins/scripting/wrapper.ts');
+    const { deserializeDocument } = await import(/* @vite-ignore */ '/src/serialization.ts');
+    const document = deserializeDocument(`---\nhvy_version: 0.1\n---\n`, '.hvy');
+    const first = await runUserScript({
+      document,
+      source: 'return 1',
+      componentId: 'cached-visibility-script',
+      renderOnMutation: false,
+      cacheDefinition: true,
+    });
+    const scripting = (window as Window & {
+      __HVY_SCRIPTING__?: {
+        compiledDefinitionSources: Map<string, string>;
+        compiledDefinitions: Map<string, unknown>;
+      };
+    }).__HVY_SCRIPTING__;
+    const afterFirst = {
+      sourceCount: scripting?.compiledDefinitionSources.size,
+      definitionCount: scripting?.compiledDefinitions.size,
+      definition: scripting?.compiledDefinitions.get('cached-visibility-script'),
+    };
+    const second = await runUserScript({
+      document,
+      source: 'return 1',
+      componentId: 'cached-visibility-script',
+      renderOnMutation: false,
+      cacheDefinition: true,
+    });
+    const afterSecond = {
+      sourceCount: scripting?.compiledDefinitionSources.size,
+      definitionCount: scripting?.compiledDefinitions.size,
+      definitionReused: scripting?.compiledDefinitions.get('cached-visibility-script') === afterFirst.definition,
+    };
+    const changed = await runUserScript({
+      document,
+      source: 'return 2',
+      componentId: 'cached-visibility-script',
+      renderOnMutation: false,
+      cacheDefinition: true,
+    });
+    return {
+      first: first.returnValue,
+      second: second.returnValue,
+      changed: changed.returnValue,
+      afterFirst: { sourceCount: afterFirst.sourceCount, definitionCount: afterFirst.definitionCount },
+      afterSecond,
+      afterChange: {
+        sourceCount: scripting?.compiledDefinitionSources.size,
+        definitionCount: scripting?.compiledDefinitions.size,
+        definitionReplaced: scripting?.compiledDefinitions.get('cached-visibility-script') !== afterFirst.definition,
+      },
+    };
+  });
+
+  expect(result).toEqual({
+    first: 1,
+    second: 1,
+    changed: 2,
+    afterFirst: { sourceCount: 1, definitionCount: 1 },
+    afterSecond: { sourceCount: 1, definitionCount: 1, definitionReused: true },
+    afterChange: { sourceCount: 1, definitionCount: 1, definitionReplaced: true },
+  });
+});

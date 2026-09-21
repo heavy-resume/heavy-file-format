@@ -705,6 +705,30 @@ test('PDF doc definition applies document heading font size styles', () => {
   }));
 });
 
+test('PDF doc definition renders H3 larger than H4 by default', () => {
+  const block = createEmptyBlock('text');
+  block.text = '### Third-level heading\n\n#### Fourth-level heading';
+  const section = createEmptySection('');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Heading Hierarchy' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0] as HvyPdfMakeNodeObject;
+  const textStack = firstSection.stack?.[0] as HvyPdfMakeNodeObject;
+  const h3 = textStack.stack?.[0] as HvyPdfMakeNodeObject;
+  const h4 = textStack.stack?.[1] as HvyPdfMakeNodeObject;
+
+  expect(h3.style).toContain('sectionTitle3');
+  expect(h4.style).toContain('sectionTitle4');
+  expect(expectedResult.styles?.sectionTitle3?.fontSize).toBe(11);
+  expect(expectedResult.styles?.sectionTitle4?.fontSize).toBe(10);
+});
+
 function countPdfPages(buffer: ArrayBuffer): number {
   const text = Buffer.from(buffer).toString('latin1');
   return (text.match(/\/Type\s*\/Page\b/g) ?? []).length;

@@ -101,6 +101,7 @@ export function buildPdfExportDocDefinition(
       sectionTitle: { fontSize: 14, bold: true, margin: [0, 10, 0, 4] },
       sectionTitle2: { fontSize: 12, bold: true, margin: [0, 8, 0, 3] },
       sectionTitle3: { fontSize: 11, bold: true, margin: [0, 6, 0, 3] },
+      sectionTitle4: { fontSize: 10, bold: true, margin: [0, 4, 0, 2] },
       paragraph: { margin: [0, 0, 0, 5] },
       detailHeading: { bold: true, margin: [0, 4, 0, 1] },
       detailBody: { margin: [6, 0, 0, 4] },

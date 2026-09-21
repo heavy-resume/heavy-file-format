@@ -5,29 +5,40 @@ import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '
 import { hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
 import { getTextCaptionMarkdown } from './caption';
 
-export function exportDocumentSourceMarkdown(document: VisualDocument): string {
+export interface DocumentSourceMarkdownOptions {
+  excludeComponents?: readonly string[];
+}
+
+export function exportDocumentSourceMarkdown(
+  document: VisualDocument,
+  options: DocumentSourceMarkdownOptions = {}
+): string {
+  const excludedComponents = new Set(options.excludeComponents ?? []);
   return document.sections
-    .flatMap((section) => renderSectionMarkdown(section))
+    .flatMap((section) => renderSectionMarkdown(section, excludedComponents))
     .join('\n\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-function renderSectionMarkdown(section: VisualSection): string[] {
+function renderSectionMarkdown(section: VisualSection, excludedComponents: ReadonlySet<string>): string[] {
   if (section.isGhost || section.editorOnly || isSectionHiddenByTemplateMarker(section)) {
     return [];
   }
   const heading = `# ${section.title.trim() || 'Untitled Section'}`;
-  const blockParts = section.blocks.flatMap((block) => renderBlockMarkdown(block));
+  const blockParts = section.blocks.flatMap((block) => renderBlockMarkdown(block, excludedComponents));
   return [heading, ...blockParts].filter((part) => part.trim().length > 0);
 }
 
-function renderBlockMarkdown(block: VisualBlock): string[] {
+function renderBlockMarkdown(block: VisualBlock, excludedComponents: ReadonlySet<string>): string[] {
   if (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block)) {
     return [];
   }
   const component = block.schema.kind;
+  if (excludedComponents.has(component)) {
+    return [];
+  }
   if (component === 'text') {
     return textBlockPart(block);
   }
@@ -55,19 +66,19 @@ function renderBlockMarkdown(block: VisualBlock): string[] {
   if (component === 'container') {
     return [
       ...textPart(block.schema.containerTitle),
-      ...block.schema.containerBlocks.flatMap((child) => renderBlockMarkdown(child)),
+      ...block.schema.containerBlocks.flatMap((child) => renderBlockMarkdown(child, excludedComponents)),
     ];
   }
   if (component === 'component-list') {
-    return block.schema.componentListBlocks.flatMap((child) => renderBlockMarkdown(child));
+    return block.schema.componentListBlocks.flatMap((child) => renderBlockMarkdown(child, excludedComponents));
   }
   if (component === 'grid') {
-    return block.schema.gridItems.flatMap((item) => renderBlockMarkdown(item.block));
+    return block.schema.gridItems.flatMap((item) => renderBlockMarkdown(item.block, excludedComponents));
   }
   if (component === 'expandable') {
     return [
-      ...block.schema.expandableStubBlocks.children.flatMap((child) => renderBlockMarkdown(child)),
-      ...block.schema.expandableContentBlocks.children.flatMap((child) => renderBlockMarkdown(child)),
+      ...block.schema.expandableStubBlocks.children.flatMap((child) => renderBlockMarkdown(child, excludedComponents)),
+      ...block.schema.expandableContentBlocks.children.flatMap((child) => renderBlockMarkdown(child, excludedComponents)),
     ];
   }
   return textPart(block.text);

@@ -42,7 +42,7 @@ export async function exportCurrentDocumentPdf(): Promise<void> {
 
 export async function exportCurrentDocumentPdfWithTemplateBytes(bytes: Uint8Array, templateFilename: string): Promise<void> {
   const sourceDocument = state.document;
-  const sourceText = exportDocumentSourceMarkdown(sourceDocument);
+  const sourceText = exportDocumentSourceMarkdown(sourceDocument, { excludeComponents: ['image', 'carousel'] });
   const pdfTemplate = deserializeDocumentBytes(bytes, '.phvy');
   const baseName = normalizeFilename(state.filename || 'document.hvy').replace(/\.(hvy|thvy|phvy|md|markdown)$/i, '');
   const updateStatus = (status: string, stepId?: string): void => {

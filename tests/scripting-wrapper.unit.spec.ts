@@ -182,6 +182,14 @@ test('buildPythonProgram uses the component id in tracebacks when available', ()
   );
 });
 
+test('buildPythonProgram reuses a cached compiled definition while its source is unchanged', () => {
+  const program = buildPythonProgram('r7', 'cached-example-script', {}, [], 'cached-example-script');
+
+  expect(program).toContain("__hvy_code__ = __hvy_globals__.compiledDefinitions.get(__hvy_definition_key__)");
+  expect(program).toContain("__hvy_globals__.compiledDefinitionSources.get(__hvy_definition_key__) != __hvy_compilable_source__");
+  expect(program).toContain("__hvy_globals__.compiledDefinitions.set(__hvy_definition_key__, __hvy_code__)");
+});
+
 test('buildPythonProgram preloads checked libraries', () => {
   const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're', 'datetime']);
 

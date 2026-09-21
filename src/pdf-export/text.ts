@@ -265,7 +265,13 @@ function getPdfTextLineStyle(styleName: string | null, decision: HvyPdfExportDec
 }
 
 function getHeadingStyle(level: number, lineStyle: string): string[] {
-  const headingStyle = level <= 1 ? 'sectionTitle' : level === 2 ? 'sectionTitle2' : 'sectionTitle3';
+  const headingStyle = level <= 1
+    ? 'sectionTitle'
+    : level === 2
+      ? 'sectionTitle2'
+      : level === 3
+        ? 'sectionTitle3'
+        : 'sectionTitle4';
   return lineStyle === 'paragraph' ? [headingStyle] : [headingStyle, lineStyle];
 }
 

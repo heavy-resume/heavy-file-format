@@ -150,7 +150,9 @@ test('requestChatTurn keeps Viewer follow-ups in one read-only agent conversatio
   }));
 });
 
-test('requestChatTurn refuses document changes in viewer mode without calling the provider', async () => {
+test('requestChatTurn sends apparent document changes to the read-only Viewer agent', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'Viewer mode cannot make that change.' });
+
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
     document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy'),
@@ -159,11 +161,13 @@ test('requestChatTurn refuses document changes in viewer mode without calling th
   });
 
   expect(result.error).toBeNull();
-  expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
-  expect(runViewerAgentMock).not.toHaveBeenCalled();
+  expect(result.messages.at(-1)?.content).toBe('Viewer mode cannot make that change.');
+  expect(runViewerAgentMock).toHaveBeenCalledOnce();
 });
 
-test('requestChatTurn refuses DB-backed viewer change requests before QA routing', async () => {
+test('requestChatTurn sends apparent DB-backed changes to the read-only Viewer agent', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'I can explain the forms, but cannot change them.' });
+
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
     document: deserializeDocument(DOC_WITH_DB_TABLE, '.hvy'),
@@ -172,8 +176,23 @@ test('requestChatTurn refuses DB-backed viewer change requests before QA routing
   });
 
   expect(result.error).toBeNull();
-  expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
-  expect(runViewerAgentMock).not.toHaveBeenCalled();
+  expect(result.messages.at(-1)?.content).toBe('I can explain the forms, but cannot change them.');
+  expect(runViewerAgentMock).toHaveBeenCalledOnce();
+});
+
+test('requestChatTurn sends informational requests containing change keywords to the Viewer agent', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'Here is a summary of the document.' });
+
+  const result = await requestChatTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy'),
+    messages: [],
+    question: 'Can you create a summary of this document?',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('Here is a summary of the document.');
+  expect(runViewerAgentMock).toHaveBeenCalledOnce();
 });
 
 test('requestChatTurn still answers informational viewer questions about changes', async () => {

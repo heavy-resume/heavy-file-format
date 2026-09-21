@@ -328,11 +328,11 @@ async function buildBundledRunner() {
         name: 'raw-query-loader',
         setup(buildApi) {
           buildApi.onResolve({ filter: /\?raw$/ }, (resolveArgs) => ({
-            path: new URL(resolveArgs.path.replace(/\?raw$/, ''), pathToFileURL(`${resolveArgs.resolveDir}/`)).pathname,
+            path: resolveAssetPath(resolveArgs.path.replace(/\?raw$/, ''), resolveArgs.resolveDir),
             namespace: 'raw-query',
           }));
           buildApi.onResolve({ filter: /\?inline$/ }, (resolveArgs) => ({
-            path: new URL(resolveArgs.path.replace(/\?inline$/, ''), pathToFileURL(`${resolveArgs.resolveDir}/`)).pathname,
+            path: resolveAssetPath(resolveArgs.path.replace(/\?inline$/, ''), resolveArgs.resolveDir),
             namespace: 'raw-query',
           }));
           buildApi.onResolve({ filter: /\?url$/ }, (resolveArgs) => ({

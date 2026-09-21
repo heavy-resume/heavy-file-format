@@ -5,6 +5,7 @@
 
 export interface BrythonGlobal {
   protocol?: string;
+  script_path?: string;
   builtins: Record<string, unknown>;
   imported: Record<string, unknown>;
   VFS?: Record<string, unknown>;
@@ -13,7 +14,7 @@ export interface BrythonGlobal {
   import_info?: Record<string, unknown>;
   stdlib_module_names?: string[];
   update_VFS?: (entries: Record<string, unknown>) => void;
-  python_to_js?: (src: string) => string;
+  python_to_js?: (src: string, scriptId?: string) => string;
   run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
   $options?: Record<string, unknown>;
   meta_path?: unknown[];

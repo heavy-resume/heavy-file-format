@@ -88,11 +88,11 @@ const result = await build({
       name: 'raw-query-loader',
       setup(buildApi) {
         buildApi.onResolve({ filter: /\?raw$/ }, (args) => ({
-          path: new URL(args.path.replace(/\?raw$/, ''), pathToFileURL(`${args.resolveDir}/`)).pathname,
+          path: resolveAssetPath(args.path.replace(/\?raw$/, ''), args.resolveDir),
           namespace: 'raw-query',
         }));
         buildApi.onResolve({ filter: /\?inline$/ }, (args) => ({
-          path: new URL(args.path.replace(/\?inline$/, ''), pathToFileURL(`${args.resolveDir}/`)).pathname,
+          path: resolveAssetPath(args.path.replace(/\?inline$/, ''), args.resolveDir),
           namespace: 'raw-query',
         }));
         buildApi.onResolve({ filter: /\?url$/ }, (args) => ({

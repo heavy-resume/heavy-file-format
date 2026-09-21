@@ -1,4 +1,6 @@
 import { loadBrython, getBrython } from './brython-loader';
+import { wrapPythonSourceInFunction } from './python-source';
+export { wrapPythonSourceInFunction } from './python-source';
 import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import { createScriptingPluginsApi } from './plugin-apis';
 import type { HvyPdfExportRuleRecorder } from '../../pdf-export/types';
@@ -377,17 +379,6 @@ export function instrumentPythonSource(source: string): string {
 
 function isCompoundContinuationLine(trimmedLine: string): boolean {
   return /^(elif|else|except|finally)\b/.test(trimmedLine);
-}
-
-export function wrapPythonSourceInFunction(source: string): string {
-  const lines = source.split('\n');
-  const body = lines.length > 0 && lines.some((line) => line.trim().length > 0)
-    ? lines.map((line) => `    ${line}`)
-    : ['    pass'];
-  return [
-    'def __hvy_user_main__():',
-    ...body,
-  ].join('\n');
 }
 
 function isImportStatementStart(line: string): boolean {

@@ -10,6 +10,29 @@ import {
   walkHvyFile,
 } from '../scripts/hvy-mcp-cli.mjs';
 
+test('expected result: MCP CLI runner reports Python syntax errors without changing the file', async () => {
+  // BEFORE
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'hvy-mcp-syntax-test-'));
+  const filePath = join(temporaryDirectory, 'syntax.hvy');
+  await writeFile(filePath, `---
+hvy_version: 0.1
+---
+<!--hvy: {"id":"probe-section"}-->
+#! Probe section
+
+<!--hvy:plugin {"id":"probe-script","plugin":"hvy.scripting"}-->
+value = "unfinished
+`);
+  const before = await readFile(filePath, 'utf8');
+
+  // TOOL CALL
+  const expectedResult = await runHvyCliOnFile({ filePath, commands: ['hvy lint'] });
+
+  // AFTER
+  expect(expectedResult.results[0]?.output).toContain('script.py: line 1, column 9: SyntaxError');
+  expect(await readFile(filePath, 'utf8')).toBe(before);
+});
+
 test('expected result: MCP CLI runner loads SQL.js for schema inspection and lint', async () => {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'hvy-mcp-cli-test-'));
   const filePath = join(temporaryDirectory, 'database.hvy');

@@ -23,7 +23,8 @@ import { deleteUnusedEmbeddedFiles, findUnusedEmbeddedFiles, type UnusedEmbedded
 import { runUserFileAttachmentHistoryCommand } from '../../../attachment-history-controller';
 import { captureHistoryStackState, recordHistory, restoreHistoryStackState } from '../../../history';
 import { closeIcon, plusIcon } from '../../../icons';
-import { getRenderApp, state } from '../../../state';
+import { getActiveStateRuntime, getRenderApp, runWithStateRuntimeAsync, state } from '../../../state';
+import { hydrateHostAttachmentDescriptors } from '../../../attachment-store';
 import { openRemoveConfirmationModal } from '../../../bind/handlers/remove-confirmation-modal';
 import type { VisualDocument } from '../../../types';
 import { renderDeleteControl } from '../delete-control/delete-control';
@@ -183,7 +184,21 @@ export function bindDocumentAttachmentManager(app: HTMLElement): void {
   });
 }
 
-function openUnusedAttachmentReview(app: HTMLElement, unused: UnusedEmbeddedFile[]): void {
+export async function reviewUnusedEmbeddedFiles(app: HTMLElement): Promise<void> {
+  const runtime = getActiveStateRuntime();
+  const document = state.document;
+  await hydrateHostAttachmentDescriptors(document, state.attachmentHost);
+  const unused = findUnusedEmbeddedFiles(document);
+  if (!unused.length) return;
+  await new Promise<void>((resolve, reject) => {
+    openUnusedAttachmentReview(app, unused, (remove) => {
+      if (!remove) { resolve(); return; }
+      void runWithStateRuntimeAsync(runtime, () => purgeUnusedAttachments(app, unused, true)).then(resolve, reject);
+    });
+  });
+}
+
+function openUnusedAttachmentReview(app: HTMLElement, unused: UnusedEmbeddedFile[], onDecision?: (remove: boolean) => void): void {
   app.querySelector('.document-attachment-purge-modal-root')?.remove();
   const root = document.createElement('div');
   root.className = 'modal-root document-attachment-purge-modal-root';
@@ -199,7 +214,7 @@ function openUnusedAttachmentReview(app: HTMLElement, unused: UnusedEmbeddedFile
           : unused.map((attachment) => renderUnusedAttachmentReviewRow(attachment)).join('')}
       </div>
       <div class="modal-head-actions document-attachment-purge-actions">
-        <button type="button" class="ghost" data-document-attachment-purge-action="cancel">Cancel</button>
+        <button type="button" class="ghost" data-document-attachment-purge-action="cancel">${onDecision ? 'Ignore and save' : 'Cancel'}</button>
         <button type="button" class="danger" data-document-attachment-purge-action="delete"${unused.length === 0 ? ' disabled' : ''}>Delete ${unused.length} file${unused.length === 1 ? '' : 's'}</button>
       </div>
     </section>`;
@@ -208,14 +223,16 @@ function openUnusedAttachmentReview(app: HTMLElement, unused: UnusedEmbeddedFile
     if (!action) return;
     event.preventDefault();
     root.remove();
-    if (action === 'delete') void purgeUnusedAttachments(app, unused);
+    if (onDecision) onDecision(action === 'delete');
+    else if (action === 'delete') void purgeUnusedAttachments(app, unused);
   });
   root.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     event.preventDefault();
     root.remove();
+    onDecision?.(false);
   });
-  (app.querySelector<HTMLElement>('.document-meta-pane') ?? app).append(root);
+  (onDecision ? app : app.querySelector<HTMLElement>('.document-meta-pane') ?? app).append(root);
   root.querySelector<HTMLButtonElement>('[data-document-attachment-purge-action="cancel"]')?.focus();
 }
 
@@ -231,7 +248,7 @@ function renderUnusedAttachmentReviewRow(attachment: UnusedEmbeddedFile): string
   </article>`;
 }
 
-async function purgeUnusedAttachments(app: HTMLElement, unused: UnusedEmbeddedFile[]): Promise<void> {
+async function purgeUnusedAttachments(app: HTMLElement, unused: UnusedEmbeddedFile[], propagateError = false): Promise<void> {
   try {
     await runUserFileAttachmentHistoryCommand({
       label: 'Remove unused embedded files',
@@ -246,6 +263,7 @@ async function purgeUnusedAttachments(app: HTMLElement, unused: UnusedEmbeddedFi
     });
     getRenderApp()();
   } catch (error) {
+    if (propagateError) throw error;
     setAttachmentManagerStatus(app, attachmentErrorMessage(error));
   }
 }

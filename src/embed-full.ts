@@ -150,9 +150,10 @@ import { normalizePdfStylePresets, type HvyPdfStylePreset } from './pdf-style-pr
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { setEditorClipboardHost } from './editor-clipboard';
-import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
+import { hydrateHostAttachmentDescriptors, hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
 import type { UserFileAttachmentLimits } from './document-attachments';
+import { reviewUnusedEmbeddedFiles } from './editor/components/document-attachments/document-attachments';
 import { deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles, type UnusedEmbeddedFile } from './attachment-cleanup';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
@@ -230,6 +231,7 @@ export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
   findUnusedEmbeddedFiles(): UnusedEmbeddedFile[];
+  reviewUnusedEmbeddedFiles(): Promise<void>;
   purgeUnusedEmbeddedFiles(): Promise<UnusedEmbeddedFile[]>;
   isEmbeddedSqliteDatabaseUnused(): boolean;
   deleteUnusedEmbeddedSqliteDatabase(): Promise<boolean>;
@@ -1502,17 +1504,32 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
     },
+    reviewUnusedEmbeddedFiles() {
+      return runWithStateRuntime(runtime, () => reviewUnusedEmbeddedFiles(options.root));
+    },
     findUnusedEmbeddedFiles() {
-      return runWithStateRuntime(runtime, () => findUnusedEmbeddedFiles(state.document));
+      return runWithStateRuntime(runtime, () => {
+        hydrateHostAttachmentDescriptorsSync(state.document, state.attachmentHost);
+        return findUnusedEmbeddedFiles(state.document);
+      });
     },
     purgeUnusedEmbeddedFiles() {
-      return runWithStateRuntimeAsync(runtime, () => purgeUnusedEmbeddedFiles(state.document, state.attachmentHost));
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await hydrateHostAttachmentDescriptors(state.document, state.attachmentHost);
+        return purgeUnusedEmbeddedFiles(state.document, state.attachmentHost);
+      });
     },
     isEmbeddedSqliteDatabaseUnused() {
-      return runWithStateRuntime(runtime, () => isEmbeddedSqliteDatabaseUnused(state.document));
+      return runWithStateRuntime(runtime, () => {
+        hydrateHostAttachmentDescriptorsSync(state.document, state.attachmentHost);
+        return isEmbeddedSqliteDatabaseUnused(state.document);
+      });
     },
     deleteUnusedEmbeddedSqliteDatabase() {
-      return runWithStateRuntimeAsync(runtime, () => deleteUnusedEmbeddedSqliteDatabase(state.document, state.attachmentHost));
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await hydrateHostAttachmentDescriptors(state.document, state.attachmentHost);
+        return deleteUnusedEmbeddedSqliteDatabase(state.document, state.attachmentHost);
+      });
     },
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => {

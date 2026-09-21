@@ -261,6 +261,22 @@ export function hydrateHostAttachmentDescriptorsSync(
   }
 }
 
+export async function hydrateHostAttachmentDescriptors(
+  document: VisualDocument,
+  host: HvyAttachmentHostAdapter | null | undefined
+): Promise<void> {
+  if (!host) {
+    return;
+  }
+  const descriptors = await host.list();
+  const store = ensureDocumentAttachmentStore(document);
+  for (const descriptor of descriptors) {
+    if (!store.getDescriptor(descriptor.id)) {
+      store.setDescriptor(descriptor);
+    }
+  }
+}
+
 function normalizeAttachmentStoreEntry(entry: AttachmentStoreEntry): AttachmentStoreEntry {
   const length = Math.max(0, Math.floor(entry.length));
   const bytes = entry.bytes ?? (entry.source

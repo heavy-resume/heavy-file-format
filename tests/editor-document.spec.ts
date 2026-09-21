@@ -2358,6 +2358,47 @@ hvy_version: 0.1
   });
 });
 
+test('embedded unused-file scan refreshes host descriptors before serialization', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const root = document.querySelector<HTMLElement>('#editorMount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    let descriptors: Array<{ id: string; meta: { mediaType: string }; length: number }> = [];
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`), '.hvy'),
+      mode: 'editor',
+      attachmentStore: {
+        list: () => descriptors,
+        recall: () => null,
+        store: () => {},
+        remove: () => {},
+      },
+    });
+    await mount.setMode('editor');
+    descriptors = [
+      { id: 'image:first.png', meta: { mediaType: 'image/png' }, length: 3 },
+      { id: 'image:second.png', meta: { mediaType: 'image/png' }, length: 4 },
+    ];
+
+    return mount.findUnusedEmbeddedFiles().map((entry) => entry.id);
+  });
+
+  expect(result).toEqual(['image:first.png', 'image:second.png']);
+});
+
 test('embedded viewers can hydrate and update search snapshots from headless search', async ({ page }) => {
   await page.goto('/');
 

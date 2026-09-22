@@ -83,9 +83,17 @@ export interface ProxyChatResponse {
   toolState?: ProviderToolState;
 }
 
+export type ProxyChatStreamEvent =
+  | { type: 'output_delta'; delta: string }
+  | { type: 'response'; response: ProxyChatResponse };
+
 export interface HostChatClient {
   complete(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): Promise<ProxyChatResponse>;
   toolTurn?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): Promise<ProxyChatResponse>;
+  /** Optional streaming transport. The final event must contain the complete response. */
+  stream?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): AsyncIterable<ProxyChatStreamEvent>;
+  /** Optional streaming transport for native tool turns. Falls back to stream, then toolTurn/complete. */
+  streamToolTurn?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): AsyncIterable<ProxyChatStreamEvent>;
 }
 
 let fallbackHostChatClient: HostChatClient | null = null;
@@ -146,6 +154,7 @@ export interface ProxyCompletionParams {
 export interface ProxyToolTurnParams extends Omit<ProxyCompletionParams, 'responseInstructions'> {
   tools: ProviderToolDefinition[];
   toolState?: ProviderToolState;
+  onOutput?: (output: string) => void;
 }
 
 export interface ProxyToolTurn {
@@ -314,6 +323,7 @@ export function renderChatPanel(
   const showCliSimControls = isDocumentEdit && ENABLE_CHAT_CLI_SIM;
   const cliSimHtml = showCliSimControls && chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : '';
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
+  const hasStreamingAnswer = chat.messages.some((message) => message.streaming);
   console.debug('[hvy:chat-render] composer state', {
     panelOpen: chat.panelOpen,
     mode,
@@ -452,7 +462,7 @@ export function renderChatPanel(
                            .join('')
                    }
                    ${
-                     chat.isSending && !isDocumentEdit
+                     chat.isSending && !isDocumentEdit && !hasStreamingAnswer
                        ? `<div class="chat-pending-response" role="status" aria-label="Preparing an answer">
                             <span class="chat-pending-response-pulse" aria-hidden="true"><i></i><i></i><i></i></span>
                             <span>${deps.escapeHtml(chat.status ?? 'Reading the document and preparing an answer...')}</span>
@@ -828,7 +838,10 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
-    const payload = hostClient.toolTurn
+    const stream = hostClient.streamToolTurn ?? hostClient.stream;
+    const payload = stream
+      ? await consumeHostChatStream(stream.call(hostClient, requestPayload, { signal: params.signal, debugLabel }), params.onOutput)
+      : hostClient.toolTurn
       ? await hostClient.toolTurn(requestPayload, { signal: params.signal, debugLabel })
       : await hostClient.complete(requestPayload, { signal: params.signal, debugLabel });
     const typed = payload as ProxyChatResponse | null;
@@ -895,6 +908,31 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     nativeMessages: Array.isArray(typed.nativeMessages) ? typed.nativeMessages : [],
     toolState: typed.toolState ?? createEmptyHostToolState(params.settings.provider),
   };
+}
+
+async function consumeHostChatStream(
+  events: AsyncIterable<ProxyChatStreamEvent>,
+  onOutput?: (output: string) => void
+): Promise<ProxyChatResponse> {
+  let output = '';
+  let response: ProxyChatResponse | null = null;
+  for await (const event of events) {
+    if (event.type === 'output_delta') {
+      output += event.delta;
+      onOutput?.(output);
+      continue;
+    }
+    if (event.type === 'response') {
+      response = event.response;
+    }
+  }
+  if (!response) {
+    throw new Error('Host chat stream ended without a final response.');
+  }
+  if (!response.output && output) {
+    response = { ...response, output };
+  }
+  return response;
 }
 
 function logChatProxyDebug(debugLabel: string, event: string, details: () => unknown): void {
@@ -1219,6 +1257,7 @@ function renderChatMessageHtml(message: ChatMessage, deps: RenderChatPanelDeps, 
     `chat-bubble-${message.role}`,
     message.error ? 'chat-bubble-error' : '',
     message.progress ? 'chat-bubble-progress' : '',
+    message.streaming ? 'chat-bubble-streaming' : '',
     message.work ? 'chat-bubble-work' : '',
     tokenUsage ? 'has-token-usage' : '',
   ].filter(Boolean).join(' ');
@@ -1273,7 +1312,9 @@ function renderStandardChatMessageHtml(message: ChatMessage, deps: RenderChatPan
   return `
     <div class="chat-bubble-body">${
       message.role === 'assistant'
-        ? renderAssistantMessageHtml(message.content)
+        ? message.streaming
+          ? deps.escapeHtml(message.content).replace(/\n/g, '<br />')
+          : renderAssistantMessageHtml(message.content)
         : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
     }</div>
     ${renderSentChatAttachmentsHtml(message.attachments ?? [], deps)}

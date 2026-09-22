@@ -1599,7 +1599,7 @@ export {
 };
 export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
 export type { HvyWebMcpModelContext, HvyWebMcpOptions, HvyWebMcpTool, HvyWebMcpToolContext } from './webmcp';
-export type { HostChatClient, ProxyChatRequest, ProxyChatResponse } from './chat/chat';
+export type { HostChatClient, ProxyChatRequest, ProxyChatResponse, ProxyChatStreamEvent } from './chat/chat';
 export type {
   ProviderToolCall,
   ProviderToolDefinition,

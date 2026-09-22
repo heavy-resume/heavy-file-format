@@ -63,6 +63,8 @@ export interface ChatMessage {
   tokenUsage?: ChatTokenUsage;
   error?: boolean;
   progress?: boolean;
+  /** Incomplete assistant output. Render incrementally without interpreting HVY structure. */
+  streaming?: boolean;
   work?: ChatWorkState;
 }
 

@@ -191,6 +191,19 @@ export function bindSubmit(app: HTMLElement): void {
         refreshChatOrRenderApp();
         await waitForNextFrame();
       };
+      let streamingChatRefreshScheduled = false;
+      const scheduleStreamingChatRefresh = (): void => {
+        if (streamingChatRefreshScheduled) {
+          return;
+        }
+        streamingChatRefreshScheduled = true;
+        requestAnimationFrame(() => {
+          streamingChatRefreshScheduled = false;
+          if (requestNonce === state.chat.requestNonce && !abortController.signal.aborted) {
+            refreshChatOrRenderApp();
+          }
+        });
+      };
       saveChatOrSessionState();
       console.debug('[hvy:chat-submit] started request', {
         requestNonce,
@@ -273,6 +286,13 @@ export function bindSubmit(app: HTMLElement): void {
                     return;
                   }
                   refreshChatOrRenderApp();
+                },
+                onProgress: (message) => {
+                  if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
+                    return;
+                  }
+                  state.chat.messages = upsertChatProgressMessage(state.chat.messages, message);
+                  scheduleStreamingChatRefresh();
                 },
                 signal: abortController.signal,
               });

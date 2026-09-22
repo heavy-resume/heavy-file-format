@@ -659,6 +659,18 @@
   animation-delay: 0.28s;
 }
 
+.hvy-document .chat-bubble-streaming .chat-bubble-body::after {
+  content: '';
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.9em;
+  margin-left: 0.2rem;
+  border-radius: 2px;
+  background: var(--hvy-accent-2);
+  vertical-align: -0.08em;
+  animation: hvy-chat-streaming-caret 0.9s ease-in-out infinite;
+}
+
 @keyframes hvy-chat-pending-pulse {
   0%, 60%, 100% {
     opacity: 0.35;
@@ -670,10 +682,19 @@
   }
 }
 
+@keyframes hvy-chat-streaming-caret {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hvy-document .chat-pending-response-pulse i {
     animation: none;
     opacity: 0.75;
+  }
+
+  .hvy-document .chat-bubble-streaming .chat-bubble-body::after {
+    animation: none;
   }
 }
 

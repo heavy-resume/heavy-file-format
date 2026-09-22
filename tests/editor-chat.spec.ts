@@ -210,6 +210,52 @@ test('viewer question shows pending feedback and anchors Latest to the scroll su
   await expect(page.getByRole('status', { name: 'Preparing an answer' })).toHaveCount(0);
 });
 
+test('viewer streams host output as text before rendering the completed HVY response', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    const { setHostChatClient } = await import(/* @vite-ignore */ '/src/chat/chat.ts');
+    let finish!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    (window as typeof window & { finishHvyChatStream?: () => void }).finishHvyChatStream = finish;
+    setHostChatClient({
+      async complete() {
+        return { output: 'Unexpected fallback.' };
+      },
+      async *streamToolTurn() {
+        yield { type: 'output_delta' as const, delta: '<!--hvy:text {"id":"streamed-answer"}-->\n**Partial' };
+        await finished;
+        yield { type: 'output_delta' as const, delta: ' answer**' };
+        yield {
+          type: 'response' as const,
+          response: {
+            output: '<!--hvy:text {"id":"streamed-answer"}-->\n**Partial answer**',
+            toolCalls: [],
+            nativeMessages: [],
+            toolState: { provider: 'openai' as const, input: [] },
+          },
+        };
+      },
+    });
+  });
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('[data-field="chat-input"]').fill('Stream an HVY answer');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  const answer = page.locator('[data-chat-message-id].chat-bubble-streaming');
+  await expect(answer).toContainText('<!--hvy:text');
+  await expect(answer.locator('.chat-hvy-response')).toHaveCount(0);
+
+  await page.evaluate(() => {
+    (window as typeof window & { finishHvyChatStream?: () => void }).finishHvyChatStream?.();
+  });
+  await expect(page.locator('.chat-bubble-streaming')).toHaveCount(0);
+  await expect(page.locator('.chat-hvy-response')).toContainText('Partial answer');
+});
+
 test('viewer question updates chat without rerendering the app', async ({ page }) => {
   let renderAppLogCount = 0;
   page.on('console', (message) => {

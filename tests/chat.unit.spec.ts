@@ -11,6 +11,7 @@ import {
   mergeChatSettings,
   requestChatCompletion,
   requestProxyCompletion,
+  requestProxyToolTurn,
   setHostChatClient,
   stopChatRequest,
   stripDocumentHeaderAndComments,
@@ -28,6 +29,44 @@ import type { HvyChatContextPreparationProgress, HvyChatSearchIndexSnapshot, Hvy
 afterEach(() => {
   setHostChatClient(null);
   vi.restoreAllMocks();
+});
+
+test('requestProxyToolTurn consumes host output deltas and returns the final response', async () => {
+  const streamed: string[] = [];
+  const client = {
+    complete: vi.fn(async () => ({ output: 'fallback' })),
+    async *streamToolTurn() {
+      yield { type: 'output_delta' as const, delta: '<!--hvy:text ' };
+      yield { type: 'output_delta' as const, delta: '{"id":"answer"}-->\nFinal answer' };
+      yield {
+        type: 'response' as const,
+        response: {
+          output: '<!--hvy:text {"id":"answer"}-->\nFinal answer',
+          toolCalls: [],
+          nativeMessages: [],
+          toolState: { provider: 'openai' as const, input: [] },
+        },
+      };
+    },
+  };
+
+  const result = await requestProxyToolTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    messages: [{ id: '1', role: 'user', content: 'Go.' }],
+    context: 'Document context',
+    systemInstructions: 'Answer.',
+    mode: 'qa',
+    tools: [],
+    client,
+    onOutput: (output) => streamed.push(output),
+  });
+
+  expect(streamed).toEqual([
+    '<!--hvy:text ',
+    '<!--hvy:text {"id":"answer"}-->\nFinal answer',
+  ]);
+  expect(result.output).toContain('Final answer');
+  expect(client.complete).not.toHaveBeenCalled();
 });
 
 test('stripDocumentHeaderAndComments removes front matter and preserves structural hvy comments', () => {

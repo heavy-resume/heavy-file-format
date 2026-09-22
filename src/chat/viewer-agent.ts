@@ -33,6 +33,7 @@ export async function runViewerAgent(params: {
   chatContextProvider?: HvyChatContextProvider | null;
   embeddingProvider?: HvyEmbeddingProvider | null;
   onContextPreparation?: HvyChatContextPreparationCallback;
+  onOutput?: (output: string) => void;
   signal?: AbortSignal;
 }): Promise<ViewerAgentResult> {
   const context = await buildViewerAgentContext(params);
@@ -43,6 +44,7 @@ export async function runViewerAgent(params: {
   let tokenUsage: ChatTokenUsage | undefined;
 
   for (let step = 0; step < VIEWER_AGENT_MAX_STEPS; step += 1) {
+    params.onOutput?.('');
     const turn = await requestProxyToolTurn({
       settings: params.settings,
       messages: params.messages,
@@ -51,6 +53,7 @@ export async function runViewerAgent(params: {
       mode: 'qa',
       debugLabel: `viewer-agent:${step + 1}`,
       tools,
+      onOutput: params.onOutput,
       ...(toolState ? { toolState } : {}),
       onReasoningSummary: (summary) => {
         reasoningSummary = summary;

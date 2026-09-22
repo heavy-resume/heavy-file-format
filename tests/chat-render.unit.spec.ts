@@ -64,6 +64,27 @@ test('renderChatPanel shows an in-thread pending answer for viewer questions', (
   expect(html.indexOf('class="chat-scroll-bottom"')).toBeGreaterThan(html.indexOf('class="chat-footer"'));
 });
 
+test('renderChatPanel does not interpret incomplete streaming output as HVY', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  chat.messages = [{
+    id: 'streaming-answer',
+    role: 'assistant',
+    content: '<!--hvy:text {"id":"answer"}-->\nPartial **answer**',
+    streaming: true,
+  }];
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Example\n', '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa');
+
+  expect(html).toContain('chat-bubble-streaming');
+  expect(html).toContain('Partial **answer**');
+  expect(html).toContain('&lt;!--hvy:text');
+  expect(html).not.toContain('chat-hvy-response');
+  expect(html).not.toContain('chat-pending-response');
+});
+
 test('renderChatPanel shows token usage on assistant messages', () => {
   const chat = createDefaultChatState();
   chat.panelOpen = true;

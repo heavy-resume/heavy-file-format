@@ -70,10 +70,12 @@ export async function requestChatTurn(params: {
   chatSearchCache?: HvyChatSearchCache | null;
   embeddingProvider?: HvyEmbeddingProvider | null;
   onContextPreparation?: HvyChatContextPreparationCallback;
+  onProgress?: (message: ChatMessage) => void;
   allowDbQaTools?: boolean;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
+  const answerMessageId = crypto.randomUUID();
   try {
     const result = await runViewerAgent({
       settings: params.settings,
@@ -84,13 +86,21 @@ export async function requestChatTurn(params: {
       chatContextProvider: params.chatContextProvider,
       embeddingProvider: params.embeddingProvider,
       onContextPreparation: params.onContextPreparation,
+      onOutput: (output) => {
+        params.onProgress?.({
+          id: answerMessageId,
+          role: 'assistant',
+          content: output,
+          streaming: true,
+        });
+      },
       signal: params.signal,
     });
     return {
       messages: [
         ...nextMessages,
         {
-          id: crypto.randomUUID(),
+          id: answerMessageId,
           role: 'assistant',
           content: result.answer,
           ...(result.reasoningSummary ? { reasoning: result.reasoningSummary } : {}),

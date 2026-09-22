@@ -13,8 +13,9 @@ test('YouTube embed waits until its clipped expandable content approaches the vi
   await expect(page.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
 
   await page.evaluate(async () => {
-    const { videoPluginFactory } = await import('/src/plugins/video/video.ts');
-    const instance = videoPluginFactory({
+    const { createPluginMount } = await import('/src/plugins/viewport-plugin-mount.ts');
+    const { videoPlugin, videoPluginFactory } = await import('/src/plugins/video/video.ts');
+    const context = {
       mode: 'reader',
       block: {
         schema: {
@@ -25,7 +26,11 @@ test('YouTube embed waits until its clipped expandable content approaches the vi
         },
       },
       observeLinks: () => {},
-    } as never);
+    } as never;
+    const instance = createPluginMount(
+      () => videoPluginFactory(context),
+      videoPlugin.mount!,
+    );
     document.body.innerHTML = `<div class="hvy-document">
       <div class="viewer-shell">
         <div class="reader-document" style="height: 300px; overflow: auto;">
@@ -46,7 +51,7 @@ test('YouTube embed waits until its clipped expandable content approaches the vi
 
   await page.waitForTimeout(100);
   const iframe = page.getByTitle('Clipped video');
-  await expect(iframe).not.toHaveAttribute('src');
+  await expect(iframe).toHaveCount(0);
   expect(youtubeRequests).toHaveLength(0);
 
   await page.locator('.expandable-reader').evaluate((expandable) => {

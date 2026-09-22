@@ -312,6 +312,14 @@ export interface HvyPlugin {
   // sized rather than fill-width. Defaults to the host's full modal width.
   // Accepts CSS length units (for example, "18rem" or "320px").
   preferredEditorWidth?: string;
+  // Reader component factories are viewport-mounted by default; editor
+  // components mount immediately. Plugins whose reader lifecycle must begin
+  // offscreen may opt into immediate mounting, while large visual components
+  // may provide a better reserved-height estimate.
+  mount?: {
+    strategy?: 'viewport' | 'immediate';
+    placeholderHeight?: string;
+  };
   // Conditional registrations expose metadata without loading executable
   // plugin code. The host calls load only after per-file authorization.
   authorization?: 'required';

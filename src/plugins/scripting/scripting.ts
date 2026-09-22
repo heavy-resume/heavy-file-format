@@ -510,6 +510,7 @@ const scriptingDocumentHook = {
 export const scriptingPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(SCRIPTING_PLUGIN_ID),
   displayName: 'Scripting',
+  mount: { strategy: 'immediate' },
   documentation: {
     filename: 'about-scripting.txt',
     text: scriptingDocumentation,

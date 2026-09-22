@@ -193,6 +193,7 @@ export const diagramPluginFactory: HvyPluginFactory = build;
 export const diagramPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(DIAGRAM_PLUGIN_ID),
   displayName: 'Diagram',
+  mount: { placeholderHeight: '360px' },
   documentation: {
     filename: 'about-diagram.txt',
     text: diagramDocumentation,

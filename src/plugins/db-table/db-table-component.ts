@@ -947,6 +947,7 @@ function refreshDatabasePlugins(): void {
 export const dbTablePlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(DB_TABLE_PLUGIN_ID, DB_TABLE_PLUGIN_VERSION),
   displayName: 'DB Table',
+  mount: { strategy: 'immediate' },
   documentation: {
     filename: 'about-db-table.txt',
     text: dbTableDocumentation,

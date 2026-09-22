@@ -36,6 +36,9 @@ test('default example button loads carousel component and graph plugin', async (
   await expect(page.locator('#readerDocument')).toContainText('Attached SVG image rendered from the HVY tail');
   await expect(page.locator('#readerDocument')).toContainText('The graph plugin stores chart attributes');
   await expect(page.locator('#readerDocument .hvy-carousel-reader img').first()).toBeVisible();
+  await page.locator('#readerDocument').evaluate((reader) => {
+    reader.scrollTop = reader.scrollHeight;
+  });
   await expect(page.locator('#readerDocument .hvy-graph-reader canvas').first()).toBeVisible();
 });
 

@@ -29,10 +29,6 @@ interface VideoPreviewState {
   title: string;
   stale: boolean;
   youtubeObserverCleanup: (() => void) | null;
-  hydrationObserver: IntersectionObserver | null;
-  hydrationRoot: Element | null;
-  hydrationTarget: Element | null;
-  hydrationVersion: number;
 }
 
 interface YouTubePlayerApi {
@@ -63,10 +59,6 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     title: '',
     stale: false,
     youtubeObserverCleanup: null,
-    hydrationObserver: null,
-    hydrationRoot: null,
-    hydrationTarget: null,
-    hydrationVersion: 0,
   };
   const preview = document.createElement('div');
 
@@ -131,7 +123,6 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     element: root,
     refresh: sync,
     unmount: () => {
-      resetVideoHydration(previewState);
       previewState.youtubeObserverCleanup?.();
       previewState.youtubeObserverCleanup = null;
       if (ctx.mode === 'editor') {
@@ -214,7 +205,6 @@ function renderVideoPreview(
   state.stale = false;
   host.classList.remove('is-stale');
   if (state.stateKey !== stateKey) {
-    resetVideoHydration(state);
     state.youtubeObserverCleanup?.();
     state.youtubeObserverCleanup = null;
   }
@@ -239,83 +229,17 @@ function renderVideoPreview(
   const embedUrl = createRuntimeEmbedUrl(normalized);
   if (state.stateKey !== stateKey) {
     host.innerHTML = `<div class="hvy-video-frame">
-      <iframe data-video-embed-src="${escapeAttr(embedUrl)}" title="${escapeAttr(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="${escapeAttr(getIframeAllowPolicy(normalized))}" allowfullscreen></iframe>
+      <iframe src="${escapeAttr(embedUrl)}" title="${escapeAttr(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="${escapeAttr(getIframeAllowPolicy(normalized))}" allowfullscreen></iframe>
     </div>`;
     state.stateKey = stateKey;
     state.title = title;
-    scheduleVideoHydration(host, normalized, state, ctx);
+    observeYouTubeEmbedFailure(host, normalized, state.title, state, ctx);
     return;
   }
   if (state.title !== title) {
     host.querySelector('iframe')?.setAttribute('title', title);
     state.title = title;
   }
-  scheduleVideoHydration(host, normalized, state, ctx);
-}
-
-function scheduleVideoHydration(
-  host: HTMLElement,
-  video: NormalizedVideo,
-  state: VideoPreviewState,
-  ctx: HvyPluginContext
-): void {
-  const version = state.hydrationVersion;
-  queueMicrotask(() => {
-    if (state.hydrationVersion !== version) {
-      return;
-    }
-    const iframe = host.querySelector<HTMLIFrameElement>('iframe[data-video-embed-src]');
-    const frame = iframe?.closest<HTMLElement>('.hvy-video-frame') ?? null;
-    if (!iframe || !frame || !iframe.isConnected || iframe.getAttribute('src')) {
-      return;
-    }
-    const embedUrl = iframe.dataset.videoEmbedSrc;
-    if (!embedUrl) {
-      return;
-    }
-    const hydrate = () => {
-      disconnectVideoHydrationObserver(state);
-      if (!iframe.isConnected || iframe.getAttribute('src')) {
-        return;
-      }
-      iframe.src = embedUrl;
-      observeYouTubeEmbedFailure(host, video, state.title, state, ctx);
-    };
-    if (typeof IntersectionObserver === 'undefined') {
-      hydrate();
-      return;
-    }
-    const scroller = iframe.closest('.reader-document, .editor-tree');
-    if (state.hydrationObserver && state.hydrationRoot === scroller && state.hydrationTarget === frame) {
-      return;
-    }
-    disconnectVideoHydrationObserver(state);
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.target === frame && entry.isIntersecting)) {
-        hydrate();
-      }
-    }, {
-      root: scroller,
-      rootMargin: '200px 0px',
-      threshold: 0,
-    });
-    state.hydrationObserver = observer;
-    state.hydrationRoot = scroller;
-    state.hydrationTarget = frame;
-    observer.observe(frame);
-  });
-}
-
-function disconnectVideoHydrationObserver(state: VideoPreviewState): void {
-  state.hydrationObserver?.disconnect();
-  state.hydrationObserver = null;
-  state.hydrationRoot = null;
-  state.hydrationTarget = null;
-}
-
-function resetVideoHydration(state: VideoPreviewState): void {
-  disconnectVideoHydrationObserver(state);
-  state.hydrationVersion += 1;
 }
 
 function getVideoPreviewStateKey(config: VideoConfig, normalized: ReturnType<typeof normalizeVideoUrl>): string {
@@ -503,6 +427,7 @@ export const videoPluginFactory: HvyPluginFactory = build;
 export const videoPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(VIDEO_PLUGIN_ID),
   displayName: 'Video',
+  mount: { placeholderHeight: '360px' },
   documentation: {
     filename: 'about-video.txt',
     text: videoDocumentation,

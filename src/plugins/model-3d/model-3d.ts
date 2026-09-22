@@ -366,6 +366,7 @@ export const model3dPluginFactory: HvyPluginFactory = build;
 export const model3dPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(MODEL_3D_PLUGIN_ID),
   displayName: '3D Model',
+  mount: { placeholderHeight: '360px' },
   documentation: {
     filename: 'about-model-3d.txt',
     text: model3dDocumentation,

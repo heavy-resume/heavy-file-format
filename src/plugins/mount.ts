@@ -24,6 +24,7 @@ import { getPluginAuthorizationMode } from './authorization/plugin-authorization
 import {
   loadConditionallyAllowedPlugin,
 } from './authorization/conditional-plugin';
+import { createPluginMount } from './viewport-plugin-mount';
 
 interface SavedFocus {
   element: HTMLElement;
@@ -403,7 +404,10 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
 
     let instance: HvyPluginInstance;
     try {
-      instance = registration.create(ctx);
+      instance = createPluginMount(() => registration.create!(ctx), {
+        ...registration.mount,
+        strategy: registration.mount?.strategy ?? (mode === 'reader' ? 'viewport' : 'immediate'),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Plugin failed to mount.';
       placeholder.textContent = `Plugin error: ${message}`;

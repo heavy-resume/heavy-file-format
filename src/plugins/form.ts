@@ -1350,6 +1350,7 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(FORM_PLUGIN_ID),
   displayName: 'Form',
+  mount: { strategy: 'immediate' },
   documentation: {
     filename: 'about-form.txt',
     text: formDocumentation,

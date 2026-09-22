@@ -251,6 +251,17 @@ function validateHostPlugin(plugin: HvyPlugin): void {
         && plugin.preferredEditorWidth.trim() !== DEFAULT_COMPONENT_EDITOR_PREFERRED_WIDTH))) {
     throw new Error(`Plugin "${plugin.id}" has invalid preferredEditorWidth "${String(plugin.preferredEditorWidth)}".`);
   }
+  if (plugin.mount !== undefined) {
+    if (plugin.mount.strategy !== undefined
+      && plugin.mount.strategy !== 'viewport'
+      && plugin.mount.strategy !== 'immediate') {
+      throw new Error(`Plugin "${plugin.id}" has invalid mount strategy.`);
+    }
+    if (plugin.mount.placeholderHeight !== undefined
+      && (typeof plugin.mount.placeholderHeight !== 'string' || !plugin.mount.placeholderHeight.trim())) {
+      throw new Error(`Plugin "${plugin.id}" has invalid mount placeholder height.`);
+    }
+  }
 }
 
 function selectHostPlugins(plugins: HvyPlugin[], document?: VisualDocument): HvyPlugin[] {

@@ -477,3 +477,51 @@ ${Array.from({ length: 6 }, (_item, index) => `<!--hvy: {"id":"nested-move-tail-
     { timeout: 1000 }
   ).toBeLessThanOrEqual(2);
 });
+
+test('collapsed expandable preview hydrates an image only after it leaves the clipped region', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const [{ state }, { setImageAttachment }, { bindLazyImageHydration }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/attachments.ts'),
+      import('/src/editor/components/image/image.ts'),
+    ]);
+    setImageAttachment(
+      state.document,
+      'clipped-preview.svg',
+      'image/svg+xml',
+      new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="20" height="10"/></svg>')
+    );
+    document.body.innerHTML = `<div id="lazy-expandable-root" class="hvy-document">
+      <div class="viewer-shell">
+        <div class="reader-document" style="height: 300px; overflow: auto;">
+          <section class="reader-section">
+            <div class="expandable-reader has-empty-stub is-collapsed">
+              <div class="expandable-reader-body">
+                <div class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview">
+                  <div class="expand-content">
+                    <div style="height: 260px;">Preview content above the image</div>
+                    <img width="20" height="10" alt="Clipped preview" data-image-filename="clipped-preview.svg" data-hvy-lazy-image="true">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>`;
+    bindLazyImageHydration(document.querySelector('#lazy-expandable-root')!);
+  });
+
+  const image = page.getByRole('img', { name: 'Clipped preview' });
+  await page.waitForTimeout(100);
+  await expect(image).not.toHaveAttribute('src');
+
+  await page.locator('.expandable-reader').evaluate((expandable) => {
+    expandable.classList.remove('is-collapsed');
+    expandable.classList.add('is-expanded');
+  });
+  await expect(image).toHaveAttribute('src', /^blob:/, { timeout: 1000 });
+});

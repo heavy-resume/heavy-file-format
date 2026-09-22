@@ -310,26 +310,21 @@ export function bindLazyImageHydration(root: ParentNode): void {
   const observers: IntersectionObserver[] = [];
   let targetCount = 0;
   imagesByScroller.forEach((scrollerImages, scroller) => {
-    const imagesByTarget = new Map<Element, HTMLImageElement[]>();
-    scrollerImages.forEach((image) => {
-      const target = image.closest('.reader-section, .editor-section-card') ?? image;
-      imagesByTarget.set(target, [...(imagesByTarget.get(target) ?? []), image]);
-    });
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) {
           return;
         }
         observer.unobserve(entry.target);
-        (imagesByTarget.get(entry.target) ?? []).forEach(hydrateImage);
+        hydrateImage(entry.target as HTMLImageElement);
       });
     }, {
       root: scroller,
       rootMargin: '200px 0px',
       threshold: 0,
     });
-    imagesByTarget.forEach((_targetImages, target) => observer.observe(target));
-    targetCount += imagesByTarget.size;
+    scrollerImages.forEach((image) => observer.observe(image));
+    targetCount += scrollerImages.length;
     observers.push(observer);
   });
   lazyImageHydrationObservers.set(root, observers);

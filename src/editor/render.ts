@@ -1204,12 +1204,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         parentBlockId: block.id,
         locked: true,
       });
-      const contentHtml = renderEditorNestedBlocks(sectionKey, block.schema.expandableContentBlocks.children, {
-        container: 'expandable-content',
-        parentBlockId: block.id,
-        locked: true,
-      });
       const hasStubContent = stubHtml.trim().length > 0;
+      const contentHtml = expanded || !hasStubContent
+        ? renderEditorNestedBlocks(sectionKey, block.schema.expandableContentBlocks.children, {
+            container: 'expandable-content',
+            parentBlockId: block.id,
+            locked: true,
+          })
+        : '';
       const hasExpandedContent = contentHtml.trim().length > 0;
       const stubBody = hasStubContent ? stubHtml : '<div class="expandable-passive-empty-ghost">Empty stub</div>';
       const contentBody = hasExpandedContent ? contentHtml : '<div class="expandable-passive-empty-ghost">Empty expanded content</div>';

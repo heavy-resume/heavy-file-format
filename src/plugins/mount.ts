@@ -433,9 +433,11 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
 
   const pruneAll = isFullPluginReconcileRoot(root);
 
-  // Reconcile: anything cached but not seen this pass is orphaned.
+  // A partial surface refresh does not include placeholders for live mounts
+  // elsewhere. Only detached mounts can be orphaned; a host being mounted
+  // off-document can also still own live elements within this reconcile root.
   for (const [key, entry] of mounted) {
-    if (seen.has(key)) {
+    if (seen.has(key) || entry.instance.element.isConnected || root.contains(entry.instance.element)) {
       continue;
     }
     if (!pruneAll && !seenModes.has(entry.mode)) {

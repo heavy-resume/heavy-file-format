@@ -22,8 +22,12 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
   const expandedOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'expanded', false);
   const stubLocked = blockLocked || (stub.lock && !definitionEditor) || pdfDocument;
   const contentLocked = blockLocked || (content.lock && !definitionEditor) || pdfDocument;
-  const stubPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-stub', stubBlocks, helpers, stubLocked);
-  const contentPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-content', contentBlocks, helpers, contentLocked);
+  const stubPlacementTargets = stubOpen
+    ? renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-stub', stubBlocks, helpers, stubLocked)
+    : '';
+  const contentPlacementTargets = expandedOpen
+    ? renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-content', contentBlocks, helpers, contentLocked)
+    : '';
   const stubPlacementMode = stubPlacementTargets.includes('component-placement-target');
   const contentPlacementMode = contentPlacementTargets.includes('component-placement-target');
   const copiedStubPane = isCopiedExpandablePane(sectionKey, block.id, 'stub');
@@ -38,11 +42,11 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     : copiedContentPane
       ? `<button type="button" class="secondary expandable-pane-copy-button" data-action="cancel-component-placement" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Cancel place</button>`
       : `<button type="button" class="ghost expandable-pane-copy-button" data-action="copy-expandable-content-pane" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Copy</button>`;
-  const stubPreview = stubBlocks
+  const stubPreview = stubOpen ? '' : stubBlocks
     .slice(0, 2)
     .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
     .join('');
-  const contentPreview = contentBlocks
+  const contentPreview = expandedOpen ? '' : contentBlocks
     .slice(0, 2)
     .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
     .join('');
@@ -238,13 +242,16 @@ function renderExpandablePaneMeta(
 
 export const renderExpandableReader: ComponentReaderRenderer = (section, block, helpers) => {
   const stubHtml = helpers.renderReaderBlocks(section, block.schema.expandableStubBlocks.children);
-  const contentHtml = helpers.renderReaderBlocks(section, block.schema.expandableContentBlocks.children);
-  if (!stubHtml.trim() && !contentHtml.trim()) {
+  const expanded = block.schema.expandableExpanded;
+  const hasStubContent = stubHtml.trim().length > 0;
+  // An empty rendered stub still needs the content preview, even when it has children.
+  const contentHtml = expanded || !hasStubContent
+    ? helpers.renderReaderBlocks(section, block.schema.expandableContentBlocks.children)
+    : '';
+  if (!hasStubContent && !contentHtml.trim()) {
     return '';
   }
-  const expanded = block.schema.expandableExpanded;
   const alwaysShowStub = block.schema.expandableAlwaysShowStub;
-  const hasStubContent = stubHtml.trim().length > 0;
   const stubPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
   const contentPaneStyle = helpers.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));
   const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(

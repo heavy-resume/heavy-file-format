@@ -310,6 +310,93 @@ test('block meta fields render hidden marker as a checkbox', () => {
   expect(expectedResult).not.toContain('placeholder="yes"');
 });
 
+test('passive editor skips collapsed expandable content and rebuilds it on expansion', () => {
+  const block: VisualBlock = {
+    id: 'fake-expandable', text: '', schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('expandable'),
+      expandableStubBlocks: { lock: false, children: [
+        { id: 'fake-stub', text: 'Fake stub', schemaMode: false, schema: defaultBlockSchema('xref-card') },
+      ] },
+      expandableContentBlocks: { lock: false, children: [
+        { id: 'fake-content', text: 'Fake content', schemaMode: false, schema: defaultBlockSchema('xref-card') },
+      ] },
+    },
+  };
+  const section = createSection([block]);
+  const helpers = {} as ComponentRenderHelpers;
+  const renderedIds: string[] = [];
+  const renderer = createEditorRenderer({
+    documentExtension: '.hvy',
+    documentMeta: {},
+    documentSections: [section],
+    showAdvancedEditor: false,
+    addComponentBySection: {},
+    activeEditorBlock: null,
+    aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
+    componentPlacement: null,
+    pendingEditorActivation: null,
+    expandableEditorPanels: {},
+    readerExpandableState: {},
+    searchRevealedAncestors: {},
+    editorSidebarHelpDismissed: true,
+    currentView: 'editor',
+    responsivePreview: 'full',
+    mobileAdjustmentMode: false,
+    openTemplateDefinitionKeys: [],
+    openTextLineStyleName: null,
+    paragraphStyleRecentNames: [],
+    pdfStylePresets: [],
+    pdfStylePresetId: null,
+  }, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    renderReaderBlock: (_section, child) => {
+      renderedIds.push(child.id);
+      return `<article>${child.text}</article>`;
+    },
+    renderReusableSectionOptions: () => '',
+    renderOption: () => '',
+    resolveBaseComponent: (componentName) => componentName,
+    ensureContainerBlocks: () => {},
+    ensureComponentListBlocks: () => {},
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    isActiveEditorSectionTitle: () => false,
+    isActiveEditorBlock: () => false,
+    isDefaultUntitledSectionTitle: () => false,
+    formatSectionTitle: (title) => title,
+    findSectionByKey: () => section,
+    buildSectionRenderSequence: (targetSection) => targetSection.blocks.map((targetBlock) => ({ kind: 'block' as const, block: targetBlock })),
+    getComponentDefs: () => [],
+    getSectionDefs: () => [],
+    getThemeConfig: () => ({ colors: {} }),
+    getComponentRenderHelpers: () => helpers,
+    isBuiltinComponent: () => false,
+  });
+
+  const collapsedHtml = renderer.renderPassiveEditorBlock(section.key, block, [section]);
+  expect(collapsedHtml).toContain('Fake stub');
+  expect(collapsedHtml).not.toContain('Fake content');
+  expect(renderedIds).toEqual(['fake-stub']);
+
+  renderedIds.length = 0;
+  block.schema.expandableExpanded = true;
+  const expandedHtml = renderer.renderPassiveEditorBlock(section.key, block, [section]);
+  expect(expandedHtml).toContain('Fake stub');
+  expect(expandedHtml).toContain('Fake content');
+  expect(renderedIds).toEqual(['fake-stub', 'fake-content']);
+
+  renderedIds.length = 0;
+  block.schema.expandableExpanded = false;
+  block.schema.expandableStubBlocks.children = [];
+  const previewHtml = renderer.renderPassiveEditorBlock(section.key, block, [section]);
+  expect(previewHtml).toContain('Fake content');
+  expect(renderedIds).toEqual(['fake-content']);
+});
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

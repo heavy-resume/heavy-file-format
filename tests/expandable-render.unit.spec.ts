@@ -1,9 +1,11 @@
 import { expect, test } from 'vitest';
 
 import { defaultBlockSchema } from '../src/document-factory';
-import { renderExpandableReader } from '../src/editor/components/expandable/expandable';
+import { renderExpandableEditor, renderExpandableReader } from '../src/editor/components/expandable/expandable';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
+import { initState } from '../src/state';
+import { createTestState } from './serialization-test-helpers';
 
 function makeSection(blocks: VisualBlock[]): VisualSection {
   return {
@@ -79,3 +81,82 @@ test('expanded expandable with empty stub omits the stub pane and keeps content 
   expect(html).not.toContain('expandable-pane-expanded');
   expect(html).not.toContain('expandable-reader-pane-stub');
 });
+
+test('collapsed expandable renders only its visible stub, then renders content on expansion', () => {
+  const block = makeExpandableBlock(false);
+  block.schema.expandableStubBlocks.children = [makeTextBlock('stub-test', 'Stub content')];
+  const renderedIds: string[] = [];
+  const countingHelpers = {
+    ...helpers,
+    renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]) {
+      renderedIds.push(...blocks.map((child) => child.id));
+      return helpers.renderReaderBlocks(section, blocks);
+    },
+  };
+
+  const collapsedHtml = renderExpandableReader(makeSection([block]), block, countingHelpers);
+  expect(collapsedHtml).toContain('Stub content');
+  expect(collapsedHtml).not.toContain('Expanded content');
+  expect(renderedIds).toEqual(['stub-test']);
+
+  renderedIds.length = 0;
+  block.schema.expandableExpanded = true;
+  const expandedHtml = renderExpandableReader(makeSection([block]), block, countingHelpers);
+  expect(expandedHtml).toContain('Stub content');
+  expect(expandedHtml).toContain('Expanded content');
+  expect(renderedIds).toEqual(['stub-test', 'content-test']);
+});
+
+test('collapsed expandable still previews content when stub children render empty', () => {
+  const block = makeExpandableBlock(false);
+  block.schema.expandableStubBlocks.children = [makeTextBlock('hidden-stub', '')];
+  const html = renderExpandableReader(makeSection([block]), block, {
+    ...helpers,
+    renderReaderBlocks(section, blocks) {
+      return helpers.renderReaderBlocks(section, blocks.filter((child) => child.text));
+    },
+  });
+  expect(html).toContain('has-empty-stub');
+  expect(html).toContain('Expanded content');
+});
+
+test.each([[false, false], [true, false], [false, true], [true, true]])(
+  'editor renders only displayed pane bodies or previews (stub open: %s, content open: %s)',
+  (stubOpen, contentOpen) => {
+    initState(createTestState({ meta: { hvy_version: '0.1' }, extension: '.hvy', attachments: [], sections: [] }));
+    const block = makeExpandableBlock(false);
+    block.schema.expandableStubBlocks.children = [0, 1, 2].map((index) => makeTextBlock(`stub-${index}`, `Stub ${index}`));
+    block.schema.expandableContentBlocks.children = [0, 1, 2].map((index) => makeTextBlock(`content-${index}`, `Content ${index}`));
+    const fullRenderIds: string[] = [];
+    const previewRenderIds: string[] = [];
+    const html = renderExpandableEditor('section-test', block, {
+      ...helpers,
+      escapeHtml: helpers.escapeAttr,
+      isMobileAdjustmentMode: () => false,
+      isAdvancedEditorMode: () => false,
+      isExpandableEditorPanelOpen: (_sectionKey, _blockId, pane) => pane === 'stub' ? stubOpen : contentOpen,
+      renderEditorNestedBlocks: (_sectionKey, blocks) => {
+        fullRenderIds.push(...blocks.map((child) => child.id));
+        return blocks.map((child) => `<p>${child.text}</p>`).join('');
+      },
+      renderPassiveEditorBlock: (_sectionKey, child) => {
+        previewRenderIds.push(child.id);
+        return `<p>${child.text}</p>`;
+      },
+      renderAddComponentPicker: () => '',
+    });
+
+    expect(fullRenderIds).toEqual([
+      ...(stubOpen ? ['stub-0', 'stub-1', 'stub-2'] : []),
+      ...(contentOpen ? ['content-0', 'content-1', 'content-2'] : []),
+    ]);
+    expect(previewRenderIds).toEqual([
+      ...(stubOpen ? [] : ['stub-0', 'stub-1']),
+      ...(contentOpen ? [] : ['content-0', 'content-1']),
+    ]);
+    expect(html).toContain('Stub 0');
+    expect(html).toContain('Content 0');
+    expect(html.includes('Stub 2')).toBe(stubOpen);
+    expect(html.includes('Content 2')).toBe(contentOpen);
+  }
+);

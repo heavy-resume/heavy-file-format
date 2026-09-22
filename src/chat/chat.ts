@@ -451,13 +451,21 @@ export function renderChatPanel(
                            .map((message) => renderChatMessageHtml(message, deps, canCopyToHvy))
                            .join('')
                    }
+                   ${
+                     chat.isSending && !isDocumentEdit
+                       ? `<div class="chat-pending-response" role="status" aria-label="Preparing an answer">
+                            <span class="chat-pending-response-pulse" aria-hidden="true"><i></i><i></i><i></i></span>
+                            <span>${deps.escapeHtml(chat.status ?? 'Reading the document and preparing an answer...')}</span>
+                          </div>`
+                       : ''
+                   }
                  </div>
 
                  <div class="chat-footer">
                    ${composerHtml}
                  </div>
+                 <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
                </div>
-               <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
              </aside>`
           : ''
       }

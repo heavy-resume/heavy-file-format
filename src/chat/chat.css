@@ -602,10 +602,14 @@
 }
 
 .hvy-document .chat-scroll-bottom {
-  position: absolute;
-  right: 1.35rem;
-  bottom: 6.4rem;
+  position: sticky;
+  right: auto;
+  bottom: 0.55rem;
+  align-self: flex-end;
+  flex: 0 0 auto;
   z-index: 2;
+  margin-top: -2.35rem;
+  margin-right: 0.55rem;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--hvy-border-alt);
@@ -616,6 +620,61 @@
 
 .hvy-document .chat-scroll-bottom[hidden] {
   display: none;
+}
+
+.hvy-document .chat-pending-response {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: fit-content;
+  max-width: min(100%, 24rem);
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--hvy-bg-alt) 58%, transparent);
+  color: var(--hvy-text-alt);
+  font-size: 0.88rem;
+}
+
+.hvy-document .chat-pending-response-pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.hvy-document .chat-pending-response-pulse i {
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: var(--hvy-accent-2);
+  animation: hvy-chat-pending-pulse 1.1s ease-in-out infinite;
+}
+
+.hvy-document .chat-pending-response-pulse i:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.hvy-document .chat-pending-response-pulse i:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes hvy-chat-pending-pulse {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.16rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hvy-document .chat-pending-response-pulse i {
+    animation: none;
+    opacity: 0.75;
+  }
 }
 
 .hvy-document .chat-composer {

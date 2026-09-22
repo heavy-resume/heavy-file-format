@@ -50,6 +50,20 @@ hvy_version: 0.1
   expect(html).toContain('<button type="submit" class="secondary" disabled>Send</button>');
 });
 
+test('renderChatPanel shows an in-thread pending answer for viewer questions', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  chat.status = 'Reading the document and preparing an answer...';
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n\n# Example\n', '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa');
+
+  expect(html).toContain('class="chat-pending-response"');
+  expect(html).toContain('Reading the document and preparing an answer...');
+  expect(html.indexOf('class="chat-scroll-bottom"')).toBeGreaterThan(html.indexOf('class="chat-footer"'));
+});
+
 test('renderChatPanel shows token usage on assistant messages', () => {
   const chat = createDefaultChatState();
   chat.panelOpen = true;

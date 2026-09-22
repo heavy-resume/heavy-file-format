@@ -165,6 +165,49 @@ test('chat stays scrolled to latest across full rerenders', async ({ page }) => 
   await expect.poll(() =>
     scroller.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)
   ).toBeLessThanOrEqual(12);
+
+  await scroller.evaluate(async (node) => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    node.scrollTop = 0;
+    node.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(0);
+  const latestButton = page.locator('.chat-scroll-bottom');
+  await expect(latestButton).toBeVisible();
+  const [scrollerBox, latestBox] = await Promise.all([scroller.boundingBox(), latestButton.boundingBox()]);
+  expect(scrollerBox).not.toBeNull();
+  expect(latestBox).not.toBeNull();
+  expect(latestBox!.x + latestBox!.width).toBeLessThanOrEqual(scrollerBox!.x + scrollerBox!.width);
+  expect(latestBox!.y + latestBox!.height).toBeLessThanOrEqual(scrollerBox!.y + scrollerBox!.height);
+  expect(scrollerBox!.y + scrollerBox!.height - (latestBox!.y + latestBox!.height)).toBeLessThanOrEqual(16);
+});
+
+test('viewer question shows pending feedback and anchors Latest to the scroll surface', async ({ page }) => {
+  test.setTimeout(5_000);
+  let finishResponse!: () => void;
+  const responseStarted = new Promise<void>((resolve) => {
+    finishResponse = resolve;
+  });
+  await page.route('**/api/chat', async (route) => {
+    await responseStarted;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ output: 'Finished answer.', toolCalls: [], nativeMessages: [], toolState: { provider: 'openai', input: [] } }),
+    });
+  });
+  await page.goto('/');
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('[data-field="chat-input"]').fill('A question that takes a while');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.getByRole('status', { name: 'Preparing an answer' })).toContainText('Reading the document and preparing an answer...');
+  await expect(page.locator('.chat-scroll-bottom')).toHaveCSS('position', 'sticky');
+
+  finishResponse();
+  await expect(page.locator('.chat-bubble', { hasText: 'Finished answer.' })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Preparing an answer' })).toHaveCount(0);
 });
 
 test('viewer question updates chat without rerendering the app', async ({ page }) => {
@@ -216,14 +259,14 @@ test('Viewer follow-up inspects a known path inside the cache-stable read-only a
     chatRequests.push(route.request().postDataJSON());
     const response = chatRequests.length === 1
       ? {
-          output: 'The answer choices may affect the response.',
-          reasoningSummary: '',
-          toolCalls: [],
-          nativeMessages: [],
-          toolState: { provider: 'openai', input: [] },
-        }
+        output: 'The answer choices may affect the response.',
+        reasoningSummary: '',
+        toolCalls: [],
+        nativeMessages: [],
+        toolState: { provider: 'openai', input: [] },
+      }
       : chatRequests.length === 2
-      ? {
+        ? {
           output: '',
           reasoningSummary: '',
           toolCalls: [{
@@ -239,7 +282,7 @@ test('Viewer follow-up inspects a known path inside the cache-stable read-only a
           }],
           toolState: { provider: 'openai', input: [] },
         }
-      : {
+        : {
           output: 'The requested content is already present in the inspected component.',
           reasoningSummary: '',
           toolCalls: [],

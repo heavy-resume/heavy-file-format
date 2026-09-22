@@ -154,7 +154,7 @@ export function bindSubmit(app: HTMLElement): void {
       // Retain this dispatch flag for the existing request diagnostics.
       const answerDocumentEditChatAsQuestion = false;
       const useDocumentEditTurn = isDocumentEditChat && !answerDocumentEditChatAsQuestion;
-      state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Waiting for answer...';
+      state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Reading the document and preparing an answer...';
       const saveChatOrSessionState = (): void => {
         if (isDocumentEditChat) {
           saveSessionState(state);
@@ -267,7 +267,7 @@ export function bindSubmit(app: HTMLElement): void {
                   }
                   state.chat.status = event.phase === 'preparing-context'
                     ? formatContextPreparationStatus(event.progress)
-                    : 'Waiting for answer...';
+                    : 'Reading the document and preparing an answer...';
                   if (event.phase === 'preparing-context') {
                     await refreshChatAfterStatusChange();
                     return;

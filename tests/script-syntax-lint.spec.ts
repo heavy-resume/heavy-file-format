@@ -67,12 +67,14 @@ test('cached script definitions are reused until their source changes', async ({
       __HVY_SCRIPTING__?: {
         compiledDefinitionSources: Map<string, string>;
         compiledDefinitions: Map<string, unknown>;
+        compiledPrograms: Map<string, { execute: () => unknown }>;
       };
     }).__HVY_SCRIPTING__;
     const afterFirst = {
       sourceCount: scripting?.compiledDefinitionSources.size,
       definitionCount: scripting?.compiledDefinitions.size,
       definition: scripting?.compiledDefinitions.get('cached-visibility-script'),
+      program: scripting?.compiledPrograms.get('cached-visibility-script'),
     };
     const second = await runUserScript({
       document,
@@ -85,6 +87,7 @@ test('cached script definitions are reused until their source changes', async ({
       sourceCount: scripting?.compiledDefinitionSources.size,
       definitionCount: scripting?.compiledDefinitions.size,
       definitionReused: scripting?.compiledDefinitions.get('cached-visibility-script') === afterFirst.definition,
+      programReused: scripting?.compiledPrograms.get('cached-visibility-script') === afterFirst.program,
     };
     const changed = await runUserScript({
       document,
@@ -103,6 +106,7 @@ test('cached script definitions are reused until their source changes', async ({
         sourceCount: scripting?.compiledDefinitionSources.size,
         definitionCount: scripting?.compiledDefinitions.size,
         definitionReplaced: scripting?.compiledDefinitions.get('cached-visibility-script') !== afterFirst.definition,
+        programReused: scripting?.compiledPrograms.get('cached-visibility-script') === afterFirst.program,
       },
     };
   });
@@ -112,7 +116,7 @@ test('cached script definitions are reused until their source changes', async ({
     second: 1,
     changed: 2,
     afterFirst: { sourceCount: 1, definitionCount: 1 },
-    afterSecond: { sourceCount: 1, definitionCount: 1, definitionReused: true },
-    afterChange: { sourceCount: 1, definitionCount: 1, definitionReplaced: true },
+    afterSecond: { sourceCount: 1, definitionCount: 1, definitionReused: true, programReused: true },
+    afterChange: { sourceCount: 1, definitionCount: 1, definitionReplaced: true, programReused: true },
   });
 });

@@ -577,13 +577,19 @@ test('advanced editor exposes anchored button configuration as a component card'
   await expect(previewButton).toBeVisible();
   await expect(preview.locator('.button-component-preview-stage')).toBeVisible();
 
-  const previewBox = await preview.boundingBox();
-  const buttonBox = await previewButton.boundingBox();
   const visibilityScript = settings.locator('.visibility-script-field');
   await expect(visibilityScript).not.toHaveAttribute('open', '');
   await expect(visibilityScript.locator('summary')).toContainText('Visibility Script');
   await expect(visibilityScript.locator('summary')).toContainText('Configured');
   await visibilityScript.locator('summary').click();
+  await expect.poll(async () => {
+    const settledButtonBox = await previewButton.boundingBox();
+    const settledVisibleScriptBox = await settings.locator('[data-field="block-button-visible-script"]').boundingBox();
+    return Boolean(settledButtonBox && settledVisibleScriptBox
+      && settledButtonBox.y + settledButtonBox.height < settledVisibleScriptBox.y);
+  }).toBe(true);
+  const previewBox = await preview.boundingBox();
+  const buttonBox = await previewButton.boundingBox();
   const visibleScriptBox = await settings.locator('[data-field="block-button-visible-script"]').boundingBox();
 
   expect(previewBox).not.toBeNull();

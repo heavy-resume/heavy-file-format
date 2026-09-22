@@ -31,6 +31,7 @@ export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
 // Counter for unique runtime ids — each script run gets its own slot on the
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
 let runtimeCounter = 0;
+let compiledProgramCounter = 0;
 
 interface HvyScriptingGlobal {
   runtimes: Record<string, ScriptingRuntime>;
@@ -42,6 +43,8 @@ interface HvyScriptingGlobal {
   regex: HvyScriptingRegexBridge;
   compiledDefinitionSources: Map<string, string>;
   compiledDefinitions: Map<string, unknown>;
+  activeRuntimeIds: Map<string, string>;
+  compiledPrograms: Map<string, { source: string; scriptId: string; execute: () => unknown }>;
 }
 
 interface HvyScriptingRegexMatch {
@@ -97,6 +100,8 @@ function getScriptingGlobal(): HvyScriptingGlobal {
       regex: createScriptingRegexBridge(),
       compiledDefinitionSources: new Map(),
       compiledDefinitions: new Map(),
+      activeRuntimeIds: new Map(),
+      compiledPrograms: new Map(),
     };
   }
   if (!window.__HVY_SCRIPTING__.callbacks) {
@@ -116,6 +121,12 @@ function getScriptingGlobal(): HvyScriptingGlobal {
   }
   if (!window.__HVY_SCRIPTING__.compiledDefinitions) {
     window.__HVY_SCRIPTING__.compiledDefinitions = new Map();
+  }
+  if (!window.__HVY_SCRIPTING__.activeRuntimeIds) {
+    window.__HVY_SCRIPTING__.activeRuntimeIds = new Map();
+  }
+  if (!window.__HVY_SCRIPTING__.compiledPrograms) {
+    window.__HVY_SCRIPTING__.compiledPrograms = new Map();
   }
   return window.__HVY_SCRIPTING__;
 }
@@ -589,6 +600,9 @@ export function buildPythonProgram(
     .map(([name, value]) => `    __hvy_user_globals__[${JSON.stringify(name)}] = ${toPythonLiteral(value)}`)
     .join('\n');
   const libraryList = `[${allowedLibraries.map((name) => JSON.stringify(name)).join(', ')}]`;
+  const runtimeLookup = compiledDefinitionKey
+    ? `__hvy_runtime_id__ = __hvy_globals__.activeRuntimeIds.get(${JSON.stringify(compiledDefinitionKey)})`
+    : `__hvy_runtime_id__ = ${JSON.stringify(runtimeId)}`;
   const compileDefinition = compiledDefinitionKey
     ? `__hvy_definition_key__ = ${JSON.stringify(compiledDefinitionKey)}
     __hvy_code__ = __hvy_globals__.compiledDefinitions.get(__hvy_definition_key__)
@@ -601,9 +615,10 @@ export function buildPythonProgram(
 from browser import window as __hvy_window__
 
 __hvy_globals__ = __hvy_window__.__HVY_SCRIPTING__
-__hvy_runtime__ = __hvy_globals__.runtimes['${runtimeId}']
-__hvy_source__ = __hvy_globals__.sources['${runtimeId}']
-__hvy_instrumented_source__ = __hvy_globals__.instrumentedSources['${runtimeId}']
+${runtimeLookup}
+__hvy_runtime__ = __hvy_globals__.runtimes[__hvy_runtime_id__]
+__hvy_source__ = __hvy_globals__.sources[__hvy_runtime_id__]
+__hvy_instrumented_source__ = __hvy_globals__.instrumentedSources[__hvy_runtime_id__]
 __hvy_trace_enabled__ = False
 __hvy_builtin_import__ = __import__
 __hvy_builtin_eval__ = eval
@@ -1566,18 +1581,48 @@ ${injectedAssignments}
     __hvy_entrypoint__ = __hvy_user_globals__.get('__hvy_user_main__')
     __hvy_sanitize_user_globals__()
     if __hvy_entrypoint__ is not None:
-        __hvy_globals__.results['${runtimeId}'] = __hvy_entrypoint__()
+        __hvy_globals__.results[__hvy_runtime_id__] = __hvy_entrypoint__()
     __hvy_runtime__.doc.rerender()
 except Exception as __hvy_err__:
-    __hvy_globals__.errors['${runtimeId}'] = __hvy_window__.__BRYTHON__.error_trace(__hvy_err__)
+    __hvy_globals__.errors[__hvy_runtime_id__] = __hvy_window__.__BRYTHON__.error_trace(__hvy_err__)
 finally:
     if __hvy_trace_enabled__:
         try:
             __hvy_sys__.settrace(None)
         except Exception:
             pass
-    __hvy_globals__.callbacks['${runtimeId}']()
+    __hvy_globals__.callbacks[__hvy_runtime_id__]()
 `;
+}
+
+function executeCachedPythonProgram(
+  scripting: HvyScriptingGlobal,
+  cacheKey: string,
+  runtimeId: string,
+  source: string,
+): void {
+  let cached = scripting.compiledPrograms.get(cacheKey);
+  if (!cached || cached.source !== source) {
+    const brython = getBrython();
+    if (typeof brython.python_to_js !== 'function') {
+      throw new Error('Brython Python-to-JavaScript compiler API unavailable.');
+    }
+    const scriptId = `hvy_cached_${++compiledProgramCounter}`;
+    const translated = brython.python_to_js(source, scriptId);
+    cached = {
+      source,
+      scriptId,
+      execute: new Function(`return ${translated}`) as () => unknown,
+    };
+    scripting.compiledPrograms.set(cacheKey, cached);
+  }
+  scripting.activeRuntimeIds.set(cacheKey, runtimeId);
+  try {
+    getBrython().imported[cached.scriptId] = {};
+    cached.execute();
+  } finally {
+    scripting.activeRuntimeIds.delete(cacheKey);
+  }
 }
 
 function toPythonLiteral(value: unknown): string {
@@ -1861,13 +1906,22 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         const runScript = brython.run_script;
 
         withSuppressedBrythonConsoleNoise(() => {
-          runScript(
-            scriptElement,
-            scriptElement.textContent || '',
-            `hvy_script_${runtimeId}`,
-            `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
-            true
-          );
+          if (options.cacheDefinition) {
+            executeCachedPythonProgram(
+              scripting,
+              getScriptingTraceLabel(options.componentId),
+              runtimeId,
+              scriptElement.textContent || '',
+            );
+          } else {
+            runScript(
+              scriptElement,
+              scriptElement.textContent || '',
+              `hvy_script_${runtimeId}`,
+              `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
+              true
+            );
+          }
         });
       } catch (error) {
         let message = String(error);

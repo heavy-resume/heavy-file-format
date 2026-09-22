@@ -126,6 +126,29 @@ test('PDF text rendering preserves markdown links as PDF annotations', () => {
   ]);
 });
 
+test('PDF text rendering does not apply paragraph spacing between bullet items', () => {
+  const expectedResult = renderPdfTextBlock(
+    '- First bullet\n- Second bullet\n- Third bullet',
+    '',
+    {
+      visibility: 'show',
+      keepTogether: false,
+      keepWithNext: false,
+      allowSplit: true,
+      pageBreakBefore: false,
+      pageBreakAfter: false,
+      pdfStyle: {},
+    }
+  );
+
+  expect(expectedResult.style).toEqual(['list', 'paragraph']);
+  expect(expectedResult.ul).toEqual([
+    { text: 'First bullet', style: 'paragraph', margin: [0, 0, 0, 0] },
+    { text: 'Second bullet', style: 'paragraph', margin: [0, 0, 0, 0] },
+    { text: 'Third bullet', style: 'paragraph', margin: [0, 0, 0, 0] },
+  ]);
+});
+
 test('PDF doc definition applies component CSS margins to block wrappers', () => {
   const firstBlock = createEmptyBlock('text');
   firstBlock.schema.id = 'first';

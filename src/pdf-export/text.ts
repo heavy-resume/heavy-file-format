@@ -64,7 +64,11 @@ export function renderPdfTextBlock(
       );
     } else if (bullet) {
       activeListStyle = style;
-      listItems.push(applyTextStyle(applyTextAlignment({ text: renderPdfInlineMarkdown(bullet[1] ?? ''), style }, align), textStyle));
+      listItems.push(applyTextStyle(applyTextAlignment({
+        text: renderPdfInlineMarkdown(bullet[1] ?? ''),
+        style,
+        margin: [0, 0, 0, 0],
+      }, align), textStyle));
     } else {
       flushList();
       stack.push(

@@ -6,11 +6,15 @@ export function runDocumentEditHooksAfterCommit(
   scrollRestore: PaneScrollState | null = null,
   afterRender?: () => void,
   refreshEditorSectionKey?: string,
-  options: { preserveActiveEditor?: boolean } = {}
+  options: { preserveActiveEditor?: boolean; callerRefreshedDocumentChange?: boolean } = {}
 ): void {
   const runtime = getActiveStateRuntime();
   void runPluginDocumentHooks('edit').then((hookResult) => {
     runWithStateRuntime(runtime, () => {
+      if (options.callerRefreshedDocumentChange && !hookResult.documentChanged) {
+        afterRender?.();
+        return;
+      }
       getRefreshReaderPanels()();
       if (options.preserveActiveEditor && !hookResult.documentChanged) {
         afterRender?.();

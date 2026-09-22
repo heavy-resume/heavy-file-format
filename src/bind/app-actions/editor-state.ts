@@ -208,7 +208,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
       if (deactivationAnchor) {
         restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
       }
-    }, sectionKey);
+    }, sectionKey, { callerRefreshedDocumentChange: true });
   }
 };
 

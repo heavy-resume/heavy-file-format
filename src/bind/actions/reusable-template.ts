@@ -5,13 +5,14 @@ import { extractReusableTemplateVariablesFromDefinition, validateReusableTemplat
 import { state, getRenderApp } from '../../state';
 import type { ReusableTemplateModalState } from '../../types';
 
-export function openReusableTemplateModalIfNeeded(component: string, target: ReusableTemplateModalState['target']): boolean {
+export function openReusableTemplateModalIfNeeded(component: string, target: ReusableTemplateModalState['target'], onComplete?: ReusableTemplateModalState['onComplete']): boolean {
   const definition = getComponentDefs().find((item) => item.name === component);
   const variables = extractReusableTemplateVariablesFromDefinition(definition);
   if (variables.length === 0) {
     return false;
   }
-  state.reusableTemplateModal = { component, target };
+  state.reusableTemplateModal?.onComplete?.({ status: 'cancelled' });
+  state.reusableTemplateModal = { component, target, onComplete };
   getRenderApp()();
   return true;
 }

@@ -1310,3 +1310,28 @@ environment value exists; omitted fields inherit explicitly supplied environment
 The reference text-processing modal exposes Model settings when the model picker is enabled;
 these preferences persist with the existing chat settings storage. Host-managed clients keep control
 of configuration through mount options. Prompts live in `src/editor/components/text-ai/text-ai-request.ts`.
+
+
+### Host-invoked template forms
+
+`mount.openTemplateForm({ targetType: 'fake-entry' })` opens the existing item
+creation form for the sole component list whose `componentListComponent` is
+`fake-entry`. Use `{ targetId: 'fake-list' }` to target the list's persisted
+`schema.id` instead; internal block IDs and section keys are not host identifiers.
+Both fields can be supplied to validate the expected item type. Missing targets,
+ambiguous types, duplicate IDs, type mismatches, locked lists, and templates
+without variables reject the promise. Locked ancestors do not lock the list.
+
+The method preserves viewer/editor/AI mode, reveals collapsed ancestors, opens
+the sidebar when appropriate, and scrolls to the list before opening the form.
+An explicitly revealed empty reader block gets a transient empty-state display;
+this does not modify serialized content. Lookup is independent of document
+structure. A target excluded from the rendered view cannot be revealed.
+
+The promise resolves to `{ status: 'inserted', itemId: string | null }` after Add,
+or `{ status: 'cancelled' }` after cancellation or mount destruction. `itemId`
+is the created item's persisted ID, when available. A second invocation while
+the same mount is opening/showing a form rejects. In editor mode, insertion
+retains the existing new-item editing flow; finish that edit before undoing the
+insertion. Implementation lives in `embed-template-form.ts`, with data-only
+resolution in `template-form-target.ts` and public types in `embed.ts`.

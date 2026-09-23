@@ -612,6 +612,7 @@ readerRenderer = createReaderRenderer(
     get reusableSaveModal() {
       return state.reusableSaveModal;
     },
+    get readerNavigationTarget() { return state.readerNavigationTarget; },
     get reusableTemplateModal() {
       return state.reusableTemplateModal;
     },

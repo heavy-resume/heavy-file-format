@@ -1260,10 +1260,13 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     }
     syncReusableTemplateForBlock(target.sectionKey, target.blockId);
   }
-  if (state.currentView !== 'ai') {
+  if (state.currentView === 'editor') {
     setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' });
     markActiveEditorBlockAsNew(newBlock.id);
   }
+  const onComplete = modal.onComplete;
+  delete modal.onComplete;
   closeModal();
   getRenderApp()();
+  onComplete?.({ status: 'inserted', itemId: newBlock.schema.id.trim() || null });
 }

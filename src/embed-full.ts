@@ -1,3 +1,5 @@
+import type { HvyTemplateFormOptions, HvyTemplateFormResult } from './embed';
+import { openMountedTemplateForm, cancelMountedTemplateForm } from './embed-template-form';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { runImportOperation } from './import-errors';
 import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
@@ -229,6 +231,7 @@ export interface HvyMountOptions {
 }
 
 export interface HvyMount {
+  openTemplateForm(options: HvyTemplateFormOptions): Promise<HvyTemplateFormResult>;
   destroy(): void;
   getDocument(): VisualDocument;
   findUnusedEmbeddedFiles(): UnusedEmbeddedFile[];
@@ -593,6 +596,7 @@ function ensureRenderers(): void {
       get dbTableQueryModal() { return state.dbTableQueryModal; },
       get pdfTemplateImportModal() { return state.pdfTemplateImportModal; },
       get reusableSaveModal() { return state.reusableSaveModal; },
+      get readerNavigationTarget() { return state.readerNavigationTarget; },
       get reusableTemplateModal() { return state.reusableTemplateModal; },
       get reusableDefinitionEditModal() { return state.reusableDefinitionEditModal; },
       get sectionTemplateFlavorModal() { return state.sectionTemplateFlavorModal; },
@@ -775,7 +779,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
 function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
   const bindGeneration = (embedUiBindGenerations.get(root) ?? 0) + 1;
   embedUiBindGenerations.set(root, bindGeneration);
-  if (state.currentView === 'viewer') {
+  if (state.currentView === 'viewer' && !state.reusableTemplateModal) {
     bindReaderUi(root);
     return;
   }
@@ -1471,9 +1475,17 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
   }
   let destroyed = false;
   return {
+    openTemplateForm(formOptions) {
+      if (destroyed) return Promise.reject(new Error('HVY mount has been destroyed.'));
+      return Promise.resolve().then(() => {
+        if (destroyed) throw new Error('HVY mount has been destroyed.');
+        return runWithStateRuntime(runtime, () => openMountedTemplateForm(options.root, formOptions));
+      });
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelMountedTemplateForm(runtime);
       webMcpRegistration?.destroy();
       runWithStateRuntime(runtime, () => {
         releasePdfPreviewRuntime(runtime);

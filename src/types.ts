@@ -344,6 +344,7 @@ export interface ReusableSaveModalState {
 }
 
 export interface ReusableTemplateModalState {
+  onComplete?: (result: import('./embed').HvyTemplateFormResult) => void;
   component: string;
   target:
     | { kind: 'section'; sectionKey: string }
@@ -635,6 +636,8 @@ export interface AppState {
   newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
+  /** Keep an explicitly revealed empty block visible without changing document content. */
+  readerNavigationTarget?: { sectionKey: string; blockId: string };
   reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   tempHighlights: Set<string>;

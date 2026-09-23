@@ -89,6 +89,7 @@ interface ReaderRenderState {
   pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
+  readerNavigationTarget?: { sectionKey: string; blockId: string };
   reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
@@ -610,10 +611,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       }
       return renderBlockShell(renderReaderViewCollapseWrapper(targetKey, block, body), '', presentation);
     };
+    const emptyTargetContent = state.readerNavigationTarget?.sectionKey === section.key
+      && state.readerNavigationTarget.blockId === block.id
+      ? '<div class="reader-empty-state" role="status">No content to display yet.</div>'
+      : '';
     const renderNonEmptyBlockShell = (body: string, presentation: BlockShellPresentation = {}): string =>
-      body.trim() ? renderBlockShell(body, '', presentation) : '';
+      body.trim() || emptyTargetContent ? renderBlockShell(body.trim() ? body : emptyTargetContent, '', presentation) : '';
     const renderNonEmptyMaybeCollapsedBlockShell = (body: string, presentation: BlockShellPresentation = {}): string =>
-      body.trim() ? renderMaybeCollapsedBlockShell(body, presentation) : '';
+      body.trim() || emptyTargetContent ? renderMaybeCollapsedBlockShell(body.trim() ? body : emptyTargetContent, presentation) : '';
 
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {

@@ -195,7 +195,25 @@ export interface HvyMountOptions {
   webMcp?: boolean | HvyWebMcpOptions;
 }
 
+/** Locate a component list by its persisted ID or its exact item template name. */
+export interface HvyTemplateFormOptions {
+  /** Persisted document ID of the component list. */
+  targetId?: string;
+  /** Exact item component/template name; requires a unique matching list. */
+  targetType?: string;
+}
+
+export type HvyTemplateFormResult =
+  | {
+    status: 'inserted';
+    /** Persisted item ID, if the template supplies one. */
+    itemId: string | null;
+  }
+  | { status: 'cancelled' };
+
 export interface HvyMount {
+  /** Reveal a component list and collect template values. Resolves on insertion or cancellation. */
+  openTemplateForm(options: HvyTemplateFormOptions): Promise<HvyTemplateFormResult>;
   destroy(): void;
   getDocument(): VisualDocument;
   findUnusedEmbeddedFiles(): UnusedEmbeddedFile[];
@@ -549,6 +567,7 @@ function ensureReaderRenderer(): ReaderRenderer {
       get dbTableQueryModal() { return state.dbTableQueryModal; },
       get pdfTemplateImportModal() { return null; },
       get reusableSaveModal() { return null; },
+      get readerNavigationTarget() { return state.readerNavigationTarget; },
       get reusableTemplateModal() { return null; },
       get reusableDefinitionEditModal() { return null; },
       get sectionTemplateFlavorModal() { return null; },
@@ -1034,6 +1053,9 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     `);
   };
   return {
+    openTemplateForm(formOptions) {
+      return ready.then((mount) => mount.openTemplateForm(formOptions));
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -1358,6 +1380,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     return transition;
   };
   const mount: HvyMount = {
+    openTemplateForm(formOptions) {
+      return ensureFullMount().then((mount) => mount.openTemplateForm(formOptions));
+    },
     setMode,
     destroy() {
       if (destroyed) return;

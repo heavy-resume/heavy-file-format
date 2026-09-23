@@ -70,7 +70,12 @@ test('expandable stubs provide an insertable chevron placeholder that follows ex
   await expect(expandable.locator('.hvy-expandable-chevron')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
   await expandable.locator('.expand-stub-toggle').click();
   await expect(page.locator('.expandable-reader').first()).toHaveClass(/is-expanded/);
+  await expect(page.locator('.expandable-reader .hvy-expandable-chevron').first()).toHaveCSS('animation-name', 'hvyExpandableChevronOpen');
   await expect(page.locator('.expandable-reader .hvy-expandable-chevron').first()).toHaveCSS('transform', 'matrix(0, 1, -1, 0, 0, 0)');
+  await page.locator('.expandable-reader .expand-stub-toggle').first().click();
+  await expect(page.locator('.expandable-reader').first()).toHaveClass(/is-collapsing/);
+  await expect(page.locator('.expandable-reader .hvy-expandable-chevron').first()).toHaveCSS('animation-name', 'hvyExpandableChevronClose');
+  await expect(page.locator('.expandable-reader').first()).toHaveClass(/is-collapsed/);
 
   await page.getByRole('button', { name: 'Editor', exact: true }).click();
   await page.getByRole('button', { name: 'Raw', exact: true }).click();

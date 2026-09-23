@@ -1,3 +1,4 @@
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { runImportOperation } from './import-errors';
 import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
 import './default-theme.css';
@@ -659,6 +660,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   renderHtmlMs = elapsedMs(renderHtmlStartedAt);
   const domStartedAt = nowMs();
   root.innerHTML = markup;
+  bindResponsiveSidebarShells(root);
   syncActivePdfPreview(root, state.document, pdfDocument);
   domMs = elapsedMs(domStartedAt);
   const postStartedAt = nowMs();

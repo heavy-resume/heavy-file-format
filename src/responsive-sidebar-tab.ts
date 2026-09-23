@@ -1,5 +1,5 @@
 import { state } from './state';
-import { shouldAutoDismissSidebarHelp } from './sidebar-help';
+import { shouldAutoDismissSidebarHelp, updateSidebarHelpPositions } from './sidebar-help';
 
 type SidebarKind = 'editor' | 'viewer';
 
@@ -21,6 +21,7 @@ export function bindResponsiveSidebarShells(app: HTMLElement): void {
             updateResponsiveSidebarShellState(entry.target, entry.contentRect.width);
           }
         });
+        updateSidebarHelpPositions(app);
       })
     : null;
 
@@ -28,6 +29,9 @@ export function bindResponsiveSidebarShells(app: HTMLElement): void {
     updateResponsiveSidebarShellState(shell);
     observer?.observe(shell);
   });
+
+  // Run before paint, independently of asynchronously loaded editor event bindings.
+  updateSidebarHelpPositions(app);
 
   if (observer) {
     responsiveShellResizeObservers.set(app, observer);

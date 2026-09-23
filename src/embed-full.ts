@@ -1,3 +1,4 @@
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { runImportOperation } from './import-errors';
 import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
 import { changeDocumentView } from './document-view';
@@ -733,6 +734,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       ${readerRenderer.renderLinkInlineModal()}
       ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
     </main>`;
+  bindResponsiveSidebarShells(root);
   syncActivePdfPreview(root, state.document, pdfDocument && state.currentView === 'viewer');
   bindEmbedUi(root, runtime);
   bindChatThreadUi(

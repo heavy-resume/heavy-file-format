@@ -1,3 +1,4 @@
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import './default-theme.css';
 import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
@@ -888,6 +889,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   app.innerHTML = markup;
+  bindResponsiveSidebarShells(app);
   syncActivePdfPreview(app, state.document, pdfDocument && isViewerView);
   domMs = performance.now() - stepStartedAt;
 

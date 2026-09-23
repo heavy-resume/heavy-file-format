@@ -476,6 +476,16 @@ Text content MAY include paired HVY comment annotations for explicit responsive 
 
 These annotations are semantic hints, not raw HTML. Renderers SHOULD convert them into implementation-specific inline elements and MUST NOT leak the marker comments into visible output.
 
+Text content MAY also contain a parent-provided placeholder marker:
+
+```markdown
+<!-- placeholder expandable-chevron -->
+```
+
+The placeholder name MUST begin with an ASCII letter and contain only ASCII letters, digits, `_`, or `-`. A containing component defines which named placeholders are available to its descendant text components and supplies their rendered meaning. Authoring clients SHOULD expose controls only for placeholders provided by the nearest applicable parent context. Unknown placeholders MUST remain source-preserving in editors and MUST NOT produce visible reader content. This generic mechanism allows parent components to contribute contextual inline values without adding parent-specific behavior to the text component.
+
+An expandable provides the `expandable-chevron` placeholder to text components in its stub, including text nested through layout components. It renders as a right-pointing chevron while the expandable is closed and a down-pointing chevron while it is open. The expanded-content pane does not inherit this placeholder from that expandable. A nested expandable establishes its own stub/content placeholder context.
+
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
 ```markdown

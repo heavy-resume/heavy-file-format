@@ -195,6 +195,11 @@
   line-height: 1;
 }
 
+.hvy-document .text-placeholder-toolbar-icon > .hvy-expandable-chevron {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .hvy-document .text-line-style-toolbar {
   padding: 0.28rem;
   border: 1px solid var(--hvy-border-translucent);

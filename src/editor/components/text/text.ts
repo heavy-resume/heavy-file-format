@@ -15,6 +15,7 @@ const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const textLineStyles = helpers.getTextLineStyles?.() ?? {};
+  const textPlaceholders = helpers.getTextPlaceholders?.() ?? [];
   const codeLanguageInputAttrs = {
     'data-section-key': sectionKey,
     'data-block-id': block.id,
@@ -23,7 +24,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   const alignStyle = block.schema.align === 'left' ? '' : ` style="text-align: ${helpers.escapeAttr(block.schema.align)};"`;
   if (fillInParts.length > 1 && isFillInEditorMode(sectionKey, block.id)) {
     const richToolbar = fillInParts.length === 2
-      ? helpers.renderRichToolbar(sectionKey, block.id, { field: 'text-fill-in-rich', includeAlign: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles })
+      ? helpers.renderRichToolbar(sectionKey, block.id, { field: 'text-fill-in-rich', includeAlign: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles, textPlaceholders })
       : '';
     const richEditorAttributes = richToolbar
       ? `
@@ -87,7 +88,15 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     : renderUseAsSelectionControl(sectionKey, block.id, sortValueDefs, getSortValueDefsForEditorBlock(sectionKey, block, 'group'), helpers);
   const richToolbar = mobileAdjustment
     ? ''
-    : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, includeTextAi: !block.schema.lock, align: block.schema.align, currentMarkdown: block.text, textLineStyles });
+    : helpers.renderRichToolbar(sectionKey, block.id, {
+      includeAlign: true,
+      includeFillIn: true,
+      includeTextAi: !block.schema.lock,
+      textPlaceholders,
+      align: block.schema.align,
+      currentMarkdown: block.text,
+      textLineStyles,
+    });
   return `
   <div class="text-editor-shell">
     ${richToolbar ? `<div class="text-editor-toolbar-bounds"><div class="text-editor-toolbar-slot">${richToolbar}</div></div><div class="text-editor-toolbar-spacer"></div>` : ''}
@@ -356,7 +365,7 @@ function renderMarkdownEditorHtmlWithSortValues(
   const groupDefs = getSortValueDefsForEditorBlock(sectionKey, block, 'group');
   const answerGroups = getBlockAnswerGroups(getInlineAnswerGroupIndex(state.document.sections), sectionKey, block.id);
   if (Object.keys(defs).length === 0 && Object.keys(groupDefs).length === 0) {
-    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs, answerGroups);
+    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs, answerGroups, helpers.getTextPlaceholders?.());
   }
   const replacements: string[] = [];
   let source = markdown;
@@ -367,7 +376,7 @@ function renderMarkdownEditorHtmlWithSortValues(
       return token;
     }, kind);
   }
-  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs, answerGroups);
+  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs, answerGroups, helpers.getTextPlaceholders?.());
   replacements.forEach((replacement, index) => {
     html = html.replace(`HVY_SORT_VALUE_TOKEN_${index}`, replacement);
   });
@@ -430,8 +439,9 @@ function isFillInEditorMode(sectionKey: string, blockId: string): boolean {
 }
 
 export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) => {
+  const textPlaceholders = helpers.getTextPlaceholders?.();
   const rendered = block.schema.showCopy
-    ? `${helpers.renderComponentFragment('text', block.text, block, section.key)}
+    ? `${helpers.renderComponentFragment('text', block.text, block, section.key, textPlaceholders)}
       <button
         type="button"
         class="text-copy-button"
@@ -441,6 +451,6 @@ export const renderTextReader: ComponentReaderRenderer = (section, block, helper
         aria-label="Copy text"
         title="Copy text"
       ><span class="text-copy-icon" aria-hidden="true"></span></button>`
-    : helpers.renderComponentFragment('text', block.text, block, section.key);
+    : helpers.renderComponentFragment('text', block.text, block, section.key, textPlaceholders);
   return state.reusableDefinitionEditModal ? renderTemplateValueTokens(rendered) : rendered;
 };

@@ -16,7 +16,7 @@ import { renderTextReader } from '../editor/components/text/text';
 import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
 import { renderLinkAttachmentPicker } from '../editor/components/link-attachment-picker/link-attachment-picker';
 import { renderLinkDocumentPicker } from '../editor/components/link-document-picker/link-document-picker';
-import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from '../editor/component-helpers';
+import { mergeTextPlaceholders, type ComponentRenderHelpers, type ReaderBlockRenderOptions, type TextPlaceholderContextOptions, type TextPlaceholderDefinition } from '../editor/component-helpers';
 import { renderAddComponentPicker } from '../editor/component-picker';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
@@ -142,7 +142,7 @@ export interface ReaderRenderer {
   renderReaderSection: (section: VisualSection, windowOptions?: ReaderRenderTreeWindowOptions) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
   renderReaderGridBlocks: ComponentRenderHelpers['renderReaderGridBlocks'];
-  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[], options?: TextPlaceholderContextOptions) => string;
   renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
   orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
@@ -158,6 +158,17 @@ export interface ReaderRenderer {
 export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRenderDeps): ReaderRenderer {
   let activeReaderViewContext: ReaderViewContext | null = null;
   let activeSearchFilterContext: SearchFilterContext | null = null;
+  let activeTextPlaceholders: TextPlaceholderDefinition[] = [];
+
+  function withTextPlaceholders<T>(options: TextPlaceholderContextOptions, render: () => T): T {
+    const previous = activeTextPlaceholders;
+    activeTextPlaceholders = mergeTextPlaceholders(previous, options);
+    try {
+      return render();
+    } finally {
+      activeTextPlaceholders = previous;
+    }
+  }
   const readerRenderTreeHeightLedger = createRenderTreeHeightLedger();
   let activeReaderRenderTreeWindowOptions: ReaderRenderTreeWindowOptions | null = null;
 
@@ -524,6 +535,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
+    if (options.textPlaceholders || options.omitTextPlaceholderNames) {
+      const { textPlaceholders, omitTextPlaceholderNames, ...remainingOptions } = options;
+      return withTextPlaceholders({ textPlaceholders, omitTextPlaceholderNames }, () => (
+        renderReaderBlock(section, block, remainingOptions)
+      ));
+    }
     if (isViewerHiddenBlock(block)) {
       return '';
     }
@@ -593,7 +610,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       options.trimVerticalEndMargin ? ' data-reader-trim-vertical-end-margin="true"' : '',
     ].join('');
     const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
-    const helpers = deps.getComponentRenderHelpers();
+    const helpers = { ...deps.getComponentRenderHelpers(), getTextPlaceholders: () => activeTextPlaceholders };
     type BlockShellPresentation = {
       beforeHtml?: string;
       className?: string;
@@ -789,12 +806,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return false;
   }
 
-  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[], windowOptions?: ReaderRenderTreeWindowOptions): string {
+  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[], placeholderOptions: TextPlaceholderContextOptions = {}): string {
+    if (placeholderOptions.textPlaceholders || placeholderOptions.omitTextPlaceholderNames) {
+      return withTextPlaceholders(placeholderOptions, () => renderReaderBlocks(section, blocks));
+    }
     const visibleBlocks = getVisibleReaderBlocks(section, blocks, false);
-    const inheritedWindowOptions = windowOptions ?? (activeReaderRenderTreeWindowOptions ? {
+    const inheritedWindowOptions = activeReaderRenderTreeWindowOptions ? {
       ...activeReaderRenderTreeWindowOptions,
       layoutOffsetTop: (activeReaderRenderTreeWindowOptions.layoutOffsetTop ?? 0) + 64,
-    } : undefined);
+    } : undefined;
     const activeResultBlockId = state.search.results.find((result) => result.id === state.search.activeResultId)?.blockId;
     const forceNodeKeys = new Set(visibleBlocks
       .filter((block) => block.id === activeResultBlockId || containsReaderBlockId(block, activeResultBlockId))

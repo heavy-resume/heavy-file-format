@@ -28,6 +28,7 @@ import {
 import type { AppState, ChatProvider, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
+import type { TextPlaceholderDefinition } from './editor/component-helpers';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeOverrides as setRuntimeThemeOverrides, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
 import {
@@ -458,6 +459,7 @@ function renderLightweightRichToolbar(
     includeAlign?: boolean;
     includeFillIn?: boolean;
     includeTextAi?: boolean;
+    textPlaceholders?: import('./editor/component-helpers').TextPlaceholderDefinition[];
     align?: 'left' | 'center' | 'right';
     currentMarkdown?: string;
   } = {}
@@ -490,6 +492,7 @@ function renderLightweightRichToolbar(
         <button type="button" class="icon-button${selectedClass(blockStyle === 'ordered-list')}" data-rich-action="ordered-list" ${richButtonAttrs} aria-label="Numbered List" title="Numbered List"><span class="toolbar-icon ordered-list-icon" aria-hidden="true"></span></button>
         <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
         <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)" disabled><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+        ${(options.textPlaceholders ?? []).map((placeholder) => `<button type="button" class="icon-button ghost" data-rich-action="text-placeholder" data-text-placeholder-name="${escapeAttr(placeholder.name)}" ${richButtonAttrs} aria-label="${escapeAttr(placeholder.label)}" title="${escapeAttr(placeholder.title ?? placeholder.label)}"><span class="toolbar-icon text-placeholder-toolbar-icon" aria-hidden="true">${placeholder.render(true)}</span></button>`).join('')}
       </div>
       ${options.includeTextAi ? `<div class="text-ai-toolbar-segment"><button type="button" class="ghost icon-button" data-text-ai="true" ${richButtonAttrs} aria-label="Process with AI" title="Process with AI">✨</button></div>` : ''}
     </div>
@@ -524,7 +527,8 @@ function renderComponentFragment(
   componentName: string,
   content: string,
   block: { id: string; schema: { codeLanguage?: string; fillIn?: boolean } },
-  sectionKey = ''
+  sectionKey = '',
+  textPlaceholders?: TextPlaceholderDefinition[]
 ): string {
   if (componentName === 'code') {
     const language = block.schema.codeLanguage?.trim() || 'text';
@@ -534,13 +538,14 @@ function renderComponentFragment(
   const answerGroups = componentName === 'text'
     ? getBlockAnswerGroups(getInlineAnswerGroupIndex(state.document.sections), sectionKey, block.id)
     : undefined;
-  return renderTextFragment(source, answerGroups);
+  return renderTextFragment(source, textPlaceholders, answerGroups);
 }
 
-function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
+function renderTextFragment(content: string, textPlaceholders?: TextPlaceholderDefinition[], answerGroups?: Map<number, string>): string {
   const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
   return renderUserFileAttachmentLinksInHtml(addExternalLinkTargets(markdownToReaderHtml(normalized, {
     answerGroups,
+    textPlaceholders,
     crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
   }), { crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true }), state.document);
 }

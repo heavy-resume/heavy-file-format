@@ -13,6 +13,13 @@ import {
 } from '../src/markdown';
 import { renderedMarkdownHtmlToSearchText } from '../src/rendered-markdown-text';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
+import type { TextPlaceholderDefinition } from '../src/editor/component-helpers';
+
+const fakeStatusPlaceholder: TextPlaceholderDefinition = {
+  name: 'fake-status',
+  label: 'Fake status',
+  render: (editable) => `<span class="fake-status${editable ? ' is-editable' : ''}">ready</span>`,
+};
 
 test('expected result: single tildes remain literal text in text components', () => {
   expect(markdownToReaderHtml('Keep ~this~ literal')).toContain('<p>Keep ~this~ literal</p>');
@@ -20,6 +27,20 @@ test('expected result: single tildes remain literal text in text components', ()
 
 test('expected result: double tildes render intentional strikethrough in text components', () => {
   expect(markdownToReaderHtml('Strike ~~this~~ text')).toContain('<p>Strike <del>this</del> text</p>');
+});
+
+test('expected result: parent-provided text placeholders render and serialize generically', () => {
+  const source = 'State: <!-- placeholder fake-status -->';
+  expect(markdownToReaderHtml(source, { textPlaceholders: [fakeStatusPlaceholder] })).toContain(
+    '<span class="fake-status">ready</span>'
+  );
+  expect(turndown.turndown('<p>State: <span class="hvy-text-placeholder" data-hvy-text-placeholder="fake-status">ready</span></p>')).toBe(source);
+});
+
+test('expected result: unknown text placeholders stay editable but remain hidden from readers', () => {
+  const source = 'Before <!-- placeholder fake-missing --> after';
+  expect(markdownToReaderHtml(source)).toContain('<p>Before  after</p>');
+  expect(turndown.turndown('<p>Before <span class="hvy-text-placeholder" data-hvy-text-placeholder="fake-missing">missing</span> after</p>')).toBe(source);
 });
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
@@ -364,13 +385,25 @@ test('removes non-text media from rich editor content before serialization', () 
     querySelectorAll: (selector: string) => {
       expect(selector).toContain('img');
       return [
-        { remove: () => removed.push('img') },
-        { remove: () => removed.push('canvas') },
+        { closest: () => null, remove: () => removed.push('img') },
+        { closest: () => null, remove: () => removed.push('canvas') },
       ] as unknown as NodeListOf<HTMLElement>;
     },
   } as unknown as ParentNode);
 
   expect(removed).toEqual(['img', 'canvas']);
+});
+
+test('preserves rendered media inside an atomic text placeholder', () => {
+  const removed: string[] = [];
+
+  removeNonTextContentFromRichEditor({
+    querySelectorAll: () => [
+      { closest: () => ({ dataset: { hvyTextPlaceholder: 'fake-status' } }), remove: () => removed.push('svg') },
+    ] as unknown as NodeListOf<HTMLElement>,
+  } as unknown as ParentNode);
+
+  expect(removed).toEqual([]);
 });
 
 test('renders hvy alt annotations as responsive spans', () => {

@@ -288,6 +288,8 @@ export function bindClickDispatch(app: HTMLElement): void {
             valueKind: richButton.dataset.valueKind === 'group' ? 'group' : 'sort',
             sortValueType: richButton.dataset.sortValueType,
             templateVariableName: richButton.dataset.templateVariableName,
+            textPlaceholderName: richButton.dataset.textPlaceholderName,
+            textPlaceholderHtml: richButton.querySelector<HTMLElement>('.text-placeholder-toolbar-icon')?.innerHTML,
           });
           closeUseAsMenus(app);
           clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);

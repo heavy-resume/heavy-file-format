@@ -182,6 +182,9 @@ export function syncTextToolbarContextActions(editable: HTMLElement, actions: st
 
 function getTextToolbarActionKey(button: HTMLElement): string | null {
   const richAction = button.dataset.richAction;
+  if (richAction === 'text-placeholder' && button.dataset.textPlaceholderName) {
+    return `rich:${richAction}:${button.dataset.textPlaceholderName}`;
+  }
   if (richAction && richAction !== 'text-line-style') {
     return `rich:${richAction}`;
   }

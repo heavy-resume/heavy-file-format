@@ -593,3 +593,42 @@
   flex: 0 0 auto;
   margin: 0.15rem 0.22rem 0 0;
 }
+.hvy-document .hvy-text-placeholder {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.12em;
+}
+
+.hvy-document .hvy-text-placeholder-source {
+  display: none;
+}
+
+.hvy-document .hvy-expandable-chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  color: currentColor;
+  transform: rotate(var(--hvy-expandable-chevron-rotation, 0deg));
+  transform-origin: center;
+  transition: transform 160ms ease;
+}
+
+.hvy-document .hvy-expandable-chevron svg,
+.hvy-document .text-placeholder-toolbar-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hvy-document .hvy-text-placeholder-unknown {
+  padding: 0.08em 0.3em;
+  border: 1px dashed var(--hvy-border-alt);
+  border-radius: 0.3em;
+  color: var(--hvy-text-muted);
+  font-size: 0.78em;
+}

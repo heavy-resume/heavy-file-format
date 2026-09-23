@@ -40,6 +40,7 @@
 .hvy-document .expandable-part:has(.component-picker:focus-within),
 .hvy-document .expandable-part:has(.component-picker[data-open="true"]),
 .hvy-document .expandable-part:has(.expandable-pane-meta[open]),
+.hvy-document .expandable-part:has(.text-editor-toolbar-bounds),
 .hvy-document .expandable-part:has(.paragraph-style-toolbar.is-picker-open),
 .hvy-document .expandable-part:has(.paragraph-style-toolbar.is-style-edit-open) {
   overflow: visible;
@@ -305,6 +306,17 @@
 .hvy-document .expandable-reader {
   display: grid;
   gap: 0.35rem;
+  --hvy-expandable-chevron-rotation: 0deg;
+}
+
+.hvy-document .expandable-reader.is-expanded,
+.hvy-document .expand-chooser-grid.is-document-expanded {
+  --hvy-expandable-chevron-rotation: 90deg;
+}
+
+.hvy-document .expandable-reader.is-collapsed,
+.hvy-document .expand-chooser-grid.is-document-collapsed {
+  --hvy-expandable-chevron-rotation: 0deg;
 }
 
 .hvy-document .expandable-reader-body {

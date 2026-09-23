@@ -3,6 +3,9 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../com
 import type { VisualBlock } from '../../types';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { state } from '../../../state';
+import { EXPANDABLE_CHEVRON_PLACEHOLDER } from '../../../expandable-chevron';
+
+const EXPANDABLE_CHEVRON_NAME = EXPANDABLE_CHEVRON_PLACEHOLDER.name;
 
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
@@ -44,11 +47,15 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
       : `<button type="button" class="ghost expandable-pane-copy-button" data-action="copy-expandable-content-pane" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Copy</button>`;
   const stubPreview = stubOpen ? '' : stubBlocks
     .slice(0, 2)
-    .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
+    .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock, {
+      textPlaceholders: [EXPANDABLE_CHEVRON_PLACEHOLDER],
+    }))
     .join('');
   const contentPreview = expandedOpen ? '' : contentBlocks
     .slice(0, 2)
-    .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
+    .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock, {
+      omitTextPlaceholderNames: [EXPANDABLE_CHEVRON_NAME],
+    }))
     .join('');
   const disabledAttr = mobileAdjustment ? ' disabled' : '';
   const stubMeta = advanced ? renderExpandablePaneMeta(
@@ -120,7 +127,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     </label>`
   ) : '';
   return `
-    <div class="expand-chooser-grid">
+    <div class="expand-chooser-grid${block.schema.expandableExpanded ? ' is-document-expanded' : ' is-document-collapsed'}">
       <section class="expandable-part expandable-part-stub${stubOpen ? ' is-open' : ' is-closed'}">
         <div class="expandable-header">
           <button type="button" class="expandable-summary expandable-summary-label" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
@@ -221,6 +228,9 @@ function renderExpandablePlacementBlockList(
     container,
     parentBlockId,
     locked,
+    ...(container === 'expandable-stub'
+      ? { textPlaceholders: [EXPANDABLE_CHEVRON_PLACEHOLDER] }
+      : { omitTextPlaceholderNames: [EXPANDABLE_CHEVRON_NAME] }),
   });
 }
 
@@ -241,12 +251,16 @@ function renderExpandablePaneMeta(
 }
 
 export const renderExpandableReader: ComponentReaderRenderer = (section, block, helpers) => {
-  const stubHtml = helpers.renderReaderBlocks(section, block.schema.expandableStubBlocks.children);
+  const stubHtml = helpers.renderReaderBlocks(section, block.schema.expandableStubBlocks.children, {
+    textPlaceholders: [EXPANDABLE_CHEVRON_PLACEHOLDER],
+  });
   const expanded = block.schema.expandableExpanded;
   const hasStubContent = stubHtml.trim().length > 0;
   // An empty rendered stub still needs the content preview, even when it has children.
   const contentHtml = expanded || !hasStubContent
-    ? helpers.renderReaderBlocks(section, block.schema.expandableContentBlocks.children)
+    ? helpers.renderReaderBlocks(section, block.schema.expandableContentBlocks.children, {
+      omitTextPlaceholderNames: [EXPANDABLE_CHEVRON_NAME],
+    })
     : '';
   if (!hasStubContent && !contentHtml.trim()) {
     return '';

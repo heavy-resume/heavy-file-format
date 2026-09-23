@@ -1,7 +1,7 @@
 import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
-import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
+import { mergeTextPlaceholders, type ComponentRenderHelpers, type ReaderBlockRenderOptions, type TextPlaceholderContextOptions, type TextPlaceholderDefinition } from './component-helpers';
 import type { ComponentDefinition, ComponentPlacementState, ImageAttachmentMaxDimensions, VisualDocument } from '../types';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
@@ -225,7 +225,13 @@ export interface EditorRenderer {
   renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked?: boolean) => string;
   renderEditorNestedBlocks: ComponentRenderHelpers['renderEditorNestedBlocks'];
   renderEditorGridBlocks: ComponentRenderHelpers['renderEditorGridBlocks'];
-  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
+  renderPassiveEditorBlock: (
+    sectionKey: string,
+    block: VisualBlock,
+    rootSections?: VisualSection[],
+    parentLocked?: boolean,
+    placeholderOptions?: TextPlaceholderContextOptions
+  ) => string;
   renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderRichToolbar: (
     sectionKey: string,
@@ -238,19 +244,21 @@ export interface EditorRenderer {
       includeAlign?: boolean;
       includeFillIn?: boolean;
       includeTextAi?: boolean;
+      textPlaceholders?: import('./component-helpers').TextPlaceholderDefinition[];
       align?: Align;
       currentMarkdown?: string;
       textLineStyles?: TextLineStyles;
     }
   ) => string;
   renderMetaPanel: () => string;
-  renderTextFragment: (content: string) => string;
-  renderComponentFragment: (componentName: string, content: string, block: VisualBlock, sectionKey?: string) => string;
+  renderTextFragment: (content: string, textPlaceholders?: TextPlaceholderDefinition[], answerGroups?: Map<number, string>) => string;
+  renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
+  let activeTextPlaceholders: TextPlaceholderDefinition[] = [];
   let encryptedEditorDepth = 0;
   const editorRenderTreeHeightLedger = createRenderTreeHeightLedger();
   let activeEditorRenderTreeWindowOptions: EditorRenderTreeWindowOptions | null = null;
@@ -701,6 +709,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       container: 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
       parentBlockId: string;
       locked: boolean;
+      textPlaceholders?: TextPlaceholderDefinition[];
+      omitTextPlaceholderNames?: string[];
     }
   ): string {
     const nestedWindowOptions = activeEditorRenderTreeWindowOptions && !state.componentPlacement && !state.mobileAdjustmentMode
@@ -714,7 +724,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ),
       }
       : undefined;
-    return renderEditorBlockPlan(
+    return withTextPlaceholders(options, () => renderEditorBlockPlan(
       sectionKey,
       state.documentSections,
       options.locked,
@@ -725,7 +735,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       ),
       nestedWindowOptions,
       { container: options.container, parentBlockId: options.parentBlockId }
-    );
+    ));
+  }
+
+  function withTextPlaceholders<T>(options: TextPlaceholderContextOptions, render: () => T): T {
+    const previous = activeTextPlaceholders;
+    activeTextPlaceholders = mergeTextPlaceholders(previous, options);
+    try {
+      return render();
+    } finally {
+      activeTextPlaceholders = previous;
+    }
   }
 
   function renderEditorGridBlocks(
@@ -1024,8 +1044,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     sectionKey: string,
     block: VisualBlock,
     rootSections: VisualSection[],
-    parentLocked = false
+    parentLocked = false,
+    placeholderOptions: TextPlaceholderContextOptions = {}
   ): string {
+    if (placeholderOptions.textPlaceholders || placeholderOptions.omitTextPlaceholderNames) {
+      return withTextPlaceholders(placeholderOptions, () => renderPassiveEditorBlock(sectionKey, block, rootSections, parentLocked));
+    }
     if (isHiddenEditorOnlyScriptingBlock(block, sectionKey)) {
       return '';
     }
@@ -1365,7 +1389,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}"${alignStyle}>${content}</div>`;
     }
 
-    return deps.renderReaderBlock(section, block, { suppressAiEditorDelegation: true, ignoreReaderSessionState: true });
+    return deps.renderReaderBlock(section, block, {
+      suppressAiEditorDelegation: true,
+      ignoreReaderSessionState: true,
+      textPlaceholders: activeTextPlaceholders,
+    });
   }
 
   function renderRichToolbar(
@@ -1379,6 +1407,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       includeAlign?: boolean;
       includeFillIn?: boolean;
       includeTextAi?: boolean;
+      textPlaceholders?: TextPlaceholderDefinition[];
       align?: Align;
       currentMarkdown?: string;
       textLineStyles?: TextLineStyles;
@@ -1426,6 +1455,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="icon-button${selectedClass(blockStyle === 'ordered-list')}" data-rich-action="ordered-list" ${richButtonAttrs} aria-label="Numbered List" title="Numbered List"><span class="toolbar-icon ordered-list-icon" aria-hidden="true"></span></button>
           <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)" disabled><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+          ${(options?.textPlaceholders ?? []).map((placeholder) => `<button type="button" class="icon-button ghost" data-rich-action="text-placeholder" data-text-placeholder-name="${deps.escapeAttr(placeholder.name)}" ${richButtonAttrs} aria-label="${deps.escapeAttr(placeholder.label)}" title="${deps.escapeAttr(placeholder.title ?? placeholder.label)}"><span class="toolbar-icon text-placeholder-toolbar-icon" aria-hidden="true">${placeholder.render(true)}</span></button>`).join('')}
         </div>
         ${textLineStyleControls}
         ${options?.includeTextAi ? `<div class="text-ai-toolbar-segment"><button type="button" class="ghost icon-button" data-text-ai="true" ${richButtonAttrs} aria-label="Process with AI" title="Process with AI">✨</button></div>` : ''}
@@ -2044,7 +2074,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderBlockContentEditor(sectionKey: string, block: VisualBlock): string {
     const component = deps.resolveBaseComponent(block.schema.component);
-    const helpers = deps.getComponentRenderHelpers();
+    const helpers = { ...deps.getComponentRenderHelpers(), getTextPlaceholders: () => activeTextPlaceholders };
 
     if (component === 'encrypted') {
       return renderEncryptedComponentEditor(sectionKey, block);
@@ -2711,7 +2741,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return listBlock ? buildComponentListDisplayContext(listBlock) : null;
   }
 
-  function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
+  function renderTextFragment(content: string, textPlaceholders?: TextPlaceholderDefinition[], answerGroups?: Map<number, string>): string {
     const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
     const linkedHtml = addExternalLinkTargets(markdownToReaderHtml(normalized, {
       answerGroups,
@@ -2719,6 +2749,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
       preserveSortValueAnnotations: state.currentView === 'editor',
       crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
+      textPlaceholders,
     }), state.crossDocumentLinksEnabled === true);
     const attachmentHtml = state.document
       ? renderUserFileAttachmentLinksInHtml(linkedHtml, state.document)
@@ -2726,7 +2757,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return unwrapSingleParagraph(decorateMarkdownCodeBlocks(attachmentHtml, deps.escapeHtml));
   }
 
-  function renderComponentFragment(componentName: string, content: string, block: VisualBlock, sectionKey = ''): string {
+  function renderComponentFragment(componentName: string, content: string, block: VisualBlock, sectionKey = '', textPlaceholders?: TextPlaceholderDefinition[]): string {
     if (componentName === 'code') {
       return renderSyntaxHighlightedCode(content, block.schema.codeLanguage || 'text');
     }
@@ -2736,12 +2767,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : undefined;
     if (componentName === 'text' && block.schema.fillIn && hasTextFillInMarker(content)) {
       if (state.currentView === 'viewer') {
-        return renderTextFragment(removeTextFillInMarkers(content), answerGroups);
+        return renderTextFragment(removeTextFillInMarkers(content), textPlaceholders, answerGroups);
       }
       const parts = splitTextFillIns(content);
       const tokenPrefix = 'HVY_FILL_IN_VALUE_TOKEN_';
       let html = renderTextFragment(
         parts.map((part, index) => (index < parts.length - 1 ? `${part}${tokenPrefix}${index}` : part)).join(''),
+        textPlaceholders,
         answerGroups
       );
       for (let index = 0; index < parts.length - 1; index += 1) {
@@ -2761,7 +2793,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
       return `<div class="text-fill-in-editor text-fill-in-reader-editor" data-fill-parts="${deps.escapeAttr(JSON.stringify(parts))}">${html}</div>`;
     }
-    return renderTextFragment(content, answerGroups);
+    return renderTextFragment(content, textPlaceholders, answerGroups);
   }
 
   function renderPassiveContainerBlocks(sectionKey: string, block: VisualBlock): string {

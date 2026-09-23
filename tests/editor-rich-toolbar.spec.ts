@@ -35,6 +35,61 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test('expandable stubs provide an insertable chevron placeholder that follows expansion state', async ({ page }) => {
+  await page.goto('/');
+  await loadExpandablePlaceholderDocument(page);
+
+  await page.locator('[data-action="activate-block"]', { hasText: 'Fake summary' }).last().click();
+  const stubPanelToggle = page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first();
+  if (await stubPanelToggle.count()) await stubPanelToggle.click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Fake summary' }).last().click();
+
+  const editor = page.locator('.rich-editor').first();
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  await editor.evaluate((node) => {
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await expandTextToolbar(toolbar);
+  await toolbar.locator('[data-rich-action="text-placeholder"][data-text-placeholder-name="expandable-chevron"]:visible').click();
+  await expect(editor.locator('[data-hvy-text-placeholder="expandable-chevron"]')).toHaveCount(1);
+  await expect(editor.locator('[data-hvy-text-placeholder="expandable-chevron"] svg')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Viewer', exact: true }).click();
+  const expandable = page.locator('.expandable-reader').first();
+  if (await expandable.evaluate((node) => node.classList.contains('is-expanded'))) {
+    await expandable.locator('.expand-stub-toggle').click();
+  }
+  await expect(expandable).toHaveClass(/is-collapsed/);
+  await expect(expandable.locator('.hvy-expandable-chevron')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  await expandable.locator('.expand-stub-toggle').click();
+  await expect(page.locator('.expandable-reader').first()).toHaveClass(/is-expanded/);
+  await expect(page.locator('.expandable-reader .hvy-expandable-chevron').first()).toHaveCSS('transform', 'matrix(0, 1, -1, 0, 0, 0)');
+
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/<!-- placeholder expandable-chevron -->/);
+});
+
+test('expandable content does not provide the stub chevron placeholder', async ({ page }) => {
+  await page.goto('/');
+  await loadExpandablePlaceholderDocument(page, true);
+
+  await page.locator('[data-action="activate-block"]', { hasText: 'Fake details' }).last().click();
+  const contentPanelToggle = page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first();
+  if (await contentPanelToggle.count()) await contentPanelToggle.click();
+  const nestedContent = page.locator('[data-action="activate-block"]', { hasText: 'Fake details' }).last();
+  if (await nestedContent.count()) await nestedContent.click();
+
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar [data-rich-action="text-placeholder"]')).toHaveCount(0);
+});
+
 test('toolbar exposes quote and code block actions', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, 'Quoted');
@@ -1080,6 +1135,28 @@ ${markdown.split('\n').map((line) => `  ${line}`).join('\n')}
   await expect(page.locator('.editor-block-passive', { hasText: expectedText }).first()).toBeVisible();
 }
 
+async function loadExpandablePlaceholderDocument(page: Page, expanded = false): Promise<void> {
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":${expanded ? 'true' : 'false'}}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {}-->
+    Fake summary
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {}-->
+    Fake details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('.editor-block-passive', { hasText: 'Fake summary' }).first()).toBeVisible();
+}
+
 test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
@@ -1877,6 +1954,61 @@ ${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1
   });
   expect(leftGridMetrics).not.toBeNull();
   expect(Math.abs(leftGridMetrics!.toolbarLeft - leftGridMetrics!.gridCellLeft)).toBeLessThanOrEqual(1);
+});
+
+test('nested text editor toolbar does not cover advanced controls on its component path', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {"id":"summary"}-->
+    Summary
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {"id":"detail"}-->
+    Detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const expandableBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+  await expandableBlock.locator('[data-expandable-panel="stub"]').first().click();
+  await expandableBlock.locator('.editor-block-passive', { hasText: 'Summary' }).click();
+  const activeTextBlock = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator(':scope > .editor-block-content[data-component-id="summary"]'),
+  });
+  await expandTextToolbar(activeTextBlock.locator('.rich-toolbar').first());
+
+  await expect(expandableBlock.locator('.expandable-part-stub')).toHaveCSS('overflow', 'visible');
+
+  await expect.poll(() => activeTextBlock.evaluate((block) => {
+    const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    if (!toolbar) return -1;
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const componentPath = [] as HTMLElement[];
+    for (let current: HTMLElement | null = block; current; current = current.parentElement?.closest<HTMLElement>('.editor-block') ?? null) {
+      componentPath.push(current);
+    }
+    return componentPath.flatMap((component) => [
+      ...Array.from(component.querySelectorAll<HTMLElement>(':scope > .editor-block-context-actions button')),
+      ...Array.from(component.querySelectorAll<HTMLElement>(':scope > .editor-block-head .editor-actions button')),
+      ...Array.from(component.querySelectorAll<HTMLElement>(':scope > .editor-block-remove-button')),
+    ]).filter((control) => {
+      const controlBox = control.getBoundingClientRect();
+      return toolbarBox.left < controlBox.right
+        && toolbarBox.right > controlBox.left
+        && toolbarBox.top < controlBox.bottom
+        && toolbarBox.bottom > controlBox.top;
+    }).length;
+  })).toBe(0);
 });
 
 test('floating text toolbar reserves no space above the editor and keeps bottom clearance while scrolling', async ({ page }) => {

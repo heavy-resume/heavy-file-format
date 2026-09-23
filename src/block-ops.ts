@@ -1295,7 +1295,13 @@ export function getComponentRenderHelpers(editorRenderer: {
   renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[], parentLocked?: boolean) => string;
   renderEditorNestedBlocks: ComponentRenderHelpers['renderEditorNestedBlocks'];
   renderEditorGridBlocks: ComponentRenderHelpers['renderEditorGridBlocks'];
-  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
+  renderPassiveEditorBlock: (
+    sectionKey: string,
+    block: VisualBlock,
+    sections: import('./editor/types').VisualSection[],
+    parentLocked?: boolean,
+    options?: import('./editor/component-helpers').TextPlaceholderContextOptions
+  ) => string;
   renderTextFragment: ComponentRenderHelpers['renderTextFragment'];
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
@@ -1329,17 +1335,18 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml: (markdown, codeLanguageInputAttrs, answerGroups) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
+    markdownToEditorHtml: (markdown, codeLanguageInputAttrs, answerGroups, textPlaceholders) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
       textLineStyles: getTextLineStylesFromMeta(state.document.meta),
       textLineStyleMode: 'editor',
       codeLanguageInputAttrs,
       answerGroups,
+      textPlaceholders,
     })),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderEditorNestedBlocks: editorRenderer.renderEditorNestedBlocks,
     renderEditorGridBlocks: editorRenderer.renderEditorGridBlocks,
-    renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
+    renderPassiveEditorBlock: (sectionKey, block, options) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections, false, options),
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderReaderGridBlocks: readerRenderer.renderReaderGridBlocks,
     renderReaderBlocks: readerRenderer.renderReaderBlocks,
@@ -1392,7 +1399,14 @@ export function applyRichAction(
   action: string,
   editable: HTMLElement,
   value?: string,
-  options: { sortValueKey?: string; sortValueType?: string; templateVariableName?: string; valueKind?: ListValueKind } = {}
+  options: {
+    sortValueKey?: string;
+    sortValueType?: string;
+    templateVariableName?: string;
+    valueKind?: ListValueKind;
+    textPlaceholderName?: string;
+    textPlaceholderHtml?: string;
+  } = {}
 ): void {
   if (action === 'template-value') {
     if (applyTemplateValueSelection(editable, options.templateVariableName)) {
@@ -1403,6 +1417,12 @@ export function applyRichAction(
   if (action === 'fill-in') {
     if (applyTextFillInSlot(editable)) {
     }
+    return;
+  }
+  if (action === 'text-placeholder') {
+    insertTextPlaceholderAtSelection(editable, options.textPlaceholderName, options.textPlaceholderHtml);
+    updateRichToolbarState(editable);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
     return;
   }
   if (action === 'sort-value') {
@@ -1482,6 +1502,22 @@ export function applyRichAction(
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function insertTextPlaceholderAtSelection(editable: HTMLElement, name?: string, html?: string): void {
+  if (editable.dataset.field !== 'block-rich') return;
+  if (!name || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) return;
+  const range = getEditableSelectionRange(editable);
+  if (!range) return;
+  range.deleteContents();
+  const template = editable.ownerDocument.createElement('template');
+  template.innerHTML = `<span class="hvy-text-placeholder" data-hvy-text-placeholder="${escapeAttr(name)}" contenteditable="false" data-rich-atomic="true" tabindex="-1"><span class="hvy-text-placeholder-source">&lt;!-- placeholder ${escapeAttr(name)} --&gt;</span>${html ?? ''}</span>`;
+  const placeholder = template.content.firstElementChild;
+  if (!placeholder) return;
+  const caretAnchor = editable.ownerDocument.createTextNode('\u200b');
+  range.insertNode(caretAnchor);
+  range.insertNode(placeholder);
+  setCollapsedSelection(caretAnchor, caretAnchor.length);
 }
 
 function applyTemplateValueSelection(editable: HTMLElement, requestedName?: string): boolean {

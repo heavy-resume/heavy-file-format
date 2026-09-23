@@ -6,6 +6,7 @@ import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
 import { initState } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
+import { EXPANDABLE_CHEVRON_PLACEHOLDER } from '../src/expandable-chevron';
 
 function makeSection(blocks: VisualBlock[]): VisualSection {
   return {
@@ -105,6 +106,28 @@ test('collapsed expandable renders only its visible stub, then renders content o
   expect(expandedHtml).toContain('Stub content');
   expect(expandedHtml).toContain('Expanded content');
   expect(renderedIds).toEqual(['stub-test', 'content-test']);
+});
+
+test('expandable passes generic chevron placeholder context only to its stub', () => {
+  const block = makeExpandableBlock(true);
+  block.schema.expandableStubBlocks.children = [makeTextBlock('stub-test', 'Stub content')];
+  const contexts: Array<{ ids: string[]; provided: string[]; omitted: string[] }> = [];
+  renderExpandableReader(makeSection([block]), block, {
+    ...helpers,
+    renderReaderBlocks(_section, blocks, options) {
+      contexts.push({
+        ids: blocks.map((child) => child.id),
+        provided: (options?.textPlaceholders ?? []).map((placeholder) => placeholder.name),
+        omitted: options?.omitTextPlaceholderNames ?? [],
+      });
+      return blocks.map((child) => `<p>${child.text}</p>`).join('');
+    },
+  });
+
+  expect(contexts).toEqual([
+    { ids: ['stub-test'], provided: [EXPANDABLE_CHEVRON_PLACEHOLDER.name], omitted: [] },
+    { ids: ['content-test'], provided: [], omitted: [EXPANDABLE_CHEVRON_PLACEHOLDER.name] },
+  ]);
 });
 
 test('collapsed expandable still previews content when stub children render empty', () => {

@@ -4,7 +4,12 @@ import { rcompare, satisfies, valid } from 'semver';
 import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './declarations';
 import type { HvyOutputGenerator, HvyPlugin, HvyPluginInput } from './types';
 import { getLoadedConditionalPlugin } from './authorization/conditional-plugin';
-import { DEFAULT_COMPONENT_EDITOR_MINIMUM_WIDTH, normalizeComponentEditorMinimumWidth } from '../editor/component-editor-width-value';
+import {
+  DEFAULT_COMPONENT_EDITOR_MINIMUM_WIDTH,
+  DEFAULT_COMPONENT_EDITOR_PREFERRED_WIDTH,
+  normalizeComponentEditorMinimumWidth,
+  normalizeComponentEditorPreferredWidth,
+} from '../editor/component-editor-width-value';
 
 export interface DocumentPluginDefinition {
   id: string;
@@ -27,6 +32,7 @@ export const QR_CODE_PLUGIN_ID = 'hvy.qr-code';
 export const VIDEO_PLUGIN_ID = 'hvy.video';
 export const EDITABLE_TEXT_PLUGIN_ID = 'hvy.editable-text';
 export const CANVAS_PLUGIN_ID = 'hvy.canvas';
+export const MODEL_3D_PLUGIN_ID = 'hvy.model-3d';
 export const POWER_SCRIPTING_PLUGIN_ID = 'hvy.power-scripting';
 export function createBuiltInPluginMetadata(id: string, version = HVY_BUILT_IN_PLUGIN_VERSION): Pick<HvyPlugin, 'id' | 'version' | 'hvyApiVersion'> {
   return {
@@ -238,6 +244,23 @@ function validateHostPlugin(plugin: HvyPlugin): void {
       || (normalizeComponentEditorMinimumWidth(plugin.minimumEditorWidth) === DEFAULT_COMPONENT_EDITOR_MINIMUM_WIDTH
         && plugin.minimumEditorWidth.trim() !== DEFAULT_COMPONENT_EDITOR_MINIMUM_WIDTH))) {
     throw new Error(`Plugin "${plugin.id}" has invalid minimumEditorWidth "${String(plugin.minimumEditorWidth)}".`);
+  }
+  if (plugin.preferredEditorWidth !== undefined
+    && (typeof plugin.preferredEditorWidth !== 'string'
+      || (normalizeComponentEditorPreferredWidth(plugin.preferredEditorWidth) === DEFAULT_COMPONENT_EDITOR_PREFERRED_WIDTH
+        && plugin.preferredEditorWidth.trim() !== DEFAULT_COMPONENT_EDITOR_PREFERRED_WIDTH))) {
+    throw new Error(`Plugin "${plugin.id}" has invalid preferredEditorWidth "${String(plugin.preferredEditorWidth)}".`);
+  }
+  if (plugin.mount !== undefined) {
+    if (plugin.mount.strategy !== undefined
+      && plugin.mount.strategy !== 'viewport'
+      && plugin.mount.strategy !== 'immediate') {
+      throw new Error(`Plugin "${plugin.id}" has invalid mount strategy.`);
+    }
+    if (plugin.mount.placeholderHeight !== undefined
+      && (typeof plugin.mount.placeholderHeight !== 'string' || !plugin.mount.placeholderHeight.trim())) {
+      throw new Error(`Plugin "${plugin.id}" has invalid mount placeholder height.`);
+    }
   }
 }
 

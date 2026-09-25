@@ -3,10 +3,13 @@ import { getAiEditorDoubleClickDelayMs } from '../../reference-config';
 import { hasComponentInEditorClipboard, hasSectionInEditorClipboard } from '../../editor-clipboard';
 import { findBlockByIds } from '../../block-ops';
 import { findBlockContainerById } from '../../section-ops';
+import { activateTransientPopover, releaseTransientPopover } from '../../transient-popovers';
 
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 const AI_LONG_PRESS_MS = 560;
 const AI_CONTEXT_CLICK_SUPPRESS_MS = 350;
+
+export const AI_READER_CONTEXT_OPEN_EVENT = 'hvy-ai-reader-context-open';
 
 let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
 let suppressNextAiContextClickUntil = 0;
@@ -62,7 +65,7 @@ export function bindContextmenu(app: HTMLElement): void {
       }
       return;
     }
-    if (state.currentView === 'ai' && isNativeContextMenuModifier(event)) {
+    if (state.currentView === 'ai' && (isNativeContextMenuModifier(event) || shouldIgnoreAiContextGestureTarget(target))) {
       return;
     }
 
@@ -299,6 +302,9 @@ function openReaderContextPopover(app: HTMLElement, event: MouseEvent | PointerE
   if (state.currentView === 'ai' && !blockId) {
     return;
   }
+  if (state.currentView === 'ai') {
+    target.dispatchEvent(new CustomEvent(AI_READER_CONTEXT_OPEN_EVENT, { bubbles: true }));
+  }
   event.preventDefault();
   const fallbackRect = (blockElement ?? sectionElement)?.getBoundingClientRect();
   const shellRect = (app.querySelector<HTMLElement>('.viewer-shell') ?? app).getBoundingClientRect();
@@ -428,6 +434,7 @@ function renderContextMenuElement(app: HTMLElement): void {
     addButton('Clear filtering', 'clear-target-filtering');
   }
   root.append(...(backdrop ? [backdrop] : []), ...(clone ? [clone] : []), popover);
+  activateTransientPopover(app, popover, () => closeReaderContextPopover(app));
   const position = placeContextMenuPopover(root, popover, menu.x, menu.y);
   menu.x = position.x;
   menu.y = position.y;
@@ -518,6 +525,7 @@ function getComponentPasteContextAttrs(menu: { sectionKey: string; blockId?: str
 }
 
 export function closeReaderContextPopover(app: HTMLElement, clearState = true): void {
+  releaseTransientPopover(app, app.querySelector<HTMLElement>('.hvy-context-popover'));
   if (clearState) {
     state.contextMenu = null;
   }

@@ -733,7 +733,6 @@ section_defs:
   - name: Professional History
     template:
       title: Professional History
-      level: 1
       blocks:
         - text: "# Professional History"
           schema:
@@ -779,7 +778,6 @@ section_defs:
   - name: Professional History
     template:
       title: Professional History
-      level: 1
       blocks:
         - text: "# Professional History"
           schema:
@@ -884,6 +882,7 @@ hvy_version: 0.1
   expect(result).toEqual({
     status: 'error',
     message: 'The import planner did not return a usable plan.',
+    error: { message: 'The import planner did not return a usable plan.' },
   });
 });
 
@@ -1463,8 +1462,7 @@ importPreplan:
 <!--hvy: {"id":"protected-notes","protect_from_import":true}-->
 #! Protected Notes
 
-<!--hvy:subsection {"id":"protected-child"}-->
-#! Protected Child
+ <!--hvy:container {"id":"protected-child","containerTitle":"Protected Child"}-->
 `, '.hvy');
 
   const result = await buildImportPlanForDocument(document, {
@@ -2020,6 +2018,7 @@ hvy_version: 0.1
   expect(result).toEqual({
     status: 'error',
     message: 't is not iterable',
+    error: { message: 't is not iterable' },
   });
   expect(consoleError).toHaveBeenCalledWith('[hvy:import] import failed', expect.objectContaining({
     operation: 'execute',
@@ -3859,6 +3858,7 @@ test('importTextIntoDocument returns error for empty approved steps without call
   expect(result).toEqual({
     status: 'error',
     message: 'Import requires at least one approved plan step.',
+    error: { message: 'Import requires at least one approved plan step.' },
   });
   expect(requestProxyCompletionMock).not.toHaveBeenCalled();
 });

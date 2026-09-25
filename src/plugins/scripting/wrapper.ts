@@ -1,4 +1,6 @@
 import { loadBrython, getBrython } from './brython-loader';
+import { wrapPythonSourceInFunction } from './python-source';
+export { wrapPythonSourceInFunction } from './python-source';
 import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import { createScriptingPluginsApi } from './plugin-apis';
 import type { HvyPdfExportRuleRecorder } from '../../pdf-export/types';
@@ -29,6 +31,7 @@ export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
 // Counter for unique runtime ids — each script run gets its own slot on the
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
 let runtimeCounter = 0;
+let compiledProgramCounter = 0;
 
 interface HvyScriptingGlobal {
   runtimes: Record<string, ScriptingRuntime>;
@@ -38,6 +41,10 @@ interface HvyScriptingGlobal {
   results: Record<string, unknown>;
   callbacks: Record<string, () => void>;
   regex: HvyScriptingRegexBridge;
+  compiledDefinitionSources: Map<string, string>;
+  compiledDefinitions: Map<string, unknown>;
+  activeRuntimeIds: Map<string, string>;
+  compiledPrograms: Map<string, { source: string; scriptId: string; execute: () => unknown }>;
 }
 
 interface HvyScriptingRegexMatch {
@@ -83,7 +90,19 @@ function getScriptingGlobal(): HvyScriptingGlobal {
     throw new Error('Scripting runtime requires a browser environment.');
   }
   if (!window.__HVY_SCRIPTING__) {
-    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, results: {}, callbacks: {}, regex: createScriptingRegexBridge() };
+    window.__HVY_SCRIPTING__ = {
+      runtimes: {},
+      sources: {},
+      instrumentedSources: {},
+      errors: {},
+      results: {},
+      callbacks: {},
+      regex: createScriptingRegexBridge(),
+      compiledDefinitionSources: new Map(),
+      compiledDefinitions: new Map(),
+      activeRuntimeIds: new Map(),
+      compiledPrograms: new Map(),
+    };
   }
   if (!window.__HVY_SCRIPTING__.callbacks) {
     window.__HVY_SCRIPTING__.callbacks = {};
@@ -96,6 +115,18 @@ function getScriptingGlobal(): HvyScriptingGlobal {
   }
   if (!window.__HVY_SCRIPTING__.regex) {
     window.__HVY_SCRIPTING__.regex = createScriptingRegexBridge();
+  }
+  if (!window.__HVY_SCRIPTING__.compiledDefinitionSources) {
+    window.__HVY_SCRIPTING__.compiledDefinitionSources = new Map();
+  }
+  if (!window.__HVY_SCRIPTING__.compiledDefinitions) {
+    window.__HVY_SCRIPTING__.compiledDefinitions = new Map();
+  }
+  if (!window.__HVY_SCRIPTING__.activeRuntimeIds) {
+    window.__HVY_SCRIPTING__.activeRuntimeIds = new Map();
+  }
+  if (!window.__HVY_SCRIPTING__.compiledPrograms) {
+    window.__HVY_SCRIPTING__.compiledPrograms = new Map();
   }
   return window.__HVY_SCRIPTING__;
 }
@@ -379,17 +410,6 @@ function isCompoundContinuationLine(trimmedLine: string): boolean {
   return /^(elif|else|except|finally)\b/.test(trimmedLine);
 }
 
-export function wrapPythonSourceInFunction(source: string): string {
-  const lines = source.split('\n');
-  const body = lines.length > 0 && lines.some((line) => line.trim().length > 0)
-    ? lines.map((line) => `    ${line}`)
-    : ['    pass'];
-  return [
-    'def __hvy_user_main__():',
-    ...body,
-  ].join('\n');
-}
-
 function isImportStatementStart(line: string): boolean {
   const trimmed = line.trimStart();
   return /^import\b/.test(trimmed) || /^from\b.*\bimport\b/.test(trimmed);
@@ -566,7 +586,13 @@ export function cleanScriptingErrorDetail(rawError: string): string {
 // source out of the shared JS global, prefers sys.settrace() for line
 // counting, and falls back to a JS-side source rewrite if tracing is
 // unavailable in the current Brython build.
-export function buildPythonProgram(runtimeId: string, componentId?: string, injectedGlobals: Record<string, unknown> = {}, libraries: readonly string[] = []): string {
+export function buildPythonProgram(
+  runtimeId: string,
+  componentId?: string,
+  injectedGlobals: Record<string, unknown> = {},
+  libraries: readonly string[] = [],
+  compiledDefinitionKey?: string,
+): string {
   const traceLabel = getScriptingTraceLabel(componentId);
   const allowedLibraries = libraries.filter((name): name is ScriptingLibraryName => (SCRIPTING_LIBRARY_OPTIONS as readonly string[]).includes(name));
   const injectedAssignments = Object.entries(injectedGlobals)
@@ -574,13 +600,25 @@ export function buildPythonProgram(runtimeId: string, componentId?: string, inje
     .map(([name, value]) => `    __hvy_user_globals__[${JSON.stringify(name)}] = ${toPythonLiteral(value)}`)
     .join('\n');
   const libraryList = `[${allowedLibraries.map((name) => JSON.stringify(name)).join(', ')}]`;
+  const runtimeLookup = compiledDefinitionKey
+    ? `__hvy_runtime_id__ = __hvy_globals__.activeRuntimeIds.get(${JSON.stringify(compiledDefinitionKey)})`
+    : `__hvy_runtime_id__ = ${JSON.stringify(runtimeId)}`;
+  const compileDefinition = compiledDefinitionKey
+    ? `__hvy_definition_key__ = ${JSON.stringify(compiledDefinitionKey)}
+    __hvy_code__ = __hvy_globals__.compiledDefinitions.get(__hvy_definition_key__)
+    if __hvy_code__ is None or __hvy_globals__.compiledDefinitionSources.get(__hvy_definition_key__) != __hvy_compilable_source__:
+        __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
+        __hvy_globals__.compiledDefinitionSources.set(__hvy_definition_key__, __hvy_compilable_source__)
+        __hvy_globals__.compiledDefinitions.set(__hvy_definition_key__, __hvy_code__)`
+    : `__hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')`;
   return `
 from browser import window as __hvy_window__
 
 __hvy_globals__ = __hvy_window__.__HVY_SCRIPTING__
-__hvy_runtime__ = __hvy_globals__.runtimes['${runtimeId}']
-__hvy_source__ = __hvy_globals__.sources['${runtimeId}']
-__hvy_instrumented_source__ = __hvy_globals__.instrumentedSources['${runtimeId}']
+${runtimeLookup}
+__hvy_runtime__ = __hvy_globals__.runtimes[__hvy_runtime_id__]
+__hvy_source__ = __hvy_globals__.sources[__hvy_runtime_id__]
+__hvy_instrumented_source__ = __hvy_globals__.instrumentedSources[__hvy_runtime_id__]
 __hvy_trace_enabled__ = False
 __hvy_builtin_import__ = __import__
 __hvy_builtin_eval__ = eval
@@ -1521,7 +1559,7 @@ try:
         __hvy_trace_enabled__ = False
 
     __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
-    __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
+    ${compileDefinition}
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_user_step__,
         '__import__': __hvy_script_import__,
@@ -1543,18 +1581,48 @@ ${injectedAssignments}
     __hvy_entrypoint__ = __hvy_user_globals__.get('__hvy_user_main__')
     __hvy_sanitize_user_globals__()
     if __hvy_entrypoint__ is not None:
-        __hvy_globals__.results['${runtimeId}'] = __hvy_entrypoint__()
+        __hvy_globals__.results[__hvy_runtime_id__] = __hvy_entrypoint__()
     __hvy_runtime__.doc.rerender()
 except Exception as __hvy_err__:
-    __hvy_globals__.errors['${runtimeId}'] = __hvy_window__.__BRYTHON__.error_trace(__hvy_err__)
+    __hvy_globals__.errors[__hvy_runtime_id__] = __hvy_window__.__BRYTHON__.error_trace(__hvy_err__)
 finally:
     if __hvy_trace_enabled__:
         try:
             __hvy_sys__.settrace(None)
         except Exception:
             pass
-    __hvy_globals__.callbacks['${runtimeId}']()
+    __hvy_globals__.callbacks[__hvy_runtime_id__]()
 `;
+}
+
+function executeCachedPythonProgram(
+  scripting: HvyScriptingGlobal,
+  cacheKey: string,
+  runtimeId: string,
+  source: string,
+): void {
+  let cached = scripting.compiledPrograms.get(cacheKey);
+  if (!cached || cached.source !== source) {
+    const brython = getBrython();
+    if (typeof brython.python_to_js !== 'function') {
+      throw new Error('Brython Python-to-JavaScript compiler API unavailable.');
+    }
+    const scriptId = `hvy_cached_${++compiledProgramCounter}`;
+    const translated = brython.python_to_js(source, scriptId);
+    cached = {
+      source,
+      scriptId,
+      execute: new Function(`return ${translated}`) as () => unknown,
+    };
+    scripting.compiledPrograms.set(cacheKey, cached);
+  }
+  scripting.activeRuntimeIds.set(cacheKey, runtimeId);
+  try {
+    getBrython().imported[cached.scriptId] = {};
+    cached.execute();
+  } finally {
+    scripting.activeRuntimeIds.delete(cacheKey);
+  }
 }
 
 function toPythonLiteral(value: unknown): string {
@@ -1598,6 +1666,7 @@ export interface RunUserScriptOptions {
   libraries?: readonly string[];
   databaseChanges?: DatabaseChangeSnapshot;
   onCallbackError?: (result: ScriptingRunResult) => void;
+  cacheDefinition?: boolean;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -1775,7 +1844,13 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   // in addition to the manual run_script call below, causing a double-execution.
   const scriptElement = document.createElement('script');
   scriptElement.id = `hvy-script-${runtimeId}`;
-  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId, options.injectedGlobals ?? {}, libraries);
+  scriptElement.textContent = buildPythonProgram(
+    runtimeId,
+    options.componentId,
+    options.injectedGlobals ?? {},
+    libraries,
+    options.cacheDefinition ? getScriptingTraceLabel(options.componentId) : undefined,
+  );
 
   try {
     return await new Promise((resolve) => {
@@ -1831,13 +1906,22 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         const runScript = brython.run_script;
 
         withSuppressedBrythonConsoleNoise(() => {
-          runScript(
-            scriptElement,
-            scriptElement.textContent || '',
-            `hvy_script_${runtimeId}`,
-            `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
-            true
-          );
+          if (options.cacheDefinition) {
+            executeCachedPythonProgram(
+              scripting,
+              getScriptingTraceLabel(options.componentId),
+              runtimeId,
+              scriptElement.textContent || '',
+            );
+          } else {
+            runScript(
+              scriptElement,
+              scriptElement.textContent || '',
+              `hvy_script_${runtimeId}`,
+              `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
+              true
+            );
+          }
         });
       } catch (error) {
         let message = String(error);

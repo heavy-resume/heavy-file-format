@@ -10,6 +10,7 @@
     "hvy.video",
     "hvy.editable-text",
     "hvy.canvas",
+    "hvy.model-3d",
     "hvy.power-scripting"
   ]
 }

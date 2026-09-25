@@ -240,10 +240,6 @@ function findSectionKeyForScriptingBlock(
     if (found) {
       return section.key;
     }
-    const nested = findSectionKeyForScriptingBlock(section.children, target);
-    if (nested) {
-      return nested;
-    }
   }
   return '';
 }
@@ -399,7 +395,7 @@ function getScriptingPluginLibraries(pluginConfig: JsonObject | null | undefined
 }
 
 function visitBlocksInSection(
-  section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: JsonObject } }>; children: unknown[] },
+  section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: JsonObject } }> },
   sectionKey: string,
   out: ScriptingTarget[]
 ): void {
@@ -417,9 +413,6 @@ function visitBlocksInSection(
       });
     }
   });
-  for (const child of section.children as Array<typeof section>) {
-    visitBlocksInSection(child, child.key, out);
-  }
 }
 
 export function getRunnableScriptingTargetsForView(
@@ -517,6 +510,7 @@ const scriptingDocumentHook = {
 export const scriptingPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(SCRIPTING_PLUGIN_ID),
   displayName: 'Scripting',
+  mount: { strategy: 'immediate' },
   documentation: {
     filename: 'about-scripting.txt',
     text: scriptingDocumentation,

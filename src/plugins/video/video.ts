@@ -54,7 +54,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-video hvy-video-${ctx.mode}`;
   let handles: EditorHandles | null = null;
-  const previewState: VideoPreviewState = { stateKey: '', title: '', stale: false, youtubeObserverCleanup: null };
+  const previewState: VideoPreviewState = {
+    stateKey: '',
+    title: '',
+    stale: false,
+    youtubeObserverCleanup: null,
+  };
   const preview = document.createElement('div');
 
   if (ctx.mode === 'editor') {
@@ -228,7 +233,7 @@ function renderVideoPreview(
     </div>`;
     state.stateKey = stateKey;
     state.title = title;
-    observeYouTubeEmbedFailure(host, normalized, title, state, ctx);
+    observeYouTubeEmbedFailure(host, normalized, state.title, state, ctx);
     return;
   }
   if (state.title !== title) {
@@ -411,7 +416,6 @@ function normalizeVideoBlocks(document: VisualDocument): boolean {
   const visitSections = (sections: VisualDocument['sections']) => {
     for (const section of sections) {
       visitBlocks(section.blocks);
-      visitSections(section.children);
     }
   };
   visitSections(document.sections);
@@ -423,6 +427,7 @@ export const videoPluginFactory: HvyPluginFactory = build;
 export const videoPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(VIDEO_PLUGIN_ID),
   displayName: 'Video',
+  mount: { placeholderHeight: '360px' },
   documentation: {
     filename: 'about-video.txt',
     text: videoDocumentation,

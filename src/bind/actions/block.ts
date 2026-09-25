@@ -1,5 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
+import { syncSortValuesForDocument } from '../../sort-values';
 import { findBlockContainerById, findBlockContainerInList, findSectionByKey, insertBlockAtSectionInsertionBoundary, removeBlockFromSectionRenderSequence } from '../../section-ops';
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
@@ -78,12 +79,6 @@ const addBlock: ActionHandler = ({ app, actionButton, section }) => {
       return;
     }
   }
-  const previousLastBlockId = section.blocks.length > 0 ? section.blocks[section.blocks.length - 1].id : '';
-  for (const child of section.children) {
-    if (child.renderAfterBlockId == null) {
-      child.renderAfterBlockId = previousLastBlockId;
-    }
-  }
   section.blocks.push(newBlock);
   setActiveEditorBlock(section.key, newBlock.id);
   markActiveEditorBlockAsNew(newBlock.id);
@@ -91,7 +86,7 @@ const addBlock: ActionHandler = ({ app, actionButton, section }) => {
 };
 
 const addEmptySectionHeading: ActionHandler = ({ section }) => {
-  if (!section || section.lock || section.blocks.length > 0 || section.children.length > 0 || section.title.trim().length === 0) {
+  if (!section || section.lock || section.blocks.length > 0 || section.title.trim().length === 0) {
     return;
   }
   recordHistory();
@@ -224,7 +219,7 @@ const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }
   }
   if (richField !== 'caption-rich' || block.schema.kind === 'image') {
     syncReusableTemplateForBlock(sectionKey, block.id);
-    getRefreshReaderPanels()();
+    if (richField !== 'caption-rich') getRefreshReaderPanels()();
   }
   const selector = `[data-section-key="${sectionKey}"][data-block-id="${block.id}"][data-field="${richField}"]`;
   const editable = app.querySelector<HTMLElement>(selector);
@@ -377,6 +372,7 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
     }
   }
   syncReusableTemplateForBlock(sectionKey, reusableOwnerId ?? blockId);
+  syncSortValuesForDocument(state.document);
   if (activeIsAffected && activeBlockId) {
     clearActiveEditorBlock(activeBlockId);
   }
@@ -420,6 +416,7 @@ const moveBlock = (offset: -1 | 1): ActionHandler => ({ sectionKey, blockId }) =
     return;
   }
   if (moveBlockByOffset(sectionKey, blockId, offset)) {
+    syncSortValuesForDocument(state.document);
     getRenderApp()();
   }
 };
@@ -691,6 +688,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     }
   }
   syncReusableTemplateForBlock(sectionKey, syncBlockId);
+  syncSortValuesForDocument(state.document);
   state.componentPlacement = null;
   setActiveEditorBlock(sectionKey, activePlacedBlockId);
   state.pendingEditorActivation = null;

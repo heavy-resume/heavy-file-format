@@ -15,7 +15,6 @@ function makeSection(blocks: VisualBlock[]): VisualSection {
     idEditorOpen: false,
     isGhost: false,
     title: 'Test',
-    level: 1,
     expanded: true,
     highlight: false,
     css: '',
@@ -23,7 +22,6 @@ function makeSection(blocks: VisualBlock[]): VisualSection {
     description: '',
     location: 'main',
     blocks,
-    children: [],
   };
 }
 

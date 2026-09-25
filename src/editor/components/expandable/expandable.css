@@ -40,6 +40,7 @@
 .hvy-document .expandable-part:has(.component-picker:focus-within),
 .hvy-document .expandable-part:has(.component-picker[data-open="true"]),
 .hvy-document .expandable-part:has(.expandable-pane-meta[open]),
+.hvy-document .expandable-part:has(.text-editor-toolbar-bounds),
 .hvy-document .expandable-part:has(.paragraph-style-toolbar.is-picker-open),
 .hvy-document .expandable-part:has(.paragraph-style-toolbar.is-style-edit-open) {
   overflow: visible;
@@ -305,6 +306,46 @@
 .hvy-document .expandable-reader {
   display: grid;
   gap: 0.35rem;
+  --hvy-expandable-chevron-rotation: 0deg;
+  --hvy-expandable-chevron-animation: none;
+}
+
+.hvy-document .expandable-reader.is-expanded,
+.hvy-document .expand-chooser-grid.is-document-expanded {
+  --hvy-expandable-chevron-rotation: 90deg;
+}
+
+.hvy-document .expandable-reader.is-collapsed,
+.hvy-document .expand-chooser-grid.is-document-collapsed {
+  --hvy-expandable-chevron-rotation: 0deg;
+}
+
+.hvy-document .expandable-reader.is-expanding {
+  --hvy-expandable-chevron-animation: hvyExpandableChevronOpen 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.hvy-document .expandable-reader.is-collapsing {
+  --hvy-expandable-chevron-animation: hvyExpandableChevronClose 160ms ease-out both;
+}
+
+@keyframes hvyExpandableChevronOpen {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(90deg);
+  }
+}
+
+@keyframes hvyExpandableChevronClose {
+  from {
+    transform: rotate(90deg);
+  }
+
+  to {
+    transform: rotate(0deg);
+  }
 }
 
 .hvy-document .expandable-reader-body {
@@ -530,6 +571,13 @@
   to {
     opacity: 0;
     transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hvy-document .expandable-reader .hvy-expandable-chevron {
+    animation: none;
+    transition: none;
   }
 }
 

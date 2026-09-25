@@ -637,6 +637,7 @@ function isSelectedExample(value: unknown): value is SelectedExample {
     || value === 'study-tools'
     || value === 'survey'
     || value === 'video-demo'
+    || value === 'model-3d-demo'
     || value === 'plugin-sort-values'
     || value === 'pdf-template'
     || value === 'sepa-recreation'
@@ -666,7 +667,7 @@ function isChatSettings(value: unknown): value is ChatSettings {
   return Boolean(
     value &&
     typeof value === 'object' &&
-    ((value as ChatSettings).provider === 'openai' || (value as ChatSettings).provider === 'anthropic' || (value as ChatSettings).provider === 'qwen') &&
+    (typeof (value as ChatSettings).provider === 'string' && (value as ChatSettings).provider.trim().length > 0) &&
     typeof (value as ChatSettings).model === 'string'
   );
 }
@@ -678,7 +679,7 @@ function normalizeChatSettings(value: unknown): ChatSettings {
   return {
     provider: value.provider,
     model: value.model,
-    compactionProvider: value.compactionProvider === 'anthropic' ? 'anthropic' : DEFAULT_SAVED_CHAT_SETTINGS.compactionProvider,
+    compactionProvider: typeof value.compactionProvider === 'string' && value.compactionProvider.trim() ? value.compactionProvider : DEFAULT_SAVED_CHAT_SETTINGS.compactionProvider,
     compactionModel: typeof value.compactionModel === 'string' && value.compactionModel.trim()
       ? value.compactionModel
       : DEFAULT_SAVED_CHAT_SETTINGS.compactionModel,

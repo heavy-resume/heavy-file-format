@@ -21,6 +21,9 @@ HVY also supports ___text___ as a constrained inline underline extension. Triple
 The underline extension is intentionally nonstandard Markdown, but remains readable in renderers that do not implement it.
 Use ~~text~~ for strikethrough.
 
+## Automatic List Values ##
+Inside a reusable component-list item, bind visible text to a named key using <!--hvy:group-value {"key":"Fake Category"}-->Fake Blue<!--/hvy:group-value--> or the parallel hvy:sort-value annotation. The key must exist in the owner's groupValueDefs or sortValueDefs. Edit the body text while preserving both markers to update the item's derived key. Readers show only the body text. Group types are text or enum; enum bodies use configured labels.
+
 ## Code And Indentation ##
 Use fenced Markdown code blocks with triple backticks or standard Markdown fences for visible code.
 Structural indentation around HVY directives is not Markdown code indentation.

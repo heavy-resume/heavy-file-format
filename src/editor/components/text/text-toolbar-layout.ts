@@ -85,6 +85,9 @@ function syncCompactTextToolbar(shell: HTMLElement, toolbarSlot: HTMLElement): v
     toolbar.querySelector(':scope > [data-text-toolbar-dismiss]')?.after(compact);
   }
 
+  const aiControls = toolbar.querySelector<HTMLElement>(':scope > .text-ai-toolbar-segment');
+  if (aiControls) compact.querySelector('.text-toolbar-expand-left')?.after(aiControls);
+
   const revision = String(recentTextToolbarRevision);
   const contextActionKeys = readTextToolbarContextActionKeys(toolbar);
   const contextSignature = contextActionKeys.join(' ');
@@ -99,10 +102,9 @@ function syncCompactTextToolbar(shell: HTMLElement, toolbarSlot: HTMLElement): v
   if (!actions) {
     return;
   }
-  const nextButtons = getCompactTextToolbarButtons(toolbar, contextActionKeys);
-  const currentKeys = Array.from(actions.children).map((button) => getTextToolbarActionKey(button as HTMLElement));
-  const nextKeys = nextButtons.map((button) => getTextToolbarActionKey(button));
-  if (currentKeys.length === nextKeys.length && currentKeys.every((key, index) => key === nextKeys[index])) {
+  const currentButtons = Array.from(actions.querySelectorAll<HTMLButtonElement>(':scope > button'));
+  const nextButtons = getCompactTextToolbarButtons(toolbar, contextActionKeys, currentButtons);
+  if (currentButtons.length === nextButtons.length && currentButtons.every((button, index) => button === nextButtons[index])) {
     compact.dataset.textToolbarRecentRevision = revision;
     compact.dataset.textToolbarContextActions = contextSignature;
     return;
@@ -112,7 +114,11 @@ function syncCompactTextToolbar(shell: HTMLElement, toolbarSlot: HTMLElement): v
   compact.dataset.textToolbarContextActions = contextSignature;
 }
 
-function getCompactTextToolbarButtons(toolbar: HTMLElement, contextActionKeys: string[] = []): HTMLButtonElement[] {
+function getCompactTextToolbarButtons(
+  toolbar: HTMLElement,
+  contextActionKeys: string[],
+  currentButtons: HTMLButtonElement[]
+): HTMLButtonElement[] {
   const sourceButtons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>(
     ':scope > .toolbar-segment button[data-rich-action], :scope > .toolbar-segment button[data-action="set-block-align"]'
   )).filter((button) => !button.closest('.paragraph-style-toolbar'));
@@ -127,8 +133,14 @@ function getCompactTextToolbarButtons(toolbar: HTMLElement, contextActionKeys: s
     ...recentTextToolbarActionKeys,
     ...DEFAULT_COMPACT_TEXT_TOOLBAR_ACTION_KEYS.filter((key) => !recentTextToolbarActionKeys.includes(key)),
   ];
+  const requestedRecentKeys = requestedKeys.filter((key) => !contextActionKeys.includes(key)).slice(0, COMPACT_TEXT_TOOLBAR_ACTION_LIMIT);
+  const currentByKey = new Map(currentButtons.map((button) => [getTextToolbarActionKey(button), button]));
+  // Keep existing controls stationary for this DOM instance. A fresh toolbar has
+  // no retained buttons, so it naturally starts in the latest recent-use order.
+  const retainedKeys = Array.from(currentByKey.keys()).filter((key): key is string => key !== null && requestedRecentKeys.includes(key));
   const displayedKeys = [
-    ...requestedKeys.filter((key) => !contextActionKeys.includes(key)).slice(0, COMPACT_TEXT_TOOLBAR_ACTION_LIMIT),
+    ...requestedRecentKeys.filter((key) => !retainedKeys.includes(key)),
+    ...retainedKeys,
     ...contextActionKeys,
   ];
   return displayedKeys
@@ -137,6 +149,8 @@ function getCompactTextToolbarButtons(toolbar: HTMLElement, contextActionKeys: s
       if (!source) {
         return [];
       }
+      const current = currentByKey.get(key);
+      if (current) return [current];
       const clone = source.cloneNode(true) as HTMLButtonElement;
       clone.dataset.textToolbarCompactAction = 'true';
       return [clone];
@@ -168,6 +182,9 @@ export function syncTextToolbarContextActions(editable: HTMLElement, actions: st
 
 function getTextToolbarActionKey(button: HTMLElement): string | null {
   const richAction = button.dataset.richAction;
+  if (richAction === 'text-placeholder' && button.dataset.textPlaceholderName) {
+    return `rich:${richAction}:${button.dataset.textPlaceholderName}`;
+  }
   if (richAction && richAction !== 'text-line-style') {
     return `rich:${richAction}`;
   }

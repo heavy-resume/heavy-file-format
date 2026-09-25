@@ -164,7 +164,7 @@ test('reference hot reload restores session encryption keys and unlocked compone
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -517,7 +517,7 @@ test('reference app saves the guide document through the server file endpoint', 
 
 test('search result navigation stays in editor view', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const spacerSections = Array.from({ length: 14 }, (_item, index) => `
 <!--hvy: {"id":"spacer-${index + 1}"}-->
 #! Spacer ${index + 1}
@@ -674,7 +674,7 @@ hvy_version: 0.1
 
 test('raw HVY editor keeps native find and fills its surface', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
 
   await page.locator('#rawEditor').click();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
@@ -694,7 +694,7 @@ test('raw HVY editor keeps native find and fills its surface', async ({ page }) 
 
 test('editor search opens sidebar for sidebar results', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -728,7 +728,7 @@ hvy_version: 0.1
 
 test('editor search expands collapsed expandable ancestors', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2356,6 +2356,47 @@ hvy_version: 0.1
     tail: [{ id: 'image:host.png', length: 3 }],
     bytes: [7, 8, 9],
   });
+});
+
+test('embedded unused-file scan refreshes host descriptors before serialization', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const root = document.querySelector<HTMLElement>('#editorMount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    let descriptors: Array<{ id: string; meta: { mediaType: string }; length: number }> = [];
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`), '.hvy'),
+      mode: 'editor',
+      attachmentStore: {
+        list: () => descriptors,
+        recall: () => null,
+        store: () => {},
+        remove: () => {},
+      },
+    });
+    await mount.setMode('editor');
+    descriptors = [
+      { id: 'image:first.png', meta: { mediaType: 'image/png' }, length: 3 },
+      { id: 'image:second.png', meta: { mediaType: 'image/png' }, length: 4 },
+    ];
+
+    return mount.findUnusedEmbeddedFiles().map((entry) => entry.id);
+  });
+
+  expect(result).toEqual(['image:first.png', 'image:second.png']);
 });
 
 test('embedded viewers can hydrate and update search snapshots from headless search', async ({ page }) => {
@@ -4262,7 +4303,7 @@ hvy_version: 0.1
 test('AI editing tip stays out of the way of an open component picker', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4383,6 +4424,7 @@ hvy_version: 0.1
     ];
     const calls: unknown[] = [];
     const progress: string[] = [];
+    const errors: unknown[] = [];
     const mount = mountHvy({
       root,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
@@ -4405,12 +4447,14 @@ hvy_version: 0.1
           },
         },
       },
+      onError(error) { errors.push(error); },
       onProgress(event) {
         progress.push(event.phase);
       },
     });
     return {
       result: importResult,
+      errors,
       calls: calls.length,
       progress,
       html: root.textContent,
@@ -4420,6 +4464,7 @@ hvy_version: 0.1
   expect(result.calls).toBe(2);
   expect(result.progress).toContain('linting');
   expect(result.result.status).toBe('error');
+  expect(result.errors).toEqual([result.result.error]);
   expect(result.result.message).toContain('expandable block is missing');
   expect(result.html).toContain('Existing content');
   expect(result.html).toContain('Imported despite diagnostic');
@@ -4731,7 +4776,7 @@ test('new section component picker survives a focusout without a related target'
 
 test('top-level section gutters insert a focused section at the selected boundary', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4790,7 +4835,7 @@ test('new section title generates a matching section id without serializing it',
   await page.locator('.section-meta-modal [data-modal-action="close"]').click();
 
   // ...but HVY-SPEC.md forbids writing a generated id back into section metadata.
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('#! Launch Plan');
   await expect(page.locator('#rawEditor')).not.toContainText('"id":"launch-plan"');
 });
@@ -4844,7 +4889,7 @@ test('edit sidebar add section creates a sidebar section', async ({ page }) => {
 test('sidebar section and component Meta buttons open their modals', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4900,7 +4945,7 @@ hvy_version: 0.1
 test('encrypted container button manages key changes and encryption removal', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5075,7 +5120,7 @@ section_defs:
 test('section virtualization unloads and reloads offscreen editor sections', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5091,7 +5136,7 @@ ${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"virtual-${index 
 
   const editorTree = page.locator('#editorTree');
   await expect.poll(() => page.locator('#editorTree [data-hvy-virtual-placeholder="true"]').count()).toBeGreaterThan(0);
-  expect(await page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)').count()).toBeLessThan(42);
+  expect(await page.locator('#editorTree .editor-section-card').count()).toBeLessThan(42);
   await editorTree.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
@@ -5107,7 +5152,7 @@ ${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"virtual-${index 
 test('open component editors survive sibling activation and section virtualization', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5139,7 +5184,7 @@ ${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"open-virtual-${i
 test('section remove requires confirmation', async ({ page }) => {
   await page.goto('/');
 
-  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  const sections = page.locator('.editor-section-card');
   const initialCount = await sections.count();
 
   // Main and sidebar each have their own add-section ghost.
@@ -5282,7 +5327,7 @@ hvy_version: 0.1
   await expect(page.locator('#readerDocument')).toContainText('Changed accomplishment');
 
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).not.toContainText('"hideIfUnmodified":true');
   await expect(page.locator('#rawEditor')).not.toContainText('"expanded":false');
 });
@@ -5312,7 +5357,7 @@ test('resume template hides untouched scaffold sections only in viewer', async (
 test('h3 headings after body copy have subsection spacing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5343,7 +5388,7 @@ hvy_version: 0.1
 test('reader headings keep bold default weight', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5523,11 +5568,45 @@ test('section template dropdown uses themed text when a light paper palette foll
   await expect(page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"]')).toHaveCSS('color', expectedResult);
 });
 
+test('search option controls use themed colors across palettes and color modes', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.search-launcher').click();
+
+  for (const paletteId of ['paper', 'mocha', 'petrichor', 'spring', 'ufo', 'black-widow']) {
+    for (const darkMode of [false, true]) {
+      const expectedResult = await page.locator('#app').evaluate(async (root, { paletteId, darkMode }) => {
+        const { state } = await import('/src/state.ts');
+        const { applyTheme } = await import('/src/theme.ts');
+        state.paletteOverrideId = paletteId;
+        applyTheme();
+        root.classList.toggle('theme-dark', darkMode);
+        const rootStyle = getComputedStyle(root);
+        const probe = document.createElement('span');
+        probe.style.color = rootStyle.getPropertyValue('--hvy-text');
+        probe.style.borderColor = rootStyle.getPropertyValue('--hvy-border-input');
+        root.append(probe);
+        const probeStyle = getComputedStyle(probe);
+        const result = {
+          text: probeStyle.color,
+          checkboxBorder: probeStyle.borderColor,
+        };
+        probe.remove();
+        return result;
+      }, { paletteId, darkMode });
+
+      await expect(page.locator('.search-category-toggle').first()).toHaveCSS('color', expectedResult.text);
+      await expect(page.locator('.search-switch input')).toHaveCSS('appearance', 'none');
+      await expect(page.locator('.search-switch input')).toHaveCSS('border-color', expectedResult.checkboxBorder);
+      await expect(page.locator('.search-switch input')).not.toHaveCSS('background-image', 'none');
+    }
+  }
+});
+
 test('document meta exposes whether a section template allows multiple sections per document', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 section_defs:
@@ -5554,13 +5633,13 @@ section_defs:
   await repeatable.check();
   await expect(sectionTemplate).toContainText('multiple allowed');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toHaveValue(/repeatable: true/);
 });
 
 test('component template sort values and enum options are editable metadata', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -5616,7 +5695,7 @@ component_defs:
   await addedSortValue.locator('[data-field="def-enum-option-label"]').fill('High');
   await addedSortValue.locator('[data-field="def-enum-option-value"]').fill('high');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('Status:');
   await expect(page.locator('#rawEditor')).toContainText('Priority:');
   await expect(page.locator('#rawEditor')).toContainText('label: Open');
@@ -5627,7 +5706,7 @@ component_defs:
 test('section template heading edits do not render block cancel or done controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 section_defs:
@@ -5673,7 +5752,7 @@ section_defs:
 test('template component editor opens nested component meta and returns to template editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -5715,7 +5794,7 @@ component_defs:
 test('section template editor opens section meta and returns to template editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 section_defs:
@@ -5809,7 +5888,7 @@ test('resume editor script does not scan changed reciprocal xrefs on load', asyn
   await page.goto('/');
 
   await selectDocumentMenuItem(page, 'Resume Example');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
 
   const rawEditor = page.locator('#rawEditor');
   await expect(rawEditor).toContainText('changed_xrefs = []');
@@ -5866,6 +5945,24 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toBeFocused();
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
+
+for (const preview of ['Phone 390', 'Desktop']) {
+  test(`document meta scrolls in ${preview} preview`, async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Advanced' }).click();
+    await page.getByRole('button', { name: 'Document Meta' }).click();
+    await page.getByRole('button', { name: preview, exact: true }).click();
+
+    const scroller = page.locator('.document-meta-scroll');
+    await expect(scroller).toHaveCSS('overflow-y', 'auto');
+    expect(await scroller.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
+      await scroller.evaluate((element) => element.clientHeight)
+    );
+    await scroller.evaluate((element) => { element.scrollTop = 200; });
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(200);
+  });
+}
 
 test('responsive preview controls resize document frame without resizing app chrome', async ({ page }) => {
   await page.goto('/');
@@ -5972,7 +6069,7 @@ test('responsive preview applies container query defaults', async ({ page }) => 
 test('tables resize inside narrow responsive preview containers', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6007,7 +6104,7 @@ test('truncated static table cells open their contents while cross-column select
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6183,7 +6280,7 @@ test('document ai context is editable metadata and keeps focus while typing', as
   await expect(aiContext).toBeFocused();
   await expect(aiContext).toHaveValue('Use top skills as featured skills.');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('ai-context: Use top skills as featured skills.');
 });
 
@@ -6207,7 +6304,7 @@ test('document description and tags are editable metadata and keep focus while t
   await expect(tags).toBeFocused();
   await expect(tags).toHaveValue('preview, hosted');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('description: Hosted preview summary.');
   await expect(page.locator('#rawEditor')).toContainText('tags: preview, hosted');
 });
@@ -6226,7 +6323,7 @@ test('document ai import guidance is editable metadata and keeps focus while typ
   await expect(importGuidance).toBeFocused();
   await expect(importGuidance).toHaveValue('Route scattered awards into the Awards template.');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('ai-import-guidance: Route scattered awards into the Awards template.');
 });
 
@@ -6245,7 +6342,7 @@ test('description generate button appears only for empty component descriptions'
     });
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6299,7 +6396,7 @@ test('document meta populates missing descriptions parent first', async ({ page 
   });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6332,7 +6429,7 @@ hvy_version: 0.1
   await expect(page.locator('.meta-panel')).toContainText('Generated 2 missing descriptions.');
   expect(contexts).toHaveLength(2);
   expect(contexts[1]).toContain('Profile - Profile area');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('"description":"Profile area"');
   await expect(page.locator('#rawEditor')).toContainText('"description":"Profile summary list"');
   await expect(page.locator('#rawEditor')).not.toContainText('Summary body","description"');
@@ -6341,7 +6438,7 @@ hvy_version: 0.1
 test('custom component templates open a fill modal before editor insertion', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -6402,7 +6499,7 @@ test('component template remove confirmation deletes the template', async ({ pag
     schema:
       placeholder: Card`,
   ].join('\n');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -6472,7 +6569,7 @@ test('custom component template output generator fills a field from provided var
     }]);
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -6557,7 +6654,7 @@ test('custom component template output generator locks field while pending and h
     }]);
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -6610,7 +6707,7 @@ component_defs:
 test('AI view shows editor placeholders and empty list add affordances', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6654,7 +6751,7 @@ hvy_version: 0.1
 test('custom component template modal cancel leaves the document unchanged', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -6684,7 +6781,7 @@ component_defs:
 test('text component fenced python code is syntax highlighted', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6723,7 +6820,7 @@ def greet(name):
 test('text component fenced code wraps long directive lines instead of overflowing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6751,7 +6848,7 @@ hvy_version: 0.1
 test('trailing spaces after bold labels remain editable outside bold text', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -6793,6 +6890,6 @@ hvy_version: 0.1
   await expect(editor.locator('p').first().locator('strong')).toHaveText('Location:');
   await expect(editor.locator('p').first()).toContainText('Location: Seattle, WA');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('**Location:** Seattle, WA');
 });

@@ -52,7 +52,7 @@ export function insertEditorTopLevelSectionDom(options: EditorTopLevelSectionIns
     return false;
   }
   const hasExistingSection = Array.from(anchor.parentElement?.children ?? []).some((candidate) => (
-    candidate.matches('.editor-section-card:not(.editor-subsection-card), .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"]')
+    candidate.matches('.editor-section-card, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"]')
   ));
   const gutter = createElementFromHtml(
     anchor.ownerDocument,
@@ -183,7 +183,6 @@ export function refreshEditorSectionDom(options: EditorSectionRefreshOptions): b
   if (targets.length === 0) {
     return false;
   }
-  const isSubsection = !options.sections.some((candidate) => candidate === section);
   let replaced = 0;
   targets.forEach((target) => {
     const scrollContainer = target.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel');
@@ -195,8 +194,7 @@ export function refreshEditorSectionDom(options: EditorSectionRefreshOptions): b
       target.ownerDocument,
       options.editorRenderer,
       section,
-      options.sections,
-      isSubsection
+      options.sections
     );
     if (!replacement) {
       return;
@@ -214,10 +212,9 @@ export function createEditorSectionElement(
   editorRenderer: EditorRenderer,
   section: VisualSection,
   rootSections: VisualSection[],
-  isSubsection = false,
   blockWindowOptions?: EditorRenderTreeWindowOptions
 ): HTMLElement | null {
-  const html = editorRenderer.renderEditorSection(section, rootSections, isSubsection, blockWindowOptions).trim();
+  const html = editorRenderer.renderEditorSection(section, rootSections, blockWindowOptions).trim();
   if (!html) {
     return null;
   }

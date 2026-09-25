@@ -13,6 +13,13 @@ import {
 } from '../src/markdown';
 import { renderedMarkdownHtmlToSearchText } from '../src/rendered-markdown-text';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
+import type { TextPlaceholderDefinition } from '../src/editor/component-helpers';
+
+const fakeStatusPlaceholder: TextPlaceholderDefinition = {
+  name: 'fake-status',
+  label: 'Fake status',
+  render: (editable) => `<span class="fake-status${editable ? ' is-editable' : ''}">ready</span>`,
+};
 
 test('expected result: single tildes remain literal text in text components', () => {
   expect(markdownToReaderHtml('Keep ~this~ literal')).toContain('<p>Keep ~this~ literal</p>');
@@ -20,6 +27,20 @@ test('expected result: single tildes remain literal text in text components', ()
 
 test('expected result: double tildes render intentional strikethrough in text components', () => {
   expect(markdownToReaderHtml('Strike ~~this~~ text')).toContain('<p>Strike <del>this</del> text</p>');
+});
+
+test('expected result: parent-provided text placeholders render and serialize generically', () => {
+  const source = 'State: <!-- placeholder fake-status -->';
+  expect(markdownToReaderHtml(source, { textPlaceholders: [fakeStatusPlaceholder] })).toContain(
+    '<span class="fake-status">ready</span>'
+  );
+  expect(turndown.turndown('<p>State: <span class="hvy-text-placeholder" data-hvy-text-placeholder="fake-status">ready</span></p>')).toBe(source);
+});
+
+test('expected result: unknown text placeholders stay editable but remain hidden from readers', () => {
+  const source = 'Before <!-- placeholder fake-missing --> after';
+  expect(markdownToReaderHtml(source)).toContain('<p>Before  after</p>');
+  expect(turndown.turndown('<p>Before <span class="hvy-text-placeholder" data-hvy-text-placeholder="fake-missing">missing</span> after</p>')).toBe(source);
 });
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
@@ -364,13 +385,25 @@ test('removes non-text media from rich editor content before serialization', () 
     querySelectorAll: (selector: string) => {
       expect(selector).toContain('img');
       return [
-        { remove: () => removed.push('img') },
-        { remove: () => removed.push('canvas') },
+        { closest: () => null, remove: () => removed.push('img') },
+        { closest: () => null, remove: () => removed.push('canvas') },
       ] as unknown as NodeListOf<HTMLElement>;
     },
   } as unknown as ParentNode);
 
   expect(removed).toEqual(['img', 'canvas']);
+});
+
+test('preserves rendered media inside an atomic text placeholder', () => {
+  const removed: string[] = [];
+
+  removeNonTextContentFromRichEditor({
+    querySelectorAll: () => [
+      { closest: () => ({ dataset: { hvyTextPlaceholder: 'fake-status' } }), remove: () => removed.push('svg') },
+    ] as unknown as NodeListOf<HTMLElement>,
+  } as unknown as ParentNode);
+
+  expect(removed).toEqual([]);
 });
 
 test('renders hvy alt annotations as responsive spans', () => {
@@ -502,7 +535,7 @@ test('serializes rich editor fill-in markers back to value comments', () => {
   ).toBe('Before <!-- value {"placeholder":"Summary"} --> after.');
 });
 
-test('converts markdown headings into HVY section hierarchy', () => {
+test('converts markdown headings into flat HVY sections and retains heading content', () => {
   const document = convertMarkdownToHvyDocument(`# Project Brief
 
 Intro text.
@@ -516,12 +549,14 @@ Intro text.
   expect(document.extension).toBe('.hvy');
   expect(document.meta.reader_max_width).toBe('60rem');
   expect(document.meta.title).toBe('Project Brief');
-  expect(document.sections).toHaveLength(1);
+  expect(document.sections).toHaveLength(2);
   expect(document.sections[0]?.title).toBe('Project Brief');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('# Project Brief');
+  expect(document.sections[1]?.blocks[0]?.text).toBe('## Goals');
   expect(document.sections[0]?.blocks[0]?.schema.component).toBe('text');
-  expect(document.sections[0]?.blocks[0]?.text).toBe('Intro text.');
-  expect(document.sections[0]?.children[0]?.title).toBe('Goals');
-  expect(document.sections[0]?.children[0]?.blocks[0]?.text).toBe('- Ship import\n- Preserve tables');
+  expect(document.sections[0]?.blocks[1]?.text).toBe('Intro text.');
+  expect(document.sections[1]?.title).toBe('Goals');
+  expect(document.sections[1]?.blocks[1]?.text).toBe('- Ship import\n- Preserve tables');
 });
 
 test('converts markdown tables to HVY tables and preserves fenced code as text markdown', () => {
@@ -537,7 +572,7 @@ SELECT * FROM items;
 \`\`\`
 `);
 
-  const blocks = document.sections[0]?.blocks ?? [];
+  const blocks = document.sections[0]?.blocks.slice(1) ?? [];
 
   expect(blocks[0]?.schema.component).toBe('table');
   expect(blocks[0]?.schema.tableColumns).toEqual(['Name', 'Count']);
@@ -555,10 +590,33 @@ Plain Markdown should not go blank.
   expect(document.extension).toBe('.hvy');
   expect(document.meta.reader_max_width).toBe('60rem');
   expect(document.sections[0]?.title).toBe('Notes');
-  expect(document.sections[0]?.blocks[0]?.text).toBe('Plain Markdown should not go blank.');
+  expect(document.sections[0]?.blocks[1]?.text).toBe('Plain Markdown should not go blank.');
 
   const expectedResult = serializeDocument(document);
   expect(expectedResult).toContain('<!--hvy: {"id":"notes"');
   expect(expectedResult).toContain('<!--hvy:text {}-->');
   expect(expectedResult).toContain('Plain Markdown should not go blank.');
+});
+
+
+test('expected result: document strikethrough color and markdown survive save and reload', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+theme:
+  colors:
+    --hvy-strikethrough-color: '#d12345'
+typography:
+  recolorStrikethrough: true
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+<!--hvy:text {"id":"fake-text"}-->
+~~Fake removed text~~
+`, '.hvy');
+
+  const expectedResult = deserializeDocument(serializeDocument(document), '.hvy');
+
+  expect(expectedResult.meta.theme).toEqual({ colors: { '--hvy-strikethrough-color': '#d12345' } });
+  expect(expectedResult.meta.typography).toEqual({ recolorStrikethrough: true });
+  expect(expectedResult.sections[0].blocks[0].text).toContain('~~Fake removed text~~');
 });

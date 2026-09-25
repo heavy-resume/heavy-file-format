@@ -69,7 +69,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 ## TypeScript Reference Implementation
 
 A browser-based reference app is included with:
-- `Visual Editor`: click to add sections, nested sections, and text blocks.
+- `Visual Editor`: click to add sections, containers, and text blocks.
 - `Schema Mode`: per-block advanced settings (component, alignment, left/center/right slot).
 - `Reader`: expandable sections, navigation by section ID, and section meta styling.
 - `Download`: save the current editor buffer as a local file.
@@ -1214,6 +1214,21 @@ if (plan.status === 'ready') {
 }
 ```
 
+Both import methods return `status: 'error'` with `message` and a serializable
+`error` object for terminal failures. They also accept `onError(error)`, called
+once before the promise resolves, including validation and finalization failures.
+The error contains `message` and, when supplied, `status` (HTTP status), `code`,
+`quota` (host-defined string), and `retryAfter` (Retry-After header value).
+Host chat clients should reject with an Error carrying those fields to preserve
+them through import. The built-in HTTP transport preserves them automatically.
+Cancellation returns `status: 'aborted'` without invoking `onError`.
+
+Use `onError` to update UI immediately; callbacks should not throw and their
+returned promises are not awaited. Hosts should still catch rejected promises
+for lifecycle/loading failures or exceptions in their own callbacks. `onProgress`
+reports work phases, not terminal errors. Imports may have applied earlier
+sections before failing; errors do not roll those changes back.
+
 Set `newSectionsOnly: true` on both calls when import should append blank
 sections or instantiate reusable section templates without replacing existing
 body sections. Individual body sections can also set `protect_from_import: true`
@@ -1286,3 +1301,37 @@ HVY has a documented plugin block envelope plus a first plugin contract for `hvy
   `list()` exposes available templates and flavors, `variables(selection)` describes the required fields, `locations(selection)` returns the selected template's unique location-marker names, and `materialize(options)` returns a fresh filled `VisualBlock` clone when a plugin needs the derived value directly. The optional `locations` map replaces matching markers with fresh component clones. Plugins should call each returned instance's `unmount()` during their own cleanup.
 - The built-in `hvy.editable-text` plugin uses that editor as a permanently visible writable surface in Viewer mode. Its Markdown body is stored in `plugin.txt`; `pluginConfig.placeholder` optionally controls its empty-state prompt.
 - See [`examples/embed-text-editor-plugin.html`](examples/embed-text-editor-plugin.html) for an isolated embedded editor that places a normal text component next to a plugin using `ctx.textEditor.mount(...)` and `ctx.setText(...)`.
+
+Text quick-control AI processing has independent `ChatSettings.textProcessingProvider` and
+`textProcessingModel` settings. Environment defaults are `VITE_HVY_TEXT_PROCESSING_PROVIDER`
+and `VITE_HVY_TEXT_PROCESSING_MODEL`; neither has a built-in default. Both must be explicitly
+configured before text processing can send a request. `null` clears a saved field even when an
+environment value exists; omitted fields inherit explicitly supplied environment settings. Embedded hosts can pass these fields through `chatSettings`.
+The reference text-processing modal exposes Model settings when the model picker is enabled;
+these preferences persist with the existing chat settings storage. Host-managed clients keep control
+of configuration through mount options. Prompts live in `src/editor/components/text-ai/text-ai-request.ts`.
+
+
+### Host-invoked template forms
+
+`mount.openTemplateForm({ targetType: 'fake-entry' })` opens the existing item
+creation form for the sole component list whose `componentListComponent` is
+`fake-entry`. Use `{ targetId: 'fake-list' }` to target the list's persisted
+`schema.id` instead; internal block IDs and section keys are not host identifiers.
+Both fields can be supplied to validate the expected item type. Missing targets,
+ambiguous types, duplicate IDs, type mismatches, locked lists, and templates
+without variables reject the promise. Locked ancestors do not lock the list.
+
+The method preserves viewer/editor/AI mode, reveals collapsed ancestors, opens
+the sidebar when appropriate, and scrolls to the list before opening the form.
+An explicitly revealed empty reader block gets a transient empty-state display;
+this does not modify serialized content. Lookup is independent of document
+structure. A target excluded from the rendered view cannot be revealed.
+
+The promise resolves to `{ status: 'inserted', itemId: string | null }` after Add,
+or `{ status: 'cancelled' }` after cancellation or mount destruction. `itemId`
+is the created item's persisted ID, when available. A second invocation while
+the same mount is opening/showing a form rejects. In editor mode, insertion
+retains the existing new-item editing flow; finish that edit before undoing the
+insertion. Implementation lives in `embed-template-form.ts`, with data-only
+resolution in `template-form-target.ts` and public types in `embed.ts`.

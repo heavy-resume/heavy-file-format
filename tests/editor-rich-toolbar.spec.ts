@@ -35,6 +35,66 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test('expandable stubs provide an insertable chevron placeholder that follows expansion state', async ({ page }) => {
+  await page.goto('/');
+  await loadExpandablePlaceholderDocument(page);
+
+  await page.locator('[data-action="activate-block"]', { hasText: 'Fake summary' }).last().click();
+  const stubPanelToggle = page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first();
+  if (await stubPanelToggle.count()) await stubPanelToggle.click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Fake summary' }).last().click();
+
+  const editor = page.locator('.rich-editor').first();
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  await editor.evaluate((node) => {
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await expandTextToolbar(toolbar);
+  await toolbar.locator('[data-rich-action="text-placeholder"][data-text-placeholder-name="expandable-chevron"]:visible').click();
+  await expect(editor.locator('[data-hvy-text-placeholder="expandable-chevron"]')).toHaveCount(1);
+  await expect(editor.locator('[data-hvy-text-placeholder="expandable-chevron"] svg')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Viewer', exact: true }).click();
+  const expandable = page.locator('.expandable-reader').first();
+  if (await expandable.evaluate((node) => node.classList.contains('is-expanded'))) {
+    await expandable.locator('.expand-stub-toggle').click();
+  }
+  await expect(expandable).toHaveClass(/is-collapsed/);
+  await expect(expandable.locator('.hvy-expandable-chevron')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  await expandable.locator('.expand-stub-toggle').click();
+  await expect(page.locator('.expandable-reader').first()).toHaveClass(/is-expanded/);
+  await expect(page.locator('.expandable-reader .hvy-expandable-chevron').first()).toHaveCSS('animation-name', 'hvyExpandableChevronOpen');
+  await expect(page.locator('.expandable-reader .hvy-expandable-chevron').first()).toHaveCSS('transform', 'matrix(0, 1, -1, 0, 0, 0)');
+  await page.locator('.expandable-reader .expand-stub-toggle').first().click();
+  await expect(page.locator('.expandable-reader').first()).toHaveClass(/is-collapsing/);
+  await expect(page.locator('.expandable-reader .hvy-expandable-chevron').first()).toHaveCSS('animation-name', 'hvyExpandableChevronClose');
+  await expect(page.locator('.expandable-reader').first()).toHaveClass(/is-collapsed/);
+
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/<!-- placeholder expandable-chevron -->/);
+});
+
+test('expandable content does not provide the stub chevron placeholder', async ({ page }) => {
+  await page.goto('/');
+  await loadExpandablePlaceholderDocument(page, true);
+
+  await page.locator('[data-action="activate-block"]', { hasText: 'Fake details' }).last().click();
+  const contentPanelToggle = page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first();
+  if (await contentPanelToggle.count()) await contentPanelToggle.click();
+  const nestedContent = page.locator('[data-action="activate-block"]', { hasText: 'Fake details' }).last();
+  if (await nestedContent.count()) await nestedContent.click();
+
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar [data-rich-action="text-placeholder"]')).toHaveCount(0);
+});
+
 test('toolbar exposes quote and code block actions', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, 'Quoted');
@@ -383,9 +443,43 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   expect(expectedResult.serialized).toContain('Edited from viewer.');
 });
 
+test('wrapped plugin placeholder grows the empty editor at narrow widths', async ({ page }) => {
+  await page.goto('/examples/lightweight-viewer-text-editor.html');
+
+  const editor = page.locator('#lightweightViewerOnlyMount [data-field="hvy-plugin-text-editor"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '';
+    node.dataset.placeholder = 'Enter contact info here. When you share your resume, visitors will need to request contact info access separately.';
+    node.style.width = '10rem';
+    node.style.minHeight = '0';
+    node.style.fontSize = '1.5rem';
+  });
+
+  const emptyExpectedResult = await editor.evaluate((node) => ({
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  expect(emptyExpectedResult.clientHeight).toBeGreaterThan(150);
+  expect(emptyExpectedResult.scrollHeight).toBe(emptyExpectedResult.clientHeight);
+
+  await editor.click();
+  await page.keyboard.type('First line');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Second line wraps across the narrow editor width.');
+
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText('First line');
+  await expect(editor).toContainText('Second line wraps across the narrow editor width.');
+  const contentExpectedResult = await editor.evaluate((node) => ({
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  expect(contentExpectedResult.scrollHeight).toBe(contentExpectedResult.clientHeight);
+});
+
 test('plugins can mount the shared text editor helper', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Raw' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const { setHostPlugins } = await import('/src/plugins/registry.ts');
     setHostPlugins([{
@@ -416,7 +510,7 @@ test('plugins can mount the shared text editor helper', async ({ page }) => {
     }]);
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toBeVisible();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
@@ -496,9 +590,9 @@ text_line_styles:
 
 test('built-in editable text plugin remains editable from viewer mode', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Raw' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Raw', exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toBeVisible();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
@@ -741,7 +835,7 @@ test('italic toolbar action serializes multi-paragraph and list selections', asy
     emptyEmphasis: 0,
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('_Alpha_');
   await expect(page.locator('#rawEditor')).toContainText('- _Bravo_');
   await expect(page.locator('#rawEditor')).toContainText('- _Charlie_');
@@ -789,7 +883,7 @@ test('quote toolbar action formats every selected paragraph and list block', asy
   expect(bulletBox).not.toBeNull();
   expect(bulletBox!.x).toBeGreaterThan(quoteBox!.x + 12);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('> Alpha');
   await expect(page.locator('#rawEditor')).toContainText('> - Bravo');
   await expect(page.locator('#rawEditor')).toContainText('> - Charlie');
@@ -1046,6 +1140,28 @@ ${markdown.split('\n').map((line) => `  ${line}`).join('\n')}
   await expect(page.locator('.editor-block-passive', { hasText: expectedText }).first()).toBeVisible();
 }
 
+async function loadExpandablePlaceholderDocument(page: Page, expanded = false): Promise<void> {
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":${expanded ? 'true' : 'false'}}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {}-->
+    Fake summary
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {}-->
+    Fake details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('.editor-block-passive', { hasText: 'Fake summary' }).first()).toBeVisible();
+}
+
 test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
@@ -1189,7 +1305,7 @@ test('paragraph style picker shows two recent choices and opens the full list', 
 test('paragraph style recents carry across active text blocks', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 text_line_styles:
@@ -1486,11 +1602,11 @@ test('floating text toolbar starts compact, expands from either side, and keeps 
   await compact.locator('[data-rich-action="underline"]').click();
   await expect(compactActions).toHaveCount(5);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'underline',
     'heading-1',
     'heading-2',
     'bold',
     'italic',
+    'underline',
   ]);
 
   await compact.locator('.text-toolbar-expand-left').click();
@@ -1504,10 +1620,10 @@ test('floating text toolbar starts compact, expands from either side, and keeps 
   await expect(compactActions).toHaveCount(5);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
     'quote',
-    'underline',
     'heading-1',
     'heading-2',
     'bold',
+    'underline',
   ]);
 
   await page.keyboard.press('Escape');
@@ -1576,7 +1692,7 @@ test('default compact history evicts underline first when it was not promoted', 
   ]);
 });
 
-test('format hotkeys promote while link remains outside compact history', async ({ page }) => {
+test('format hotkeys preserve visible order while link remains outside compact history', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, 'Expected result hotkey recent stack');
   await page.locator('[data-action="activate-block"]').first().click();
@@ -1588,20 +1704,20 @@ test('format hotkeys promote while link remains outside compact history', async 
 
   await page.keyboard.press(`${modifier}+U`);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'underline',
     'heading-1',
     'heading-2',
     'bold',
     'italic',
+    'underline',
   ]);
 
   await page.keyboard.press(`${modifier}+B`);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'bold',
-    'underline',
     'heading-1',
     'heading-2',
+    'bold',
     'italic',
+    'underline',
   ]);
 
   await editor.evaluate((node) => {
@@ -1618,11 +1734,11 @@ test('format hotkeys promote while link remains outside compact history', async 
   await page.keyboard.press(`${modifier}+K`);
   await expect(page.locator('#linkInlineModal')).toBeVisible();
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'bold',
-    'underline',
     'heading-1',
     'heading-2',
+    'bold',
     'italic',
+    'underline',
   ]);
   await page.locator('#linkInlineInput').fill('https://example.test/new');
   await page.locator('#linkInlineModal').getByRole('button', { name: 'Apply' }).click();
@@ -1644,37 +1760,94 @@ test('format hotkeys promote while link remains outside compact history', async 
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'bold',
-    'underline',
     'heading-1',
     'heading-2',
+    'bold',
     'italic',
+    'underline',
   ]);
 });
 
-test('plugin text editor hotkeys promote their actions in compact history', async ({ page }) => {
+test('plugin text editor hotkeys keep existing quick controls in place', async ({ page }) => {
   await page.goto('/examples/lightweight-viewer-text-editor.html');
 
   const editorShell = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
   const editor = editorShell.locator('[data-field="hvy-plugin-text-editor"]');
   await editor.click();
+  await expect(editorShell.getByRole('button', { name: 'Process with AI' })).toBeVisible();
   await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+I`);
 
   const compactActions = editorShell.locator('.text-toolbar-compact-actions > button');
   await expect(compactActions).toHaveCount(5);
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'italic',
     'heading-1',
     'heading-2',
     'bold',
+    'italic',
     'underline',
   ]);
+  await editorShell.getByRole('button', { name: 'Process with AI' }).click();
+  const aiDialog = page.getByRole('dialog', { name: 'AI Clean-up' });
+  await expect(aiDialog).toBeVisible();
+  await aiDialog.getByRole('button', { name: 'Close' }).click();
+  await expect(editor).toBeFocused();
+});
+
+test('plugin styles do not change shared quick text controls', async ({ page }) => {
+  await page.goto('/examples/lightweight-viewer-text-editor.html');
+
+  const editorShell = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
+  await editorShell.evaluate((root) => {
+    const style = document.createElement('style');
+    style.textContent = `.hvy-editable-text-reader button {
+      font: 700 2rem/1.8 Georgia, serif;
+      letter-spacing: 0.4rem;
+      text-transform: uppercase;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-all;
+    }`;
+    document.head.append(style);
+    const pluginControl = document.createElement('button');
+    pluginControl.className = 'expected-plugin-control';
+    pluginControl.textContent = 'Plugin control';
+    root.append(pluginControl);
+  });
+
+  await editorShell.locator('[data-field="hvy-plugin-text-editor"]').click();
+  const heading = editorShell.locator('.text-toolbar-compact-actions > [data-rich-action="heading-1"]');
+  const expectedResult = await heading.evaluate((button) => {
+    const style = getComputedStyle(button);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      lineHeight: style.lineHeight,
+      letterSpacing: style.letterSpacing,
+      textTransform: style.textTransform,
+      whiteSpace: style.whiteSpace,
+      overflowWrap: style.overflowWrap,
+      wordBreak: style.wordBreak,
+    };
+  });
+  expect(expectedResult).toEqual({
+    fontFamily: 'Arial, sans-serif',
+    fontSize: '13.3333px',
+    fontWeight: '400',
+    lineHeight: '13.3333px',
+    letterSpacing: 'normal',
+    textTransform: 'none',
+    whiteSpace: 'nowrap',
+    overflowWrap: 'normal',
+    wordBreak: 'normal',
+  });
+  await expect(editorShell.locator('.expected-plugin-control')).toHaveCSS('font-size', '32px');
 });
 
 test('grid text editor uses an unsquashed floating toolbar without covering component controls', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 reader_max_width: 70rem
@@ -1788,6 +1961,61 @@ ${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1
   expect(Math.abs(leftGridMetrics!.toolbarLeft - leftGridMetrics!.gridCellLeft)).toBeLessThanOrEqual(1);
 });
 
+test('nested text editor toolbar does not cover advanced controls on its component path', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {"id":"summary"}-->
+    Summary
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {"id":"detail"}-->
+    Detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const expandableBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+  await expandableBlock.locator('[data-expandable-panel="stub"]').first().click();
+  await expandableBlock.locator('.editor-block-passive', { hasText: 'Summary' }).click();
+  const activeTextBlock = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator(':scope > .editor-block-content[data-component-id="summary"]'),
+  });
+  await expandTextToolbar(activeTextBlock.locator('.rich-toolbar').first());
+
+  await expect(expandableBlock.locator('.expandable-part-stub')).toHaveCSS('overflow', 'visible');
+
+  await expect.poll(() => activeTextBlock.evaluate((block) => {
+    const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    if (!toolbar) return -1;
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const componentPath = [] as HTMLElement[];
+    for (let current: HTMLElement | null = block; current; current = current.parentElement?.closest<HTMLElement>('.editor-block') ?? null) {
+      componentPath.push(current);
+    }
+    return componentPath.flatMap((component) => [
+      ...Array.from(component.querySelectorAll<HTMLElement>(':scope > .editor-block-context-actions button')),
+      ...Array.from(component.querySelectorAll<HTMLElement>(':scope > .editor-block-head .editor-actions button')),
+      ...Array.from(component.querySelectorAll<HTMLElement>(':scope > .editor-block-remove-button')),
+    ]).filter((control) => {
+      const controlBox = control.getBoundingClientRect();
+      return toolbarBox.left < controlBox.right
+        && toolbarBox.right > controlBox.left
+        && toolbarBox.top < controlBox.bottom
+        && toolbarBox.bottom > controlBox.top;
+    }).length;
+  })).toBe(0);
+});
+
 test('floating text toolbar reserves no space above the editor and keeps bottom clearance while scrolling', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, Array.from({ length: 16 }, (_, index) => `Expected result line ${index + 1}`).join('\n\n'));
@@ -1861,7 +2089,7 @@ test('floating text toolbar reserves no space above the editor and keeps bottom 
 test('paragraph style picker fits inside compact sidebar editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 text_line_styles:
@@ -2300,4 +2528,30 @@ test('toolbar buttons expose platform hotkeys in titles', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Italic' }).first()).toHaveAttribute('title', /Italic \((Cmd|Ctrl)\+I\)/);
   await expect(page.getByRole('button', { name: 'Underline' }).first()).toHaveAttribute('title', /Underline \((Cmd|Ctrl)\+U\)/);
   await expect(page.getByRole('button', { name: 'Link' }).first()).toHaveAttribute('title', /Link \((Cmd|Ctrl)\+K\)/);
+});
+
+test('existing quick buttons stay in place until a fresh toolbar draw', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result stable quick controls');
+  await page.locator('[data-action="activate-block"]').first().click();
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  const actions = toolbar.locator('.text-toolbar-compact-actions > button');
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['heading-1', 'heading-2', 'bold', 'italic', 'underline']);
+
+  await toolbar.locator('.text-toolbar-compact [data-rich-action="italic"]').click();
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['heading-1', 'heading-2', 'bold', 'italic', 'underline']);
+  await toolbar.locator('.text-toolbar-compact [data-rich-action="italic"]').click();
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['heading-1', 'heading-2', 'bold', 'italic', 'underline']);
+
+  await page.evaluate(async () => {
+    const { getRenderApp } = await import('/src/state.ts');
+    getRenderApp()();
+  });
+  expect(await actions.evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.richAction)))
+    .toEqual(['italic', 'heading-1', 'heading-2', 'bold', 'underline']);
 });

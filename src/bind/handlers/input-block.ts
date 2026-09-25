@@ -1,3 +1,4 @@
+import { listValueFields, syncSortValuesForDocument, listValueKindForElement, renameListValueKey } from '../../sort-values';
 import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
@@ -34,7 +35,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types
 import type { SortValueDateFormat, SortValueType } from '../../types';
 import { componentSortValueDetailsKey } from '../../editor/render';
 import type { JsonObject } from '../../hvy/types';
-import { writeDocumentParagraphSpacing } from '../../document-typography';
+import { writeDocumentParagraphSpacing, writeDocumentRecolorStrikethrough } from '../../document-typography';
 import {
   formatPdfMarginUnitValue,
   formatPdfPointsAsUnit,
@@ -106,6 +107,19 @@ export function bindInputBlock(app: HTMLElement): void {
       } else {
         delete state.document.meta.tags;
       }
+      return;
+    }
+
+    if (target instanceof HTMLInputElement && ['chat-provider', 'ai-provider', 'chat-compaction-provider'].includes(field ?? '')) {
+      if (state.chat.isSending || state.aiEdit.isSending) return;
+      if (field === 'chat-compaction-provider') {
+        state.chat.settings.compactionProvider = target.value;
+      } else {
+        state.chat.settings.provider = target.value;
+      }
+      persistChatSettings(state.chat.settings);
+      state.chat.error = null;
+      state.aiEdit.error = null;
       return;
     }
 
@@ -192,6 +206,13 @@ export function bindInputBlock(app: HTMLElement): void {
       }
       applyTheme();
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-recolor-strikethrough' && target instanceof HTMLInputElement) {
+      recordHistory('meta:recolor-strikethrough');
+      writeDocumentRecolorStrikethrough(state.document.meta, target.checked);
+      applyTheme();
       return;
     }
 
@@ -548,25 +569,29 @@ export function bindInputBlock(app: HTMLElement): void {
       const newName = target.value.trim();
       const defs = getComponentDefs();
       const def = Number.isNaN(idx) ? null : defs[idx];
-      if (!def?.sortValueDefs?.[oldName] || !newName || (newName !== oldName && def.sortValueDefs[newName])) {
+      const definitions = def?.[listValueFields(listValueKindForElement(target)).definitions];
+      if (!def || !definitions?.[oldName] || !newName || (newName !== oldName && definitions[newName])) {
         return;
       }
       if (newName !== oldName) {
         recordHistory(`def:${idx}:sort-value:${oldName}:name`);
-        const entries = Object.entries(def.sortValueDefs).map(([name, definition]) =>
-          name === oldName ? [newName, definition] : [name, definition]
-        );
-        def.sortValueDefs = Object.fromEntries(entries);
+        renameListValueKey(state.document, def.name, oldName, newName, listValueKindForElement(target));
         target.dataset.sortValueName = newName;
+        const card = target.closest<HTMLElement>('.component-sort-value-card');
+        if (card) {
+          card.dataset.sortValueName = newName;
+          const summary = card.querySelector('summary strong');
+          if (summary) summary.textContent = newName;
+        }
         target.closest<HTMLElement>('.component-sort-value-card')
           ?.querySelectorAll<HTMLElement>('[data-sort-value-name]')
           .forEach((element) => {
             element.dataset.sortValueName = newName;
           });
-        const oldOpenKey = componentSortValueDetailsKey(idx, oldName);
+        const oldOpenKey = componentSortValueDetailsKey(idx, oldName, listValueKindForElement(target));
         if (state.openTemplateDefinitionKeys.includes(oldOpenKey)) {
           state.openTemplateDefinitionKeys = state.openTemplateDefinitionKeys
-            .map((key) => key === oldOpenKey ? componentSortValueDetailsKey(idx, newName) : key);
+            .map((key) => key === oldOpenKey ? componentSortValueDetailsKey(idx, newName, listValueKindForElement(target)) : key);
         }
         state.document.meta.component_defs = defs;
       }
@@ -577,7 +602,7 @@ export function bindInputBlock(app: HTMLElement): void {
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const name = target.dataset.sortValueName ?? '';
       const defs = getComponentDefs();
-      const definition = Number.isNaN(idx) ? null : defs[idx]?.sortValueDefs?.[name];
+      const definition = Number.isNaN(idx) ? null : defs[idx]?.[listValueFields(listValueKindForElement(target)).definitions]?.[name];
       const type = isSortValueType(target.value) ? target.value : null;
       if (!definition || !type || definition.type === type) {
         return;
@@ -594,11 +619,12 @@ export function bindInputBlock(app: HTMLElement): void {
       } else {
         delete definition.format;
       }
-      const openKey = componentSortValueDetailsKey(idx, name);
+      const openKey = componentSortValueDetailsKey(idx, name, listValueKindForElement(target));
       if (!state.openTemplateDefinitionKeys.includes(openKey)) {
         state.openTemplateDefinitionKeys = [...state.openTemplateDefinitionKeys, openKey];
       }
       state.document.meta.component_defs = defs;
+      syncSortValuesForDocument(state.document);
       getRenderApp()();
       return;
     }
@@ -607,11 +633,12 @@ export function bindInputBlock(app: HTMLElement): void {
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const name = target.dataset.sortValueName ?? '';
       const defs = getComponentDefs();
-      const definition = Number.isNaN(idx) ? null : defs[idx]?.sortValueDefs?.[name];
+      const definition = Number.isNaN(idx) ? null : defs[idx]?.[listValueFields(listValueKindForElement(target)).definitions]?.[name];
       if (definition?.type === 'date' && isSortValueDateFormat(target.value)) {
         recordHistory(`def:${idx}:sort-value:${name}:format`);
         definition.format = target.value;
         state.document.meta.component_defs = defs;
+        syncSortValuesForDocument(state.document);
       }
       return;
     }
@@ -621,7 +648,7 @@ export function bindInputBlock(app: HTMLElement): void {
       const optionIndex = Number.parseInt(target.dataset.optionIndex ?? '', 10);
       const name = target.dataset.sortValueName ?? '';
       const defs = getComponentDefs();
-      const definition = Number.isNaN(idx) ? null : defs[idx]?.sortValueDefs?.[name];
+      const definition = Number.isNaN(idx) ? null : defs[idx]?.[listValueFields(listValueKindForElement(target)).definitions]?.[name];
       const option = definition?.type === 'enum' && !Number.isNaN(optionIndex)
         ? definition.options?.[optionIndex]
         : null;
@@ -632,9 +659,10 @@ export function bindInputBlock(app: HTMLElement): void {
       if (field === 'def-enum-option-label') {
         option.label = target.value;
       } else {
-        option.value = parseSortValueOption(target.value);
+        option.value = listValueKindForElement(target) === 'group' ? target.value : parseSortValueOption(target.value);
       }
       state.document.meta.component_defs = defs;
+      syncSortValuesForDocument(state.document);
       return;
     }
 
@@ -1014,11 +1042,9 @@ function renameComponentTemplateReferences(oldName: string, newName: string): vo
   });
   getSectionDefs().forEach((def) => {
     visitBlocksInList(def.template.blocks, renameBlock);
-    def.template.children.forEach((child) => visitSectionTemplateBlocks(child, renameBlock));
     (def.flavors ?? []).forEach((flavor) => {
       if (flavor.template) {
         visitBlocksInList(flavor.template.blocks, renameBlock);
-        flavor.template.children.forEach((child) => visitSectionTemplateBlocks(child, renameBlock));
       }
     });
   });
@@ -1047,10 +1073,6 @@ function renameComponentSchemaTree(
   visitBlocksInList(schema.expandableContentBlocks?.children ?? [], renameBlock);
 }
 
-function visitSectionTemplateBlocks(section: VisualSection, visitor: (block: VisualBlock) => void): void {
-  visitBlocksInList(section.blocks, visitor);
-  section.children.forEach((child) => visitSectionTemplateBlocks(child, visitor));
-}
 
 function renameSectionTemplateReferences(oldName: string, newName: string, stableKey?: string): void {
   if (!oldName || !newName || oldName === newName || stableKey?.trim()) {
@@ -1060,7 +1082,6 @@ function renameSectionTemplateReferences(oldName: string, newName: string, stabl
     if (section.templateKey === oldName) {
       section.templateKey = newName;
     }
-    section.children.forEach(renameSection);
   };
   state.document.sections.forEach(renameSection);
   getSectionDefs().forEach((def) => {

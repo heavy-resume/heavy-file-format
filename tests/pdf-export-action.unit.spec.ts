@@ -83,7 +83,7 @@ vi.mock('../src/ai-document-import', () => ({
 }));
 
 function createDocumentWithExportTemplate(): VisualDocument {
-  const section = createEmptySection(1, 'Summary');
+  const section = createEmptySection('Summary');
   section.key = 'section-summary';
   section.customId = 'summary';
   section.blocks = [createEmptyBlock('text')];
@@ -157,6 +157,18 @@ test('export PDF names PHVY output with a PDF extension', async () => {
 test('export PDF imports HVY source into selected PHVY before rendering', async () => {
   const template = createDocumentWithExportTemplate();
   template.extension = '.phvy';
+  const carousel = createEmptyBlock('carousel');
+  carousel.schema.carouselImages = [{
+    imageFile: 'private-slide.png',
+    imageAlt: 'Carousel-only alt text',
+    caption: 'Carousel-only caption',
+  }];
+  state.document.sections[0].blocks.push(carousel);
+  const image = createEmptyBlock('image');
+  image.schema.imageFile = 'private-image.png';
+  image.schema.imageAlt = 'Image-only alt text';
+  image.schema.caption = { text: 'Image-only caption' };
+  state.document.sections[0].blocks.push(image);
   state.pdfTemplateImportModal = createPdfTemplateImportModalState();
 
   await exportCurrentDocumentPdfWithTemplateBytes(serializeDocumentBytes(template), 'template.phvy');
@@ -189,6 +201,10 @@ test('export PDF imports HVY source into selected PHVY before rendering', async 
   expect(vi.mocked(importTextIntoDocument).mock.calls[0]?.[1]).not.toHaveProperty('sourceName');
   expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('<!--hvy');
   expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('hvy_version');
+  expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('Carousel-only alt text');
+  expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('Carousel-only caption');
+  expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('Image-only alt text');
+  expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('Image-only caption');
   expect(state.pdfTemplateImportModal?.totalTokenUsage).toEqual({ inputTokens: 180, outputTokens: 30, totalTokens: 210 });
   expect(state.pdfTemplateImportModal?.steps).toEqual([
     { id: 'read', label: 'Read PHVY template', status: 'pending', tokenUsage: {} },

@@ -70,9 +70,6 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     for (const block of section.blocks) {
       visible = visitBlock(block, sectionMatched) || visible;
     }
-    for (const child of section.children) {
-      visible = (sectionMatched ? markSectionTreeVisible(child) : visitSection(child, [...ancestors, section])) || visible;
-    }
     if (visible) {
       visibleSections.add(section.key);
       ancestors.forEach((ancestor) => visibleSections.add(ancestor.key));
@@ -190,7 +187,6 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   const markSectionTreeVisible = (section: VisualSection): boolean => {
     visibleSections.add(section.key);
     section.blocks.forEach((block) => visitBlock(block, true));
-    section.children.forEach(markSectionTreeVisible);
     return true;
   };
 
@@ -246,7 +242,6 @@ function addExcludedBlocksByTags(sections: VisualSection[], excludeTags: string[
   };
   for (const section of sections) {
     section.blocks.forEach(visitBlock);
-    addExcludedBlocksByTags(section.children, excludeTags, excludedBlocks);
   }
 }
 
@@ -288,7 +283,6 @@ function addDocumentTargetIdsForDirectMatches(
     for (const block of section.blocks) {
       addBlockTargetIdsForDirectMatches(block, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
     }
-    addDocumentTargetIdsForDirectMatches(section.children, matchedSections, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
   }
 }
 
@@ -323,7 +317,6 @@ function addXrefMatchesForMatchedTargets(
     for (const block of section.blocks) {
       addXrefBlockMatchesForMatchedTargets(block, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
     }
-    addXrefMatchesForMatchedTargets(section.children, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
   }
 }
 
@@ -376,10 +369,6 @@ function findSectionByKey(sections: VisualSection[], sectionKey: string): Visual
     if (section.key === sectionKey) {
       return section;
     }
-    const child = findSectionByKey(section.children, sectionKey);
-    if (child) {
-      return child;
-    }
   }
   return null;
 }
@@ -387,12 +376,6 @@ function findSectionByKey(sections: VisualSection[], sectionKey: string): Visual
 function findBlockInSection(section: VisualSection, blockId: string): VisualBlock | null {
   for (const block of section.blocks) {
     const found = findBlockInTree(block, blockId);
-    if (found) {
-      return found;
-    }
-  }
-  for (const child of section.children) {
-    const found = findBlockInSection(child, blockId);
     if (found) {
       return found;
     }

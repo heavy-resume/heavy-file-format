@@ -5,4 +5,5 @@
 
 .hvy-reference-host .hvy-reference-app {
   height: 100dvh;
+  container: hvy-reference-app / inline-size;
 }

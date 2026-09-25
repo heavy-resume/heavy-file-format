@@ -24,6 +24,7 @@ import { getPluginAuthorizationMode } from './authorization/plugin-authorization
 import {
   loadConditionallyAllowedPlugin,
 } from './authorization/conditional-plugin';
+import { createPluginMount } from './viewport-plugin-mount';
 
 interface SavedFocus {
   element: HTMLElement;
@@ -255,6 +256,16 @@ function buildContext(
         })),
       }),
     },
+    groupValues: {
+      get: (key) => runWithStateRuntime(runtime, () => findBlockByIds(sectionKey, blockId)?.schema.pluginGroupValues[String(key ?? '')]),
+      set: (key, value) => syncPluginSortValue((current) => {
+        const normalizedKey = String(key ?? '').trim();
+        if (normalizedKey && typeof value === 'string') current.schema.pluginGroupValues[normalizedKey] = value;
+      }),
+      clear: (key) => syncPluginSortValue((current) => {
+        delete current.schema.pluginGroupValues[String(key ?? '').trim()];
+      }),
+    },
     sortValues: {
       get: (key) => {
         const current = findBlockByIds(sectionKey, blockId);
@@ -393,7 +404,10 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
 
     let instance: HvyPluginInstance;
     try {
-      instance = registration.create(ctx);
+      instance = createPluginMount(() => registration.create!(ctx), {
+        ...registration.mount,
+        strategy: registration.mount?.strategy ?? (mode === 'reader' ? 'viewport' : 'immediate'),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Plugin failed to mount.';
       placeholder.textContent = `Plugin error: ${message}`;
@@ -419,9 +433,11 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
 
   const pruneAll = isFullPluginReconcileRoot(root);
 
-  // Reconcile: anything cached but not seen this pass is orphaned.
+  // A partial surface refresh does not include placeholders for live mounts
+  // elsewhere. Only detached mounts can be orphaned; a host being mounted
+  // off-document can also still own live elements within this reconcile root.
   for (const [key, entry] of mounted) {
-    if (seen.has(key)) {
+    if (seen.has(key) || entry.instance.element.isConnected || root.contains(entry.instance.element)) {
       continue;
     }
     if (!pruneAll && !seenModes.has(entry.mode)) {

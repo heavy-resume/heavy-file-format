@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('before, full rerender, after: a large editor renders and restores only the active section window', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').evaluate((rawEditor, value) => {
     rawEditor.value = value;
     rawEditor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: null }));
@@ -23,7 +23,7 @@ ${Array.from({ length: 60 }, (_item, index) => `<!--hvy: {"id":"window-${index +
   const editorTree = page.locator('#editorTree');
   await expect.poll(() => editorTree.locator('[data-hvy-virtual-placeholder="true"]').count(), { timeout: 1000 })
     .toBeGreaterThan(0);
-  expect(await editorTree.locator('.editor-section-card:not(.editor-subsection-card)').count()).toBeLessThan(60);
+  expect(await editorTree.locator('.editor-section-card').count()).toBeLessThan(60);
   await editorTree.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect(editorTree.locator('.editor-section-card', { hasText: 'Window 60' })).toBeVisible({ timeout: 1000 });
   await editorTree.evaluate(() => new Promise<void>((resolve) => {
@@ -35,7 +35,7 @@ ${Array.from({ length: 60 }, (_item, index) => `<!--hvy: {"id":"window-${index +
   await expect(editorTree.locator('.editor-section-card', { hasText: 'Window 60' })).toBeVisible({ timeout: 1000 });
   const afterRender = await editorTree.evaluate((element) => ({
     scrollTop: element.scrollTop,
-    mountedSections: element.querySelectorAll('.editor-section-card:not(.editor-subsection-card)').length,
+    mountedSections: element.querySelectorAll('.editor-section-card').length,
     placeholders: element.querySelectorAll('[data-hvy-virtual-placeholder="true"]').length,
   }));
 

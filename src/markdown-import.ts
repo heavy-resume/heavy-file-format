@@ -11,15 +11,9 @@ interface MarkdownSource {
   body: string;
 }
 
-interface SectionFrame {
-  headingDepth: number;
-  section: VisualSection;
-}
-
 export function convertMarkdownToHvyDocument(sourceText: string): VisualDocument {
   const source = splitMarkdownFrontMatter(sourceText);
   const rootSections: VisualSection[] = [];
-  const stack: SectionFrame[] = [];
   let currentSection: VisualSection | null = null;
   let textBuffer: string[] = [];
   const usedIds = new Set<string>();
@@ -35,9 +29,8 @@ export function convertMarkdownToHvyDocument(sourceText: string): VisualDocument
 
   const ensureSection = (): VisualSection => {
     if (!currentSection) {
-      currentSection = createMarkdownSection('Imported Markdown', 1, usedIds);
+      currentSection = createMarkdownSection('Imported Markdown', 0, usedIds);
       rootSections.push(currentSection);
-      stack.push({ headingDepth: 1, section: currentSection });
     }
     return currentSection;
   };
@@ -50,7 +43,7 @@ export function convertMarkdownToHvyDocument(sourceText: string): VisualDocument
 
     if (isHeadingToken(token)) {
       flushText();
-      currentSection = appendHeadingSection(rootSections, stack, token, usedIds);
+      currentSection = appendHeadingSection(rootSections, token, usedIds);
       continue;
     }
 
@@ -93,21 +86,11 @@ function isTableToken(token: Token): token is Tokens.Table {
 
 function appendHeadingSection(
   rootSections: VisualSection[],
-  stack: SectionFrame[],
   token: Tokens.Heading,
   usedIds: Set<string>
 ): VisualSection {
   const section = createMarkdownSection(token.text.trim() || 'Untitled Section', token.depth, usedIds);
-  while (stack.length > 0 && stack[stack.length - 1].headingDepth >= token.depth) {
-    stack.pop();
-  }
-  const parent = stack[stack.length - 1]?.section;
-  if (parent) {
-    parent.children.push(section);
-  } else {
-    rootSections.push(section);
-  }
-  stack.push({ headingDepth: token.depth, section });
+  rootSections.push(section);
   return section;
 }
 
@@ -120,7 +103,7 @@ function createMarkdownSection(title: string, headingDepth: number, usedIds: Set
     idEditorOpen: false,
     isGhost: false,
     title,
-    level: Math.max(1, headingDepth),
+
     expanded: true,
     highlight: false,
     editorOnly: false,
@@ -128,8 +111,7 @@ function createMarkdownSection(title: string, headingDepth: number, usedIds: Set
     tags: '',
     description: '',
     location: 'main',
-    blocks: [],
-    children: [],
+    blocks: headingDepth > 0 ? [createTextBlock(`${"#".repeat(headingDepth)} ${title}`)] : [],
   };
 }
 

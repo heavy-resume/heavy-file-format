@@ -67,7 +67,6 @@ const section: VisualSection = {
   idEditorOpen: false,
   isGhost: false,
   title: 'Section',
-  level: 1,
   expanded: true,
   highlight: false,
   css: '',
@@ -75,7 +74,6 @@ const section: VisualSection = {
   description: '',
   location: 'main',
   blocks: [],
-  children: [],
 };
 
 test('reader table striping continues across headerless continuation tables and resets at the next header', () => {

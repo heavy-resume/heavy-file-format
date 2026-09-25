@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
-import { applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter, getXrefTargetOptions, isXrefTargetValid } from '../src/xref-ops';
+import { applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter, getXrefTargetOptions, isXrefTargetValid, isXrefTargetAvailable } from '../src/xref-ops';
 import { createTestState } from './serialization-test-helpers';
 import { createBlockFromReusableTemplateValues } from '../src/bind/actions/reusable-template';
 import { assignAutoBlockId } from '../src/auto-block-id';
@@ -379,4 +379,58 @@ hvy_version: 0.1
 
   expect(expectedResult.schema.xrefTitle).toBe('Custom title');
   expect(expectedResult.schema.xrefDetail).toBe('Custom detail');
+});
+
+test('xref pickers exclude targets used in the same list and release changed targets', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-reference
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: fake
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+ <!--hvy:text {"id":"fake-one","tags":"fake"}-->
+  Fake One
+ <!--hvy:text {"id":"fake-two","tags":"fake"}-->
+  Fake Two
+ <!--hvy:component-list {"componentListComponent":"fake-reference"}-->
+  <!--hvy:component-list:0 {}-->
+   <!--hvy:fake-reference {"xrefTitle":"First","xrefTarget":"#fake-one"}-->
+  <!--hvy:component-list:1 {}-->
+   <!--hvy:fake-reference {"xrefTitle":"Second"}-->
+ <!--hvy:component-list {"componentListComponent":"fake-reference"}-->
+  <!--hvy:component-list:0 {}-->
+   <!--hvy:fake-reference {"xrefTitle":"Other List"}-->
+`, '.hvy');
+  initState(createTestState(document));
+  const list = document.sections[0]!.blocks[2]!;
+  const first = list.schema.componentListBlocks[0]!;
+  const second = list.schema.componentListBlocks[1]!;
+  const otherList = document.sections[0]!.blocks[3]!;
+
+  expect(isXrefTargetAvailable(document, '#fake-one', { block: second })).toBe(false);
+  expect(isXrefTargetAvailable(document, '', { block: second })).toBe(true);
+  expect(getXrefTargetOptions('fake', { block: second }).map((option) => option.value)).toEqual(['fake-two']);
+  expect(getXrefTargetOptions('fake', { block: first }).map((option) => option.value)).toEqual(['fake-one', 'fake-two']);
+  expect(getXrefTargetOptions('fake', { list }).map((option) => option.value)).toEqual(['fake-two']);
+  expect(getXrefTargetOptions('fake', { block: otherList.schema.componentListBlocks[0]! }).map((option) => option.value)).toEqual(['fake-one', 'fake-two']);
+  expect(getXrefTargetOptions('fake').map((option) => option.value)).toEqual(['fake-one', 'fake-two']);
+
+  first.schema.xrefTarget = 'fake-two';
+
+  expect(getXrefTargetOptions('fake', { block: second }).map((option) => option.value)).toEqual(['fake-one']);
+
+  second.schema.xrefTarget = '#fake-two';
+
+  expect(isXrefTargetAvailable(document, 'fake-two', { block: second })).toBe(true);
+
+  expect(getXrefTargetOptions('fake', { block: second }).map((option) => option.value)).toEqual(['fake-one', 'fake-two']);
+
+  list.schema.componentListBlocks.splice(0, 1);
+  second.schema.xrefTarget = '';
+
+  expect(getXrefTargetOptions('fake', { block: second }).map((option) => option.value)).toEqual(['fake-one', 'fake-two']);
 });

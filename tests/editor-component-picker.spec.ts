@@ -17,6 +17,10 @@ test('section add component affordance is a compact single row', async ({ page }
 
   await expect(addComponent.getByRole('button', { name: 'Section component type' })).toBeVisible();
   await expect(addComponent.locator('select')).toHaveCount(0);
+  await expect(addComponent).toHaveCSS(
+    '-webkit-tap-highlight-color',
+    'rgba(0, 0, 0, 0)',
+  );
   expect(box?.height ?? 0).toBeLessThanOrEqual(46);
 });
 
@@ -32,6 +36,9 @@ test('default example button loads carousel component and graph plugin', async (
   await expect(page.locator('#readerDocument')).toContainText('Attached SVG image rendered from the HVY tail');
   await expect(page.locator('#readerDocument')).toContainText('The graph plugin stores chart attributes');
   await expect(page.locator('#readerDocument .hvy-carousel-reader img').first()).toBeVisible();
+  await page.locator('#readerDocument').evaluate((reader) => {
+    reader.scrollTop = reader.scrollHeight;
+  });
   await expect(page.locator('#readerDocument .hvy-graph-reader canvas').first()).toBeVisible();
 });
 

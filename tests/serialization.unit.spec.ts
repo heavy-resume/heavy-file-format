@@ -69,25 +69,30 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toContain('<!--hvy: {"id":"ai-features","lock":false,"expanded":true,"highlight":false}-->');
 });
 
-test('round-trips subsection nesting through serialization', () => {
+test('round-trips flat sections with nested containers', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"overview"}-->
-#! Overview
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
 
-<!--hvy:subsection {"id":"application-pipeline"}-->
-#! Application Pipeline
+ <!--hvy:container {"id":"fake-group","containerTitle":"Fake Group"}-->
+  <!--hvy:container {"id":"fake-nested-group"}-->
+   <!--hvy:text {"id":"fake-leaf"}-->
+    Fake content
+
+<!--hvy: {"id":"fake-peer"}-->
+#! Fake Peer
 `, '.hvy');
 
   const serialized = serializeDocument(document);
   const expectedResult = deserializeDocument(serialized, '.hvy');
-
-  expect(serialized).toContain('<!--hvy:subsection {"id":"application-pipeline","lock":false,"expanded":true,"highlight":false}-->');
-  expect(expectedResult.sections).toHaveLength(1);
-  expect(expectedResult.sections[0]?.children).toHaveLength(1);
-  expect(expectedResult.sections[0]?.children[0]?.customId).toBe('application-pipeline');
+  expect(expectedResult.sections.map(section => section.customId)).toEqual(['fake-section', 'fake-peer']);
+  expect(expectedResult.sections[0]).not.toHaveProperty('children');
+  expect(expectedResult.sections[0]).not.toHaveProperty('level');
+  expect(expectedResult.sections[0].blocks[0].schema.containerBlocks[0].schema.containerBlocks[0].text).toBe('Fake content');
+  expect(serialized).not.toContain('hvy:subsection');
 });
 
 test('round-trips sort value annotations in text content', () => {
@@ -193,7 +198,6 @@ section_defs:
     template:
       id: projects
       title: Projects
-      level: 1
       exclude_from_import: true
       protect_from_import: true
       tags: reciprocal-xref-source
@@ -208,7 +212,6 @@ section_defs:
     repeatable: true
     template:
       title: Resume Section
-      level: 1
       blocks: []
       children: []
 ---
@@ -606,7 +609,6 @@ section_defs:
     template:
       id: publications
       title: Publications
-      level: 1
       blocks:
         - text: "# Publications"
           schema:
@@ -1847,4 +1849,40 @@ section_defs:
   const expectedResult = serializeDocument(document);
 
   expect(expectedResult).toContain('blocks:\n        - component: fake-reusable-text');
+});
+
+test('keeps a reusable form template script as a literal block through serialization', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.form
+component_defs:
+  - name: scored-form
+    baseType: plugin
+    schema:
+      component: plugin
+      plugin: hvy.form
+    text: |
+      fields: []
+      scripts:
+        grade: |
+          total = int(doc.form.get("a") or 0) + int(doc.form.get("b") or 0) + int(doc.form.get("c"))
+          if total > 10:
+              doc.form.set("note", "big")
+---
+
+<!--hvy: {"id":"intro"}-->
+#! Intro
+
+ <!--hvy:text {}-->
+  Body
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('    text: |');
+  expect(expectedResult).not.toContain('    text: >');
+  expect(expectedResult).toContain('        total = int(doc.form.get("a") or 0) + int(doc.form.get("b") or 0) + int(doc.form.get("c"))');
+  expect(deserializeDocument(expectedResult, '.hvy').meta.component_defs?.[0]?.text)
+    .toBe(document.meta.component_defs?.[0]?.text);
 });

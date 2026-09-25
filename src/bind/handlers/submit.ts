@@ -6,7 +6,6 @@ import type { HvyVirtualPathNamingState } from '../../cli-core/virtual-file-syst
 import type { VisualBlock, VisualSection } from '../../editor/types';
 import type { HvyChatContextPreparationProgress } from '../../types';
 import { recordMeasurement } from '../../perf-trace';
-import { isLikelyInformationalAnswerRequest } from '../../ai-document-tool-parsing';
 import { getPendingChatAttachments } from '../../chat/chat-attachments';
 import { applyInlineAnswerTypeChoice } from '../../block-ops';
 
@@ -151,11 +150,11 @@ export function bindSubmit(app: HTMLElement): void {
       const abortController = new AbortController();
       state.chat.abortController = abortController;
       const isDocumentEditChat = state.currentView !== 'viewer';
-      const answerDocumentEditChatAsQuestion = isDocumentEditChat
-        && pendingAttachments.length === 0
-        && isLikelyInformationalAnswerRequest(question);
+      // Editable chat keeps its tools for questions and follow-ups too.
+      // Retain this dispatch flag for the existing request diagnostics.
+      const answerDocumentEditChatAsQuestion = false;
       const useDocumentEditTurn = isDocumentEditChat && !answerDocumentEditChatAsQuestion;
-      state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Waiting for answer...';
+      state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Reading the document and preparing an answer...';
       const saveChatOrSessionState = (): void => {
         if (isDocumentEditChat) {
           saveSessionState(state);
@@ -191,6 +190,19 @@ export function bindSubmit(app: HTMLElement): void {
       const refreshChatAfterStatusChange = async (): Promise<void> => {
         refreshChatOrRenderApp();
         await waitForNextFrame();
+      };
+      let streamingChatRefreshScheduled = false;
+      const scheduleStreamingChatRefresh = (): void => {
+        if (streamingChatRefreshScheduled) {
+          return;
+        }
+        streamingChatRefreshScheduled = true;
+        requestAnimationFrame(() => {
+          streamingChatRefreshScheduled = false;
+          if (requestNonce === state.chat.requestNonce && !abortController.signal.aborted) {
+            refreshChatOrRenderApp();
+          }
+        });
       };
       saveChatOrSessionState();
       console.debug('[hvy:chat-submit] started request', {
@@ -268,12 +280,19 @@ export function bindSubmit(app: HTMLElement): void {
                   }
                   state.chat.status = event.phase === 'preparing-context'
                     ? formatContextPreparationStatus(event.progress)
-                    : 'Waiting for answer...';
+                    : 'Reading the document and preparing an answer...';
                   if (event.phase === 'preparing-context') {
                     await refreshChatAfterStatusChange();
                     return;
                   }
                   refreshChatOrRenderApp();
+                },
+                onProgress: (message) => {
+                  if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
+                    return;
+                  }
+                  state.chat.messages = upsertChatProgressMessage(state.chat.messages, message);
+                  scheduleStreamingChatRefresh();
                 },
                 signal: abortController.signal,
               });
@@ -523,10 +542,6 @@ function findSectionOwningBlock(sections: VisualSection[], targetBlock: VisualBl
     if (findBlockInList(section.blocks, targetBlock.id) === targetBlock) {
       return section;
     }
-    const nested = findSectionOwningBlock(section.children, targetBlock);
-    if (nested) {
-      return nested;
-    }
   }
   return null;
 }
@@ -554,10 +569,6 @@ function findSectionById(sections: VisualSection[], sectionId: string): VisualSe
     if (section.customId === sectionId || section.key === sectionId) {
       return section;
     }
-    const nested = findSectionById(section.children, sectionId);
-    if (nested) {
-      return nested;
-    }
   }
   return null;
 }
@@ -567,10 +578,6 @@ function findBlockByIdInSections(sections: VisualSection[], blockId: string): Vi
     const block = findBlockInList(section.blocks, blockId) ?? findBlockBySchemaIdInList(section.blocks, blockId);
     if (block) {
       return block;
-    }
-    const nested = findBlockByIdInSections(section.children, blockId);
-    if (nested) {
-      return nested;
     }
   }
   return null;

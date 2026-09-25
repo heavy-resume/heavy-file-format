@@ -1,6 +1,8 @@
+import { findSortValueOwnerBlock, syncSortValuesForListItem, syncSortValuesForDocument } from '../sort-values';
 import { cliBlockMetadata } from './block-metadata-fields';
 import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment } from './template-directories';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml } from 'yaml';
+import { stringifyYamlUnfolded } from '../hvy/yaml-stringify';
 import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
 import type { VisualDocument } from '../types';
@@ -76,7 +78,7 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
 
   addFile(
     '/header.yaml',
-    () => stringifyYaml(omitTemplateDefinitions(document.meta)).trimEnd(),
+    () => stringifyYamlUnfolded(omitTemplateDefinitions(document.meta)).trimEnd(),
     (content) => {
       const parsed = parseYaml(content);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -119,6 +121,13 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
 function addTemplateFiles(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, naming?: HvyVirtualPathNamingState): void {
   const roots = getTemplateDirectories(document);
   addTemplateMetadataFiles(entries, roots);
+  for (const root of roots) {
+    const entry = entries.get(`${root.path}/definition.json`);
+    if (entry?.kind === 'file' && entry.write) {
+      const write = entry.write;
+      entry.write = (content) => { write(content); syncSortValuesForDocument(document); };
+    }
+  }
   for (const root of roots) {
     const subtree = new Map<string, HvyVirtualEntry>();
     if (root.block) addBlock(subtree, document, root.block, root.contentPath, naming);
@@ -357,13 +366,10 @@ function addSectionLookup(
   lookup: Map<string, VisualSection>,
   section: VisualSection,
   sectionPath: string,
-  naming?: HvyVirtualPathNamingState
+  _naming?: HvyVirtualPathNamingState
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   lookup.set(sectionPath, section);
-  section.children
-    .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionLookup(entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
@@ -464,7 +470,6 @@ function addSection(entries: Map<string, HvyVirtualEntry>, document: VisualDocum
     read: () => formatSectionAbout(section),
   });
   addBlockList(entries, document, section.blocks, sectionPath, naming);
-  addSectionList(entries, document, section.children, sectionPath, naming);
 }
 
 function addSectionList(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, sections: VisualSection[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
@@ -492,10 +497,11 @@ function addBlockList(entries: Map<string, HvyVirtualEntry>, document: VisualDoc
 
 function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, block: VisualBlock, blockPath: string, naming?: HvyVirtualPathNamingState): void {
   const meta = document.meta;
-  entries.set(blockPath, { kind: 'dir', path: blockPath });
+  const blockEntries = new Map<string, HvyVirtualEntry>();
+  blockEntries.set(blockPath, { kind: 'dir', path: blockPath });
   const baseComponent = getBlockBaseComponent(meta, block);
   const componentFile = `${blockPath}/${sanitizePathSegment(block.schema.component) || 'component'}.json`;
-  entries.set(componentFile, {
+  blockEntries.set(componentFile, {
     kind: 'file',
     path: componentFile,
     read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema, meta), null, 2)}\n`,
@@ -507,7 +513,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocumen
     ),
   });
   const componentName = sanitizePathSegment(block.schema.component) || 'component';
-  entries.set(`${blockPath}/${componentName}.css`, {
+  blockEntries.set(`${blockPath}/${componentName}.css`, {
     kind: 'file',
     path: `${blockPath}/${componentName}.css`,
     read: () => block.schema.css,
@@ -517,7 +523,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocumen
     },
   });
   const bodyTextFile = `${blockPath}/${bodyFileNameForBlock(block, meta)}`;
-  entries.set(bodyTextFile, {
+  blockEntries.set(bodyTextFile, {
     kind: 'file',
     path: bodyTextFile,
     read: () => readBlockBodyText(block, meta),
@@ -526,15 +532,27 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocumen
       writeBlockBodyText(block, meta, content);
     },
   });
-  entries.set(`${blockPath}/about-${componentName}.txt`, {
+  blockEntries.set(`${blockPath}/about-${componentName}.txt`, {
     kind: 'file',
     path: `${blockPath}/about-${componentName}.txt`,
     read: () => formatComponentAbout(meta, block.schema.component),
   });
-  addPluginDocumentationFile(entries, block, blockPath);
-  addPluginVisualDescriptionFile(entries, document, block, blockPath);
-  addTableDataFiles(entries, meta, block, blockPath);
-  addFormScriptFiles(entries, block, blockPath);
+  addPluginDocumentationFile(blockEntries, block, blockPath);
+  addPluginVisualDescriptionFile(blockEntries, document, block, blockPath);
+  addTableDataFiles(blockEntries, meta, block, blockPath);
+  addFormScriptFiles(blockEntries, block, blockPath);
+
+  for (const [path, entry] of blockEntries) {
+    if (entry.kind === 'file' && entry.write && !path.endsWith('.css')) {
+      const write = entry.write;
+      entry.write = (content) => {
+        write(content);
+        const owner = findSortValueOwnerBlock(document, block.id);
+        if (owner) syncSortValuesForListItem(document.meta, owner);
+      };
+    }
+    entries.set(path, entry);
+  }
 
   addNamedBlockChildren(entries, document, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
   if (baseComponent === 'component-list') {
@@ -616,7 +634,6 @@ function collectCanonicalIdAliases(document: VisualDocument): VirtualIdAlias[] {
         entries.set(sectionPath, { kind: 'dir', path: sectionPath });
         addAlias(getSectionId(section), sectionPath);
         visitBlocks(section.blocks, sectionPath);
-        visitSections(section.children, sectionPath);
       });
   };
   visitSections(document.sections, '/body');
@@ -789,9 +806,6 @@ function addSectionBlockLookup(
 ): void {
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   addBlockListLookup(meta, entries, lookup, section.blocks, sectionPath, naming);
-  section.children
-    .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionBlockLookup(meta, entries, lookup, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 function addBlockListLookup(
@@ -852,9 +866,6 @@ function addSectionInsertionTargets(
   entries.set(sectionPath, { kind: 'dir', path: sectionPath });
   targets.set(sectionPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(section.blocks, block, index) });
   addBlockListInsertionTargets(meta, entries, targets, section.blocks, sectionPath, naming);
-  section.children
-    .filter((child) => !child.isGhost)
-    .forEach((child, index) => addSectionInsertionTargets(meta, entries, targets, child, `${sectionPath}/${uniqueName(sectionDirectoryName(child, index), entries, sectionPath)}`, naming));
 }
 
 function addBlockListInsertionTargets(
@@ -945,7 +956,6 @@ function sectionToCliJson(section: VisualSection): JsonObject {
   return {
     id: getSectionId(section),
     title: section.title,
-    level: section.level,
     lock: section.lock,
     editorOnly: section.editorOnly,
     expanded: section.expanded,
@@ -968,7 +978,6 @@ function formatSectionInfo(section: VisualSection): string {
     'This section',
     `id: ${getSectionId(section) || '(none)'}`,
     `name: ${section.title || '(untitled)'}`,
-    `section nesting level: ${section.level}`,
     ...(section.description?.trim() ? [`description: ${section.description.trim()}`] : []),
     ...(section.tags?.trim() ? [`tags: ${section.tags.trim()}`] : []),
     ...(section.location ? [`location: ${section.location}`] : []),
@@ -993,7 +1002,6 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
     section.customIdGenerated = false;
   }
   if (typeof value.title === 'string') section.title = value.title;
-  if (typeof value.level === 'number') section.level = Math.max(1, Math.min(6, Math.floor(value.level)));
   if (typeof value.lock === 'boolean') section.lock = value.lock;
   if (typeof value.editorOnly === 'boolean') section.editorOnly = value.editorOnly;
   if (typeof value.expanded === 'boolean') section.expanded = value.expanded;
@@ -1100,6 +1108,9 @@ function applyBlockSchemaJson(
   if (Array.isArray(value.derivedSortKeyNames)) {
     schema.derivedSortKeyNames = parseStringList(value.derivedSortKeyNames);
   }
+  if (Array.isArray(value.derivedGroupKeyNames)) {
+    schema.derivedGroupKeyNames = parseStringList(value.derivedGroupKeyNames);
+  }
   if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
     schema.groupKeys = parseGroupKeys(value.groupKeys);
   }
@@ -1183,6 +1194,9 @@ function applyBlockSchemaJson(
   }
   if (value.pluginSortValues && typeof value.pluginSortValues === 'object' && !Array.isArray(value.pluginSortValues)) {
     schema.pluginSortValues = parseSortKeys(value.pluginSortValues);
+  }
+  if (value.pluginGroupValues && typeof value.pluginGroupValues === 'object' && !Array.isArray(value.pluginGroupValues)) {
+    schema.pluginGroupValues = parseGroupKeys(value.pluginGroupValues);
   }
   if (baseComponent === 'expandable') {
     if (typeof value.expandableAlwaysShowStub === 'boolean') schema.expandableAlwaysShowStub = value.expandableAlwaysShowStub;

@@ -2,7 +2,8 @@ import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
 import type { JsonObject } from '../hvy/types';
 import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
 import { findFormFieldTypeIssues, parseFormSpec } from '../plugins/form';
-import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { checkPythonSyntax } from '../plugins/scripting/python-syntax';
 import type { VisualDocument } from '../types';
 import { parse as parseYaml } from 'yaml';
 
@@ -128,6 +129,13 @@ function lintUnsupportedScriptDocToolCalls(body: string): HvyCliPluginLintIssue[
   return issues;
 }
 
+async function lintScriptSyntax(source: string, path: string): Promise<HvyCliPluginLintIssue[]> {
+  const issue = await checkPythonSyntax(source);
+  return issue ? [{
+    message: `${path}: line ${issue.line}, column ${issue.column}: ${issue.name}: ${issue.message}`,
+  }] : [];
+}
+
 function extractScriptDocToolNames(body: string): string[] {
   const names: string[] = [];
   for (const match of body.matchAll(/\bdoc\.tool\(\s*(['"])([^'"]+)\1/g)) {
@@ -201,6 +209,9 @@ registerHvyCliPluginCommands({
         return [{ message: `form YAML error: ${parsed.error}` }, ...scriptIssues, ...sqlIssues, ...scriptScalarIssues];
       }
       const parsedWithConfig = parseFormSpec(context.body, context.config);
+      for (const [name, source] of Object.entries(parsedWithConfig.spec.scripts)) {
+        scriptIssues.push(...await lintScriptSyntax(source, `${context.textPath} script ${JSON.stringify(name)}`));
+      }
       const schemaIssues = lintFormSchemaShape(context.body);
       const script = parsedWithConfig.spec.submitScript.trim();
       if (!parsedWithConfig.spec.showSubmit || script.length > 0) {
@@ -436,11 +447,12 @@ registerHvyCliPluginCommands({
   ],
   operationCommands: [],
   lintChecks: [
-    (context) => [
+    async (context) => [
       ...(context.body.trim().length === 0
         ? [{ message: 'scripting plugin body is empty; expected Brython/Python source.' }]
         : []),
       ...lintUnsupportedScriptDocToolCalls(context.body),
+      ...await lintScriptSyntax(context.body, context.textPath),
     ],
   ],
   helpCommands: [
@@ -449,6 +461,17 @@ registerHvyCliPluginCommands({
       description: 'Show doc.tool call shape for one scripting tool.',
     },
   ],
+});
+
+registerHvyCliPluginCommands({
+  name: 'power-scripting',
+  pluginId: POWER_SCRIPTING_PLUGIN_ID,
+  helpTopic: 'hvy plugin power-scripting',
+  cheatsheetName: 'scripting',
+  componentHints: ['Power scripts run Python with explicitly authorized asynchronous plugin APIs.'],
+  addCommands: [],
+  operationCommands: [],
+  lintChecks: [(context) => lintScriptSyntax(context.body, context.textPath)],
 });
 
 registerHvyCliPluginCommands({

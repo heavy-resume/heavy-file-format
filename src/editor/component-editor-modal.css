@@ -87,12 +87,13 @@
   padding: 0.75rem;
 }
 
-.hvy-document .component-editor-modal-panel {
+.hvy-document .modal-panel.component-editor-modal-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(760px, calc(100% - 1rem));
-  height: min(44rem, calc(100% - 1rem));
-  max-height: calc(100% - 1rem);
+  width: fit-content;
+  min-width: min(var(--hvy-component-editor-preferred-width, 760px), calc(100% - 2rem));
+  max-width: min(760px, calc(100% - 2rem));
+  max-height: min(44rem, calc(100% - 1rem));
   padding: 0;
   overflow: hidden;
 }
@@ -199,4 +200,15 @@
   padding: 0.7rem 0.9rem;
   border-top: 1px solid var(--hvy-border);
   background: var(--hvy-surface-alt);
+}
+
+.hvy-document .component-editor-modal-probe {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The probe answers how much room the modal could offer, so it measures the widest panel. */
+.hvy-document .component-editor-modal-probe .modal-panel.component-editor-modal-panel {
+  width: min(760px, calc(100% - 2rem));
+  min-width: 0;
 }

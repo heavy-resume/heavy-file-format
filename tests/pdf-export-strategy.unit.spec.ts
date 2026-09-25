@@ -70,7 +70,6 @@ function createSection(id: string, blocks: VisualBlock[], tags = ''): VisualSect
     idEditorOpen: false,
     isGhost: false,
     title: id,
-    level: 1,
     expanded: true,
     highlight: false,
     css: '',
@@ -79,7 +78,6 @@ function createSection(id: string, blocks: VisualBlock[], tags = ''): VisualSect
     location: 'main',
     hideIfUnmodified: false,
     blocks,
-    children: [],
   };
 }
 

@@ -25,23 +25,11 @@ const placeholderMeasureCallbacks = new WeakMap<HTMLElement, NonNullable<Section
 const SURFACES = [
   {
     scroller: '.editor-shell .editor-tree',
-    sections: '.editor-tree > .hvy-surface > .editor-tree-body > :is(.editor-section-card:not(.editor-subsection-card), .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"])',
+    sections: '.editor-tree > .hvy-surface > .editor-tree-body > :is(.editor-section-card, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"])',
   },
   {
     scroller: '.viewer-shell .reader-document',
     sections: '.reader-document > .hvy-surface > .reader-document-body > :is(.reader-section, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader"])',
-  },
-  {
-    scroller: '.editor-shell .editor-tree',
-    sections: '.editor-section-card > .editor-blocks > :is(.editor-subsection-card, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"])',
-    minimumSiblingCount: 24,
-    itemSelector: ':is(.editor-subsection-card, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"])',
-  },
-  {
-    scroller: '.viewer-shell .reader-document',
-    sections: '.reader-section > .reader-section-content > :is(.reader-section, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader"])',
-    minimumSiblingCount: 24,
-    itemSelector: ':is(.reader-section, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader"])',
   },
   {
     scroller: '.editor-shell .editor-tree',
@@ -260,9 +248,6 @@ function unloadVirtualSection(
   }
   if (section.dataset.parentLocked) {
     placeholder.dataset.parentLocked = section.dataset.parentLocked;
-  }
-  if (section.classList.contains('editor-subsection-card') || section.dataset.hvyVirtualSubsection === 'true') {
-    placeholder.dataset.hvyVirtualSubsection = 'true';
   }
   placeholder.style.minHeight = `${height}px`;
   placeholder.style.margin = style.margin;

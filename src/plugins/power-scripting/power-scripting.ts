@@ -428,6 +428,7 @@ export const powerScriptingPluginFactory: HvyPluginFactory = build;
 export const powerScriptingPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(POWER_SCRIPTING_PLUGIN_ID),
   displayName: 'Power Scripting',
+  mount: { strategy: 'immediate' },
   documentation: { filename: 'about-power-scripting.txt', text: powerScriptingDocumentation },
   aiHint: 'Viewer-only unrestricted JavaScript. Source code lives in plugin.txt and requires explicit trust.',
   aiHelp: `Use \`<!--hvy:plugin {"plugin":"${POWER_SCRIPTING_PLUGIN_ID}"}-->\`. JavaScript receives the existing document API as \`doc\`, plus \`doc.canvas\`, \`doc.animation\`, \`doc.listen\`, and \`doc.onCleanup\`.`,

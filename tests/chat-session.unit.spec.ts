@@ -1,3 +1,4 @@
+import { setReferenceAppConfig } from '../src/reference-config';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
@@ -47,6 +48,7 @@ vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
 }));
 
 beforeEach(() => {
+  setReferenceAppConfig(null);
   requestProxyCompletionMock.mockReset();
   requestProxyToolTurnMock.mockReset();
   requestProxyToolTurnMock.mockImplementation(async (params: { settings: ChatSettings }) => ({
@@ -148,7 +150,9 @@ test('requestChatTurn keeps Viewer follow-ups in one read-only agent conversatio
   }));
 });
 
-test('requestChatTurn refuses document changes in viewer mode without calling the provider', async () => {
+test('requestChatTurn sends apparent document changes to the read-only Viewer agent', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'Viewer mode cannot make that change.' });
+
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
     document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy'),
@@ -157,11 +161,13 @@ test('requestChatTurn refuses document changes in viewer mode without calling th
   });
 
   expect(result.error).toBeNull();
-  expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
-  expect(runViewerAgentMock).not.toHaveBeenCalled();
+  expect(result.messages.at(-1)?.content).toBe('Viewer mode cannot make that change.');
+  expect(runViewerAgentMock).toHaveBeenCalledOnce();
 });
 
-test('requestChatTurn refuses DB-backed viewer change requests before QA routing', async () => {
+test('requestChatTurn sends apparent DB-backed changes to the read-only Viewer agent', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'I can explain the forms, but cannot change them.' });
+
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
     document: deserializeDocument(DOC_WITH_DB_TABLE, '.hvy'),
@@ -170,8 +176,23 @@ test('requestChatTurn refuses DB-backed viewer change requests before QA routing
   });
 
   expect(result.error).toBeNull();
-  expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
-  expect(runViewerAgentMock).not.toHaveBeenCalled();
+  expect(result.messages.at(-1)?.content).toBe('I can explain the forms, but cannot change them.');
+  expect(runViewerAgentMock).toHaveBeenCalledOnce();
+});
+
+test('requestChatTurn sends informational requests containing change keywords to the Viewer agent', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'Here is a summary of the document.' });
+
+  const result = await requestChatTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy'),
+    messages: [],
+    question: 'Can you create a summary of this document?',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('Here is a summary of the document.');
+  expect(runViewerAgentMock).toHaveBeenCalledOnce();
 });
 
 test('requestChatTurn still answers informational viewer questions about changes', async () => {
@@ -290,12 +311,13 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(result.error).toBeNull();
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ hvy insert 0 section /body chores "Chores"',
     '$ [1/2] hvy insert 0 text /body/chores note',
     '$ [2/2] echo "Weekly chore plan" > /body/chores/note/text.txt',
   ]);
   expect(onProgress.mock.calls[0]?.[0].work?.tokenUsage).toEqual({ inputTokens: 100, outputTokens: 10 });
+  expect(onProgress.mock.calls.map((call) => call[0].work.activityRevision)).toEqual([1, 2, 3, 4, 5, 6]);
   expect(result.messages.at(-1)?.work?.status).toBe('done');
   expect(result.messages.at(-1)?.work?.details).toEqual([
     '$ hvy insert 0 section /body chores "Chores"',
@@ -466,6 +488,7 @@ test('requestDocumentEditChatTurn can run native provider tool calls', async () 
     ]),
   }));
   expect(onProgress.mock.calls.map((call) => call[0].content)).toContain('$ hvy insert 0 section /body chores "Chores"');
+  expect(onProgress.mock.calls.map((call) => call[0].work.activityRevision)).toEqual([1, 2, 3, 4]);
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
     content: 'Created the chore section.',
@@ -639,7 +662,6 @@ section_defs:
     template:
       id: certifications
       title: Certifications
-      level: 1
       description: Certifications
       blocks: []
       children: []
@@ -1460,7 +1482,7 @@ test('requestDocumentEditChatTurn accepts shell-looking command wrappers', async
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ ls /',
     '$ ls /body',
     '$ pwd',
@@ -1489,7 +1511,7 @@ pwd
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     'Notes\nWhat you are doing: Inspecting the current directory.\nWhy you are doing it: I need to choose the right edit target.\nWhat you are unsure of: Whether the section already exists.',
     '$ pwd',
   ]);
@@ -1523,7 +1545,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/2] cat /body/summary/long/text.txt',
     '$ [2/2] pwd',
   ]);
@@ -1551,7 +1573,7 @@ test('requestDocumentEditChatTurn dedupes identical fenced commands in one respo
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual(['$ pwd']);
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual(['$ pwd']);
   const nextPrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content ?? '';
   expect(nextPrompt.match(/CMD: pwd/g) ?? []).toHaveLength(1);
 });
@@ -1609,7 +1631,7 @@ done Created the chore section.`)
   expect(result.error).toBeNull();
   expect(serializeDocument(document)).toContain('Weekly chore plan');
   expect(onMutation).toHaveBeenCalledWith('chat-cli');
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] hvy insert 0 section /body chores "Chores"',
     '$ [2/3] hvy insert 0 text /body/chores note',
     '$ [3/3] echo "Weekly chore plan" > /body/chores/note/text.txt',
@@ -1647,7 +1669,7 @@ cat /header.yaml
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] pwd',
     '$ [2/3] ls /body',
     '$ [3/3] cat /header.yaml',
@@ -1684,7 +1706,7 @@ cat /scratchpad.txt
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] pwd',
     "$ [2/3] cat > /scratchpad.txt <<'TXT'\nPlan:\n1. Inspect\n2. Edit\nTXT",
     '$ [3/3] cat /scratchpad.txt',
@@ -1726,7 +1748,7 @@ hvy_version: 0.1
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/3] cat /body/summary/long-a/text.txt',
     '$ [2/3] cat /body/summary/long-b/text.txt',
     '$ [3/3] cat /body/summary/long-c/text.txt',
@@ -1765,7 +1787,7 @@ true
   });
 
   expect(result.error).toBeNull();
-  expect(onProgress.mock.calls.map((call) => call[0].content)).toEqual([
+  expect(onProgress.mock.calls.filter((call, index, calls) => index === 0 || call[0].work.details.length !== calls[index - 1][0].work.details.length).map((call) => call[0].content)).toEqual([
     '$ [1/4] pwd',
     '$ [2/4] ls /',
     '$ [3/4] cat /header.yaml',
@@ -2526,4 +2548,75 @@ test('copyChatMessageToHvySection uses the supplied title and section id', () =>
   if (!result.ok) return;
   expect(result.section.customId).toBe('custom-id');
   expect(result.section.title).toBe('Custom title');
+});
+
+test('semantic provider recognizes completion prose before the editor retries', async () => {
+  setReferenceAppConfig({ semanticFilterProvider: () => [{ candidateId: 'response' }] });
+  requestProxyCompletionMock.mockResolvedValueOnce('I have checked the document. No changes were needed.');
+  requestProxyCompletionMock.mockRejectedValue(new Error('Tool choice is required, but model did not call a tool'));
+  const result = await requestDocumentEditChatTurn({
+    settings: { provider: 'openai', model: 'test-model' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy'),
+    messages: [],
+    request: 'Check the document.',
+  });
+  expect(result.error).toBeNull();
+  expect(requestProxyToolTurnMock).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ['progress', () => []],
+  ['invalid output', () => 'not valid JSON'],
+  ['unavailable evaluator', () => { throw new Error('Unavailable'); }],
+  ['unknown candidate', () => [{ candidateId: 'unknown' }]],
+] as const)('expected result: %s leaves protocol recovery active', async (_label, provider) => {
+  setReferenceAppConfig({ semanticFilterProvider: provider });
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('I need to inspect the document.')
+    .mockResolvedValueOnce('done Checked the document.');
+  const result = await requestDocumentEditChatTurn({
+    settings: { provider: 'openai', model: 'test-model' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy'),
+    messages: [], request: 'Check the document.',
+  });
+  expect(result.error).toBeNull();
+  expect(requestProxyToolTurnMock).toHaveBeenCalledTimes(2);
+});
+
+test('expected result: semantic completion preserves edits and still blocks introduced diagnostics', async () => {
+  setReferenceAppConfig({ semanticFilterProvider: () => '["response"]' });
+  requestProxyCompletionMock
+    .mockResolvedValueOnce('hvy insert -1 xref-card /body/summary --id empty-ref')
+    .mockResolvedValueOnce('I have created the reference.')
+    .mockResolvedValueOnce('echo \'{"id":"empty-ref","xrefTitle":"Summary","xrefTarget":"summary"}\' > /body/summary/empty-ref/xref-card.json')
+    .mockResolvedValueOnce('I have repaired the reference.');
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n\n<!--hvy: {"id":"summary"}-->\n#! Summary\n', '.hvy');
+  const result = await requestDocumentEditChatTurn({
+    settings: { provider: 'openai', model: 'test-model' },
+    document, messages: [], request: 'Create a reference.',
+  });
+  expect(result.error).toBeNull();
+  expect(requestProxyToolTurnMock).toHaveBeenCalledTimes(4);
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('You cannot finish yet.');
+  expect(serializeDocument(document)).toContain('"xrefTarget":"summary"');
+  expect(result.messages.at(-1)?.content).toBe('I have repaired the reference.');
+});
+
+test('expected result: simulator recognizes a native turn containing only completion prose', async () => {
+  setReferenceAppConfig({ semanticFilterProvider: () => '["response"]' });
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const settings: ChatSettings = { provider: 'openai', model: 'test-model' };
+  const initial = await buildDocumentEditCliSimRequest({
+    settings, document, messages: [], request: 'Check the document.',
+  });
+  const result = await advanceDocumentEditCliSimStep({
+    settings, document, turnState: initial.turnState,
+    assistantOutput: 'I have checked the document.',
+    toolTurn: {
+      output: 'I have checked the document.', reasoningSummary: '', toolCalls: [],
+      nativeMessages: [], toolState: { provider: 'openai', input: [] },
+    },
+  });
+  expect(result.terminalSummary).toBe('I have checked the document.');
+  expect(result.requestPayload).toBeNull();
 });

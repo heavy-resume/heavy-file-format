@@ -2,6 +2,24 @@
   width: 100%;
 }
 
+.hvy-document .input-with-unit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.hvy-document .input-with-unit > input {
+  width: 100%;
+  min-width: 0;
+}
+
+.hvy-document .input-unit {
+  color: var(--hvy-muted);
+  white-space: nowrap;
+}
+
 .hvy-document .editor-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

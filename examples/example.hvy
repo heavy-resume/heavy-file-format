@@ -60,280 +60,269 @@ Keep the visible document focused on the next decision, and let the attached dat
      - [ ] Send two recruiter follow-ups
      - [ ] Tailor resume for platform roles
 
-<!--hvy:subsection {"id":"application-pipeline","highlight":true}-->
-#! Application Pipeline
+<!--hvy:container {"id":"application-pipeline","containerTitle":"Application Pipeline","css":"margin: 0.5rem 0; background: var(--hvy-highlight-1); box-shadow: inset 0 0 0 2px var(--hvy-highlight-2);"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-Use the plugin block below as the working application table. The rendered rows should come from the attached SQLite file rather than from inline HVY table data.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  Use the plugin block below as the working application table. The rendered rows should come from the attached SQLite file rather than from inline HVY table data.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
 
-<!--hvy:subsection {"id":"notes"}-->
-#! Notes
+<!--hvy:container {"id":"notes","containerTitle":"Notes","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+ <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
- <!--hvy:expandable:stub {}-->
+  <!--hvy:expandable:stub {}-->
 
-  <!--hvy:text {"css":"margin: 0;"}-->
-   Strong leads worth extra prep
+   <!--hvy:text {"css":"margin: 0;"}-->
+    Strong leads worth extra prep
 
- <!--hvy:expandable:content {}-->
+  <!--hvy:expandable:content {}-->
 
-  <!--hvy:container {"id":"nested-container-demo","containerTitle":"Nested Collapsed Container","containerExpanded":false,"css":"margin: 0; border: 1px solid var(--hvy-border); border-radius: 8px; padding: 0.75rem;"}-->
+   <!--hvy:container {"id":"nested-container-demo","containerTitle":"Nested Collapsed Container","containerExpanded":false,"css":"margin: 0; border: 1px solid var(--hvy-border); border-radius: 8px; padding: 0.75rem;"}-->
 
-   <!--hvy:container:0 {}-->
+    <!--hvy:container:0 {}-->
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     Northwind Labs and Lattice Systems are both good fits for reusable systems work, documentation-heavy delivery, and platform ownership.
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Northwind Labs and Lattice Systems are both good fits for reusable systems work, documentation-heavy delivery, and platform ownership.
 
-   <!--hvy:container:1 {}-->
+    <!--hvy:container:1 {}-->
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     Prepare stories around migration planning, developer tooling, and AI-assisted workflows before the next calls.
+     <!--hvy:text {"css":"margin: 0;"}-->
+      Prepare stories around migration planning, developer tooling, and AI-assisted workflows before the next calls.
 
-<!--hvy:subsection {"id":"next-steps"}-->
-#! Next Steps
+<!--hvy:container {"id":"next-steps","containerTitle":"Next Steps","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:component-list {"componentListComponent":"text","css":"margin: 0.5rem 0;"}-->
+ <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0.5rem 0;"}-->
 
- <!--hvy:component-list:0 {}-->
+  <!--hvy:component-list:0 {}-->
 
-  <!--hvy:text {}-->
-   Ask for feedback from roles that have stalled for more than 10 days.
+   <!--hvy:text {}-->
+    Ask for feedback from roles that have stalled for more than 10 days.
 
- <!--hvy:component-list:1 {}-->
+  <!--hvy:component-list:1 {}-->
 
-  <!--hvy:text {}-->
-   Split opportunities into "must pursue" and "nice to pursue" before adding more applications.
+   <!--hvy:text {}-->
+    Split opportunities into "must pursue" and "nice to pursue" before adding more applications.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table"}-->
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table"}-->
 
-<!--hvy:subsection {"id":"progress-bar-example"}-->
-#! Progress Bar Example
+<!--hvy:container {"id":"progress-bar-example","containerTitle":"Progress Bar Example","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-The block below is a simple themed progress bar example that should pick up the active accent color by default.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  The block below is a simple themed progress bar example that should pick up the active accent color by default.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.progress-bar","pluginConfig":{"min":0,"max":100,"value":68}}-->
-${value}%
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.progress-bar","pluginConfig":{"min":0,"max":100,"value":68}}-->
+  ${value}%
 
-<!--hvy:subsection {"id":"scripting-example"}-->
-#! Scripting Example
+<!--hvy:container {"id":"scripting-example","containerTitle":"Scripting Example","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"id":"script-value","css":"margin: 0.5rem 0;"}-->
-Script test value: 0
+ <!--hvy:text {"id":"script-value","css":"margin: 0.5rem 0;"}-->
+  Script test value: 0
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
-doc.header.set("last_viewed", "from python!")
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  doc.header.set("last_viewed", "from python!")
 
-output = doc.tool("view_component", {"component_ref": "script-value"})
-for line in output.split('\n'):
-    if "Script test value:" in line:
-        parts = line.split('|', 1)
-        if len(parts) == 2:
-            line_no = int(parts[0].strip())
-            curr_val = int(parts[1].split('Script test value:')[1].strip())
-            doc.tool("patch_component", {
-                "component_ref": "script-value",
-                "edits": [{
-                    "op": "replace",
-                    "start_line": line_no,
-                    "end_line": line_no,
-                    "text": f"Script test value: {curr_val + 1}"
-                }]
-            })
-        break
+  output = doc.tool("view_component", {"component_ref": "script-value"})
+  for line in output.split('\n'):
+     if "Script test value:" in line:
+         parts = line.split('|', 1)
+         if len(parts) == 2:
+             line_no = int(parts[0].strip())
+             curr_val = int(parts[1].split('Script test value:')[1].strip())
+             doc.tool("patch_component", {
+                 "component_ref": "script-value",
+                 "edits": [{
+                     "op": "replace",
+                     "start_line": line_no,
+                     "end_line": line_no,
+                     "text": f"Script test value: {curr_val + 1}"
+                 }]
+             })
+         break
 
-<!--hvy:plugin {"id":"random-card-form","css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitScript":"draw_card","submitLabel":"Draw a card","scriptLibraries":["random"]}}-->
-fields:
-  - label: Card
-    type: text
-    placeholder: Click Draw a card
-scripts:
-  draw_card: |
-    import random
-    cards = ["Ace of Hearts", "King of Clubs", "Queen of Diamonds", "Jack of Spades"]
-    doc.form.set_value("Card", random.choice(cards))
+ <!--hvy:plugin {"id":"random-card-form","css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitScript":"draw_card","submitLabel":"Draw a card","scriptLibraries":["random"]}}-->
+  fields:
+   - label: Card
+     type: text
+     placeholder: Click Draw a card
+  scripts:
+   draw_card: |
+     import random
+     cards = ["Ace of Hearts", "King of Clubs", "Queen of Diamonds", "Jack of Spades"]
+     doc.form.set_value("Card", random.choice(cards))
 
 
-<!--hvy:subsection {"id":"form-examples"}-->
-#! Form Examples
+<!--hvy:container {"id":"form-examples","containerTitle":"Form Examples","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-These form plugin blocks keep their input definitions in YAML text owned by `hvy.form`. They exercise static options, script-populated fields, field triggers, submit handling, and the core HTML input types without introducing standalone HVY input components.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  These form plugin blocks keep their input definitions in YAML text owned by `hvy.form`. They exercise static options, script-populated fields, field triggers, submit handling, and the core HTML input types without introducing standalone HVY input components.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"populate_lunch","submitScript":"submit_lunch","submitLabel":"Save lunch order"}}-->
-fields:
-  - label: Lunch choice
-    type: select
-    value: soup
-    required: true
-    options:
-      - label: Sandwich
-        value: sandwich
-      - label: Soup
-        value: soup
-      - label: Salad
-        value: salad
-    triggers:
-      change: populate_lunch
-  - label: Suggested side
-    type: text
-    placeholder: Pick a food first
-  - label: Delivery date
-    type: date
-  - label: Notes
-    type: textarea
-    placeholder: Allergies, timing, or other details
-  - label: Rush order
-    type: checkbox
-    value: false
-scripts:
-  populate_lunch: |
-    food = doc.form.get_value("Lunch choice")
-    sides = {
-        "sandwich": "Kettle chips",
-        "soup": "Sourdough roll",
-        "salad": "Iced tea",
-    }
-    doc.form.set_value("Suggested side", sides.get(food, ""))
-  submit_lunch: |
-    values = doc.form.get_values()
-    if not values.get("Delivery date"):
-        doc.form.set_error("Delivery date", "Choose a delivery date before submitting.")
-    else:
-        doc.form.clear_error("Delivery date")
-        doc.header.set("last_lunch_order", values)
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"populate_lunch","submitScript":"submit_lunch","submitLabel":"Save lunch order"}}-->
+  fields:
+   - label: Lunch choice
+     type: select
+     value: soup
+     required: true
+     options:
+       - label: Sandwich
+         value: sandwich
+       - label: Soup
+         value: soup
+       - label: Salad
+         value: salad
+     triggers:
+       change: populate_lunch
+   - label: Suggested side
+     type: text
+     placeholder: Pick a food first
+   - label: Delivery date
+     type: date
+   - label: Notes
+     type: textarea
+     placeholder: Allergies, timing, or other details
+   - label: Rush order
+     type: checkbox
+     value: false
+  scripts:
+   populate_lunch: |
+     food = doc.form.get_value("Lunch choice")
+     sides = {
+         "sandwich": "Kettle chips",
+         "soup": "Sourdough roll",
+         "salad": "Iced tea",
+     }
+     doc.form.set_value("Suggested side", sides.get(food, ""))
+   submit_lunch: |
+     values = doc.form.get_values()
+     if not values.get("Delivery date"):
+         doc.form.set_error("Delivery date", "Choose a delivery date before submitting.")
+     else:
+         doc.form.clear_error("Delivery date")
+         doc.header.set("last_lunch_order", values)
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"update_summary","submitScript":"submit_contact","showSubmit":false}}-->
-fields:
-  - label: Full name
-    type: text
-    placeholder: Ada Lovelace
-    required: true
-  - label: Email
-    type: email
-    placeholder: ada@example.com
-  - label: Phone
-    type: tel
-    placeholder: 555-0100
-  - label: Portfolio URL
-    type: url
-    placeholder: https://example.com
-  - label: Access phrase
-    type: password
-  - label: Interview count
-    type: number
-    value: "3"
-    triggers:
-      input: update_summary
-  - label: Preferred contact
-    type: radio
-    value: email
-    options:
-      - label: Email
-        value: email
-      - label: Phone
-        value: phone
-      - label: Portfolio review
-        value: portfolio
-    triggers:
-      change: update_summary
-  - label: Summary
-    type: textarea
-    meta:
-      css: "min-height: 4rem;"
-  - label: Source
-    type: hidden
-    value: example-document
-scripts:
-  update_summary: |
-    count = doc.form.get_value("Interview count") or "0"
-    method = doc.form.get_value("Preferred contact") or "email"
-    doc.form.set_value("Summary", f"Plan for {count} interview touchpoint(s), follow up by {method}.")
-  submit_contact: |
-    values = doc.form.get_values()
-    if not values.get("Full name"):
-        doc.form.set_error("Full name", "Name is required.")
-    else:
-        doc.form.clear_error("Full name")
-        doc.header.set("last_contact_form", values)
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"update_summary","submitScript":"submit_contact","showSubmit":false}}-->
+  fields:
+   - label: Full name
+     type: text
+     placeholder: Ada Lovelace
+     required: true
+   - label: Email
+     type: email
+     placeholder: ada@example.com
+   - label: Phone
+     type: tel
+     placeholder: 555-0100
+   - label: Portfolio URL
+     type: url
+     placeholder: https://example.com
+   - label: Access phrase
+     type: password
+   - label: Interview count
+     type: number
+     value: "3"
+     triggers:
+       input: update_summary
+   - label: Preferred contact
+     type: radio
+     value: email
+     options:
+       - label: Email
+         value: email
+       - label: Phone
+         value: phone
+       - label: Portfolio review
+         value: portfolio
+     triggers:
+       change: update_summary
+   - label: Summary
+     type: textarea
+     meta:
+       css: "min-height: 4rem;"
+   - label: Source
+     type: hidden
+     value: example-document
+  scripts:
+   update_summary: |
+     count = doc.form.get_value("Interview count") or "0"
+     method = doc.form.get_value("Preferred contact") or "email"
+     doc.form.set_value("Summary", f"Plan for {count} interview touchpoint(s), follow up by {method}.")
+   submit_contact: |
+     values = doc.form.get_values()
+     if not values.get("Full name"):
+         doc.form.set_error("Full name", "Name is required.")
+     else:
+         doc.form.clear_error("Full name")
+         doc.header.set("last_contact_form", values)
 
-<!--hvy:subsection {"id":"import-failure-example"}-->
-#! Import Failure Example
+<!--hvy:container {"id":"import-failure-example","containerTitle":"Import Failure Example","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-The script below intentionally attempts to import `browser.window` so you can inspect what the current scripting environment allows and how failure is surfaced if that import path is blocked.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  The script below intentionally attempts to import `browser.window` so you can inspect what the current scripting environment allows and how failure is surfaced if that import path is blocked.
 
-<!--hvy:text {"id":"import-example-result","css":"margin: 0.5rem 0;"}-->
-Import example result: pending
+ <!--hvy:text {"id":"import-example-result","css":"margin: 0.5rem 0;"}-->
+  Import example result: pending
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
-from browser import window
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  from browser import window
 
-output = doc.tool("view_component", {"component_ref": "import-example-result"})
-for line in output.split('\n'):
-    if "Import example result:" in line:
-        parts = line.split('|', 1)
-        if len(parts) == 2:
-            line_no = int(parts[0].strip())
-            doc.tool("patch_component", {
-                "component_ref": "import-example-result",
-                "edits": [{
-                    "op": "replace",
-                    "start_line": line_no,
-                    "end_line": line_no,
-                    "text": f"Import example result: browser import worked ({window.location.href})"
-                }]
-            })
-        break
+  output = doc.tool("view_component", {"component_ref": "import-example-result"})
+  for line in output.split('\n'):
+     if "Import example result:" in line:
+         parts = line.split('|', 1)
+         if len(parts) == 2:
+             line_no = int(parts[0].strip())
+             doc.tool("patch_component", {
+                 "component_ref": "import-example-result",
+                 "edits": [{
+                     "op": "replace",
+                     "start_line": line_no,
+                     "end_line": line_no,
+                     "text": f"Import example result: browser import worked ({window.location.href})"
+                 }]
+             })
+         break
 
-<!--hvy:subsection {"id":"carousel-example"}-->
-#! Carousel Example
+<!--hvy:container {"id":"carousel-example","containerTitle":"Carousel Example","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-The carousel component uses the same attached image storage as native image blocks, but renders multiple images with automatic movement, controls, and indicators.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  The carousel component uses the same attached image storage as native image blocks, but renders multiple images with automatic movement, controls, and indicators.
 
-<!--hvy:carousel {"css":"margin: 0.5rem 0;","carouselDurationMs":2400,"carouselPauseOnHover":true,"carouselShowControls":true,"carouselShowIndicators":true,"carouselImages":[{"imageFile":"carousel-slide-a.svg","imageAlt":"Carousel demo slide","caption":"Attached SVG image rendered from the HVY tail"},{"imageFile":"carousel-slide-b.svg","imageAlt":"Graph demo slide","caption":"Multiple attached images in one plugin block"}]}-->
+ <!--hvy:carousel {"css":"margin: 0.5rem 0;","carouselDurationMs":2400,"carouselPauseOnHover":true,"carouselShowControls":true,"carouselShowIndicators":true,"carouselImages":[{"imageFile":"carousel-slide-a.svg","imageAlt":"Carousel demo slide","caption":"Attached SVG image rendered from the HVY tail"},{"imageFile":"carousel-slide-b.svg","imageAlt":"Graph demo slide","caption":"Multiple attached images in one plugin block"}]}-->
 
-<!--hvy:subsection {"id":"static-table-example"}-->
-#! Static Table Example
+<!--hvy:container {"id":"static-table-example","containerTitle":"Static Table Example","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-This static HVY table stores columns and rows directly in the document, so it uses the built-in inline table editor rather than plugin-owned CSV text.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  This static HVY table stores columns and rows directly in the document, so it uses the built-in inline table editor rather than plugin-owned CSV text.
 
-<!--hvy:table {"id":"pipeline-static-table","css":"margin: 0.5rem 0;","tableColumns":["Stage","Applications","Interviews"],"tableShowHeader":true,"tableRows":[{"cells":["Applied","12","0"]},{"cells":["Phone Screen","5","5"]},{"cells":["Onsite","2","2"]},{"cells":["Offer","1","1"]}]}-->
+ <!--hvy:table {"id":"pipeline-static-table","css":"margin: 0.5rem 0;","tableColumns":["Stage","Applications","Interviews"],"tableShowHeader":true,"tableRows":[{"cells":["Applied","12","0"]},{"cells":["Phone Screen","5","5"]},{"cells":["Onsite","2","2"]},{"cells":["Offer","1","1"]}]}-->
 
-<!--hvy:subsection {"id":"graph-example"}-->
-#! Graph Example
+<!--hvy:container {"id":"graph-example","containerTitle":"Graph Example","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-The graph plugin stores chart attributes in JSON config and keeps the editable data as CSV text in the plugin body.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  The graph plugin stores chart attributes in JSON config and keeps the editable data as CSV text in the plugin body.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.graph","pluginConfig":{"type":"line","title":"Pipeline quality by week","xAxisLabel":"Week","yAxisLabel":"Count","legend":true,"colorScheme":"auto"}}-->
-Week,Applications,Recruiter Screens,Technical Interviews,Onsites,Offers
-Week 1,10,4,1,0,0
-Week 2,14,6,3,1,0
-Week 3,11,7,4,2,0
-Week 4,16,8,5,2,1
-Week 5,13,9,6,3,1
-Week 6,18,10,7,4,2
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.graph","pluginConfig":{"type":"line","title":"Pipeline quality by week","xAxisLabel":"Week","yAxisLabel":"Count","legend":true,"colorScheme":"auto"}}-->
+  Week,Applications,Recruiter Screens,Technical Interviews,Onsites,Offers
+  Week 1,10,4,1,0,0
+  Week 2,14,6,3,1,0
+  Week 3,11,7,4,2,0
+  Week 4,16,8,5,2,1
+  Week 5,13,9,6,3,1
+  Week 6,18,10,7,4,2
 
-<!--hvy:subsection {"id":"diagram-example"}-->
-#! Diagram Example
+<!--hvy:container {"id":"diagram-example","containerTitle":"Diagram Example","css":"margin: 0.5rem 0;"}-->
 
-<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-The diagram plugin stores Mermaid source as editable text in the plugin body and renders it as a diagram.
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  The diagram plugin stores Mermaid source as editable text in the plugin body and renders it as a diagram.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
-flowchart TD
-  research[Research roles] --> apply[Send applications]
-  apply --> screen{Recruiter screen?}
-  screen -->|Yes| prep[Prepare interview notes]
-  screen -->|No| follow[Schedule follow-up]
-  prep --> interview[Interview]
-  follow --> apply
+ <!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+  flowchart TD
+   research[Research roles] --> apply[Send applications]
+   apply --> screen{Recruiter screen?}
+   screen -->|Yes| prep[Prepare interview notes]
+   screen -->|No| follow[Schedule follow-up]
+   prep --> interview[Interview]
+   follow --> apply
 
 
 <!--hvy:tail {"id":"image:carousel-slide-a.svg","mediaType":"image/svg+xml","length":341}-->

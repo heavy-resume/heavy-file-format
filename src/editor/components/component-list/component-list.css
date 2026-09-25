@@ -158,12 +158,15 @@
 }
 
 .hvy-document .reader-block.align-center .reader-component-list {
-  grid-template-columns: min(100%, 20rem);
-  justify-content: space-around;
+  grid-template-columns: fit-content(100%);
+  justify-content: center;
+}
+
+.hvy-document .reader-block.align-center .reader-component-list > .reader-block {
+  min-width: 0;
 }
 
 .hvy-document .reader-block.align-center .reader-xref-card {
-  width: 100%;
   text-align: left;
 }
 

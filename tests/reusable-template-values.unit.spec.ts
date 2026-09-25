@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { defaultBlockSchema } from '../src/document-factory';
+import { createEmptyBlock, defaultBlockSchema } from '../src/document-factory';
 import {
   applyReusableSectionTemplateValues,
   applyReusableTemplateValues,
@@ -13,7 +13,42 @@ import {
   replaceReusableTemplateVariableOccurrenceWithText,
   setReusableTemplateVariableType,
 } from '../src/reusable-template-values';
+import { deserializeDocument } from '../src/serialization';
+import { state } from '../src/state';
 import type { ComponentDefinition, SectionDefinition } from '../src/types';
+import { registerSerializationTestState } from './serialization-test-helpers';
+
+registerSerializationTestState();
+
+const PROJECT_RECORD_DOCUMENT = `---
+hvy_version: 0.1
+component_defs:
+  - name: project-record
+    baseType: expandable
+    templateVariables:
+      project:
+        label: Project name
+      date_range:
+        label: Date range
+    schema:
+      xrefTitle: "{% project %}"
+      xrefDetail: "{% date_range %}"
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: ["PROJECT", "DATES"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% project %}", "{% date_range %}"]
+---
+
+<!--hvy: {"id":"projects"}-->
+#! Projects
+
+ <!--hvy:project-record {"id":"fake-widget","xrefTitle":"Fake Widget"}-->
+`;
 
 test('extracts reusable template variables in first-seen order with text as the default type', () => {
   const schema = {
@@ -212,7 +247,6 @@ test('substitutes reusable section template values through section fields and ne
       idEditorOpen: false,
       isGhost: false,
       title: 'Resume Section',
-      level: 1,
       expanded: true,
       highlight: false,
       priority: false,
@@ -273,7 +307,6 @@ test('substitutes reusable section template values through section fields and ne
           schemaMode: false,
         },
       ],
-      children: [],
     },
   };
 
@@ -552,4 +585,35 @@ test('expected result: URL inputs retain single-line validation', () => {
   expect(() => validateReusableTemplateValues([{ name: 'fake_url', type: 'url', label: 'Fake URL' }], {
     fake_url: 'fake\nurl',
   })).toThrow('is type url and cannot contain newlines');
+});
+
+test('component instances resolve template variables the instance never supplied', () => {
+  state.document = deserializeDocument(PROJECT_RECORD_DOCUMENT, '.hvy');
+
+  const expectedResult = state.document.sections[0].blocks[0];
+
+  expect(expectedResult.schema.xrefTitle).toBe('Fake Widget');
+  expect(expectedResult.schema.xrefDetail).toBe('');
+});
+
+test('creating a component instance without template values leaves no template tokens behind', () => {
+  state.document = deserializeDocument(PROJECT_RECORD_DOCUMENT, '.hvy');
+
+  const expectedResult = createEmptyBlock('project-record', false, state.document.meta);
+
+  expect(expectedResult.schema.xrefTitle).toBe('');
+  expect(expectedResult.schema.xrefDetail).toBe('');
+  expect(expectedResult.schema.expandableStubBlocks.children[0]?.schema.tableRows)
+    .toEqual([{ cells: ['', ''] }]);
+});
+
+test('creating a component instance with partial template values resolves the rest as blank', () => {
+  state.document = deserializeDocument(PROJECT_RECORD_DOCUMENT, '.hvy');
+
+  const expectedResult = createEmptyBlock('project-record', false, state.document.meta, { project: 'Fake Widget' });
+
+  expect(expectedResult.schema.xrefTitle).toBe('Fake Widget');
+  expect(expectedResult.schema.xrefDetail).toBe('');
+  expect(expectedResult.schema.expandableStubBlocks.children[0]?.schema.tableRows)
+    .toEqual([{ cells: ['Fake Widget', ''] }]);
 });

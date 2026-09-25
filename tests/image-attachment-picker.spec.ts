@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('attached image picker fetches two rows before expansion and can be disabled', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

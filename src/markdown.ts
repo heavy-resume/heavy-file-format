@@ -5,7 +5,7 @@ import TurndownService from 'turndown';
 import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } from './text-line-styles';
 import { createTextFillInMarker } from './text-fill-in';
 import { renderWorkspaceLinksInHtml } from './workspace-links';
-import { formatSortValueAnnotation, replaceSortValueAnnotations } from './sort-values';
+import { formatSortValueAnnotation, replaceSortValueAnnotations, listValueKindForElement, type ListValueKind } from './sort-values';
 import { normalizeRenderedMarkdownSoftBreaks } from './rendered-markdown-text';
 import {
   answerGroupInputName,
@@ -14,6 +14,7 @@ import {
   resolveBlockAnswerGroups,
   scanInlineAnswers,
 } from './inline-answer-groups';
+import type { TextPlaceholderDefinition } from './editor/component-helpers';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
@@ -188,6 +189,18 @@ turndown.addRule('hvy-text-fill-in-marker', {
   replacement: (_content, node) => createTextFillInMarker((node as Element).getAttribute('data-placeholder') ?? ''),
 });
 
+turndown.addRule('hvy-text-placeholder', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-text-placeholder') !== null,
+  replacement: (_content, node) => `<!-- placeholder ${(node as Element).getAttribute('data-hvy-text-placeholder') ?? ''} -->`,
+});
+
+turndown.addRule('hvy-template-value-token', {
+  filter: (node) => node.nodeType === 1 && (node as Element).hasAttribute('data-template-value-token'),
+  // The hidden source is HVY syntax, not prose: escaping its underscores changes
+  // the variable name and prevents template substitution after an editor round trip.
+  replacement: (_content, node) => (node as Element).querySelector('.template-value-token-source')?.textContent ?? '',
+});
+
 turndown.addRule('hvy-sort-value', {
   filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-sort-value') === 'true',
   replacement: (content, node) => {
@@ -201,7 +214,7 @@ turndown.addRule('hvy-sort-value', {
         ?? element.getAttribute('value')?.trim()
         ?? content
       : (element.textContent ?? content).replaceAll('\u200b', '').trim();
-    return formatSortValueAnnotation({ key }, label);
+    return formatSortValueAnnotation({ key }, label, listValueKindForElement(element));
   },
 });
 
@@ -218,11 +231,16 @@ export interface MarkdownRenderOptions {
    * options fall back to grouping within this text alone.
    */
   answerGroups?: Map<number, string>;
+  textPlaceholders?: TextPlaceholderDefinition[];
 }
 
 export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
   const normalized = normalizeMarkdownIndentation(markdown || '');
-  const annotations = extractResponsiveAnnotations(normalized, { editable: true, answerGroups: options.answerGroups });
+  const annotations = extractResponsiveAnnotations(normalized, {
+    editable: true,
+    answerGroups: options.answerGroups,
+    textPlaceholders: options.textPlaceholders,
+  });
   const html = renderMarkdownHtml(annotations.markdown, {
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'editor',
@@ -313,6 +331,7 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
     editable: false,
     preserveSortValues: options.preserveSortValueAnnotations === true,
     answerGroups: options.answerGroups,
+    textPlaceholders: options.textPlaceholders,
   });
   const html = renderMarkdownHtml(annotations.markdown, {
     textLineStyles: options.textLineStyles ?? {},
@@ -457,6 +476,7 @@ function sanitizeHtml(html: string): string {
 
 export function removeNonTextContentFromRichEditor(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>('img, picture, video, audio, source, iframe, object, embed, canvas, svg').forEach((element) => {
+    if (element.closest('[data-hvy-text-placeholder]')) return;
     element.remove();
   });
 }
@@ -472,7 +492,12 @@ interface ResponsiveAnnotationToken {
 
 function extractResponsiveAnnotations(
   markdown: string,
-  options: { editable: boolean; preserveSortValues?: boolean; answerGroups?: Map<number, string> }
+  options: {
+    editable: boolean;
+    preserveSortValues?: boolean;
+    answerGroups?: Map<number, string>;
+    textPlaceholders?: TextPlaceholderDefinition[];
+  }
 ): { markdown: string; tokens: ResponsiveAnnotationToken[] } {
   const tokens: ResponsiveAnnotationToken[] = [];
   const makeToken = (html: string): string => {
@@ -490,7 +515,22 @@ function extractResponsiveAnnotations(
   const withNowrap = withAlt.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
     makeToken(renderNowrapAnnotationHtml(text))
   );
-  const withSortValues = replaceSortValueAnnotations(withNowrap, (annotation) =>
+  const placeholderDefinitions = new Map((options.textPlaceholders ?? []).map((definition) => [definition.name, definition]));
+  const withTextPlaceholders = withNowrap.replace(/<!--\s*placeholder\s+([A-Za-z][A-Za-z0-9_-]*)\s*-->/g, (_match, name: string) => {
+    const definition = placeholderDefinitions.get(name);
+    if (!definition && !options.editable) return '';
+    const body = definition?.render(options.editable) ?? `<span class="hvy-text-placeholder-unknown">${escapeHtml(name)}</span>`;
+    const editorAttributes = options.editable ? ' contenteditable="false" data-rich-atomic="true" tabindex="-1"' : '';
+    const source = options.editable
+      ? `<span class="hvy-text-placeholder-source">&lt;!-- placeholder ${escapeHtml(name)} --&gt;</span>`
+      : '';
+    return makeToken(`<span class="hvy-text-placeholder" data-hvy-text-placeholder="${escapeHtml(name)}"${editorAttributes}>${source}${body}</span>`);
+  });
+  const withGroupValues = replaceSortValueAnnotations(withTextPlaceholders, (annotation) =>
+    makeToken(options.editable || options.preserveSortValues
+      ? renderSortValueAnnotationHtml(annotation.key, annotation.text, 'group')
+      : escapeHtml(annotation.text)), 'group');
+  const withSortValues = replaceSortValueAnnotations(withGroupValues, (annotation) =>
     makeToken(options.editable || options.preserveSortValues
       ? renderSortValueAnnotationHtml(annotation.key, annotation.text)
       : escapeHtml(annotation.text))
@@ -504,8 +544,8 @@ function extractResponsiveAnnotations(
   };
 }
 
-function renderSortValueAnnotationHtml(key: string, text: string): string {
-  return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
+function renderSortValueAnnotationHtml(key: string, text: string, kind: ListValueKind = 'sort'): string {
+  return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-value-kind="${kind}" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
 let fallbackGroupSeed = 0;

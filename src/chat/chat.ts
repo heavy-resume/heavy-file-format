@@ -1,3 +1,4 @@
+import { createChatRequestError } from './request-error';
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
 import type { ChatAttachmentReference, ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
@@ -82,9 +83,17 @@ export interface ProxyChatResponse {
   toolState?: ProviderToolState;
 }
 
+export type ProxyChatStreamEvent =
+  | { type: 'output_delta'; delta: string }
+  | { type: 'response'; response: ProxyChatResponse };
+
 export interface HostChatClient {
   complete(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): Promise<ProxyChatResponse>;
   toolTurn?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): Promise<ProxyChatResponse>;
+  /** Optional streaming transport. The final event must contain the complete response. */
+  stream?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): AsyncIterable<ProxyChatStreamEvent>;
+  /** Optional streaming transport for native tool turns. Falls back to stream, then toolTurn/complete. */
+  streamToolTurn?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): AsyncIterable<ProxyChatStreamEvent>;
 }
 
 let fallbackHostChatClient: HostChatClient | null = null;
@@ -145,6 +154,7 @@ export interface ProxyCompletionParams {
 export interface ProxyToolTurnParams extends Omit<ProxyCompletionParams, 'responseInstructions'> {
   tools: ProviderToolDefinition[];
   toolState?: ProviderToolState;
+  onOutput?: (output: string) => void;
 }
 
 export interface ProxyToolTurn {
@@ -313,6 +323,7 @@ export function renderChatPanel(
   const showCliSimControls = isDocumentEdit && ENABLE_CHAT_CLI_SIM;
   const cliSimHtml = showCliSimControls && chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : '';
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
+  const hasStreamingAnswer = chat.messages.some((message) => message.streaming);
   console.debug('[hvy:chat-render] composer state', {
     panelOpen: chat.panelOpen,
     mode,
@@ -339,11 +350,7 @@ export function renderChatPanel(
     ? `<div class="chat-settings">
          <label class="chat-setting">
            <span>Provider</span>
-           <select data-field="chat-provider" aria-label="Chat provider" ${chat.isSending ? 'disabled' : ''}>
-             <option value="openai"${chat.settings.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-             <option value="anthropic"${chat.settings.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-             <option value="qwen"${chat.settings.provider === 'qwen' ? ' selected' : ''}>Qwen</option>
-           </select>
+           <input type="text" data-field="chat-provider" aria-label="Chat provider" value="${deps.escapeAttr(chat.settings.provider)}" autocapitalize="off" autocomplete="off" spellcheck="false" ${chat.isSending ? 'disabled' : ''} />
          </label>
 
          <label class="chat-setting">
@@ -363,10 +370,7 @@ export function renderChatPanel(
 
          <label class="chat-setting">
            <span>Compaction provider</span>
-           <select data-field="chat-compaction-provider" aria-label="Chat compaction provider" ${chat.isSending ? 'disabled' : ''}>
-             <option value="openai"${(chat.settings.compactionProvider ?? 'openai') === 'openai' ? ' selected' : ''}>OpenAI</option>
-             <option value="anthropic"${chat.settings.compactionProvider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-           </select>
+           <input type="text" data-field="chat-compaction-provider" aria-label="Chat compaction provider" value="${deps.escapeAttr(chat.settings.compactionProvider ?? 'openai')}" autocapitalize="off" autocomplete="off" spellcheck="false" ${chat.isSending ? 'disabled' : ''} />
          </label>
 
          <label class="chat-setting">
@@ -457,13 +461,21 @@ export function renderChatPanel(
                            .map((message) => renderChatMessageHtml(message, deps, canCopyToHvy))
                            .join('')
                    }
+                   ${
+                     chat.isSending && !isDocumentEdit && !hasStreamingAnswer
+                       ? `<div class="chat-pending-response" role="status" aria-label="Preparing an answer">
+                            <span class="chat-pending-response-pulse" aria-hidden="true"><i></i><i></i><i></i></span>
+                            <span>${deps.escapeHtml(chat.status ?? 'Reading the document and preparing an answer...')}</span>
+                          </div>`
+                       : ''
+                   }
                  </div>
 
                  <div class="chat-footer">
                    ${composerHtml}
                  </div>
+                 <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
                </div>
-               <button type="button" class="chat-scroll-bottom" data-action="chat-scroll-bottom" hidden>Latest ↓</button>
              </aside>`
           : ''
       }
@@ -775,7 +787,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     payload,
   }));
   if (!response.ok) {
-    throw new Error(extractProxyError(payload, 'Chat request failed.'));
+    throw createChatRequestError(response, payload, 'Chat request failed.');
   }
 
   if (typeof (payload as ProxyChatResponse | null)?.output !== 'string' || (payload as ProxyChatResponse).output.trim().length === 0) {
@@ -826,7 +838,10 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
-    const payload = hostClient.toolTurn
+    const stream = hostClient.streamToolTurn ?? hostClient.stream;
+    const payload = stream
+      ? await consumeHostChatStream(stream.call(hostClient, requestPayload, { signal: params.signal, debugLabel }), params.onOutput)
+      : hostClient.toolTurn
       ? await hostClient.toolTurn(requestPayload, { signal: params.signal, debugLabel })
       : await hostClient.complete(requestPayload, { signal: params.signal, debugLabel });
     const typed = payload as ProxyChatResponse | null;
@@ -866,7 +881,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     payload,
   }));
   if (!response.ok) {
-    throw new Error(extractProxyError(payload, 'Chat tool request failed.'));
+    throw createChatRequestError(response, payload, 'Chat tool request failed.');
   }
 
   const typed = payload as ProxyChatResponse | null;
@@ -893,6 +908,31 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     nativeMessages: Array.isArray(typed.nativeMessages) ? typed.nativeMessages : [],
     toolState: typed.toolState ?? createEmptyHostToolState(params.settings.provider),
   };
+}
+
+async function consumeHostChatStream(
+  events: AsyncIterable<ProxyChatStreamEvent>,
+  onOutput?: (output: string) => void
+): Promise<ProxyChatResponse> {
+  let output = '';
+  let response: ProxyChatResponse | null = null;
+  for await (const event of events) {
+    if (event.type === 'output_delta') {
+      output += event.delta;
+      onOutput?.(output);
+      continue;
+    }
+    if (event.type === 'response') {
+      response = event.response;
+    }
+  }
+  if (!response) {
+    throw new Error('Host chat stream ended without a final response.');
+  }
+  if (!response.output && output) {
+    response = { ...response, output };
+  }
+  return response;
 }
 
 function logChatProxyDebug(debugLabel: string, event: string, details: () => unknown): void {
@@ -998,8 +1038,10 @@ export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {
 }
 
 interface ChatSettingsEnvironment {
-  VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
+  VITE_HVY_CHAT_PROVIDER?: string;
   VITE_HVY_CHAT_MODEL?: string;
+  VITE_HVY_TEXT_PROCESSING_PROVIDER?: ChatSettings['provider'];
+  VITE_HVY_TEXT_PROCESSING_MODEL?: string;
   VITE_HVY_CHAT_COMPACTION_PROVIDER?: string;
   VITE_HVY_CHAT_COMPACTION_MODEL?: string;
   VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES?: string;
@@ -1012,17 +1054,19 @@ interface ChatSettingsEnvironment {
 }
 
 export function getEnvChatSettings(env: ChatSettingsEnvironment): ChatSettings {
-  const provider = env.VITE_HVY_CHAT_PROVIDER === 'anthropic' || env.VITE_HVY_CHAT_PROVIDER === 'qwen' ? env.VITE_HVY_CHAT_PROVIDER : 'openai';
+  const provider = normalizeProviderIdentifier(env.VITE_HVY_CHAT_PROVIDER) ?? 'openai';
   const providerDefaultModel = getDefaultModelForProvider(provider);
-  const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : provider === 'qwen' ? env.VITE_QWEN_MODEL : env.VITE_OPENAI_MODEL;
+  const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : provider === 'qwen' ? env.VITE_QWEN_MODEL : provider === 'openai' ? env.VITE_OPENAI_MODEL : undefined;
   const model = firstNonEmptyString(env.VITE_HVY_CHAT_MODEL, providerSpecificModel, providerDefaultModel);
-  const compactionProvider = env.VITE_HVY_CHAT_COMPACTION_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
+  const compactionProvider = normalizeProviderIdentifier(env.VITE_HVY_CHAT_COMPACTION_PROVIDER) ?? 'openai';
   const compactionModel = firstNonEmptyString(env.VITE_HVY_CHAT_COMPACTION_MODEL, DEFAULT_OPENAI_COMPACTION_MODEL);
   const toolLoopCompaction = readEnvToolLoopCompaction(env);
 
   return {
     provider,
     model,
+    textProcessingProvider: normalizeProviderIdentifier(env.VITE_HVY_TEXT_PROCESSING_PROVIDER),
+    textProcessingModel: env.VITE_HVY_TEXT_PROCESSING_MODEL?.trim() || null,
     compactionProvider,
     compactionModel,
     ...(toolLoopCompaction ? { toolLoopCompaction } : {}),
@@ -1030,13 +1074,30 @@ export function getEnvChatSettings(env: ChatSettingsEnvironment): ChatSettings {
 }
 
 export function getDefaultModelForProvider(provider: ChatSettings['provider']): string {
-  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : provider === 'qwen' ? DEFAULT_QWEN_MODEL : DEFAULT_OPENAI_MODEL;
+  return provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : provider === 'qwen' ? DEFAULT_QWEN_MODEL : provider === 'openai' ? DEFAULT_OPENAI_MODEL : '';
+}
+
+function normalizeProviderIdentifier(provider: unknown): ChatSettings['provider'] | null {
+  return typeof provider === 'string' ? provider.trim() || null : null;
+}
+
+export function getTextProcessingSettings(settings: ChatSettings): ChatSettings | null {
+  const provider = normalizeProviderIdentifier(settings.textProcessingProvider);
+  const model = settings.textProcessingModel?.trim();
+  if (!provider || !model) return null;
+  return {
+    provider,
+    model,
+    ...(settings.maxContextChars ? { maxContextChars: settings.maxContextChars } : {}),
+  };
 }
 
 function getDefaultChatSettings(): ChatSettings {
   return getEnvChatSettings({
     VITE_HVY_CHAT_PROVIDER: import.meta.env.VITE_HVY_CHAT_PROVIDER,
     VITE_HVY_CHAT_MODEL: import.meta.env.VITE_HVY_CHAT_MODEL,
+    VITE_HVY_TEXT_PROCESSING_PROVIDER: import.meta.env.VITE_HVY_TEXT_PROCESSING_PROVIDER,
+    VITE_HVY_TEXT_PROCESSING_MODEL: import.meta.env.VITE_HVY_TEXT_PROCESSING_MODEL,
     VITE_HVY_CHAT_COMPACTION_PROVIDER: import.meta.env.VITE_HVY_CHAT_COMPACTION_PROVIDER,
     VITE_HVY_CHAT_COMPACTION_MODEL: import.meta.env.VITE_HVY_CHAT_COMPACTION_MODEL,
     VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES,
@@ -1051,9 +1112,15 @@ function getDefaultChatSettings(): ChatSettings {
 
 function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined, defaults: ChatSettings): ChatSettings {
   return {
-    provider: settings?.provider === 'anthropic' || settings?.provider === 'qwen' ? settings.provider : defaults.provider,
+    provider: normalizeProviderIdentifier(settings?.provider) ?? defaults.provider,
     model: typeof settings?.model === 'string' && settings.model.trim().length > 0 ? settings.model : defaults.model,
-    compactionProvider: settings?.compactionProvider === 'anthropic' ? 'anthropic' : defaults.compactionProvider ?? 'openai',
+    textProcessingProvider: normalizeProviderIdentifier(settings?.textProcessingProvider === undefined
+      ? defaults.textProcessingProvider : settings.textProcessingProvider),
+    textProcessingModel: (settings?.textProcessingModel === undefined
+      ? settings?.textProcessingProvider !== undefined && settings.textProcessingProvider !== defaults.textProcessingProvider
+        ? null : defaults.textProcessingModel
+      : settings.textProcessingModel)?.trim() || null,
+    compactionProvider: normalizeProviderIdentifier(settings?.compactionProvider) ?? defaults.compactionProvider ?? 'openai',
     compactionModel: typeof settings?.compactionModel === 'string' && settings.compactionModel.trim().length > 0
       ? settings.compactionModel
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
@@ -1068,6 +1135,8 @@ export function mergeChatSettings(settings: Partial<ChatSettings> | null | undef
   return {
     provider: sanitized.provider,
     model: sanitized.model.trim().length > 0 ? sanitized.model : defaults.model,
+    textProcessingProvider: sanitized.textProcessingProvider,
+    textProcessingModel: sanitized.textProcessingModel,
     compactionProvider: sanitized.compactionProvider ?? defaults.compactionProvider ?? 'openai',
     compactionModel: sanitized.compactionModel?.trim()
       ? sanitized.compactionModel
@@ -1126,17 +1195,6 @@ async function readJsonResponse(response: Response): Promise<unknown> {
   } catch {
     return null;
   }
-}
-
-function extractProxyError(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== 'object') {
-    return fallback;
-  }
-  const record = payload as { error?: unknown };
-  if (typeof record.error === 'string' && record.error.trim().length > 0) {
-    return record.error;
-  }
-  return fallback;
 }
 
 function firstNonEmptyString(...values: Array<string | undefined>): string {
@@ -1199,6 +1257,7 @@ function renderChatMessageHtml(message: ChatMessage, deps: RenderChatPanelDeps, 
     `chat-bubble-${message.role}`,
     message.error ? 'chat-bubble-error' : '',
     message.progress ? 'chat-bubble-progress' : '',
+    message.streaming ? 'chat-bubble-streaming' : '',
     message.work ? 'chat-bubble-work' : '',
     tokenUsage ? 'has-token-usage' : '',
   ].filter(Boolean).join(' ');
@@ -1253,7 +1312,9 @@ function renderStandardChatMessageHtml(message: ChatMessage, deps: RenderChatPan
   return `
     <div class="chat-bubble-body">${
       message.role === 'assistant'
-        ? renderAssistantMessageHtml(message.content)
+        ? message.streaming
+          ? deps.escapeHtml(message.content).replace(/\n/g, '<br />')
+          : renderAssistantMessageHtml(message.content)
         : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
     }</div>
     ${renderSentChatAttachmentsHtml(message.attachments ?? [], deps)}
@@ -1315,13 +1376,8 @@ function renderChatWorkMessageHtml(message: ChatMessage, deps: RenderChatPanelDe
     return renderStandardChatMessageHtml(message, deps);
   }
   const isRunning = work.status === 'running';
-  const summary = isRunning
-    ? deps.escapeHtml(work.lastCommand ? `Last command: ${work.lastCommand}` : message.content || 'Working through the request...')
-    : renderAssistantMessageHtml(message.content);
   return `
-    <div class="chat-bubble-body chat-work-body">
-      ${isRunning ? `<span class="chat-work-pulse" aria-hidden="true"></span><span>${summary}</span>` : summary}
-    </div>
+    ${isRunning ? '' : `<div class="chat-bubble-body chat-work-body">${renderAssistantMessageHtml(message.content)}</div>`}
     ${renderChatWorkDetails(work, deps, message.id)}
   `;
 }
@@ -1331,7 +1387,9 @@ function renderChatWorkDetails(work: ChatWorkState, deps: RenderChatPanelDeps, m
   const reasoningLines = work.reasoning.length > 0 ? work.reasoning : [];
   return `
     <details class="chat-work-details" data-chat-work-details="${deps.escapeAttr(`${messageId}:commands`)}">
-      <summary>Show command history</summary>
+      <summary>${work.status === 'running'
+        ? `<span class="chat-work-indicator" role="status" aria-label="Working; expand for command history">Working<span class="chat-work-dots" aria-hidden="true">${'.'.repeat(1 + (work.activityRevision ?? 0) % 3)}</span></span>`
+        : 'Show command history'}</summary>
       <div class="chat-work-detail-section">
         <pre class="chat-work-detail-scroll">${deps.escapeHtml(detailLines.join('\n'))}</pre>
       </div>
@@ -1372,7 +1430,6 @@ function renderAssistantHvyHtml(source: string): string | null {
 
     const content = [
       ...wrapperSection.blocks.map((block) => renderChatHvyBlock(block, document.meta)),
-      ...wrapperSection.children.map((section) => renderChatHvySection(section, document.meta)),
       ...document.sections.slice(1).map((section) => renderChatHvySection(section, document.meta)),
     ].join('');
 
@@ -1388,7 +1445,6 @@ function renderChatHvySection(section: VisualSection, documentMeta: VisualDocume
       <div class="chat-hvy-section-title">${escapeChatHtml(section.title)}</div>
       <div class="chat-hvy-section-body">
         ${section.blocks.map((block) => renderChatHvyBlock(block, documentMeta)).join('')}
-        ${section.children.map((child) => renderChatHvySection(child, documentMeta)).join('')}
       </div>
     </section>
   `;
@@ -1461,7 +1517,7 @@ function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['me
 }
 
 function looksLikeHvyResponse(source: string): boolean {
-  return /<!--hvy:(?:[a-z]|subsection|doc|css)/i.test(source);
+  return /<!--hvy:(?:[a-z]|doc|css)/i.test(source);
 }
 
 function renderChatMarkdown(markdown: string): string {
@@ -1477,7 +1533,7 @@ function getChatReaderSection(): VisualSection {
     idEditorOpen: false,
     isGhost: false,
     title: 'Response',
-    level: 1,
+
     expanded: true,
     highlight: false,
     editorOnly: false,
@@ -1486,7 +1542,6 @@ function getChatReaderSection(): VisualSection {
     description: '',
     location: 'main',
     blocks: [],
-    children: [],
   };
 }
 

@@ -11,7 +11,7 @@ function packageBytes(manifest: Record<string, unknown>, files: Record<string, s
 test('Brython package factory normalizes the complete host capability shape and disposes modules', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).waitFor();
+  await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
   const archive = packageBytes({
     formatVersion: '0.2',
     id: 'com.example.fake-worker',
@@ -186,7 +186,7 @@ plugin = make_plugin
 test('Python plugin imports remain unavailable unless requested by the manifest', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).waitFor();
+  await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
   const archive = packageBytes({
     formatVersion: '0.2', id: 'com.example.fake-missing-import', version: '1.0.0',
     displayName: 'Fake Missing Import', entry: 'plugin.py', styles: [], permissions: [], hvyApiVersion: '0.1',

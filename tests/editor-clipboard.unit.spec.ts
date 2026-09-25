@@ -47,7 +47,7 @@ hvy_version: 0.1
 `, '.hvy');
 
   installEditorClipboardComponentDefinitions(target);
-  const pasted = cloneSectionFromEditorClipboard(1);
+  const pasted = cloneSectionFromEditorClipboard();
 
   expect(target.meta.component_defs?.map((def) => def.name)).toEqual(['Resume Item']);
   expect(pasted?.blocks[0]?.schema.component).toBe('Resume Item');
@@ -88,7 +88,7 @@ hvy_version: 0.1
 `, '.phvy');
 
   installEditorClipboardComponentDefinitions(target);
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
   const prepared = prepareSectionForDocumentPaste(target, pasted);
 
   expect(target.meta.component_defs?.map((def) => def.name)).toEqual(['Pdf Card']);
@@ -119,7 +119,7 @@ component_defs:
 hvy_version: 0.1
 ---
 `, '.phvy');
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
 
   const expectedResult = prepareSectionForDocumentPasteWithResult(target, pasted);
 
@@ -155,7 +155,7 @@ hvy_version: 0.1
 ---
 `, '.phvy');
   installEditorClipboardComponentDefinitions(target);
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
 
   const expectedResult = prepareSectionForDocumentPasteWithResult(target, pasted);
 
@@ -190,7 +190,7 @@ hvy_version: 0.1
 hvy_version: 0.1
 ---
 `, '.phvy');
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
 
   const expectedResult = prepareSectionForDocumentPasteWithResult(target, pasted);
 
@@ -234,7 +234,7 @@ hvy_version: 0.1
 ---
 `, '.phvy');
   installEditorClipboardComponentDefinitions(target);
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
 
   const expectedResult = prepareSectionForDocumentPasteWithResult(target, pasted);
 
@@ -280,7 +280,7 @@ hvy_version: 0.1
 ---
 `, '.phvy');
   installEditorClipboardComponentDefinitions(target);
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
 
   const expectedResult = prepareSectionForDocumentPasteWithResult(target, pasted);
   const item = expectedResult.section.blocks[0]?.schema.componentListBlocks[0];
@@ -325,7 +325,7 @@ hvy_version: 0.1
 ---
 `, '.phvy');
   installEditorClipboardComponentDefinitions(target);
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
 
   const expectedResult = prepareSectionForDocumentPasteWithResult(target, pasted);
   const item = expectedResult.section.blocks[0]?.schema.componentListBlocks[0];
@@ -385,7 +385,7 @@ hvy_version: 0.1
 ---
 `, '.phvy');
   installEditorClipboardComponentDefinitions(target);
-  const pasted = cloneSectionFromEditorClipboard(1)!;
+  const pasted = cloneSectionFromEditorClipboard()!;
 
   const expectedResult = prepareSectionForDocumentPasteWithResult(target, pasted);
   const item = expectedResult.section.blocks[0]?.schema.componentListBlocks[0];

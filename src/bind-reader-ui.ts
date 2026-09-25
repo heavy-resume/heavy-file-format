@@ -13,7 +13,6 @@ import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { isPressSelectingText, trackPressToggleIntent } from './reader/press-toggle-intent';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
-import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
@@ -62,7 +61,6 @@ export function bindReaderUi(app: HTMLElement): void {
   const readerDocuments = app.querySelectorAll<HTMLDivElement>('#readerDocument, #aiReaderDocument');
   const readerSidebarSections = app.querySelectorAll<HTMLDivElement>('#readerSidebarSections, #aiSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
-  bindResponsiveSidebarShells(app);
   scheduleSidebarHelpAutoClose(app);
   bindReaderAppControls(app);
   bindStaticTableReaderInteractions(app, [...readerDocuments, ...readerSidebarSections]);

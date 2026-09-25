@@ -20,7 +20,6 @@ section_defs:
     template:
       key: fake-section-root
       title: Fake section
-      level: 1
       blocks: []
       children: []
 ---

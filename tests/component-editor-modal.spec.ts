@@ -99,6 +99,53 @@ hvy_version: 0.1
   await expect(reopenedGrid.locator('xpath=ancestor::*[@data-active-editor-block="true"][1]')).toHaveCount(1);
 });
 
+test('short component editor modals fit their content in the phone preview', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-main"}-->
+#! Fake Main
+
+ <!--hvy:grid {"id":"fake-grid","gridColumns":3,"gridStackWidth":"never"}-->
+  <!--hvy:grid:0 {"id":"fake-first"}-->
+   <!--hvy:text {"id":"fake-short-text"}-->
+    Short expected result
+
+  <!--hvy:grid:1 {"id":"fake-second"}-->
+   <!--hvy:text {}-->
+    Second
+
+  <!--hvy:grid:2 {"id":"fake-third"}-->
+   <!--hvy:text {}-->
+    Third
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Short expected result' }).last().click();
+  await page.getByRole('button', { name: 'Edit text', exact: true }).click();
+
+  const modal = page.getByRole('dialog', { name: 'Edit text' });
+  const expectedResult = await modal.locator('.component-editor-modal-body').evaluate((body) => {
+    const style = getComputedStyle(body);
+    return {
+      unusedHeight: body.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+        - body.querySelector('.component-editor-modal-layer')!.getBoundingClientRect().height,
+      scrollable: body.scrollHeight > body.clientHeight,
+    };
+  });
+  expect(Math.abs(expectedResult.unusedHeight)).toBeLessThanOrEqual(1);
+  expect(expectedResult.scrollable).toBe(false);
+  await expect(modal.locator('.component-editor-modal-actions').getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await expect(modal.locator('.component-editor-modal-actions').getByRole('button', { name: 'Done' })).toBeVisible();
+});
+
 test('component editor modal body scrolls while Cancel and Done remain outside it', async ({ page }) => {
   test.setTimeout(5_000);
   page.setDefaultTimeout(1_000);
@@ -237,4 +284,88 @@ component_defs:
   await markerEditor.locator('[data-field="block-location-marker-name"]').fill('primary-actions');
   await markerEditor.getByRole('button', { name: 'Close' }).click();
   await expect(builder.locator('[data-field="block-location-marker-name"]')).toHaveValue('primary-actions');
+});
+
+test('narrow component editors stay inline when the modal would not give them more room', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"stacked-grid","gridColumns":2}-->
+  <!--hvy:grid:0 {"id":"stacked-first"}-->
+   <!--hvy:container {"id":"outer-container"}-->
+    <!--hvy:container {"id":"inner-container"}-->
+     <!--hvy:text {"id":"deep-text"}-->
+      Deep expected result
+
+  <!--hvy:grid:1 {"id":"stacked-second"}-->
+   <!--hvy:text {}-->
+    Second
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Deep expected result' }).last().click();
+  const deepTextGate = await page.locator('[data-hvy-component-editor-gate="true"][data-component-label="text"]', { hasText: 'Deep expected result' }).last().evaluate((gate) => ({
+    width: gate.getBoundingClientRect().width,
+    tooNarrow: gate.classList.contains('is-component-editor-too-narrow'),
+  }));
+  expect(deepTextGate.width).toBeLessThan(300);
+  expect(deepTextGate.tooNarrow).toBe(false);
+  await expect(page.locator('.component-editor-compact-button:visible')).toHaveCount(0);
+  await expect(page.locator('.component-editor-modal-probe')).toHaveCount(0);
+});
+
+test('xref card editors stay inline in a column the shared minimum would have gated', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-skill-xref-card
+    baseType: xref-card
+---
+
+<!--hvy: {"id":"fake-main"}-->
+#! Fake Main
+
+ <!--hvy:text {"id":"fake-target-topic"}-->
+  ### Fake Target Topic
+
+ <!--hvy:grid {"id":"fake-grid","gridColumns":3,"gridStackWidth":"never"}-->
+  <!--hvy:grid:0 {"id":"fake-first"}-->
+   <!--hvy:fake-skill-xref-card {"id":"fake-xref","xrefTitle":"Fake Target","xrefTarget":"fake-target-topic"}-->
+
+  <!--hvy:grid:1 {"id":"fake-second"}-->
+   <!--hvy:text {}-->
+    Second
+
+  <!--hvy:grid:2 {"id":"fake-third"}-->
+   <!--hvy:text {}-->
+    Third
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Fake Target' }).last().click();
+
+  const expectedResult = await page.locator('[data-hvy-component-editor-gate="true"][data-component-label="fake-skill-xref-card"]').last().evaluate((gate) => ({
+    width: gate.getBoundingClientRect().width,
+    declaredMinimum: gate.style.getPropertyValue('--hvy-component-editor-minimum-width'),
+    tooNarrow: gate.classList.contains('is-component-editor-too-narrow'),
+  }));
+  expect(expectedResult.width).toBeLessThan(300);
+  expect(expectedResult.declaredMinimum).toBe('180px');
+  expect(expectedResult.tooNarrow).toBe(false);
+  await expect(page.locator('.component-editor-compact-button:visible')).toHaveCount(0);
+  await expect(page.locator('[data-field="block-xref-target"]')).toBeVisible();
 });

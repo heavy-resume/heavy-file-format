@@ -83,7 +83,7 @@ test('AI form submit applies generated card data through a component template', 
   });
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(String.raw`---
 hvy_version: 0.1
 plugins:
@@ -193,7 +193,7 @@ test('text component showCopy copies reader text to clipboard', async ({ page })
       },
     });
   });
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(String.raw`---
 hvy_version: 0.1
 ---
@@ -272,7 +272,7 @@ test('native copy from rendered prose treats a Markdown soft wrap as a space', a
   test.setTimeout(5000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await setRawEditorText(page, `---
 hvy_version: 0.1
 ---
@@ -417,7 +417,7 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await expect(page.locator('[data-component-id="resume-pronunciation"]').first()).toBeHidden({ timeout: 1_000 });
   await expect(page.locator('[data-action="run-button-ai-generate"]')).toBeHidden();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
 
   const raw = page.locator('#rawEditor');
   await setRawEditorText(page, (await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
@@ -514,7 +514,7 @@ test('generated pronunciation can be converted back into a clean fill-in', async
   await page.evaluate(() => localStorage.clear());
   await reloadApp(page);
   await openDocument(page, 'Resume Template');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
 
   const raw = page.locator('#rawEditor');
   await setRawEditorText(page, (await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
@@ -549,7 +549,7 @@ test('generated pronunciation can be converted back into a clean fill-in', async
   const pronunciationFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-pronunciation"]) [data-field="text-fill-in-value"]');
   await expect(pronunciationFillIn).toHaveAttribute('data-placeholder', 'FILL ME IN');
   await expect(page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-pronunciation"]) .text-fill-in-editor')).toHaveText('[]');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('\\[<!-- value {"placeholder":"FILL ME IN"} -->\\]');
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"FILL ME IN"');
   await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"pronunciation"');
@@ -577,13 +577,19 @@ test('advanced editor exposes anchored button configuration as a component card'
   await expect(previewButton).toBeVisible();
   await expect(preview.locator('.button-component-preview-stage')).toBeVisible();
 
-  const previewBox = await preview.boundingBox();
-  const buttonBox = await previewButton.boundingBox();
   const visibilityScript = settings.locator('.visibility-script-field');
   await expect(visibilityScript).not.toHaveAttribute('open', '');
   await expect(visibilityScript.locator('summary')).toContainText('Visibility Script');
   await expect(visibilityScript.locator('summary')).toContainText('Configured');
   await visibilityScript.locator('summary').click();
+  await expect.poll(async () => {
+    const settledButtonBox = await previewButton.boundingBox();
+    const settledVisibleScriptBox = await settings.locator('[data-field="block-button-visible-script"]').boundingBox();
+    return Boolean(settledButtonBox && settledVisibleScriptBox
+      && settledButtonBox.y + settledButtonBox.height < settledVisibleScriptBox.y);
+  }).toBe(true);
+  const previewBox = await preview.boundingBox();
+  const buttonBox = await previewButton.boundingBox();
   const visibleScriptBox = await settings.locator('[data-field="block-button-visible-script"]').boundingBox();
 
   expect(previewBox).not.toBeNull();
@@ -694,7 +700,7 @@ test('search result highlights inside an active text editor without serializing 
   test.setTimeout(5_000);
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -727,7 +733,7 @@ hvy_version: 0.1
     selection?.addRange(range);
   });
   await page.keyboard.type('!');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('Editable needle text!', { timeout: 1_000 });
   await expect(page.locator('#rawEditor')).not.toContainText('search-match-marker', { timeout: 1_000 });
 });

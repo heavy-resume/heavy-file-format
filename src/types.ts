@@ -41,7 +41,7 @@ export interface ImageAttachmentMaxDimensions {
   height?: number;
 }
 
-export type ChatProvider = 'openai' | 'anthropic' | 'qwen';
+export type ChatProvider = string;
 
 export interface ChatAttachmentReference {
   id: string;
@@ -63,6 +63,8 @@ export interface ChatMessage {
   tokenUsage?: ChatTokenUsage;
   error?: boolean;
   progress?: boolean;
+  /** Incomplete assistant output. Render incrementally without interpreting HVY structure. */
+  streaming?: boolean;
   work?: ChatWorkState;
 }
 
@@ -75,6 +77,8 @@ export interface ChatTokenUsage {
 }
 
 export interface ChatWorkState {
+  /** Transient execution activity; advances only on command start or finish. */
+  activityRevision?: number;
   status: 'running' | 'done' | 'error';
   lastCommand?: string;
   details: string[];
@@ -111,6 +115,9 @@ export interface ChatCliSimState {
 export interface ChatSettings {
   provider: ChatProvider;
   model: string;
+  /** Independent provider/model for single text-value processing. */
+  textProcessingProvider?: ChatProvider | null;
+  textProcessingModel?: string | null;
   compactionProvider?: ChatProvider;
   compactionModel?: string;
   maxContextChars?: number;
@@ -337,6 +344,7 @@ export interface ReusableSaveModalState {
 }
 
 export interface ReusableTemplateModalState {
+  onComplete?: (result: import('./embed').HvyTemplateFormResult) => void;
   component: string;
   target:
     | { kind: 'section'; sectionKey: string }
@@ -461,6 +469,7 @@ export type SelectedExample =
   | 'study-tools'
   | 'survey'
   | 'video-demo'
+  | 'model-3d-demo'
   | 'asteroids'
   | 'plugin-sort-values'
   | 'pdf-template'
@@ -479,6 +488,7 @@ export interface ComponentDefinition {
   tags?: string;
   description?: string;
   sortValueDefs?: Record<string, SortValueDefinition>;
+  groupValueDefs?: Record<string, SortValueDefinition>;
   templateVariables?: Record<string, ReusableTemplateVariableConfig>;
   schema?: BlockSchema;
   template?: VisualBlock;
@@ -626,6 +636,8 @@ export interface AppState {
   newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
+  /** Keep an explicitly revealed empty block visible without changing document content. */
+  readerNavigationTarget?: { sectionKey: string; blockId: string };
   reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   tempHighlights: Set<string>;

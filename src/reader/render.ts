@@ -16,7 +16,7 @@ import { renderTextReader } from '../editor/components/text/text';
 import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
 import { renderLinkAttachmentPicker } from '../editor/components/link-attachment-picker/link-attachment-picker';
 import { renderLinkDocumentPicker } from '../editor/components/link-document-picker/link-document-picker';
-import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from '../editor/component-helpers';
+import { mergeTextPlaceholders, type ComponentRenderHelpers, type ReaderBlockRenderOptions, type TextPlaceholderContextOptions, type TextPlaceholderDefinition } from '../editor/component-helpers';
 import { renderAddComponentPicker } from '../editor/component-picker';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
@@ -89,6 +89,7 @@ interface ReaderRenderState {
   pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
+  readerNavigationTarget?: { sectionKey: string; blockId: string };
   reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
@@ -141,7 +142,7 @@ export interface ReaderRenderer {
   renderReaderSection: (section: VisualSection, windowOptions?: ReaderRenderTreeWindowOptions) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
   renderReaderGridBlocks: ComponentRenderHelpers['renderReaderGridBlocks'];
-  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[], options?: TextPlaceholderContextOptions) => string;
   renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
   orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
@@ -157,6 +158,17 @@ export interface ReaderRenderer {
 export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRenderDeps): ReaderRenderer {
   let activeReaderViewContext: ReaderViewContext | null = null;
   let activeSearchFilterContext: SearchFilterContext | null = null;
+  let activeTextPlaceholders: TextPlaceholderDefinition[] = [];
+
+  function withTextPlaceholders<T>(options: TextPlaceholderContextOptions, render: () => T): T {
+    const previous = activeTextPlaceholders;
+    activeTextPlaceholders = mergeTextPlaceholders(previous, options);
+    try {
+      return render();
+    } finally {
+      activeTextPlaceholders = previous;
+    }
+  }
   const readerRenderTreeHeightLedger = createRenderTreeHeightLedger();
   let activeReaderRenderTreeWindowOptions: ReaderRenderTreeWindowOptions | null = null;
 
@@ -221,7 +233,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           ${items
           .map(
             (section) =>
-              `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
+              `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}">${deps.escapeHtml(
                 deps.formatSectionTitle(section.title)
               )}</button>`
           )
@@ -269,7 +281,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function hasReaderSectionContentCandidate(section: VisualSection): boolean {
-    return section.blocks.length > 0 || section.children.some(hasReaderSectionContentCandidate);
+    return section.blocks.length > 0;
   }
 
   function renderReaderSectionPlaceholder(section: VisualSection, estimatedHeight: number): string {
@@ -449,7 +461,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function shouldAutoExpandAuthoringSection(section: VisualSection): boolean {
-    if (state.currentView !== 'ai' || !section.contained || section.children.length > 0) {
+    if (state.currentView !== 'ai' || !section.contained) {
       return false;
     }
     return section.blocks.some((block) =>
@@ -463,14 +475,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     windowOptions?: ReaderRenderTreeWindowOptions
   ): string {
     const blocks = getVisibleReaderBlocks(section, section.blocks, false);
-    const viewContext = getActiveReaderViewContext();
-    const searchContext = getActiveSearchFilterContext();
-    const children = orderReaderSections(section.children.filter((child) => (
-      !child.isGhost
-      && !isViewerHiddenSection(child)
-      && !hasReaderViewModifier(viewContext, getSectionReaderViewTargetKey(child), 'hidden')
-      && isSectionSearchVisible(searchContext, child)
-    )));
     const activeResult = state.search.results.find((result) => result.id === state.search.activeResultId);
     const forceNodeKeys = new Set<string>();
     if (activeResult) {
@@ -479,38 +483,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           forceNodeKeys.add(block.id);
         }
       });
-      children.forEach((child) => {
-        if (child.key === activeResult.sectionKey || containsReaderSectionKey(child, activeResult.sectionKey)) {
-          forceNodeKeys.add(child.key);
-        }
-      });
+
     }
     const effectiveWindowOptions = windowOptions ? { ...windowOptions, forceNodeKeys } : undefined;
     const nodes = [
       ...blocks.map(createReaderBlockRenderTreeNode),
-      ...children.map(createReaderSectionRenderTreeNode),
     ];
     const entries = readerRenderTreeHeightLedger.plan(
       nodes,
       effectiveWindowOptions,
-      children.length > 0 ? READER_SECTION_TREE_LAYOUT : READER_BLOCK_TREE_LAYOUT
+      READER_BLOCK_TREE_LAYOUT
     );
     const output: string[] = [];
     for (let index = 0; index < entries.length;) {
       const entry = entries[index];
       if (!entry) break;
-      if (entry.node.kind === 'section') {
-        const child = entry.node.item as VisualSection;
-        output.push(entry.shouldRender
-          ? renderReaderSection(
-            child,
-            createChildRenderTreeWindowOptions(effectiveWindowOptions, entry.offsetTop, 44)
-          )
-          : renderReaderSectionPlaceholder(child, entry.estimatedHeight)
-        );
-        index += 1;
-        continue;
-      }
       if (entry.shouldRender) {
         const renderOptions = section.contained
           ? {
@@ -547,12 +534,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return found;
   }
 
-  function containsReaderSectionKey(section: VisualSection, sectionKey: string | undefined): boolean {
-    if (!sectionKey) return false;
-    return section.children.some((child) => child.key === sectionKey || containsReaderSectionKey(child, sectionKey));
-  }
-
   function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
+    if (options.textPlaceholders || options.omitTextPlaceholderNames) {
+      const { textPlaceholders, omitTextPlaceholderNames, ...remainingOptions } = options;
+      return withTextPlaceholders({ textPlaceholders, omitTextPlaceholderNames }, () => (
+        renderReaderBlock(section, block, remainingOptions)
+      ));
+    }
     if (isViewerHiddenBlock(block)) {
       return '';
     }
@@ -622,7 +610,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       options.trimVerticalEndMargin ? ' data-reader-trim-vertical-end-margin="true"' : '',
     ].join('');
     const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
-    const helpers = deps.getComponentRenderHelpers();
+    const helpers = { ...deps.getComponentRenderHelpers(), getTextPlaceholders: () => activeTextPlaceholders };
     type BlockShellPresentation = {
       beforeHtml?: string;
       className?: string;
@@ -640,10 +628,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       }
       return renderBlockShell(renderReaderViewCollapseWrapper(targetKey, block, body), '', presentation);
     };
+    const emptyTargetContent = state.readerNavigationTarget?.sectionKey === section.key
+      && state.readerNavigationTarget.blockId === block.id
+      ? '<div class="reader-empty-state" role="status">No content to display yet.</div>'
+      : '';
     const renderNonEmptyBlockShell = (body: string, presentation: BlockShellPresentation = {}): string =>
-      body.trim() ? renderBlockShell(body, '', presentation) : '';
+      body.trim() || emptyTargetContent ? renderBlockShell(body.trim() ? body : emptyTargetContent, '', presentation) : '';
     const renderNonEmptyMaybeCollapsedBlockShell = (body: string, presentation: BlockShellPresentation = {}): string =>
-      body.trim() ? renderMaybeCollapsedBlockShell(body, presentation) : '';
+      body.trim() || emptyTargetContent ? renderMaybeCollapsedBlockShell(body.trim() ? body : emptyTargetContent, presentation) : '';
 
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
@@ -814,12 +806,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return false;
   }
 
-  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[], windowOptions?: ReaderRenderTreeWindowOptions): string {
+  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[], placeholderOptions: TextPlaceholderContextOptions = {}): string {
+    if (placeholderOptions.textPlaceholders || placeholderOptions.omitTextPlaceholderNames) {
+      return withTextPlaceholders(placeholderOptions, () => renderReaderBlocks(section, blocks));
+    }
     const visibleBlocks = getVisibleReaderBlocks(section, blocks, false);
-    const inheritedWindowOptions = windowOptions ?? (activeReaderRenderTreeWindowOptions ? {
+    const inheritedWindowOptions = activeReaderRenderTreeWindowOptions ? {
       ...activeReaderRenderTreeWindowOptions,
       layoutOffsetTop: (activeReaderRenderTreeWindowOptions.layoutOffsetTop ?? 0) + 64,
-    } : undefined);
+    } : undefined;
     const activeResultBlockId = state.search.results.find((result) => result.id === state.search.activeResultId)?.blockId;
     const forceNodeKeys = new Set(visibleBlocks
       .filter((block) => block.id === activeResultBlockId || containsReaderBlockId(block, activeResultBlockId))
@@ -1012,8 +1007,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function sectionContainsAdvancedOnlyScriptingBlock(section: VisualSection): boolean {
-    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock)
-      || section.children.some(sectionContainsAdvancedOnlyScriptingBlock);
+    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock);
   }
 
   function blockContainsAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
@@ -1111,7 +1105,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       idEditorOpen: false,
       isGhost: false,
       title: 'Theme Preview',
-      level: 1,
+
       expanded: true,
       highlight: false,
       css: '',
@@ -1119,7 +1113,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       description: '',
       location: 'main',
       blocks: [],
-      children: [],
     };
     const makePreviewBlock = (id: string, component: string, text: string, schema: Partial<BlockSchema> = {}): VisualBlock => ({
       id,
@@ -1131,7 +1124,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       },
       schemaMode: false,
     });
-    const previewTextBlock = makePreviewBlock('theme-preview-text', 'text', 'Paragraph with *alternate text* and a fill-in.');
+    const previewTextBlock = makePreviewBlock('theme-preview-text', 'text', 'Paragraph with *alternate text*, ~~strikethrough~~, and a fill-in.');
     const previewButtonBlock = makePreviewBlock('theme-preview-button', 'button', '', { buttonLabel: 'Generate' });
     const previewFillInBlock = makePreviewBlock('theme-preview-fill-in', 'text', 'The answer is [____].', { fillIn: true });
     const previewXrefTarget = state.documentSections[0] ? `#${deps.getSectionId(state.documentSections[0])}` : '#';
@@ -1220,7 +1213,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const textPreview = renderDemoSurface(
       renderTextReader(previewSection, previewTextBlock, helpers),
       'rest',
-      '--hvy-text --hvy-text-alt --hvy-text-muted',
+      '--hvy-text --hvy-text-alt --hvy-text-muted --hvy-strikethrough-color',
       'theme-demo-rich-text'
     );
     const buttonRestPreview = renderDemoWrapper(
@@ -1320,9 +1313,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           label: 'Text',
           detail: 'Rich text, fill-ins, quotes, and AI target state',
           className: 'theme-preview-text-card',
-          variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+          variables: ['--hvy-strikethrough-color', '--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
           states: [
-            { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted'] },
+            { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-strikethrough-color'] },
             { id: 'fill-in', label: 'Fill-in', variables: ['--hvy-text', '--hvy-text-muted', '--hvy-focus-ring'] },
             { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
           ],
@@ -1801,7 +1794,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             ? `This component already uses "${deps.escapeHtml(existingName)}". Update that component template, save this component as a new template, or add it as a flavor.`
             : `This section already uses "${deps.escapeHtml(existingName)}". Update that section template, save this section as a new template, or add it as a flavor.`
           : state.reusableSaveModal.kind === 'section'
-            ? 'This saves a cloned section template, including its current blocks and nested subsections.'
+            ? 'This saves a cloned section template, including its current components.'
             : 'This saves a cloned component template, including pre-filled values and nested children.';
       return `
         <div id="modalRoot" class="modal-root">
@@ -1870,7 +1863,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         const labelHead = `<span class="template-field-label-row"><span>${label}</span>${generatorButton}</span>`;
         if (xrefTargetTagFilter) {
           hasTargetPicker = true;
-          const targetOptions = deps.getComponentRenderHelpers().getXrefTargetOptions(xrefTargetTagFilter);
+          const insertionTarget = state.reusableTemplateModal!.target;
+          const list = insertionTarget.kind === 'component-list'
+            ? deps.findBlockByIds(insertionTarget.sectionKey, insertionTarget.blockId) ?? undefined
+            : undefined;
+          const targetOptions = deps.getComponentRenderHelpers().getXrefTargetOptions(xrefTargetTagFilter, { list });
           if (targetOptions.length === 0) {
             hasUnavailablePicker = true;
           }
@@ -2371,7 +2368,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         schemaMode: false,
       } : null);
       if (!template) return '<p class="muted">This flavor has no component preview.</p>';
-      const previewSection = createEmptySectionWithMeta(1, 'text', false, state.documentMeta);
+      const previewSection = createEmptySectionWithMeta('text', false, state.documentMeta);
       previewSection.key = `__reusable_flavor_preview__:${definitionName}:${flavorIndex}`;
       return renderReaderBlock(previewSection, template, { ignoreReaderSessionState: true });
     }

@@ -165,6 +165,95 @@ test('chat stays scrolled to latest across full rerenders', async ({ page }) => 
   await expect.poll(() =>
     scroller.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)
   ).toBeLessThanOrEqual(12);
+
+  await scroller.evaluate(async (node) => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    node.scrollTop = 0;
+    node.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(0);
+  const latestButton = page.locator('.chat-scroll-bottom');
+  await expect(latestButton).toBeVisible();
+  const [scrollerBox, latestBox] = await Promise.all([scroller.boundingBox(), latestButton.boundingBox()]);
+  expect(scrollerBox).not.toBeNull();
+  expect(latestBox).not.toBeNull();
+  expect(latestBox!.x + latestBox!.width).toBeLessThanOrEqual(scrollerBox!.x + scrollerBox!.width);
+  expect(latestBox!.y + latestBox!.height).toBeLessThanOrEqual(scrollerBox!.y + scrollerBox!.height);
+  expect(scrollerBox!.y + scrollerBox!.height - (latestBox!.y + latestBox!.height)).toBeLessThanOrEqual(16);
+});
+
+test('viewer question shows pending feedback and anchors Latest to the scroll surface', async ({ page }) => {
+  test.setTimeout(5_000);
+  let finishResponse!: () => void;
+  const responseStarted = new Promise<void>((resolve) => {
+    finishResponse = resolve;
+  });
+  await page.route('**/api/chat', async (route) => {
+    await responseStarted;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ output: 'Finished answer.', toolCalls: [], nativeMessages: [], toolState: { provider: 'openai', input: [] } }),
+    });
+  });
+  await page.goto('/');
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('[data-field="chat-input"]').fill('A question that takes a while');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.getByRole('status', { name: 'Preparing an answer' })).toContainText('Reading the document and preparing an answer...');
+  await expect(page.locator('.chat-scroll-bottom')).toHaveCSS('position', 'sticky');
+
+  finishResponse();
+  await expect(page.locator('.chat-bubble', { hasText: 'Finished answer.' })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Preparing an answer' })).toHaveCount(0);
+});
+
+test('viewer streams host output as text before rendering the completed HVY response', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    const { setHostChatClient } = await import(/* @vite-ignore */ '/src/chat/chat.ts');
+    let finish!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    (window as typeof window & { finishHvyChatStream?: () => void }).finishHvyChatStream = finish;
+    setHostChatClient({
+      async complete() {
+        return { output: 'Unexpected fallback.' };
+      },
+      async *streamToolTurn() {
+        yield { type: 'output_delta' as const, delta: '<!--hvy:text {"id":"streamed-answer"}-->\n**Partial' };
+        await finished;
+        yield { type: 'output_delta' as const, delta: ' answer**' };
+        yield {
+          type: 'response' as const,
+          response: {
+            output: '<!--hvy:text {"id":"streamed-answer"}-->\n**Partial answer**',
+            toolCalls: [],
+            nativeMessages: [],
+            toolState: { provider: 'openai' as const, input: [] },
+          },
+        };
+      },
+    });
+  });
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('[data-field="chat-input"]').fill('Stream an HVY answer');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  const answer = page.locator('[data-chat-message-id].chat-bubble-streaming');
+  await expect(answer).toContainText('<!--hvy:text');
+  await expect(answer.locator('.chat-hvy-response')).toHaveCount(0);
+
+  await page.evaluate(() => {
+    (window as typeof window & { finishHvyChatStream?: () => void }).finishHvyChatStream?.();
+  });
+  await expect(page.locator('.chat-bubble-streaming')).toHaveCount(0);
+  await expect(page.locator('.chat-hvy-response')).toContainText('Partial answer');
 });
 
 test('viewer question updates chat without rerendering the app', async ({ page }) => {
@@ -216,14 +305,14 @@ test('Viewer follow-up inspects a known path inside the cache-stable read-only a
     chatRequests.push(route.request().postDataJSON());
     const response = chatRequests.length === 1
       ? {
-          output: 'The answer choices may affect the response.',
-          reasoningSummary: '',
-          toolCalls: [],
-          nativeMessages: [],
-          toolState: { provider: 'openai', input: [] },
-        }
+        output: 'The answer choices may affect the response.',
+        reasoningSummary: '',
+        toolCalls: [],
+        nativeMessages: [],
+        toolState: { provider: 'openai', input: [] },
+      }
       : chatRequests.length === 2
-      ? {
+        ? {
           output: '',
           reasoningSummary: '',
           toolCalls: [{
@@ -239,7 +328,7 @@ test('Viewer follow-up inspects a known path inside the cache-stable read-only a
           }],
           toolState: { provider: 'openai', input: [] },
         }
-      : {
+        : {
           output: 'The requested content is already present in the inspected component.',
           reasoningSummary: '',
           toolCalls: [],
@@ -296,33 +385,54 @@ test('Viewer follow-up inspects a known path inside the cache-stable read-only a
   expect(JSON.stringify(chatRequests[2]?.toolState)).toContain('Component preview');
 });
 
-test('AI mode informational question uses QA chat instead of document edit CLI', async ({ page }) => {
-  const chatRequests: Array<{ mode?: string; messages?: Array<{ content?: string }> }> = [];
-  await page.route('**/api/chat', async (route) => {
-    const body = route.request().postDataJSON() as { mode?: string; messages?: Array<{ content?: string }> };
-    chatRequests.push(body);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        output: 'James has used Python on automation and data projects.',
-        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
-      }),
+for (const view of ['editor', 'ai']) {
+  test(`${view} chat retains editing tools for questions and follow-up requests`, async ({ page }) => {
+    test.setTimeout(5_000);
+    const chatRequests: Array<{
+      mode?: string;
+      tools?: Array<{ name: string }>;
+      messages?: Array<{ role?: string; content?: string }>;
+    }> = [];
+    await page.route('**/api/chat', async (route) => {
+      chatRequests.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          output: 'done Request handled.',
+          reasoningSummary: '',
+          toolCalls: [],
+          nativeMessages: [],
+          toolState: { provider: 'openai', input: [] },
+        }),
+      });
     });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByRole('button', { name: 'HVY Document', exact: true }).click();
+    await page.locator(`[data-action="switch-view"][data-view="${view}"]`).click();
+    await page.getByRole('button', { name: 'Open chat' }).click();
+    await page.locator('[data-field="chat-input"]').fill('What color is the heading?');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page.locator('.chat-bubble', { hasText: 'Request handled.' })).toHaveCount(1);
+    expect(chatRequests).toHaveLength(1);
+    expect(chatRequests[0]?.mode).toBe('document-edit');
+    expect(chatRequests[0]?.tools?.map((tool) => tool.name)).toContain('apply_hvy_patch');
+
+    await page.locator('[data-field="chat-input"]').fill('Can we give it the same font color too');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page.locator('.chat-bubble', { hasText: 'Request handled.' })).toHaveCount(2);
+    expect(chatRequests).toHaveLength(2);
+    expect(chatRequests[1]?.mode).toBe('document-edit');
+    expect(chatRequests[1]?.tools?.map((tool) => tool.name)).toContain('apply_hvy_patch');
+    expect(chatRequests[1]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', content: 'What color is the heading?' }),
+      expect.objectContaining({ role: 'assistant', content: 'Request handled.' }),
+      expect.objectContaining({ role: 'user', content: 'Can we give it the same font color too' }),
+    ]));
   });
-
-  await page.goto('/');
-  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.getByRole('button', { name: 'Open chat' }).click();
-  await page.locator('[data-field="chat-input"]').fill('What projects has James done with Python?');
-  await page.getByRole('button', { name: 'Send' }).click();
-
-  await expect(page.locator('.chat-bubble', { hasText: 'James has used Python on automation and data projects.' })).toBeVisible();
-  expect(chatRequests).toHaveLength(1);
-  expect(chatRequests[0]?.mode).toBe('qa');
-  expect(chatRequests[0]?.messages?.at(-1)?.content).toBe('What projects has James done with Python?');
-  await expect(page.locator('.chat-cli-sim')).toHaveCount(0);
-});
+}
 
 test('AI mode informational question with a chat attachment uses the attachment-capable CLI loop', async ({ page }) => {
   const rawJobDescription = `Job description\n${'Restaurant service requirement. '.repeat(80)}`;

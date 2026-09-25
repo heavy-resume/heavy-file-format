@@ -1,3 +1,4 @@
+import { listValueKindForElement } from '../../sort-values';
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, handleRichEditorPointerDown, refreshRichToolbarState } from './_imports';
 import { applyInlineAnswerTypeChoice } from '../../block-ops';
 import { dismissSidebarHelpBalloon } from '../../sidebar-help';
@@ -20,7 +21,7 @@ export function bindClickMisc(app: HTMLElement): void {
       const defIndex = Number.parseInt(sortValueDetails.dataset.defIndex ?? '', 10);
       const name = sortValueDetails.dataset.sortValueName ?? '';
       if (!Number.isNaN(defIndex) && name) {
-        updateOpenTemplateDefinitionKey(componentSortValueDetailsKey(defIndex, name), sortValueDetails.open);
+        updateOpenTemplateDefinitionKey(componentSortValueDetailsKey(defIndex, name, listValueKindForElement(sortValueDetails)), sortValueDetails.open);
       }
       return;
     }

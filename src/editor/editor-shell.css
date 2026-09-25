@@ -275,6 +275,10 @@
   text-align: left;
 }
 
+.hvy-document .editor-sidebar-help-balloon:not(.is-positioned) {
+  visibility: hidden;
+}
+
 .hvy-document .editor-sidebar-help-balloon::before {
   content: "";
   position: absolute;

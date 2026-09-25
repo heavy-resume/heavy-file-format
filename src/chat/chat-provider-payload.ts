@@ -3,7 +3,7 @@ export type ProxyChatMode = 'qa' | 'component-edit' | 'document-edit' | 'pdf-tem
 export type OpenAiReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 
 export interface ProviderProxyChatRequest {
-  provider: 'openai' | 'anthropic' | 'qwen';
+  provider: string;
   model: string;
   mode: ProxyChatMode;
   messages: Array<{

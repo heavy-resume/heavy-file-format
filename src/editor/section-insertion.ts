@@ -5,6 +5,6 @@ export function readSectionInsertionBoundary(element: HTMLElement): SectionInser
   const beforeKind = element.dataset.sectionBeforeKind;
   if (beforeKind === 'end') return { beforeKind: 'end', beforeId: '' };
   const beforeId = element.dataset.sectionBeforeId ?? '';
-  if (!beforeId || (beforeKind !== 'block' && beforeKind !== 'child')) return null;
+  if (!beforeId || beforeKind !== 'block') return null;
   return { beforeKind, beforeId };
 }

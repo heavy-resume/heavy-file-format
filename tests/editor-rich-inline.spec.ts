@@ -10,7 +10,7 @@ async function expandInlineRichToolbar(page: Page): Promise<void> {
 test('document undo restores one clustered rich text edit and keeps its editor active', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -134,7 +134,7 @@ test('forward deleting selected heading text does not pass heading format to the
   await page.goto('/');
 
   for (const shortcut of ['Delete', 'Control+Delete']) {
-    await page.getByRole('button', { name: 'Raw' }).click();
+    await page.getByRole('button', { name: 'Raw', exact: true }).click();
     await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -165,7 +165,7 @@ hvy_version: 0.1
     await expect(editor.locator('h1')).toHaveCount(0);
     await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
 
-    await page.getByRole('button', { name: 'Raw' }).click();
+    await page.getByRole('button', { name: 'Raw', exact: true }).click();
     await expect(page.locator('#rawEditor')).toContainText('some text');
     await expect(page.locator('#rawEditor')).not.toContainText('# some text');
   }
@@ -174,7 +174,7 @@ hvy_version: 0.1
 test('forward deleting at heading boundary does not pass heading format to the next paragraph', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -206,7 +206,7 @@ hvy_version: 0.1
   await expect(editor.locator('h1')).toHaveText('SOME HEADER');
   await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# SOME HEADER');
   await expect(page.locator('#rawEditor')).toContainText('some text');
   await expect(page.locator('#rawEditor')).not.toContainText('# SOME HEADERsome text');
@@ -215,7 +215,7 @@ hvy_version: 0.1
 test('forward deleting an empty heading restores with one document undo', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -256,7 +256,7 @@ test('image caption rich editor keeps italic and bold markers distinct', async (
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Overview', exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -303,7 +303,7 @@ hvy_version: 0.1
   await expect(captionEditor.locator('u em, em u')).toHaveText('Caption text');
 
   await page.getByRole('button', { name: 'Close Image Caption' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const rawEditor = page.locator('#rawEditor');
   await expect(rawEditor).toContainText('___');
   await expect(rawEditor).toContainText('_Caption text_');
@@ -330,7 +330,7 @@ test('active text editor wraps prose without widening the editor block', async (
     node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
   await page.keyboard.type(
-    ' Sections and components define consumable portions of information. Sections define the root document, subsections can live in sections, and components can live in sections and subsections.'
+    ' Sections and components define consumable portions of information. Sections define the document root and contain components. Containers group nested components within a section.'
   );
 
   await expect.poll(async () =>
@@ -379,7 +379,7 @@ test('mobile adjustment mode writes text edits as alt annotations', async ({ pag
   });
   await expect(mobileEditor).toHaveText('Tools & Tech');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText(
     'Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->'
   );
@@ -406,7 +406,7 @@ test('mobile adjustment mode keeps heading syntax outside alt annotations', asyn
     node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText(
     '## <!--hvy:alt {"compact":"Sum"}-->Summary<!--/hvy:alt-->'
   );
@@ -439,7 +439,7 @@ test('mobile adjustment mode removes alt annotation when text matches full value
     node.closest('.rich-editor')?.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).not.toContainText('<!--hvy:alt');
   await expect(page.locator('#rawEditor')).toContainText('Tools & Technologies');
 });
@@ -447,7 +447,7 @@ test('mobile adjustment mode removes alt annotation when text matches full value
 test('mobile adjustment preview width switches between full and alt annotation text', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -702,7 +702,7 @@ test('inline code autoformats from backticks and escapes with arrow or click', a
 test('enum sort selector ArrowRight moves caret after selector for same-line typing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -748,7 +748,7 @@ component_defs:
 test('AI enum sort selector change preserves the active editor and focus', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -787,7 +787,7 @@ component_defs:
 
 test('Done points to an invalid formatted date sort value and closes after correction', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -861,7 +861,7 @@ component_defs:
 
 test('Done accepts the selected enum sort value', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -903,7 +903,7 @@ component_defs:
 
 test('enum sort value can be removed and reinserted from Use as', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -958,7 +958,7 @@ test('clicking a passive enum activates and opens its editor dropdown', async ({
     });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -1002,7 +1002,7 @@ test('nested custom component enum opens as a dropdown in the text editor', asyn
     });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -1051,7 +1051,7 @@ component_defs:
 
 test('changing an enum in AI mode updates a scripting-derived annotation before Done', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -1129,7 +1129,7 @@ component_defs:
 test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -1187,7 +1187,7 @@ component_defs:
 test('use as sort value survives deleting and retyping the selected value', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -1213,14 +1213,15 @@ component_defs:
 
   await page.locator('[data-action="activate-block"]').filter({ hasText: 'Temporary' }).first().dispatchEvent('click');
   const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await expect(editor).toBeFocused();
   await editor.locator('p').evaluate((node) => {
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
     const textNode = node.firstChild!;
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textNode);
     selection?.removeAllRanges();
     selection?.addRange(range);
-    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
   });
   await page.locator('.text-use-as-menu-item[data-sort-value-key="Name"]').evaluate((button) => {
     (button as HTMLButtonElement).click();
@@ -1245,14 +1246,14 @@ component_defs:
 
   await expect(sortValue).toHaveText('Replacement');
   await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:sort-value {"key":"Name"}-->Replacement<!--/hvy:sort-value-->');
 });
 
 test('orphan sort value presentation is cleared while typing plain text', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1292,7 +1293,7 @@ hvy_version: 0.1
 
   await expect(editor.locator('.hvy-sort-value')).toHaveCount(0);
   await expect(editor.locator('p')).toHaveText('Plain text');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('Plain text');
   await expect(page.locator('#rawEditor')).not.toContainText('hvy:sort-value');
 });
@@ -1300,7 +1301,7 @@ hvy_version: 0.1
 test('browser-copied sort value background is cleared after deleting the annotation element', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -1339,7 +1340,7 @@ component_defs:
   await expect(editor.locator('[data-hvy-sort-value="true"]')).toHaveCount(0);
   await expect(editor.locator('p span[style*="background"]')).toHaveCount(0);
   await expect(editor.locator('p')).toHaveText('Strength: 7');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('Strength: 7');
   await expect(page.locator('#rawEditor')).not.toContainText('hvy:sort-value');
 });
@@ -1369,7 +1370,7 @@ test('code button wraps selected text as inline code and preserves angle bracket
   await expect(editor.locator('p')).toHaveText('Use <tag> now');
   await expect(editor.locator('pre')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('Use `<tag>` now');
   await page.getByRole('button', { name: 'Basic' }).click();
 });
@@ -1438,7 +1439,7 @@ test('link button preserves a mailto subject containing spaces after rerender', 
   );
   await linkModal.getByRole('button', { name: 'Apply' }).click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText(
     '[KCParks.SEPA@kingcounty.gov](mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course)'
   );
@@ -2199,7 +2200,7 @@ test('markdown editor auto-upgrades raw task markers', async ({ page }) => {
 async function loadInlineFormattingParagraph(page: Page, markdown: string): Promise<void> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

@@ -10,6 +10,7 @@ import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
 import bundledMeetingMinutesThvy from '../examples/meeting-minutes.thvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
+import bundledModel3dDemoHvyUrl from '../examples/model-3d-demo.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
 import {
   state,
@@ -42,6 +43,7 @@ import { bindDocumentAttachmentManager } from './editor/components/document-atta
 import { bindUserFileAttachmentLinks } from './document-attachment-links';
 import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
 import { bindAppEvents } from './bind/app-events';
+import { AI_READER_CONTEXT_OPEN_EVENT } from './bind/handlers/contextmenu';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { saveSessionState, saveSessionStateAsync } from './state-persistence';
 import { createDocumentFilterSnapshot } from './search/document-filter';
@@ -316,6 +318,7 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterComposer = app.querySelector<HTMLFormElement>('#metaFilterComposer');
   const metaFilterQuery = app.querySelector<HTMLInputElement>('#metaFilterQuery');
   const clearMetaFilterButton = app.querySelector<HTMLButtonElement>('[data-action="clear-meta-filter"]');
+  const referenceHeaderToggle = app.querySelector<HTMLButtonElement>('[data-action="toggle-reference-header"]');
   const rerenderSearchButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-search"]');
   const rerenderReaderButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-reader"]');
   const rerenderAppButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-app"]');
@@ -323,6 +326,12 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
   const metaFilterBehaviorButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]');
   let pendingAiReaderAction: number | null = null;
+
+  referenceHeaderToggle?.addEventListener('click', () => {
+    const expanded = referenceHeaderToggle.getAttribute('aria-expanded') !== 'true';
+    referenceHeaderToggle.setAttribute('aria-expanded', String(expanded));
+    referenceHeaderToggle.closest('.topbar')?.classList.toggle('is-reference-header-expanded', expanded);
+  });
 
   rerenderSearchButton?.addEventListener('click', () => {
     runInBoundRuntime(() => getRefreshSearchSurface()(app));
@@ -619,6 +628,20 @@ export function bindUi(app: HTMLElement): void {
   const videoDemoExampleBtn = app.querySelector<HTMLButtonElement>('#videoDemoExampleBtn');
   videoDemoExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledVideoDemoHvy, 'video-demo.hvy', 'video-demo');
+  });
+
+  const model3dDemoExampleBtn = app.querySelector<HTMLButtonElement>('#model3dDemoExampleBtn');
+  model3dDemoExampleBtn?.addEventListener('click', () => {
+    // Loaded as bytes, not raw text: the demo carries real tail attachments and
+    // reading it as text would leak --HVY-TAIL-- data into the document body.
+    void runInBoundRuntimeAsync(async () => {
+      await loadBundledBinaryDocument(
+        bundledModel3dDemoHvyUrl,
+        'model-3d-demo.hvy',
+        'model-3d-demo',
+        '3D model demo'
+      );
+    });
   });
 
   const asteroidsExampleBtn = app.querySelector<HTMLButtonElement>('#asteroidsExampleBtn');
@@ -1265,8 +1288,8 @@ export function bindUi(app: HTMLElement): void {
   aiReaderDocument?.addEventListener('change', handlePersistedAnswerChange);
   aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
   aiSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
-  aiReaderDocument?.addEventListener('dblclick', clearPendingAiReaderAction);
-  aiSidebarSections?.addEventListener('dblclick', clearPendingAiReaderAction);
+  aiReaderDocument?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
+  aiSidebarSections?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
 
   chatThread?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

@@ -80,6 +80,7 @@
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^5.0.1",
     "@noble/hashes": "^1.8.0",
+    "brython": "^3.14.0",
     "chart.js": "^4.5.1",
     "dompurify": "^3.2.6",
     "fflate": "^0.8.3",
@@ -91,6 +92,7 @@
     "qr-code-styling": "^1.9.2",
     "semver": "^7.8.5",
     "sql.js": "^1.14.1",
+    "three": "^0.186.0",
     "turndown": "^7.2.0",
     "yaml": "^2.8.1"
   },
@@ -99,8 +101,8 @@
     "@types/node": "^24.6.0",
     "@types/semver": "^7.7.1",
     "@types/sql.js": "^1.4.11",
+    "@types/three": "^0.186.0",
     "@types/turndown": "^5.0.6",
-    "brython": "^3.14.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.3",
     "vitest": "^3.2.4"

@@ -26,15 +26,18 @@ declare module 'virtual:hvy-built-in-plugins' {
     video?: HvyPlugin;
     editableText?: HvyPlugin;
     canvas?: HvyPlugin;
+    model3d?: HvyPlugin;
     powerScripting?: HvyPlugin;
   }>;
   export const builtInPluginById: Readonly<Record<string, HvyPlugin | undefined>>;
 }
 
 interface ImportMetaEnv {
-  readonly VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
+  readonly VITE_HVY_CHAT_PROVIDER?: string;
   readonly VITE_HVY_CHAT_MODEL?: string;
-  readonly VITE_HVY_CHAT_COMPACTION_PROVIDER?: 'openai' | 'anthropic';
+  readonly VITE_HVY_TEXT_PROCESSING_PROVIDER?: string;
+  readonly VITE_HVY_TEXT_PROCESSING_MODEL?: string;
+  readonly VITE_HVY_CHAT_COMPACTION_PROVIDER?: string;
   readonly VITE_HVY_CHAT_COMPACTION_MODEL?: string;
   readonly VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES?: string;
   readonly VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES?: string;

@@ -19,10 +19,10 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
 import { insertTopLevelSection } from './bind/actions/section';
 import { assignAutoBlockId } from './auto-block-id';
-import { applyXrefTargetDefaults } from './xref-ops';
+import { applyXrefTargetDefaults, isXrefTargetAvailable, normalizeXrefTarget } from './xref-ops';
 import { getOutputGenerator } from './plugins/registry';
 import { configurePluginBlock } from './plugins/plugin-block';
-import { getComponentDefsFromMeta, getSectionDefsFromMeta } from './component-defs';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import { createReusableTemplateVariableName, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, renameReusableTemplateVariable, REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT, setReusableTemplateVariableType } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
@@ -1213,6 +1213,19 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
   }
 
   const target = modal.target;
+  if (target.kind === 'component-list' && resolveBaseComponentFromMeta(newBlock.schema.component, state.document.meta) === 'xref-card') {
+    const list = findBlockByIds(target.sectionKey, target.blockId) ?? undefined;
+    if (!isXrefTargetAvailable(state.document, newBlock.schema.xrefTarget, { list })) {
+      const input = Array.from(modalRoot.querySelectorAll<HTMLInputElement>('[data-template-variable]'))
+        .find((field) => normalizeXrefTarget(field.value) === normalizeXrefTarget(newBlock.schema.xrefTarget));
+      if (input) {
+        input.setCustomValidity('This target is already used in this list. Choose another target.');
+        input.reportValidity();
+        input.addEventListener('input', () => input.setCustomValidity(''), { once: true });
+      }
+      return;
+    }
+  }
   recordHistory(`reusable-template:${modal.component}`);
   if (target.kind === 'section') {
     const section = findSectionByKey(state.document.sections, target.sectionKey);
@@ -1247,10 +1260,13 @@ function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
     }
     syncReusableTemplateForBlock(target.sectionKey, target.blockId);
   }
-  if (state.currentView !== 'ai') {
+  if (state.currentView === 'editor') {
     setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' });
     markActiveEditorBlockAsNew(newBlock.id);
   }
+  const onComplete = modal.onComplete;
+  delete modal.onComplete;
   closeModal();
   getRenderApp()();
+  onComplete?.({ status: 'inserted', itemId: newBlock.schema.id.trim() || null });
 }

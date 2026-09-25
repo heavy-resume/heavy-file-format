@@ -17,7 +17,6 @@ section_defs:
     template:
       id: projects
       title: Projects
-      level: 1
       blocks: []
       children: []
   - name: Resume Section
@@ -25,7 +24,6 @@ section_defs:
     repeatable: true
     template:
       title: Resume Section
-      level: 1
       blocks: []
       children: []
 ---
@@ -56,7 +54,6 @@ section_defs:
         label: Row label
     template:
       title: Resume Section
-      level: 1
       blocks:
         - text: "# {% section_title %}"
           schema:
@@ -71,7 +68,7 @@ section_defs:
 ---
 `, '.hvy');
 
-  const expectedResult = instantiateReusableSection('resume-section', 1);
+  const expectedResult = instantiateReusableSection('resume-section');
 
   expect(expectedResult?.templateKey).toBe('resume-section');
   expect(expectedResult?.blocks[0]?.text).toContain('Section title');

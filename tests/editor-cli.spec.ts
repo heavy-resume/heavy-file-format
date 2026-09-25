@@ -15,7 +15,7 @@ test('cli view can navigate and edit virtual component text files', async ({ pag
   await expect(page.locator('#cliOutput')).toContainText('body');
   await expect(page.locator('#cliInput')).toBeFocused();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.getByRole('button', { name: 'CLI' }).click();
   await expect(page.locator('#cliOutput')).toContainText('ls /');
   await expect(page.locator('#cliInput')).toBeFocused();

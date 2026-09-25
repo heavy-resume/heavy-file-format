@@ -1,6 +1,6 @@
 import type { VisualBlock } from './editor/types';
 import { state } from './state';
-import { flattenSections, formatSectionTitle, getSectionId } from './section-ops';
+import { flattenSections, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import type { VisualDocument } from './types';
 import { classifyXrefTarget, normalizeLocalXrefTarget } from './workspace-links';
@@ -18,12 +18,41 @@ export interface XrefTargetOption {
 
 const XREF_TARGET_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-export function getXrefTargetOptions(tagFilter = ''): XrefTargetOption[] {
-  return getXrefTargetOptionsForDocument(state.document, tagFilter);
+export interface XrefPickerContext {
+  block?: VisualBlock;
+  list?: VisualBlock;
 }
 
-export function getXrefTargetOptionsForDocument(document: VisualDocument, tagFilter = ''): XrefTargetOption[] {
-  return collectXrefTargetOptions(document, tagFilter, false);
+export function getXrefTargetOptions(tagFilter = '', context?: XrefPickerContext): XrefTargetOption[] {
+  return getXrefTargetOptionsForDocument(state.document, tagFilter, context);
+}
+
+export function getXrefTargetOptionsForDocument(document: VisualDocument, tagFilter = '', context?: XrefPickerContext): XrefTargetOption[] {
+  const unavailable = getUnavailableXrefTargets(document, context);
+  return collectXrefTargetOptions(document, tagFilter, false).filter((option) => !unavailable.has(option.value));
+}
+
+export function isXrefTargetAvailable(document: VisualDocument, target: string, context: XrefPickerContext): boolean {
+  return !getUnavailableXrefTargets(document, context).has(normalizeXrefTarget(target));
+}
+
+function getUnavailableXrefTargets(document: VisualDocument, context?: XrefPickerContext): Set<string> {
+  let list = context?.list;
+  const current = context?.block;
+  if (!list && current) {
+    visitBlocks(document.sections, (candidate) => {
+      if (candidate.schema.componentListBlocks?.includes(current)) list = candidate;
+    });
+  }
+  const unavailable = new Set<string>();
+  if (!list || resolveBaseComponentFromMeta(list.schema.component, document.meta) !== 'component-list') return unavailable;
+  const selected = normalizeXrefTarget(current?.schema.xrefTarget);
+  for (const sibling of list.schema.componentListBlocks ?? []) {
+    if (sibling === current || resolveBaseComponentFromMeta(sibling.schema.component, document.meta) !== 'xref-card') continue;
+    const target = normalizeXrefTarget(sibling.schema.xrefTarget);
+    if (target && target !== selected) unavailable.add(target);
+  }
+  return unavailable;
 }
 
 export function getDocumentLinkTargetOptionsForDocument(document: VisualDocument): XrefTargetOption[] {
@@ -171,7 +200,6 @@ function visitBlocksForXrefOptions(
     sections.forEach((section) => {
       const sectionTags = combineTags(inheritedTags, section.tags);
       visitList(section.blocks, sectionTags);
-      visitSections(section.children, sectionTags);
     });
   };
 

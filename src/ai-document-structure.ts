@@ -198,7 +198,6 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
     for (const section of sections) {
       const displayTitle = section.title.trim() || 'Untitled Section';
       collectDeepRefs(section.blocks, section.key, [`section "${displayTitle}" (${getSectionId(section)})`], true, `${getSectionId(section)} nested`);
-      indexAllSectionBlocks(section.children);
     }
   };
 
@@ -265,7 +264,7 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
       });
       const displayTitle = section.title.trim() || 'Untitled Section';
       lines.push(`${'  '.repeat(depth)}<!-- section id="${escapeInline(sectionId)}" title="${escapeInline(displayTitle)}" location="${section.location}" -->`);
-      lines.push(`${'  '.repeat(depth)}${'#'.repeat(Math.min(section.level, 6))} ${displayTitle}`);
+      lines.push(`${'  '.repeat(depth)}# ${displayTitle}`);
       const lineBudget = { remaining: MAX_SECTION_PREVIEW_LINES };
       const sectionChain = [`section "${displayTitle}" (${sectionId})`];
       walkBlocks(section.blocks, depth + 1, nesting + 1, section.key, lineBudget, sectionChain);
@@ -276,23 +275,7 @@ export function summarizeDocumentStructure(document: VisualDocument): DocumentSt
           lines.push(`${'  '.repeat(depth + 1)}indexed hidden ids: ${hiddenIds.slice(0, 12).join(', ')}${hiddenIds.length > 12 ? ', ...' : ''}`);
         }
       }
-      if (section.children.length === 0) {
-        continue;
-      }
-      if (nesting >= MAX_SUMMARY_NESTING) {
-        lines.push(`${'  '.repeat(depth + 1)}${HIDDEN_CONTENTS_MARKER}`);
-        for (const child of section.children) {
-          collectDeepRefs(
-            child.blocks,
-            child.key,
-            [`section "${child.title.trim() || 'Untitled Section'}" (${getSectionId(child)})`],
-            true,
-            `${getSectionId(child)} nested`
-          );
-        }
-        continue;
-      }
-      walkSections(section.children, depth + 1, nesting + 1);
+
     }
   };
 

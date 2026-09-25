@@ -14,7 +14,6 @@ export function filterTemplateVisibleSections(sections: VisualSection[]): Visual
     .map((section) => ({
       ...section,
       blocks: filterTemplateVisibleBlocks(section.blocks),
-      children: filterTemplateVisibleSections(section.children),
     }));
 }
 
@@ -78,16 +77,7 @@ export function clearHideIfUnmodifiedForSections(sections: VisualSection[]): boo
   return changed;
 }
 
-export function findSectionPath(sections: VisualSection[], sectionKey: string, ancestors: VisualSection[] = []): VisualSection[] | null {
-  for (const section of sections) {
-    const path = [...ancestors, section];
-    if (section.key === sectionKey) {
-      return path;
-    }
-    const childPath = findSectionPath(section.children, sectionKey, path);
-    if (childPath) {
-      return childPath;
-    }
-  }
-  return null;
+export function findSectionPath(sections: VisualSection[], sectionKey: string): VisualSection[] | null {
+  const section = sections.find((candidate) => candidate.key === sectionKey);
+  return section ? [section] : null;
 }

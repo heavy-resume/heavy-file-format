@@ -360,7 +360,7 @@ export function summarizeWorkLedgerAction(toolCall: DocumentEditToolRequest, too
     case 'remove_section':
       return `Removed section ${toolCall.section_ref}${suffix}.`;
     case 'create_section':
-      return `Created a section at ${toolCall.target_section_ref ?? toolCall.parent_section_ref ?? toolCall.position}${suffix}.`;
+      return `Created a section at ${toolCall.target_section_ref ?? toolCall.position}${suffix}.`;
     case 'reorder_section':
       return `Moved section ${toolCall.section_ref}${suffix}.`;
     case 'query_db_table':

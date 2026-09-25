@@ -94,7 +94,7 @@ test('survey editable text preserves reader scroll while typing', async ({ page 
 
 test('the answer type popover converts only the clicked answer without answering it', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -135,7 +135,7 @@ hvy_version: 0.1
 test('a new radio group spans components and clears selections across them', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').evaluate((textarea, value) => {
     if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
     textarea.value = value;
@@ -196,7 +196,7 @@ hvy_version: 0.1
 test('a named radio group stays mutually exclusive across grid cells and partial refreshes', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').evaluate((textarea, value) => {
     if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
     textarea.value = value;
@@ -264,7 +264,7 @@ hvy_version: 0.1
 test('viewer selections write through to inline checkbox and radio marker source', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').evaluate((textarea, value) => {
     if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
     textarea.value = value;
@@ -301,7 +301,7 @@ hvy_version: 0.1
   // Returning to the editor keeps the checkbox but drops the radio, which has no other
   // way to be deselected.
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('[x] Approved');
   await expect(page.locator('#rawEditor')).toContainText('- ( ) Email\n  - ( ) Phone');
 });
@@ -359,7 +359,7 @@ test('clicking past an answer label places the caret at the end of that line', a
 test('entering editor mode clears radio selections made while reading', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').evaluate((textarea, value) => {
     if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
     textarea.value = value;
@@ -400,7 +400,7 @@ hvy_version: 0.1
 test('the answer type popover opens for a checkbox written mid-sentence', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').evaluate((textarea, value) => {
     if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
     textarea.value = value;
@@ -427,7 +427,7 @@ hvy_version: 0.1
 test('a radio group directive takes up no room in the editor', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').evaluate((textarea, value) => {
     if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
     textarea.value = value;

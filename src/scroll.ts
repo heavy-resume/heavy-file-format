@@ -626,7 +626,7 @@ function isTextSelectionInput(target: HTMLElement): target is HTMLInputElement {
   return ['password', 'search', 'tel', 'text', 'url'].includes(target.type);
 }
 
-function getCaretRangeFromPoint(clientX: number, clientY: number): Range | null {
+export function getCaretRangeFromPoint(clientX: number, clientY: number): Range | null {
   const doc = document as Document & {
     caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
     caretRangeFromPoint?: (x: number, y: number) => Range | null;

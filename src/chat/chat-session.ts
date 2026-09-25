@@ -70,23 +70,12 @@ export async function requestChatTurn(params: {
   chatSearchCache?: HvyChatSearchCache | null;
   embeddingProvider?: HvyEmbeddingProvider | null;
   onContextPreparation?: HvyChatContextPreparationCallback;
+  onProgress?: (message: ChatMessage) => void;
   allowDbQaTools?: boolean;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
-  if (isLikelyViewerChangeRequest(params.question)) {
-    return {
-      messages: [
-        ...nextMessages,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: 'I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.',
-        },
-      ],
-      error: null,
-    };
-  }
+  const answerMessageId = crypto.randomUUID();
   try {
     const result = await runViewerAgent({
       settings: params.settings,
@@ -97,13 +86,21 @@ export async function requestChatTurn(params: {
       chatContextProvider: params.chatContextProvider,
       embeddingProvider: params.embeddingProvider,
       onContextPreparation: params.onContextPreparation,
+      onOutput: (output) => {
+        params.onProgress?.({
+          id: answerMessageId,
+          role: 'assistant',
+          content: output,
+          streaming: true,
+        });
+      },
       signal: params.signal,
     });
     return {
       messages: [
         ...nextMessages,
         {
-          id: crypto.randomUUID(),
+          id: answerMessageId,
           role: 'assistant',
           content: result.answer,
           ...(result.reasoningSummary ? { reasoning: result.reasoningSummary } : {}),
@@ -127,18 +124,6 @@ export async function requestChatTurn(params: {
       error: message,
     };
   }
-}
-
-function isLikelyViewerChangeRequest(question: string): boolean {
-  const normalized = question.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-  if (/^(how|what|why|where|when|who)\b/.test(normalized)) {
-    return false;
-  }
-  return /\b(add|create|insert|edit|change|update|modify|remove|delete|replace|rename|move|reorder|finish|complete|implement|wire|wiring|rig|rigging)\b/.test(normalized)
-    && /\b(document|resume|hvy|sections?|components?|tables?|forms?|skills?|tools?|text|title|header|this)\b/.test(normalized);
 }
 
 export type CopyChatMessageResult =
@@ -235,6 +220,12 @@ export async function requestDocumentEditChatTurn(params: {
       embeddingProvider: params.embeddingProvider,
       selectedComponent: params.selectedComponent,
       onMutation: params.onMutation,
+      onCommandActivity: (phase) => {
+        workState.activityRevision = (workState.activityRevision ?? 0) + 1;
+        if (phase === 'finished') {
+          emitProgress({ id: workMessageId, role: 'assistant', content: '', progress: true });
+        }
+      },
       onProgress: (content) =>
         emitProgress({
           id: crypto.randomUUID(),
@@ -497,6 +488,7 @@ function formatChatWorkMessageContent(work: ChatWorkState): string {
 function cloneChatWorkState(work: ChatWorkState): ChatWorkState {
   return {
     status: work.status,
+    activityRevision: work.activityRevision,
     ...(work.lastCommand ? { lastCommand: work.lastCommand } : {}),
     details: [...work.details],
     reasoning: [...work.reasoning],

@@ -6,7 +6,7 @@ import { createReaderSectionRenderTreeNode, READER_SECTION_TREE_LAYOUT } from '.
 
 test('reader section height ledger plans only the visible window for large documents', () => {
   const sections = Array.from({ length: 40 }, (_item, index) => {
-    const section = createEmptySection(1, `Section ${index + 1}`);
+    const section = createEmptySection(`Section ${index + 1}`);
     section.key = `section-${index + 1}`;
     const block = createEmptyBlock('text');
     block.id = `block-${index + 1}`;
@@ -32,7 +32,7 @@ test('reader section height ledger plans only the visible window for large docum
 
 test('reader section height ledger records measurements and always includes forced sections', () => {
   const sections = Array.from({ length: 40 }, (_item, index) => {
-    const section = createEmptySection(1, `Section ${index + 1}`);
+    const section = createEmptySection(`Section ${index + 1}`);
     section.key = `section-${index + 1}`;
     return section;
   });

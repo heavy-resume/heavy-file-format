@@ -550,12 +550,6 @@ function findComponentBySchemaIdInSection(section: VisualSection, id: string): S
   if (found) {
     return { block: found, sectionKey: section.key };
   }
-  for (const child of section.children) {
-    const childFound = findComponentBySchemaIdInSection(child, id);
-    if (childFound) {
-      return childFound;
-    }
-  }
   return null;
 }
 
@@ -676,10 +670,19 @@ class ScriptingComponentHandle {
   }
 
   set_sort_value(key: string, value: unknown): number {
+    return this.setAnnotatedValue(key, value, 'sort');
+  }
+
+  set_group_value(key: string, value: unknown): number {
+    return this.setAnnotatedValue(key, value, 'group');
+  }
+
+  private setAnnotatedValue(key: string, value: unknown, kind: 'sort' | 'group'): number {
     const replacements = setSortValueAnnotationText(
       this.location.block,
       String(key ?? ''),
-      String(value ?? '')
+      String(value ?? ''),
+      kind
     );
     if (replacements > 0) {
       this.markMutated();
@@ -774,7 +777,6 @@ function getScriptingComponentHandles(
   };
   const visitSection = (section: VisualSection): void => {
     visit(section.blocks, section, []);
-    section.children.forEach(visitSection);
   };
   document.sections.forEach(visitSection);
   return matches;

@@ -342,7 +342,7 @@ window.__embeddedSaveStatus = await doc.save.request({ reason: "High score added
 
 test('reference app offers download when a power script requests saving a bundled document', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

@@ -59,12 +59,10 @@ Changing an encrypted component's key MUST generate a fresh UUID and Fernet key,
 
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is the preferred syntax for italics. An opening single underscore MAY immediately follow a letter or number so authors can begin italics within a word, as in `Someth_ing there_`; the closing underscore must occur at a normal emphasis boundary. This intraword-opening behavior is an HVY Markdown extension and MUST NOT reinterpret ordinary embedded-underscore identifiers such as `snake_case_value`. Authoring clients SHOULD use standard `*text*` emphasis when an italic run directly touches unformatted letters or numbers and underscore delimiters would become ambiguous, such as multiple formatted fragments within one word.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
-Use `~~text~~` for strikethrough. Authoring clients MUST preserve this syntax when serializing strikethrough text from a rich editor.
+Use `~~text~~` for strikethrough. The document setting `typography.recolorStrikethrough` defaults to `false`: the line MUST use the struck text’s color. When `true`, renderers MUST use the active theme’s `--hvy-strikethrough-color` for both the struck text and its line (see §5.12). This setting applies even when the viewer selects a local palette instead of document colors. Authoring clients MUST preserve this syntax when serializing strikethrough text from a rich editor.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
 
 Blank lines inside text components are meaningful Markdown paragraph separators. The normal paragraph gap is configured by `typography.paragraphSpacing` and defaults to `0.45rem`.
-
-On an explicit edit commit, authoring tools MAY split a text component where one or more empty top-level paragraphs separate visible paragraph runs into adjacent text components. Adjacent visible paragraphs without an empty paragraph between them remain in the same text component. This is an editor convenience, not a distinct text-component schema: the authoring tool writes an ordinary `margin-top` declaration into the generated component's `css`, calculated from `typography.paragraphSpacing` and the number of intervening line boundaries. Authoring tools MUST NOT perform this structural split on each keystroke.
 
 A single physical newline inside an ordinary Markdown paragraph is a soft wrap and MUST have the logical plain-text value of one space when rendered, searched, or copied as plain text. Readers MUST preserve meaningful Markdown line boundaries, including blank-line paragraph separators, explicit hard breaks, block structures such as list items and headings, and line breaks inside code blocks.
 
@@ -102,7 +100,7 @@ viewer without creating a document component. Temporary, host, `blob:`,
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
-- ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.
+- ATX headings define section boundaries. Each heading starts a section at the document root, with the original heading retained as a text component. Markdown before the first heading goes into an "Imported Markdown" section.
 - Consecutive prose, list, blockquote, fenced or indented code, thematic-break, and raw HTML Markdown blocks become `text` components that preserve the source Markdown.
 - GitHub-Flavored Markdown table blocks become `table` components, using the header row for `tableColumns` and body rows for `tableRows`.
 - Imported Markdown documents SHOULD save as `.hvy` after conversion. The original Markdown source remains valid HVY by compatibility, but the editable imported representation is a richer client-authored HVY document.
@@ -158,7 +156,7 @@ When viewed, the HVY segments the information into the atomic sections and the d
 
 Everything is contained as either a section or component, and a section is essentially just a container component. There is a set of built in components native to the format, as well as component definitions used for templating, and finally plugin components.
 
-A section is considered an atomic thought if it has a defined ID. So for example, a section may exist for "Projects" and then each individual project can be a subsection or even a component within a subsection with its own ID.
+A section groups a document’s related content. Sections exist only at the document root and contain components. Use containers with their own IDs to group related components within a section.
 
 Component templates are defined as yaml in the document metadata.
 
@@ -214,7 +212,7 @@ Presentation keys in document metadata include:
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
 - `sidebar_max_width`: optional CSS width value limiting the editor and viewer sidebar. Defaults to `40rem`.
 - `database_table_max_column_width`: optional positive CSS length limiting interactive database-table column resizing and auto-fit. It accepts `px`, `rem`, `em`, or `ch` units and defaults to `40rem`.
-- `typography`: optional object for document-wide text rhythm. `typography.paragraphSpacing` is an optional non-negative CSS length used between Markdown paragraphs and paragraph-flow text components. It defaults to `0.45rem`.
+- `typography`: optional object for document-wide typography. `typography.recolorStrikethrough` is an optional boolean (default `false`) enabling the active theme’s color for both struck text and its line. `typography.paragraphSpacing` is an optional non-negative CSS length used between Markdown paragraphs and paragraph-flow text components. It defaults to `0.45rem`.
 - `responsive_breakpoints`: optional object mapping surface breakpoint names to simple CSS length tokens. Responsive inline CSS variants use these names. The defaults are `sm: 40rem`, `md: 48rem`, `lg: 64rem`, `xl: 80rem`, and `2xl: 96rem`. Authors MAY override these values or add names. Breakpoint names MUST start with a letter and contain only ASCII letters, digits, and hyphens; values MUST be simple CSS length tokens.
 - `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
@@ -238,9 +236,9 @@ This lets the same responsive rules work when a document is rendered inside a sm
 
 Top-level sections are defined by `<!--hvy: {...}-->` directives.
 
-Subsections (children of the current section) are defined by `<!--hvy:subsection {...}-->` directives.
+Sections cannot contain other sections. Nested content is represented by container components or other components that own child components.
 
-Either directive may be followed by a `#!` title line. The `!` suffix distinguishes section titles from standard ATX headings; `#!` lines are consumed by the parser and not rendered as Markdown content. Nesting is determined by the directive type, not the number of `#` characters.
+A section directive may be followed by a `#!` title line. The `!` suffix distinguishes section titles from standard ATX headings; `#!` lines are consumed by the parser and not rendered as Markdown content. A standalone `#!` title line starts a section without metadata. Heading depth does not create section nesting.
 
 If no `#!` line follows the directive, the section title defaults to the `id` value from the directive.
 
@@ -252,12 +250,6 @@ Top-level section with title:
 ```markdown
 <!--hvy: {"id":"topic-1","tags":["intro"],"style":"card"}-->
 #! Topic Title
-```
-
-Subsection:
-```markdown
-<!--hvy:subsection {"id":"details"}-->
-#! Details
 ```
 
 Without title (id is used as the section name):
@@ -338,6 +330,7 @@ Inline `css` strings are declaration-only values equivalent to an HTML `style` a
 `sortKeys` is an optional object on any block. Keys are human-readable sort names and MAY contain spaces. Values MUST be strings or finite numbers. Component-list views use these values for sorting without changing source document order.
 `derivedSortKeyNames` is an optional string array on component-list item blocks. It records which item `sortKeys` were materialized from source-backed sort values rather than manually authored metadata. Authoring tools use it to clear stale source-backed sort values when their source annotations or plugin declarations are removed or moved elsewhere. Reader-oriented renderers MAY ignore it and MUST continue to sort from `sortKeys`.
 `groupKeys` is an optional object on any block. Keys are human-readable grouping names and MAY contain spaces. Values MUST be strings. Component-list views use these values to create reader-only grouped displays.
+`derivedGroupKeyNames` is an optional string array on component-list item blocks. Like `derivedSortKeyNames`, it tracks materialized source-backed keys so authoring tools can remove stale entries without removing manually authored `groupKeys`.
 
 Visible text inside a component-list item MAY be marked as the source for an item `sortKeys` entry using a paired sort-value annotation:
 
@@ -348,6 +341,18 @@ Visible text inside a component-list item MAY be marked as the source for an ite
 The annotation payload MUST contain `key`, naming a sort value definition on the nearest reusable component definition that owns the component-list item. Authoring tools resolve the annotation against that reusable component's `sortValueDefs` entry and write the resolved value back to the owning component-list item's `sortKeys`, marking that key in `derivedSortKeyNames`. Reader-oriented renderers MUST render only the annotation body text and MUST NOT depend on scripts or annotation parsing for sorting; they use the resolved `sortKeys`.
 
 Sort-value annotations may appear in text components and table cells, including inside nested containers, grids, and expandable panes. Plugin components MAY declare local source-backed sort values using `pluginSortValues`, an object whose keys name sort value definitions on the owning component-list item and whose values MUST be strings or finite numbers. Authoring tools resolve plugin-declared sort values using the same `sortValueDefs` rules as visible annotations. If a key cannot be resolved, a value cannot be coerced, or an enum label is not one of the defined options, authoring tools SHOULD preserve the source marker or plugin declaration and leave manually authored key values unchanged. If a previously source-backed key no longer has a valid source inside the item, authoring tools SHOULD remove that key from `sortKeys` and `derivedSortKeyNames`.
+
+Grouping supports the same source-backed mechanism with a paired group-value annotation:
+
+```markdown
+<!--hvy:group-value {"key":"Fake Category"}-->Fake Blue<!--/hvy:group-value-->
+```
+
+The annotation's `key` MUST name a `groupValueDefs` entry on the reusable component definition of the owning component-list item. Authoring tools resolve its body text, write the string result to that item's `groupKeys`, and record the name in `derivedGroupKeyNames`. Text and table cells inside nested containers, grids, and expandable panes MAY contain these annotations. Plugin blocks MAY expose `pluginGroupValues`, an object mapping the same definition names to strings. For enum definitions, plugin strings may be either configured labels or stored values; an exact stored-value match takes precedence.
+
+Sort and group key namespaces are independent: the same name MAY exist in both. Sources inside a nested component-list belong to its own item, never to an outer list item. Authors SHOULD provide one source per key per item. For repeated sources, the last annotated source in child order wins; plugin declarations are then applied in child order and take precedence over annotations. Authoring tools SHOULD recompute affected keys when source text, plugin declarations, definitions, or source placement changes, including edits through tools. Invalid or missing sources MUST remain editable; preserve manual keys, but remove previously derived keys that no longer have a valid source or definition. Removing the annotation removes the binding, not its visible text.
+
+Readers MUST render only annotation body text and group using materialized `groupKeys`; scripts or annotation parsing MUST NOT be required to group a saved document. Source-backed grouping is opt-in: ordinary `groupKeys` remain manually authored metadata unless tracked in `derivedGroupKeyNames`.
 
 Section metadata also includes optional presentation keys such as:
 - `expanded`
@@ -366,7 +371,7 @@ Section metadata also includes optional presentation keys such as:
 `css` is an optional inline CSS style string applied to the rendered section wrapper.
 Inline section `css` follows the same declaration-only rule as block `css`. Use CSS blocks for media queries, container queries, selectors, and other stylesheet-level constructs.
 `priority` is an optional boolean for sections that should remain prominent in reader-oriented ordering. Readers SHOULD keep priority sections before non-priority sections when applying search/filter ordering or other relevance-based reordering. `priority` does not imply `highlight`; use `highlight` for visual emphasis.
-`lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
+`lock` is an optional boolean. Use it to prevent adding new blocks inside that section.
 `editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default, unless overridden by `document.meta.section_defaults.contained` for newly created manual sections), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
@@ -470,6 +475,16 @@ Text content MAY include paired HVY comment annotations for explicit responsive 
 `nowrap` marks a phrase that SHOULD stay on one line when the renderer supports it. Renderers MAY shrink, clip, or ellipsize the phrase according to their own CSS defaults.
 
 These annotations are semantic hints, not raw HTML. Renderers SHOULD convert them into implementation-specific inline elements and MUST NOT leak the marker comments into visible output.
+
+Text content MAY also contain a parent-provided placeholder marker:
+
+```markdown
+<!-- placeholder expandable-chevron -->
+```
+
+The placeholder name MUST begin with an ASCII letter and contain only ASCII letters, digits, `_`, or `-`. A containing component defines which named placeholders are available to its descendant text components and supplies their rendered meaning. Authoring clients SHOULD expose controls only for placeholders provided by the nearest applicable parent context. Unknown placeholders MUST remain source-preserving in editors and MUST NOT produce visible reader content. This generic mechanism allows parent components to contribute contextual inline values without adding parent-specific behavior to the text component.
+
+An expandable provides the `expandable-chevron` placeholder to text components in its stub, including text nested through layout components. It renders as a right-pointing chevron while the expandable is closed and a down-pointing chevron while it is open. The expanded-content pane does not inherit this placeholder from that expandable. A nested expandable establishes its own stub/content placeholder context.
 
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
@@ -861,6 +876,9 @@ Notes:
 - When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time. When preserving a concrete nested component with its own IDs, text, styling, or other edited fields, use the full block form; serializers MUST NOT replace that block with shorthand if doing so would discard its authored values.
 - Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
 - Component template definitions MAY include `sortValueDefs`, keyed by human-readable sort key. Each definition has `type` (`"text"`, `"number"`, `"date"`, `"datetime"`, or `"enum"`). `text` writes trimmed visible text. `number` parses trimmed visible text as a finite number. `date` requires an explicit `format` of `"YYYY-MM-DD"`, `"MM/DD/YYYY"`, or `"DD/MM/YYYY"`; implementations MUST parse that format exactly, MUST reject impossible calendar dates, and MUST write the timezone-free canonical `YYYY-MM-DD` value to `sortKeys`. Date formats MUST use a four-digit year and implementations MUST NOT infer field order from locale. `datetime` parses visible text with an explicit timezone (`Z`, a numeric offset such as `-07:00`, a `GMT-7` style offset, an IANA timezone such as `America/Los_Angeles`, or a short timezone abbreviation such as `PDT` when the runtime can resolve it to a single UTC offset for that date) and writes the equivalent UTC ISO-8601 timestamp string to `sortKeys`. `enum` requires `options`, an ordered list of `{label, value}` objects where `label` is the visible canonical text and `value` is a string or finite number written to `sortKeys`.
+- Component template definitions MAY also include `groupValueDefs`, keyed by human-readable group key. A group definition has `type: "text"` or `type: "enum"`. Text writes trimmed visible text to `groupKeys`. Enum requires `options`, an ordered list of `{label, value}` objects with non-empty string labels and string values; matching is against the trimmed visible label. Numeric, date, and datetime definitions are not group definitions. For example, `groupValueDefs: {"Fake Category": {type: text}}` binds the group annotation above to the `Fake Category` key.
+
+For both sort and group definitions, authoring UIs SHOULD expose the shared key name separately from its per-item value. A selection action should identify the target explicitly, such as `Sort: [key name]` or `Group: [key name]`, and SHOULD allow creating a named definition and binding the selection without first visiting component settings. Existing manual `sortKeys`/`groupKeys` do not themselves define automatic sources; a definition and annotation using the same key make the selected text its source. Definitions are shared by the reusable component type, while annotations identify each item's source. Renaming a key through an authoring UI SHOULD update its source annotations, plugin declarations, materialized keys, tracking names, and list defaults together. Enum group values use the same constrained themed picker as enum sort values.
 
 Authoring tools SHOULD visibly identify source-backed sort values that fail coercion. An active component with invalid source-backed sort values SHOULD remain open when completion is requested, focus the first invalid source, and explain the expected type or configured date format. Readers and parsers MUST still open documents containing invalid source values; the invalid annotation remains source text and any manually authored `sortKeys` value is preserved as described above.
 
@@ -901,6 +919,7 @@ Authoring clients SHOULD provide a visual template-definition surface using the 
 Template value notes:
 - `{% name %}` is equivalent to `{% name | text %}`.
 - `text` values are single-line values; `block` values may contain multiple lines.
+- When a multiline value is substituted on a Markdown line beginning with a `^name^` text line style marker, subsequent plain paragraphs in that value MUST inherit the same marker unless they supply an explicit marker. Soft-wrapped lines remain one paragraph. This substitution MUST preserve structural Markdown such as lists, tables, and code blocks, and MUST NOT propagate literal markers from code blocks or escaped markers. The inherited style applies only within the substituted value, not to following template content.
 - `isempty` resolves to `yes` when the value is empty or whitespace-only, and `no` otherwise. It does not change the variable's text/block validation type.
 - Variable names MUST be identifier-like strings: letters, numbers, underscores, and hyphens, starting with a letter or underscore.
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
@@ -918,6 +937,7 @@ templateVariables:
 ```
 
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
+- Value tokens belong to template definitions, not to instances. Whenever an instance is materialized from a component or section template definition, every token in it MUST be replaced: tokens the author supplied a value for take that value, and every other token — including tokens reached through fields the instance omits and therefore inherits from the definition — MUST resolve as a blank value. Readers MUST apply this when loading a document, so an instance that omits a token-valued field such as `xrefDetail` resolves to blank (or to a text fill-in where blank text bodies produce one) instead of exposing the literal `{% name %}` text.
 - Authoring tools that accept explicit template values SHOULD require the provided keys to exactly match the expected variable names.
 - Component template definitions and section template definitions MAY include `templateVariables`, keyed by variable name. Each variable config MAY include `label`, a human-readable field label for authoring UIs. When `label` is omitted, authoring tools SHOULD derive one by converting snake_case or kebab-case separators to spaces and title-casing the result.
 - A template variable config MAY include `generator`, a plugin-qualified output generator key such as `hvy.resume.skill-description`. Authoring tools MAY expose this as a field-level generation action. Generator requests MUST include only template variables that the author has provided with non-empty values; missing or empty variables MUST be omitted. If the installed generator declares required variables, authoring tools SHOULD disable the action until all required variables are non-empty.
@@ -948,7 +968,6 @@ section_defs:
     template:
       id: faq
       title: "{% section_title %}"
-      level: 2
       contained: true
       expanded: true
       highlight: false
@@ -958,16 +977,15 @@ section_defs:
           schema:
             component: text
             css: "margin: 0.5rem 0;"
-      children: []
 ```
 
 Notes:
 - `key` is an optional stable template identity. When omitted, `name` is the template identity.
 - `repeatable` is optional and defaults to `false`. Authoring tools SHOULD hide a non-repeatable section template when the document already contains a section whose `templateKey` matches the definition's `key` or `name`.
 - Sections created from section template definitions SHOULD set `templateKey` to the definition's `key` or `name`. Manually created blank sections SHOULD omit `templateKey`.
-- `template` stores a full section subtree, including blocks and nested child sections.
+- `template` stores a full section subtree, including its component tree.
 - `templateVariables` follows the rules in section 5.9 and applies to tokens anywhere in the section template subtree, including section fields, block text, and nested block schema fields.
-- Clone a `section_defs[*].template` when inserting a new section or subsection.
+- Clone a `section_defs[*].template` when inserting a new section.
 - Section templates preserve section-level presentation fields such as `contained`, `expanded`, `highlight`, `priority`, `css`, `location`, and `hideIfUnmodified`.
 - Section template definitions MAY include `flavors`, an array of alternate section templates. Each flavor has `name`, optional `description`, optional `templateVariables`, and `template`. AI import tools SHOULD choose the best section flavor before filling template values. If no flavors are defined, authoring tools use the main section template as usual.
 - Implementations SHOULD assign fresh section keys, block IDs, and custom IDs when instantiating a section template.
@@ -1052,6 +1070,7 @@ Viewers SHOULD ship built-in defaults for the following conventional names so do
 | `--hvy-text` | Primary text |
 | `--hvy-text-alt` | Secondary text |
 | `--hvy-text-muted` | Muted helper text |
+| `--hvy-strikethrough-color` | Struck text and line color when `typography.recolorStrikethrough` is enabled; themes SHOULD choose a contrasting color, such as red |
 | `--hvy-link-color` | Inline link text |
 | `--hvy-accent-1` | Primary accent fill |
 | `--hvy-accent-1-alt` | Primary accent border |
@@ -1219,7 +1238,7 @@ Rules:
 
 A `.thvy` file is a `.hvy` file. The distinction is the `.thvy` extension or `text/thvy` media type.
 
-Template sections that contain scaffold content but should not appear in a finished viewer until changed MAY set `hideIfUnmodified: true` in section metadata. Viewer-oriented surfaces hide a flagged section, its descendants, sidebar/navigation entries, search results, and reader-view targets while the flag is present. If a user, agent, or structured authoring tool edits that section, a child section, or any descendant block, the tool SHOULD remove `hideIfUnmodified` from the edited section and any flagged ancestor sections. After the flag is removed and saved, the section renders normally.
+Template sections that contain scaffold content but should not appear in a finished viewer until changed MAY set `hideIfUnmodified: true` in section metadata. Viewer-oriented surfaces hide a flagged section, its descendants, sidebar/navigation entries, search results, and reader-view targets while the flag is present. If a user, agent, or structured authoring tool edits that section, any descendant block, the tool SHOULD remove `hideIfUnmodified` from the edited section and its containing section. After the flag is removed and saved, the section renders normally.
 
 This is not an emptiness test. A section can contain headers, placeholder rows, tables, or list scaffolds and still be hidden while the flag remains. Editor and AI modes always show flagged sections. Raw source editors MAY leave or remove the flag directly; no baseline comparison is required.
 
@@ -1765,7 +1784,7 @@ Tail format:
 3. All remaining bytes after the trailing newline of that sentinel are the concatenated attachment payloads, laid out in the order the directives appear. Each attachment's byte slice has length `length` from its directive.
 
 Tail directive fields:
-- `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload and `image:<filename>` for image component attachments.
+- `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload, `image:<filename>` for image component attachments, and `model-3d:<filename>` for 3D model plugin attachments.
 - `mediaType`: RECOMMENDED IANA media type of the decoded payload.
 - `role`: optional string describing the attachment's document role. The value
   `user-file` identifies an author-managed file that MAY be selected by a
@@ -2331,6 +2350,71 @@ acceptance SHOULD be keyed to a collision-resistant digest of the ordered
 identities and source of all power scripts so that adding, removing, renaming,
 reordering, or editing trusted code requires a new approval.
 
+### 7.15 3D model plugin contract
+
+The built-in 3D model plugin is `hvy.model-3d`. It renders an interactive 3D
+model whose bytes are stored as an HVY tail attachment, so documents containing
+a 3D model remain self-contained and render offline.
+
+```markdown
+---
+hvy_version: 1.0
+plugins:
+  - id: hvy.model-3d
+---
+
+<!--hvy:plugin {"id":"bracket","plugin":"hvy.model-3d","pluginConfig":{"modelFile":"bracket.stl","mediaType":"model/stl","title":"Mounting bracket","height":360,"showGrid":true,"autoRotate":false,"wireframe":false,"allowDownload":true}}-->
+3D model. Geometry is stored in the HVY tail attachment.
+```
+
+Normative configuration and data:
+
+- `pluginConfig.modelFile` is a REQUIRED string naming the attached model file.
+  The bytes MUST be stored in the tail attachment with `id`
+  `model-3d:<modelFile>` (see §7.6). When `modelFile` is absent, names an
+  unsupported extension, or has no matching attachment, clients MUST NOT render
+  a model and SHOULD surface the missing or unsupported file to authors.
+- `pluginConfig.mediaType` is an optional advisory media type recorded for the
+  attachment. Model media types are weakly standardized, so the `modelFile`
+  extension is authoritative for format selection.
+- `pluginConfig.title` is an optional accessible name for the viewer surface.
+- `pluginConfig.height` is an optional positive integer viewer height in CSS
+  pixels. Clients SHOULD default to `360` and SHOULD clamp to `160`-`1200`.
+- `pluginConfig.showGrid`, `pluginConfig.autoRotate`, and
+  `pluginConfig.wireframe` are optional booleans defaulting to `true`, `false`,
+  and `false`. Grid and background colors MUST be derived from the active
+  document theme roles rather than stored in plugin configuration.
+- `pluginConfig.allowDownload` is an optional boolean defaulting to `true`.
+  When true, clients SHOULD offer a control that saves the attached model bytes
+  under `modelFile`.
+- The plugin text body SHOULD contain only a concise human/AI-facing
+  description. Model geometry MUST NOT be authored as plugin text.
+
+Format support for version 0.1 is the set of formats parseable without a
+WebAssembly decoder: `.glb`, `.gltf`, `.obj`, `.stl`, `.ply`, `.fbx`, `.dae`,
+`.3mf`, `.amf`, `.vtk`, `.vtp`, `.pcd`, and `.xyz`. Clients MUST report an
+error rather than render partial geometry for formats they cannot fully parse,
+including Draco-compressed glTF and KTX2-textured glTF.
+
+Model files are untrusted content under §8. Clients MUST NOT fetch, resolve, or
+traverse external resource URLs referenced by a model, including relative
+texture and buffer paths, because doing so would let an attached file drive
+outbound requests from the reader. Clients MUST instead render the model
+without those resources and SHOULD report how many were withheld.
+
+Textures carried inside the model file MUST still render. This covers `data:`
+URIs and images packed into a glTF/GLB buffer view. A client that hands such an
+image to its loader through an in-memory handle, such as an object URL it
+created itself, MUST treat that handle as inline rather than external; refusing
+it would silently strip textures from self-contained `.glb` files. Such handles
+cannot reach the network, so permitting them does not weaken the rule above.
+Formats whose textures live in sidecar files, including `.obj` with a companion
+`.mtl` and `.dae` referencing external images, therefore render untextured.
+
+Clients SHOULD enforce an upper bound on accepted model bytes
+because model parsing is computationally unbounded, and SHOULD release GPU
+resources when the component is removed.
+
 ## 8. Security & Runtime Constraints
 
 Client assumptions from product requirements:
@@ -2352,10 +2436,10 @@ Normative behavior:
 2. If the byte stream contains one or more consecutive `hvy:tail` directives immediately followed by `--HVY-TAIL--`, split the file into text bytes before the directives and opaque tail bytes after the sentinel. Each tail directive's `length` field controls how many bytes belong to that attachment, in declaration order. Otherwise treat the whole file as text bytes.
 3. Decode the text bytes as UTF-8 text.
 4. Parse YAML front matter if present at file start.
-5. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define top-level sections; `<!--hvy:subsection {...}-->` directives define subsections. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
+5. Parse Markdown into block structure. `<!--hvy: {...}-->` directives define sections at the document root. An optional `#!` line immediately following sets the section title; it is consumed and not rendered. Standard ATX headings are plain content.
 6. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, block component directives such as `<!--hvy:text ...-->`, legacy `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
 7. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
-8. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
+8. Build the flat section list and the nested component trees within each section.
 9. Validate template rules when extension is `.thvy`: require `hvy_version`.
 
 ## 10. Validation

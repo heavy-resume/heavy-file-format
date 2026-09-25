@@ -2,9 +2,8 @@
 .hvy-document .reader-xref-card {
   display: grid;
   gap: 0.12rem;
-  width: min(100%, 18rem);
-  max-width: 18rem;
-  min-width: min(14rem, 100%);
+  width: 18rem;
+  max-width: 100%;
   justify-self: start;
   padding: 0.48rem 0.58rem;
   border: 1px solid var(--hvy-border);

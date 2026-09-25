@@ -1,3 +1,4 @@
+import { syncSortValuesForDocument } from '../sort-values';
 import { findTemplateDirectory, insertTemplateDefinition } from './template-directories';
 import type { VisualDocument } from '../types';
 import {
@@ -171,6 +172,7 @@ export function writeHvyCliSessionVirtualFile(
   addSessionFiles(fs, document, session);
   const result = writeVirtualFile({ fs, cwd: session.cwd, session }, path, content, false, 'apply_hvy_patch');
   if (shouldInvalidateVirtualFileSystem(result)) {
+    if (result.mutated) syncSortValuesForDocument(document);
     invalidateHvyCliSessionVirtualFileSystem(session);
   }
   return {
@@ -225,6 +227,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
       refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
       requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
       if (shouldInvalidateVirtualFileSystem(result)) {
+        if (result.mutated) syncSortValuesForDocument(document);
         invalidateHvyCliSessionVirtualFileSystem(session);
       }
       scratchpadTouched = scratchpadTouched || heredoc.path === 'scratchpad.txt' || heredoc.path === '/scratchpad.txt';
@@ -290,6 +293,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, lastProcess.refreshSectionPaths);
     requiresFullRefresh = requiresFullRefresh || Boolean(lastProcess.requiresFullRefresh);
     if (shouldInvalidateVirtualFileSystem(lastProcess)) {
+      if (lastProcess.mutated) syncSortValuesForDocument(document);
       invalidateHvyCliSessionVirtualFileSystem(session);
     }
     scratchpadTouched = scratchpadTouched || pipeline.tokens.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
@@ -321,6 +325,12 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
 }
 
 export function executeHvyCliCommandSync(document: VisualDocument, input: string, cwd = '/'): HvyCliExecution {
+  const result = executeHvyCliCommandSyncImpl(document, input, cwd);
+  if (result.mutated && shouldInvalidateVirtualFileSystem(result)) syncSortValuesForDocument(document);
+  return result;
+}
+
+function executeHvyCliCommandSyncImpl(document: VisualDocument, input: string, cwd: string): HvyCliExecution {
   const expandedInput = expandShellSubstitutions(input, new Date());
   const args = tokenizeCommand(expandedInput);
   if (args.length === 0) {
@@ -1343,12 +1353,6 @@ function validateSectionTagsForRaw(section: VisualSection): string {
       return issue;
     }
   }
-  for (const child of section.children) {
-    const issue = validateSectionTagsForRaw(child);
-    if (issue) {
-      return issue;
-    }
-  }
   return '';
 }
 
@@ -1383,7 +1387,6 @@ function replaceSectionContents(target: VisualSection, source: VisualSection): v
   target.idEditorOpen = source.idEditorOpen;
   target.isGhost = source.isGhost;
   target.title = source.title;
-  target.level = source.level;
   target.expanded = source.expanded;
   target.highlight = source.highlight;
   target.css = source.css;
@@ -1393,9 +1396,6 @@ function replaceSectionContents(target: VisualSection, source: VisualSection): v
   target.hideIfUnmodified = source.hideIfUnmodified;
   target.exclude_from_import = source.exclude_from_import;
   target.blocks = source.blocks;
-  target.children = source.children;
-  target.autoTail = source.autoTail;
-  target.renderAfterBlockId = source.renderAfterBlockId;
   target.key = key;
 }
 
@@ -1968,8 +1968,7 @@ function pruneXrefs(document: VisualDocument, targetId: string): number {
 }
 
 function pruneXrefsFromSection(document: VisualDocument, section: VisualSection, targetId: string): number {
-  return pruneXrefsFromBlocks(document, section.blocks, targetId)
-    + section.children.reduce((total, child) => total + pruneXrefsFromSection(document, child, targetId), 0);
+  return pruneXrefsFromBlocks(document, section.blocks, targetId);
 }
 
 function pruneXrefsFromBlocks(document: VisualDocument, blocks: VisualBlock[], targetId: string): number {
@@ -2037,8 +2036,6 @@ function removeDocumentDirectoryInternal(document: VisualDocument, path: string,
       root.commit();
       return block;
     }
-    const section = findSectionForVirtualDirectory(document, path, pathNaming);
-    if (section && root.section && removeSectionReference(root.section.children, section)) return section;
     throw new Error(`rm: cannot map virtual path to template node: ${path}`);
   }
 
@@ -2060,21 +2057,11 @@ function removeDocumentDirectoryInternal(document: VisualDocument, path: string,
   return removed;
 }
 
-function removeSectionReference(sections: VisualSection[], target: VisualSection): boolean {
-  const index = sections.indexOf(target);
-  if (index >= 0) { sections.splice(index, 1); return true; }
-  return sections.some((section) => removeSectionReference(section.children, target));
-}
-
 function removeBlockReferenceFromSections(sections: VisualSection[], target: VisualBlock): VisualBlock | null {
   for (const section of sections) {
     const removed = removeBlockReferenceFromList(section.blocks, target);
     if (removed) {
       return removed;
-    }
-    const childRemoved = removeBlockReferenceFromSections(section.children, target);
-    if (childRemoved) {
-      return childRemoved;
     }
   }
   return null;
@@ -2140,17 +2127,6 @@ function removeFromSection(section: VisualSection, parts: string[]): VisualSecti
     return null;
   }
   const [head = '', ...tail] = parts;
-  const childSectionIndex = section.children.findIndex((child) => pathSegmentForId(getSectionId(child)) === head);
-  if (childSectionIndex >= 0) {
-    const child = section.children[childSectionIndex];
-    if (!child) {
-      return null;
-    }
-    if (tail.length === 0) {
-      return section.children.splice(childSectionIndex, 1)[0] ?? null;
-    }
-    return removeFromSection(child, tail);
-  }
   return removeBlockPath(section.blocks, [head, ...tail]);
 }
 
@@ -3769,7 +3745,7 @@ function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFi
     return 'read-only CLI documentation, cheatsheets, recipes, and reusable component docs';
   }
   if (fs.entries.has(`${path}/section.json`)) {
-    return isTopLevelSectionPath(path) ? 'section' : 'subsection';
+    return 'section';
   }
   const componentName = inferComponentNameForDirectory(fs, path);
   if (componentName) {
@@ -3791,9 +3767,6 @@ function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFi
   return '';
 }
 
-function isTopLevelSectionPath(path: string): boolean {
-  return path.startsWith('/body/') && !path.slice('/body/'.length).includes('/');
-}
 
 function formatComponentDirectoryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
   const componentLabel = componentName === 'table' ? 'static table component' : `${componentName} component`;
@@ -3958,7 +3931,7 @@ function formatChildrenOrderDescription(fs: ReturnType<typeof buildHvyVirtualFil
     return 'list item order';
   }
   if (fs.entries.has(`${directoryPath}/section.json`)) {
-    return 'order for this section\'s subsections and components';
+    return 'order for this section\'s components';
   }
   return 'child order';
 }

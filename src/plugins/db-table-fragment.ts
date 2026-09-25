@@ -13,7 +13,7 @@ export function validateAttachedComponentHvy(hvy: string): void {
   }
 
   const section = parsed.document.sections[0];
-  if (!section || section.children.length > 0 || section.blocks.length === 0) {
+  if (!section || section.blocks.length === 0) {
     throw new Error('Attached row HVY must contain one or more HVY component fragments.');
   }
 }

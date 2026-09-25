@@ -1,3 +1,4 @@
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import './default-theme.css';
 import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
@@ -89,6 +90,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
   { id: 'surveyExampleBtn', label: 'Survey Example', selectedExample: 'survey' },
   { id: 'videoDemoExampleBtn', label: 'Video Demo', selectedExample: 'video-demo' },
+  { id: 'model3dDemoExampleBtn', label: '3D Model Demo', selectedExample: 'model-3d-demo' },
   { id: 'asteroidsExampleBtn', label: 'Asteroids', selectedExample: 'asteroids' },
   { id: 'pluginSortValuesExampleBtn', label: 'Plugin Sort Values', selectedExample: 'plugin-sort-values' },
   { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
@@ -610,6 +612,7 @@ readerRenderer = createReaderRenderer(
     get reusableSaveModal() {
       return state.reusableSaveModal;
     },
+    get readerNavigationTarget() { return state.readerNavigationTarget; },
     get reusableTemplateModal() {
       return state.reusableTemplateModal;
     },
@@ -770,7 +773,7 @@ function renderApp(): void {
     isRawEditor,
   })}
         </div>
-        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane${isCliEditor || isDocumentMetaView ? '' : ' workspace-content-pane'}`)}>
+        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane${isDocumentMetaView ? ' document-meta-pane' : ''}${isCliEditor || isDocumentMetaView ? '' : ' workspace-content-pane'}`)}>
           ${isCliEditor || isDocumentMetaView || !readerToolsAvailable ? '' : renderSearchCollapsedSurface()}
           ${isEditorView
       ? `${isRawEditor
@@ -811,7 +814,7 @@ function renderApp(): void {
             escapeAttr,
           })
           : isDocumentMetaView
-            ? `<div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div>`
+            ? `<div class="document-meta-scroll"><div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div></div>`
             : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
                   ${renderTransientNotice()}
@@ -887,6 +890,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   app.innerHTML = markup;
+  bindResponsiveSidebarShells(app);
   syncActivePdfPreview(app, state.document, pdfDocument && isViewerView);
   domMs = performance.now() - stepStartedAt;
 
@@ -951,33 +955,39 @@ function renderApp(): void {
 function renderTopbar(): string {
   return `
     <header class="topbar">
-      <div class="title-block">
-        <h1 class="reference-title">HVY Reference Implementation</h1>
-        <p class="reference-subtitle">Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
-      </div>
-      <div class="reference-rerender-controls" role="group" aria-label="Reference rerender diagnostics">
-        <span class="reference-rerender-label">Rerender</span>
-        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-search">Search</button>
-        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-reader">Reader</button>
-        <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-app">App</button>
-        <button type="button" class="hvy-button reference-rerender-button reference-hot-reload-button" data-action="reference-hot-reload" title="Save the current session and reload the page, matching Vite's full-page hot reload lifecycle">Hot Reload</button>
-      </div>
-      <div class="toolbar">
-        <div class="toolbar-section toolbar-section-documents">
-          <button id="newBtn" type="button" class="toolbar-primary-button toolbar-document-action">New</button>
-          ${renderDocumentMenu()}
+      <button type="button" class="reference-header-toggle" data-action="toggle-reference-header" aria-expanded="false" aria-controls="referenceHeaderContent">
+        <span>HVY Reference Implementation</span>
+        <svg class="reference-header-toggle-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
+      </button>
+      <div id="referenceHeaderContent" class="reference-header-content">
+        <div class="title-block">
+          <h1 class="reference-title">HVY Reference Implementation</h1>
+          <p class="reference-subtitle">Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
         </div>
-        <div class="toolbar-section toolbar-section-files">
-          <button id="openLocalFileBtn" type="button" class="hvy-button toolbar-file-action">Open Local</button>
-          <label class="file-picker toolbar-file-action">
-            Select File
-            <input id="fileInput" class="file-picker-input" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
-          </label>
-          <input id="downloadName" class="toolbar-filename-input" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
-          ${renderReferenceDocumentDirtyIndicator()}
-          <button id="saveFileBtn" type="button" class="hvy-button toolbar-file-action">Save File</button>
-          <button id="downloadBtn" type="button" class="hvy-button toolbar-file-action">Download File</button>
-          <button id="exportPdfBtn" type="button" class="hvy-button toolbar-file-action">Export PDF</button>
+        <div class="reference-rerender-controls" role="group" aria-label="Reference rerender diagnostics">
+          <span class="reference-rerender-label">Rerender</span>
+          <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-search">Search</button>
+          <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-reader">Reader</button>
+          <button type="button" class="hvy-button reference-rerender-button" data-action="reference-rerender-app">App</button>
+          <button type="button" class="hvy-button reference-rerender-button reference-hot-reload-button" data-action="reference-hot-reload" title="Save the current session and reload the page, matching Vite's full-page hot reload lifecycle">Hot Reload</button>
+        </div>
+        <div class="toolbar">
+          <div class="toolbar-section toolbar-section-documents">
+            <button id="newBtn" type="button" class="toolbar-primary-button toolbar-document-action">New</button>
+            ${renderDocumentMenu()}
+          </div>
+          <div class="toolbar-section toolbar-section-files">
+            <button id="openLocalFileBtn" type="button" class="hvy-button toolbar-file-action">Open Local</button>
+            <label class="file-picker toolbar-file-action">
+              Select File
+              <input id="fileInput" class="file-picker-input" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
+            </label>
+            <input id="downloadName" class="toolbar-filename-input" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
+            ${renderReferenceDocumentDirtyIndicator()}
+            <button id="saveFileBtn" type="button" class="hvy-button toolbar-file-action">Save File</button>
+            <button id="downloadBtn" type="button" class="hvy-button toolbar-file-action">Download File</button>
+            <button id="exportPdfBtn" type="button" class="hvy-button toolbar-file-action">Export PDF</button>
+          </div>
         </div>
       </div>
     </header>
@@ -1427,9 +1437,7 @@ function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTML
   const parentLocked = section.lock || placeholder.dataset.parentLocked === 'true';
   if (placeholder.dataset.hvyVirtualKind === 'editor') {
     const scroller = placeholder.closest<HTMLElement>('.editor-tree');
-    const isSubsection = placeholder.dataset.hvyVirtualSubsection === 'true'
-      || !state.document.sections.some((candidate) => candidate === section);
-    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, isSubsection, scroller ? {
+    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, scroller ? {
       scrollTop: scroller.scrollTop,
       viewportHeight: scroller.clientHeight,
       layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 90,

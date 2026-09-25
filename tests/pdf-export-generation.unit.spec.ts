@@ -3,7 +3,7 @@ import { expect, test } from 'vitest';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob } from '../src/pdf-export/export';
-import { renderPdfTextBlock } from '../src/pdf-export/text';
+import { renderPdfInlineMarkdown, renderPdfTextBlock } from '../src/pdf-export/text';
 import type { HvyPdfMakeNodeObject } from '../src/pdf-export/types';
 import type { VisualDocument } from '../src/types';
 import { createDefaultTextCaption } from '../src/caption';
@@ -12,7 +12,7 @@ test('pdfmake backend produces a PDF blob for a strategy-filtered document', asy
   const block = createEmptyBlock('text');
   block.schema.id = 'intro';
   block.text = 'PDF export smoke test.';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.customId = 'summary';
   section.title = 'Summary';
   section.blocks = [block];
@@ -38,7 +38,7 @@ test('PDF doc definition renders component-list children as exportable content',
   secondItem.text = 'Second repeated item.';
   const listBlock = createEmptyBlock('component-list');
   listBlock.schema.componentListBlocks = [firstItem, secondItem];
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.title = 'Repeated Items';
   section.blocks = [listBlock];
   const document: VisualDocument = {
@@ -63,7 +63,7 @@ test('PDF doc definition omits unfilled placeholder-only text blocks', () => {
   emptyPlaceholder.schema.placeholder = 'classes';
   const filledText = createEmptyBlock('text');
   filledText.text = 'Visible education details.';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.title = 'Education';
   section.blocks = [unfilledHeading, emptyPlaceholder, filledText];
   const document: VisualDocument = {
@@ -126,6 +126,29 @@ test('PDF text rendering preserves markdown links as PDF annotations', () => {
   ]);
 });
 
+test('PDF text rendering does not apply paragraph spacing between bullet items', () => {
+  const expectedResult = renderPdfTextBlock(
+    '- First bullet\n- Second bullet\n- Third bullet',
+    '',
+    {
+      visibility: 'show',
+      keepTogether: false,
+      keepWithNext: false,
+      allowSplit: true,
+      pageBreakBefore: false,
+      pageBreakAfter: false,
+      pdfStyle: {},
+    }
+  );
+
+  expect(expectedResult.style).toEqual(['list', 'paragraph']);
+  expect(expectedResult.ul).toEqual([
+    { text: 'First bullet', style: 'paragraph', margin: [0, 0, 0, 0] },
+    { text: 'Second bullet', style: 'paragraph', margin: [0, 0, 0, 0] },
+    { text: 'Third bullet', style: 'paragraph', margin: [0, 0, 0, 0] },
+  ]);
+});
+
 test('PDF doc definition applies component CSS margins to block wrappers', () => {
   const firstBlock = createEmptyBlock('text');
   firstBlock.schema.id = 'first';
@@ -136,7 +159,7 @@ test('PDF doc definition applies component CSS margins to block wrappers', () =>
   secondBlock.schema.css = 'margin-bottom: 2rem;';
   secondBlock.schema.tableColumns = ['Column'];
   secondBlock.schema.tableRows = [{ cells: ['Cell'] }];
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [firstBlock, secondBlock];
   const document: VisualDocument = {
     meta: { title: 'PDF Component Margins' },
@@ -160,7 +183,7 @@ test('PDF table rendering resolves escaped Markdown punctuation in cells', () =>
   const table = createEmptyBlock('table');
   table.schema.tableColumns = ['Location'];
   table.schema.tableRows = [{ cells: ['Fairwood Greens (southeast)\\*'] }];
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [table];
   const document: VisualDocument = {
     meta: { title: 'PDF Table Markdown' },
@@ -184,7 +207,7 @@ test('PDF doc definition maps container CSS box styling to a flow box', () => {
   container.schema.id = 'styled-container';
   container.schema.css = 'background-color: var(--hvy-surface); color: #ffffff; padding: 0.25in 0.5in; border: 2pt solid var(--hvy-border);';
   container.schema.containerBlocks = [child];
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [container];
   const document: VisualDocument = {
     meta: {
@@ -225,7 +248,7 @@ test('pdfmake backend produces a PDF blob with a styled flow box', async () => {
   const container = createEmptyBlock('container');
   container.schema.css = 'background: #f8fafc; padding: 0.2in; border: 1pt solid #cbd5e1;';
   container.schema.containerBlocks = [child];
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [container];
   const document: VisualDocument = {
     meta: { title: 'PDF Styled Box Blob' },
@@ -241,11 +264,11 @@ test('pdfmake backend produces a PDF blob with a styled flow box', async () => {
 });
 
 test('PDF doc definition applies section default and explicit CSS margins', () => {
-  const defaultSection = createEmptySection(1, '');
+  const defaultSection = createEmptySection('');
   defaultSection.customId = 'default-section';
   defaultSection.blocks = [createEmptyBlock('text')];
   defaultSection.blocks[0].text = 'Default section';
-  const explicitSection = createEmptySection(1, '');
+  const explicitSection = createEmptySection('');
   explicitSection.customId = 'explicit-section';
   explicitSection.css = 'margin-top: 1rem; margin-bottom: 2rem;';
   explicitSection.blocks = [createEmptyBlock('text')];
@@ -271,7 +294,7 @@ test('PDF doc definition applies section default and explicit CSS margins', () =
 test('PDF doc definition widens styled section boxes for negative margin bleed', () => {
   const block = createEmptyBlock('text');
   block.text = 'Bleed header';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.customId = 'bleed-section';
   section.css = 'margin: -0.75in -0.75in 0; background: #24566f; padding: 0.25in;';
   section.blocks = [block];
@@ -299,7 +322,7 @@ test('PDF doc definition widens styled section boxes for negative margin bleed',
 test('PDF doc definition uses PHVY document page margins', () => {
   const block = createEmptyBlock('text');
   block.text = 'Page margin text.';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [block];
   const document: VisualDocument = {
     meta: {
@@ -319,7 +342,7 @@ test('PDF doc definition uses PHVY document page margins', () => {
 test('PDF doc definition renders debug page bounds into PDF background', () => {
   const block = createEmptyBlock('text');
   block.text = 'Page margin text.';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [block];
   const document: VisualDocument = {
     meta: {
@@ -348,7 +371,7 @@ test('pdfmake backend produces a PDF blob with debug page bounds enabled', async
   const block = createEmptyBlock('text');
   block.schema.id = 'debug-intro';
   block.text = 'PDF export debug bounds smoke test.';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.customId = 'debug-summary';
   section.blocks = [block];
   const document: VisualDocument = {
@@ -370,7 +393,7 @@ test('pdfmake backend produces a PDF blob with debug page bounds enabled', async
 test('PDF doc definition omits debug page bounds when PDF debug is disabled', () => {
   const block = createEmptyBlock('text');
   block.text = 'Page margin text.';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [block];
   const document: VisualDocument = {
     meta: {
@@ -394,7 +417,7 @@ test('PDF export keeps QR static SVG captions visible with debug bounds enabled'
   block.schema.imageFile = 'qr-code.svg';
   block.schema.imageAlt = 'Generated QR code';
   block.schema.caption = createDefaultTextCaption('Scan code');
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [block];
   const document: VisualDocument = {
     meta: {
@@ -436,7 +459,7 @@ test('PDF export keeps QR static SVG captions visible with debug bounds enabled'
 test('PDF export strategy page margins override PHVY document page margins', () => {
   const block = createEmptyBlock('text');
   block.text = 'Page margin text.';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [block];
   const document: VisualDocument = {
     meta: {
@@ -468,7 +491,7 @@ test('PDF doc definition constrains grid images to their column width', () => {
     { id: 'left-image', block: leftImage },
     { id: 'right-image', block: rightImage },
   ];
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [grid];
   const document: VisualDocument = {
     meta: { title: 'PDF Grid Images' },
@@ -504,7 +527,7 @@ test('PDF doc definition keeps image captions with CSS-sized images', () => {
   image.schema.imageAlt = 'QR code';
   image.schema.caption = createDefaultTextCaption('**AI Generated** - expectations from disc golf course');
   image.schema.css = 'margin: 0.5rem auto; display: block; width: 12rem; height: auto;';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [image];
   const document: VisualDocument = {
     meta: { title: 'PDF CSS Image Size' },
@@ -547,7 +570,7 @@ test('PDF doc definition applies image caption text CSS over the small caption d
   image.schema.imageAlt = 'Team photo';
   image.schema.caption = createDefaultTextCaption('Team caption');
   image.schema.caption.schema.css = 'margin: 0.5rem 0; font-size: 7pt;';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [image];
   const document: VisualDocument = {
     meta: { title: 'PDF Caption Size' },
@@ -576,7 +599,7 @@ test('PDF doc definition renders image caption headings as text headings', () =>
   image.schema.imageAlt = 'QR code';
   image.schema.caption = createDefaultTextCaption('## Caption Heading');
   image.schema.css = 'margin: 0.5rem auto; display: block; width: 12rem; height: auto;';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [image];
   const document: VisualDocument = {
     meta: { title: 'PDF Caption Heading' },
@@ -611,7 +634,7 @@ test('PDF doc definition maps medium image preset to a moderate page size', () =
   image.schema.imageFile = 'qr-code.svg';
   image.schema.imageAlt = 'QR code';
   image.schema.css = 'margin: 0.5rem auto; display: block; width: 30rem; height: auto;';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [image];
   const document: VisualDocument = {
     meta: { title: 'PDF Medium Image Size' },
@@ -647,7 +670,7 @@ test('PDF doc definition wraps grid items by gridColumns', () => {
   grid.schema.gridItems[0].block.text = 'First';
   grid.schema.gridItems[1].block.text = 'Second';
   grid.schema.gridItems[2].block.text = 'Third';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [grid];
   const document: VisualDocument = {
     meta: { title: 'PDF Grid Rows' },
@@ -673,7 +696,7 @@ test('PDF doc definition wraps grid items by gridColumns', () => {
 test('PDF doc definition applies document heading font size styles', () => {
   const block = createEmptyBlock('text');
   block.text = '# Larger Heading';
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.blocks = [block];
   const document: VisualDocument = {
     meta: {
@@ -705,7 +728,51 @@ test('PDF doc definition applies document heading font size styles', () => {
   }));
 });
 
+test('PDF doc definition renders H3 larger than H4 by default', () => {
+  const block = createEmptyBlock('text');
+  block.text = '### Third-level heading\n\n#### Fourth-level heading';
+  const section = createEmptySection('');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Heading Hierarchy' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0] as HvyPdfMakeNodeObject;
+  const textStack = firstSection.stack?.[0] as HvyPdfMakeNodeObject;
+  const h3 = textStack.stack?.[0] as HvyPdfMakeNodeObject;
+  const h4 = textStack.stack?.[1] as HvyPdfMakeNodeObject;
+
+  expect(h3.style).toContain('sectionTitle3');
+  expect(h4.style).toContain('sectionTitle4');
+  expect(expectedResult.styles?.sectionTitle3?.fontSize).toBe(11);
+  expect(expectedResult.styles?.sectionTitle4?.fontSize).toBe(10);
+});
+
 function countPdfPages(buffer: ArrayBuffer): number {
   const text = Buffer.from(buffer).toString('latin1');
   return (text.match(/\/Type\s*\/Page\b/g) ?? []).length;
 }
+
+
+test('PDF strikethrough recoloring applies to text and line only when enabled', () => {
+  const document: VisualDocument = {
+    meta: { typography: { recolorStrikethrough: true }, theme: { colors: { '--hvy-strikethrough-color': '#d12345' } } },
+    extension: '.hvy', attachments: [], sections: [],
+  };
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({ color: '#d12345', decorationColor: '#d12345' });
+  expect(renderPdfInlineMarkdown('~~Fake removed text~~')).toEqual([
+    { text: 'Fake removed text', decoration: 'lineThrough', style: 'strikethrough' },
+  ]);
+  document.meta.theme = { colors: { '--hvy-strikethrough-color': 'currentColor' } };
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({});
+  delete document.meta.theme;
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({ color: '#b83232', decorationColor: '#b83232' });
+  document.meta.typography = { recolorStrikethrough: false };
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({});
+  delete document.meta.typography;
+  expect(buildPdfExportDocDefinition(document).styles?.strikethrough).toEqual({});
+});

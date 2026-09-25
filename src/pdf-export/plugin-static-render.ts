@@ -20,9 +20,6 @@ async function resolveSectionPdfStaticPluginBlocks(
   depth: number
 ): Promise<void> {
   section.blocks = await resolveBlockListPdfStaticPlugins(document, section.key, section.blocks, depth);
-  for (const child of section.children) {
-    await resolveSectionPdfStaticPluginBlocks(document, child, depth);
-  }
 }
 
 async function resolveBlockListPdfStaticPlugins(

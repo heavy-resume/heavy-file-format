@@ -3,7 +3,7 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../com
 import type { TableRow } from '../../types';
 import { closeIcon, plusIcon, settingsIcon } from '../../../icons';
 import { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from '../../../markdown';
-import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
+import { findSortValueOwnerBlock, getComponentSortValueDefs, replaceSortValueAnnotations, type ListValueKind } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { state } from '../../../state';
 import { findReusableOwner } from '../../../reusable';
@@ -31,15 +31,19 @@ function renderTableInlineEditorHtml(
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
   const defs = getSortValueDefsForTableBlock(sectionKey, block);
-  if (Object.keys(defs).length === 0) {
+  const groupDefs = getSortValueDefsForTableBlock(sectionKey, block, 'group');
+  if (Object.keys(defs).length === 0 && Object.keys(groupDefs).length === 0) {
     return unwrapTableParagraphs(helpers.markdownToEditorHtml(value));
   }
   const replacements: string[] = [];
-  const source = replaceSortValueAnnotations(value, (annotation) => {
-    const token = `HVY_TABLE_SORT_VALUE_TOKEN_${replacements.length}`;
-    replacements.push(renderTableSortValueEditorControl(annotation.key, annotation.text, defs[annotation.key], sectionKey, blockId, helpers));
-    return token;
-  });
+  let source = value;
+  for (const kind of ['sort', 'group'] as const) {
+    source = replaceSortValueAnnotations(source, (annotation) => {
+      const token = `HVY_TABLE_SORT_VALUE_TOKEN_${replacements.length}`;
+      replacements.push(renderTableSortValueEditorControl(annotation.key, annotation.text, (kind === 'group' ? groupDefs : defs)[annotation.key], sectionKey, blockId, helpers, kind));
+      return token;
+    }, kind);
+  }
   let html = unwrapTableParagraphs(helpers.markdownToEditorHtml(source));
   replacements.forEach((replacement, index) => {
     html = html.replace(`HVY_TABLE_SORT_VALUE_TOKEN_${index}`, replacement);
@@ -47,17 +51,19 @@ function renderTableInlineEditorHtml(
   return html;
 }
 
-function getSortValueDefsForTableBlock(sectionKey: string, block: Parameters<ComponentEditorRenderer>[1]): Record<string, SortValueDefinition> {
+function getSortValueDefsForTableBlock(sectionKey: string, block: Parameters<ComponentEditorRenderer>[1], kind: ListValueKind = 'sort'): Record<string, SortValueDefinition> {
   try {
     if (!state?.document) {
       return {};
     }
-    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
+    const listOwner = findSortValueOwnerBlock(state.document, block.id);
+    if (listOwner) return getComponentSortValueDefs(state.document.meta, listOwner.schema.component, kind);
+    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component, kind);
     if (Object.keys(direct).length > 0) {
       return direct;
     }
     const owner = findReusableOwner(sectionKey, block.id);
-    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
+    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component, kind) : {};
   } catch {
     return {};
   }
@@ -202,10 +208,11 @@ function renderTableSortValueEditorControl(
   definition: SortValueDefinition | undefined,
   sectionKey: string,
   blockId: string,
-  helpers: Parameters<ComponentEditorRenderer>[2]
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  kind: ListValueKind = 'sort'
 ): string {
   if (definition?.type !== 'enum') {
-    return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="${helpers.escapeAttr(key)}">${helpers.escapeHtml(text)}</span>`;
+    return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-value-kind="${kind}" data-sort-value-key="${helpers.escapeAttr(key)}">${helpers.escapeHtml(text)}</span>`;
   }
   const selected = text.trim();
   const options = (definition.options ?? []).map((option) =>
@@ -214,7 +221,7 @@ function renderTableSortValueEditorControl(
   return `<select
     class="hvy-sort-value hvy-sort-value-enum"
     contenteditable="false"
-    data-hvy-sort-value="true"
+    data-hvy-sort-value="true" data-value-kind="${kind}"
     data-sort-value-key="${helpers.escapeAttr(key)}"
     data-field="sort-value-enum"
     data-section-key="${helpers.escapeAttr(sectionKey)}"

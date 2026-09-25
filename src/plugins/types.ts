@@ -159,6 +159,11 @@ export interface HvyPluginContext {
     set(key: string, value: SortKeyValue): boolean;
     clear(key: string): boolean;
   };
+  groupValues: {
+    get(key: string): string | undefined;
+    set(key: string, value: string): boolean;
+    clear(key: string): boolean;
+  };
   // Ask the host to re-render. Use sparingly for structural shell changes only;
   // setConfig/setText already refresh the mounted plugin and reader panels.
   requestRerender(): void;
@@ -250,7 +255,7 @@ export interface HvyPluginScriptingContext {
   pluginId: string;
   rawDocument: VisualDocument;
   // Call after directly mutating rawDocument so the scripting runtime performs
-  // its normal sort-value synchronization and render refresh.
+  // its normal sort/group value synchronization and render refresh.
   markMutated(): void;
 }
 
@@ -303,6 +308,18 @@ export interface HvyPlugin {
   // available, the host offers the editor in its scrollable component modal.
   // Accepts CSS length units (for example, "24rem" or "420px").
   minimumEditorWidth?: string;
+  // Width this plugin's editor modal opens at, for editors that are intrinsically
+  // sized rather than fill-width. Defaults to the host's full modal width.
+  // Accepts CSS length units (for example, "18rem" or "320px").
+  preferredEditorWidth?: string;
+  // Reader component factories are viewport-mounted by default; editor
+  // components mount immediately. Plugins whose reader lifecycle must begin
+  // offscreen may opt into immediate mounting, while large visual components
+  // may provide a better reserved-height estimate.
+  mount?: {
+    strategy?: 'viewport' | 'immediate';
+    placeholderHeight?: string;
+  };
   // Conditional registrations expose metadata without loading executable
   // plugin code. The host calls load only after per-file authorization.
   authorization?: 'required';

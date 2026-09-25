@@ -1,5 +1,5 @@
 import type { VisualBlock, VisualSection } from './editor/types';
-import { state } from './state';
+import { state, getActiveStateRuntime, runWithStateRuntime } from './state';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
@@ -92,8 +92,11 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
 
 export function navigateToReaderTarget(
   target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string; matchOrdinal?: number },
-  app: HTMLElement
+  app: HTMLElement,
+  onRevealed?: (error?: Error) => void,
+  signal?: AbortSignal
 ): void {
+  if (signal?.aborted) return;
   const targetId = target.targetId?.trim() ?? '';
   if (!targetId && !target.sectionKey && !target.blockId) {
     return;
@@ -164,7 +167,7 @@ export function navigateToReaderTarget(
       ?? blockByBlockIdRes.sectionKey
       ?? sectionByKeyRes.sectionKey
       ?? target.sectionKey,
-  });
+  }, 0, onRevealed, signal);
 }
 
 export function getReaderTargetIds(app: HTMLElement): string[] {
@@ -175,9 +178,13 @@ function requestTargetHighlight(
   app: HTMLElement,
   target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string; matchOrdinal?: number },
   context: { sectionFound: boolean; blockFound: boolean; sectionKey?: string },
-  attempt = 0
+  attempt = 0,
+  onRevealed?: (error?: Error) => void,
+  signal?: AbortSignal
 ): void {
-  const run = () => {
+  const runtime = getActiveStateRuntime();
+  const run = () => runWithStateRuntime(runtime, () => {
+    if (signal?.aborted) return;
     if (context.sectionKey) {
       const placeholder = app.querySelector<HTMLElement>(
         `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader"][data-section-key="${CSS.escape(context.sectionKey)}"]`
@@ -200,12 +207,13 @@ function requestTargetHighlight(
         }
       }
     }
-    const element = findReaderTargetElement(app, target);
+    const element = findReaderTargetElement(app, target, Boolean(onRevealed));
     if (!element) {
       if (attempt < 3) {
-        requestTargetHighlight(app, target, context, attempt + 1);
+        requestTargetHighlight(app, target, context, attempt + 1, onRevealed, signal);
         return;
       }
+      onRevealed?.(new Error('Unable to reveal the requested document target.'));
       console.error('[hvy:navigation] Unable to find reader target for internal link.', {
         targetId: target.targetId ?? '',
         sectionKey: target.sectionKey ?? '',
@@ -221,7 +229,7 @@ function requestTargetHighlight(
     const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(target.matchText?.trim());
     const marker = findSearchMarkerInTarget(element, target.matchText, target.matchOrdinal);
     if (wantsSearchMarker && !marker && attempt < 8) {
-      requestTargetHighlight(app, target, context, attempt + 1);
+      requestTargetHighlight(app, target, context, attempt + 1, onRevealed, signal);
       return;
     }
 
@@ -231,13 +239,13 @@ function requestTargetHighlight(
       element.classList.add('is-temp-highlighted');
     }
     revealReaderAncestors(scrollTarget);
-    scrollReaderTargetIntoView(scrollTarget);
+    scrollReaderTargetIntoView(scrollTarget, onRevealed, signal);
     if (!marker) {
       window.setTimeout(() => {
         element.classList.remove('is-temp-highlighted');
       }, 1400);
     }
-  };
+  });
   if (attempt === 0) {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(run);
@@ -262,7 +270,7 @@ function alignSidebarToResolvedTarget(app: HTMLElement, element: HTMLElement): v
   }
 }
 
-function scrollReaderTargetIntoView(target: HTMLElement): void {
+function scrollReaderTargetIntoView(target: HTMLElement, onRevealed?: (error?: Error) => void, signal?: AbortSignal): void {
   const scroll = () => {
     const container = findScrollableReaderAncestor(target);
     if (container) {
@@ -270,7 +278,7 @@ function scrollReaderTargetIntoView(target: HTMLElement): void {
       if (container === document.scrollingElement || container === document.documentElement || container === document.body) {
         window.scrollTo({
           top: Math.max(0, window.scrollY + targetRect.top - window.innerHeight / 2),
-          behavior: 'smooth',
+          behavior: onRevealed ? 'instant' : 'smooth',
         });
         return;
       }
@@ -278,18 +286,22 @@ function scrollReaderTargetIntoView(target: HTMLElement): void {
       const containerCenter = containerRect.top + containerRect.height / 2;
       container.scrollTo({
         top: Math.max(0, container.scrollTop + targetRect.top - containerCenter),
-        behavior: 'smooth',
+        behavior: onRevealed ? 'instant' : 'smooth',
       });
       return;
     }
     const targetRect = target.getBoundingClientRect();
     window.scrollTo({
       top: Math.max(0, window.scrollY + targetRect.top - window.innerHeight / 2),
-      behavior: 'smooth',
+      behavior: onRevealed ? 'instant' : 'smooth',
     });
   };
   window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(scroll);
+    window.requestAnimationFrame(() => {
+      if (signal?.aborted) return;
+      scroll();
+      onRevealed?.();
+    });
   });
 }
 
@@ -334,7 +346,7 @@ function findScrollableReaderAncestor(target: HTMLElement): HTMLElement | null {
   return null;
 }
 
-function findReaderTargetElement(app: HTMLElement, target: { targetId?: string; sectionKey?: string; blockId?: string }): HTMLElement | null {
+function findReaderTargetElement(app: HTMLElement, target: { targetId?: string; sectionKey?: string; blockId?: string }, requireBlock = false): HTMLElement | null {
   const targetId = target.targetId?.trim() ?? '';
   const surfaces = getReaderSurfaces(app);
   if (target.sectionKey && target.blockId) {
@@ -351,6 +363,7 @@ function findReaderTargetElement(app: HTMLElement, target: { targetId?: string; 
       return byId;
     }
   }
+  if (requireBlock && target.blockId) return null;
   if (target.sectionKey) {
     const selector = `[data-section-key="${CSS.escape(target.sectionKey)}"]`;
     if (selector) {
@@ -396,12 +409,6 @@ export function expandSectionPathById(sections: VisualSection[], sectionId: stri
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
     }
-    const childRes = expandSectionPathById(section.children, sectionId);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
-    }
   }
   return emptyExpandResult();
 }
@@ -412,12 +419,6 @@ export function expandSectionPathByKey(sections: VisualSection[], sectionKey: st
       const changed = !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
-    }
-    const childRes = expandSectionPathByKey(section.children, sectionKey);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
   return emptyExpandResult();
@@ -431,12 +432,6 @@ export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: s
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
     }
-    const childRes = expandBlockPathBySchemaId(section.children, schemaId);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
-    }
   }
   return emptyExpandResult();
 }
@@ -444,12 +439,6 @@ export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: s
 export function expandBlockPathByBlockId(sections: VisualSection[], blockId: string, sectionKey?: string): ExpandResult {
   for (const section of sections) {
     if (sectionKey && section.key !== sectionKey && !sectionContainsBlock(section, blockId)) {
-      const childRes = expandBlockPathByBlockId(section.children, blockId, sectionKey);
-      if (childRes.found) {
-        const changed = childRes.changed || !getReaderSectionExpanded(section);
-        setReaderSectionExpanded(section, true);
-        return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
-      }
       continue;
     }
     const blockRes = expandBlockPathInList(section.blocks, blockId, section.key, 'block-id');
@@ -457,12 +446,6 @@ export function expandBlockPathByBlockId(sections: VisualSection[], blockId: str
       const changed = blockRes.changed || !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
       return { found: true, changed, location: section.location, sectionKey: section.key };
-    }
-    const childRes = expandBlockPathByBlockId(section.children, blockId, sectionKey);
-    if (childRes.found) {
-      const changed = childRes.changed || !getReaderSectionExpanded(section);
-      setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
   return emptyExpandResult();
@@ -519,7 +502,7 @@ function expandBlockPathInList(blocks: VisualBlock[], id: string, sectionKey: st
 }
 
 function sectionContainsBlock(section: VisualSection, blockId: string): boolean {
-  return section.blocks.some((block) => findBlockInSectionById(block, blockId)) || section.children.some((child) => sectionContainsBlock(child, blockId));
+  return section.blocks.some((block) => findBlockInSectionById(block, blockId));
 }
 
 function emptyExpandResult(): ExpandResult {
@@ -557,6 +540,7 @@ export function closeModal(): void {
   state.pdfExportPlanModal = null;
   state.pdfTemplateImportModal = null;
   state.reusableSaveModal = null;
+  state.reusableTemplateModal?.onComplete?.({ status: 'cancelled' });
   state.reusableTemplateModal = null;
   state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
@@ -586,6 +570,7 @@ export function closeModalIfTarget(sectionKey: string): void {
     state.reusableSaveModal = null;
   }
   if (state.reusableTemplateModal?.target.sectionKey === sectionKey) {
+    state.reusableTemplateModal?.onComplete?.({ status: 'cancelled' });
     state.reusableTemplateModal = null;
   }
 }
@@ -618,6 +603,7 @@ export function resetTransientUiState(): void {
   state.modalSectionKey = null;
   state.newDocumentModalOpen = false;
   state.reusableSaveModal = null;
+  state.reusableTemplateModal?.onComplete?.({ status: 'cancelled' });
   state.reusableTemplateModal = null;
   state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
@@ -627,6 +613,7 @@ export function resetTransientUiState(): void {
   state.dbTableQueryModal = null;
   state.themeModalOpen = false;
   state.tempHighlights = new Set<string>();
+  delete state.readerNavigationTarget;
   state.addComponentBySection = {};
   state.metaPanelOpen = false;
   state.selectedReusableComponentName = null;

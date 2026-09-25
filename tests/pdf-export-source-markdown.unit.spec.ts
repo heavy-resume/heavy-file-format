@@ -73,3 +73,30 @@ hvy_version: 0.1
   expect(expectedResult).not.toContain('classes');
   expect(expectedResult).not.toContain('<!-- value');
 });
+
+test('PHVY import source markdown can exclude unsupported visual components and their text', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"portfolio"}-->
+#! Portfolio
+
+<!--hvy:text {}-->
+Visible introduction
+
+<!--hvy:carousel {"carouselImages":[{"imageFile":"first.png","imageAlt":"First slide alt","caption":"First slide caption"}]}-->
+
+<!--hvy:image {"imageFile":"portrait.png","imageAlt":"Portrait alt","caption":{"text":"Portrait caption"}}-->
+`, '.hvy');
+
+  const expectedResult = exportDocumentSourceMarkdown(document, { excludeComponents: ['image', 'carousel'] });
+
+  expect(expectedResult).toBe(`# Portfolio
+
+Visible introduction`);
+  expect(expectedResult).not.toContain('First slide alt');
+  expect(expectedResult).not.toContain('First slide caption');
+  expect(expectedResult).not.toContain('Portrait alt');
+  expect(expectedResult).not.toContain('Portrait caption');
+});

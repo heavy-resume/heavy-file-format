@@ -27,6 +27,7 @@
 }
 
 .hvy-document .text-toolbar-compact {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -38,6 +39,11 @@
 }
 
 .hvy-document .text-toolbar-compact-actions {
+  /* Keep hover lift and focus borders inside the scrolling clip without moving controls. */
+  padding: 0.35rem;
+  margin: -0.35rem;
+  min-width: 0;
+  overflow-x: auto;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -109,6 +115,20 @@
   background: var(--hvy-surface-alt);
 }
 
+/* The toolbar is host UI even when it is mounted inside plugin-owned DOM. Keep
+ * plugin typography from changing the size or wrapping of these controls. */
+.hvy-document .text-editor-shell .text-editor-toolbar-slot > .rich-toolbar button {
+  font-family: Arial, sans-serif;
+  font-size: 0.833333rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .hvy-document .rich-toolbar button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
@@ -173,6 +193,11 @@
   height: 1.25rem;
   color: currentColor;
   line-height: 1;
+}
+
+.hvy-document .text-placeholder-toolbar-icon > .hvy-expandable-chevron {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .hvy-document .text-line-style-toolbar {

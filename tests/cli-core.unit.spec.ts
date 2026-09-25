@@ -98,7 +98,7 @@ test('cli can navigate and read virtual component files', async () => {
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain('This section');
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain('name: Summary');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).toContain('section nesting level: 1');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/summary/section-info.txt')).output).not.toContain('section nesting level:');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary/intro')).output).toContain('file text.txt [w]');
   expect((await executeHvyCliCommand(document, session, 'ls /body/summary/intro')).output).toContain('file about-text.txt [ro]');
   expect((await executeHvyCliCommand(document, session, 'cat intro/text.txt')).output).toBe('Hello world');
@@ -294,7 +294,7 @@ test('hvy insert 0 section explains when the parent path is a component', async 
     session,
     'hvy insert 0 section /body/top-skills-tools-technologies/grid-1 top-skill-baking Baking'
   )).rejects.toThrow(
-    'hvy insert section: sections must be added at the root level or on top of an existing section. /body/top-skills-tools-technologies/grid-1 is a component, not a section.'
+    'hvy insert section: sections must be added at /body. Use a container to group components inside a section.'
   );
 
   await expect(executeHvyCliCommand(
@@ -302,7 +302,7 @@ test('hvy insert 0 section explains when the parent path is a component', async 
     session,
     'hvy insert 0 section /body/skills/component-list-1 skill-baking Baking'
   )).rejects.toThrow(
-    'hvy insert section: sections must be added at the root level or on top of an existing section. /body/skills/component-list-1 is a component, not a section.'
+    'hvy insert section: sections must be added at /body. Use a container to group components inside a section.'
   );
 });
 

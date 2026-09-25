@@ -1,10 +1,11 @@
 import './text.css';
 import './text-answer-mode.css';
+import { renderListValueCreation } from '../list-value-creation/list-value-creation';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
 import { state } from '../../../state';
 import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../../../inline-answer-groups';
-import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
+import { findSortValueOwnerBlock, getListValueBindingChoices, replaceSortValueAnnotations, type ListValueKind } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { findReusableOwner } from '../../../reusable';
 import { getComponentDefs, getSectionDefs } from '../../../component-defs';
@@ -14,6 +15,7 @@ const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const textLineStyles = helpers.getTextLineStyles?.() ?? {};
+  const textPlaceholders = helpers.getTextPlaceholders?.() ?? [];
   const codeLanguageInputAttrs = {
     'data-section-key': sectionKey,
     'data-block-id': block.id,
@@ -22,7 +24,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   const alignStyle = block.schema.align === 'left' ? '' : ` style="text-align: ${helpers.escapeAttr(block.schema.align)};"`;
   if (fillInParts.length > 1 && isFillInEditorMode(sectionKey, block.id)) {
     const richToolbar = fillInParts.length === 2
-      ? helpers.renderRichToolbar(sectionKey, block.id, { field: 'text-fill-in-rich', includeAlign: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles })
+      ? helpers.renderRichToolbar(sectionKey, block.id, { field: 'text-fill-in-rich', includeAlign: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles, textPlaceholders })
       : '';
     const richEditorAttributes = richToolbar
       ? `
@@ -83,10 +85,18 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   const sortValueDefs = getSortValueDefsForEditorBlock(sectionKey, block);
   const useAsSelectionControl = mobileAdjustment
     ? ''
-    : renderUseAsSelectionControl(sectionKey, block.id, sortValueDefs, helpers);
+    : renderUseAsSelectionControl(sectionKey, block.id, sortValueDefs, getSortValueDefsForEditorBlock(sectionKey, block, 'group'), helpers);
   const richToolbar = mobileAdjustment
     ? ''
-    : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles });
+    : helpers.renderRichToolbar(sectionKey, block.id, {
+      includeAlign: true,
+      includeFillIn: true,
+      includeTextAi: !block.schema.lock,
+      textPlaceholders,
+      align: block.schema.align,
+      currentMarkdown: block.text,
+      textLineStyles,
+    });
   return `
   <div class="text-editor-shell">
     ${richToolbar ? `<div class="text-editor-toolbar-bounds"><div class="text-editor-toolbar-slot">${richToolbar}</div></div><div class="text-editor-toolbar-spacer"></div>` : ''}
@@ -145,6 +155,7 @@ export function renderTemplateValueTokens(html: string, options: { editable?: bo
       const marker = document.createElement('span');
       marker.className = 'template-value-token';
       marker.contentEditable = 'false';
+      marker.dataset.richAtomic = 'true';
       marker.tabIndex = -1;
       marker.dataset.templateValueToken = match[1] ?? '';
       const variable = variables.get(match[1] ?? '');
@@ -154,7 +165,10 @@ export function renderTemplateValueTokens(html: string, options: { editable?: bo
       const sourceToken = document.createElement('span');
       sourceToken.className = 'template-value-token-source';
       sourceToken.textContent = match[0];
-      marker.append(sourceToken);
+      const label = document.createElement('span');
+      label.className = 'template-value-token-label';
+      label.textContent = marker.dataset.templateValueDisplay;
+      marker.append(sourceToken, label);
       fragment.append(marker);
       if (options.editable) {
         fragment.append(document.createTextNode('\u200b'));
@@ -237,6 +251,7 @@ function renderUseAsSelectionControl(
   sectionKey: string,
   blockId: string,
   sortValueDefs: Record<string, SortValueDefinition>,
+  groupValueDefs: Record<string, SortValueDefinition>,
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
   const templateValueOption = state.reusableDefinitionEditModal
@@ -259,21 +274,22 @@ function renderUseAsSelectionControl(
     data-block-id="${helpers.escapeAttr(blockId)}"
     role="menuitem"
   >Reuse “${helpers.escapeHtml(variable.label)}”</button>`).join('');
-  const sortOptions = Object.entries(sortValueDefs)
+  const sortOptions = (['sort', 'group'] as const).map((kind) => Object.entries(kind === 'group' ? groupValueDefs : sortValueDefs)
     .filter(([key]) => key.trim().length > 0)
     .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
     .map(([key, definition]) => `<button
       type="button"
       class="ghost text-use-as-menu-item"
       data-rich-action="sort-value"
+      data-value-kind="${kind}"
       data-sort-value-type="${helpers.escapeAttr(definition.type)}"
       data-sort-value-key="${helpers.escapeAttr(key)}"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(blockId)}"
       role="menuitem"
-      title="Use selected text as the ${helpers.escapeAttr(key)} sort value"
-    >Sort: ${helpers.escapeHtml(key)}</button>`)
-    .join('');
+      title="Use selected text as the ${helpers.escapeAttr(key)} ${kind} value"
+    >${kind === 'group' ? 'Group' : 'Sort'}: ${helpers.escapeHtml(key)}</button>`)
+    .join('')).join('');
   return `<div class="text-use-as-selection">
     <button
       type="button"
@@ -293,6 +309,7 @@ function renderUseAsSelectionControl(
       ${templateValueOption}
       ${existingTemplateValueOptions}
       ${sortOptions ? `<div class="text-use-as-menu-divider" role="separator"></div>${sortOptions}` : ''}
+      ${renderListValueCreation(sectionKey, blockId)}
     </div>
   </div>`;
 }
@@ -345,34 +362,40 @@ function renderMarkdownEditorHtmlWithSortValues(
   codeLanguageInputAttrs?: Record<string, string>
 ): string {
   const defs = getSortValueDefsForEditorBlock(sectionKey, block);
+  const groupDefs = getSortValueDefsForEditorBlock(sectionKey, block, 'group');
   const answerGroups = getBlockAnswerGroups(getInlineAnswerGroupIndex(state.document.sections), sectionKey, block.id);
-  if (Object.keys(defs).length === 0) {
-    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs, answerGroups);
+  if (Object.keys(defs).length === 0 && Object.keys(groupDefs).length === 0) {
+    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs, answerGroups, helpers.getTextPlaceholders?.());
   }
   const replacements: string[] = [];
-  const source = replaceSortValueAnnotations(markdown, (annotation) => {
-    const token = `HVY_SORT_VALUE_TOKEN_${replacements.length}`;
-    replacements.push(renderSortValueEditorControl(annotation.key, annotation.text, defs[annotation.key], sectionKey, block.id, helpers));
-    return token;
-  });
-  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs, answerGroups);
+  let source = markdown;
+  for (const kind of ['sort', 'group'] as const) {
+    source = replaceSortValueAnnotations(source, (annotation) => {
+      const token = `HVY_SORT_VALUE_TOKEN_${replacements.length}`;
+      replacements.push(renderSortValueEditorControl(annotation.key, annotation.text, (kind === 'group' ? groupDefs : defs)[annotation.key], sectionKey, block.id, helpers, kind));
+      return token;
+    }, kind);
+  }
+  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs, answerGroups, helpers.getTextPlaceholders?.());
   replacements.forEach((replacement, index) => {
     html = html.replace(`HVY_SORT_VALUE_TOKEN_${index}`, replacement);
   });
   return html;
 }
 
-function getSortValueDefsForEditorBlock(sectionKey: string, block: Parameters<ComponentEditorRenderer>[1]): Record<string, SortValueDefinition> {
+function getSortValueDefsForEditorBlock(sectionKey: string, block: Parameters<ComponentEditorRenderer>[1], kind: ListValueKind = 'sort'): Record<string, SortValueDefinition> {
   try {
     if (!state?.document) {
       return {};
     }
-    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
+    const listOwner = findSortValueOwnerBlock(state.document, block.id);
+    if (listOwner) return getListValueBindingChoices(state.document.meta, listOwner, kind);
+    const direct = getListValueBindingChoices(state.document.meta, block, kind);
     if (Object.keys(direct).length > 0) {
       return direct;
     }
     const owner = findReusableOwner(sectionKey, block.id);
-    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
+    return owner ? getListValueBindingChoices(state.document.meta, owner, kind) : {};
   } catch {
     return {};
   }
@@ -384,12 +407,13 @@ function renderSortValueEditorControl(
   definition: SortValueDefinition | undefined,
   sectionKey: string,
   blockId: string,
-  helpers: Parameters<ComponentEditorRenderer>[2]
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  kind: ListValueKind = 'sort'
 ): string {
   if (definition?.type !== 'enum') {
     return `<span
       class="hvy-sort-value"
-      data-hvy-sort-value="true"
+      data-hvy-sort-value="true" data-value-kind="${kind}"
       data-sort-value-key="${helpers.escapeAttr(key)}"
     >${helpers.escapeHtml(text)}</span>`;
   }
@@ -400,7 +424,7 @@ function renderSortValueEditorControl(
   return `<select
     class="hvy-sort-value hvy-sort-value-enum"
     contenteditable="false"
-    data-hvy-sort-value="true"
+    data-hvy-sort-value="true" data-value-kind="${kind}"
     data-sort-value-key="${helpers.escapeAttr(key)}"
     data-field="sort-value-enum"
     data-section-key="${helpers.escapeAttr(sectionKey)}"
@@ -415,8 +439,9 @@ function isFillInEditorMode(sectionKey: string, blockId: string): boolean {
 }
 
 export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) => {
+  const textPlaceholders = helpers.getTextPlaceholders?.();
   const rendered = block.schema.showCopy
-    ? `${helpers.renderComponentFragment('text', block.text, block, section.key)}
+    ? `${helpers.renderComponentFragment('text', block.text, block, section.key, textPlaceholders)}
       <button
         type="button"
         class="text-copy-button"
@@ -426,6 +451,6 @@ export const renderTextReader: ComponentReaderRenderer = (section, block, helper
         aria-label="Copy text"
         title="Copy text"
       ><span class="text-copy-icon" aria-hidden="true"></span></button>`
-    : helpers.renderComponentFragment('text', block.text, block, section.key);
+    : helpers.renderComponentFragment('text', block.text, block, section.key, textPlaceholders);
   return state.reusableDefinitionEditModal ? renderTemplateValueTokens(rendered) : rendered;
 };

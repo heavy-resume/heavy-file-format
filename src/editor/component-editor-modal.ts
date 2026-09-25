@@ -30,6 +30,9 @@ interface ComponentEditorModalController {
   completionContext: EditorModalContext | null;
 }
 
+// The modal only earns its extra click when it gives the editor meaningfully more room than it has inline.
+const MODAL_WIDTH_GAIN_RATIO = 1.2;
+
 const controllers = new WeakMap<HTMLElement, ComponentEditorModalController>();
 
 export function bindComponentEditorModal(app: HTMLElement): void {
@@ -55,7 +58,7 @@ function createController(app: HTMLElement, runtime: StateRuntime): ComponentEdi
     completionContext: null,
   };
   controller.resizeObserver = new ResizeObserver((entries) => {
-    entries.forEach((entry) => updateGateWidth(entry.target as HTMLElement));
+    updateGateWidths(controller, entries.map((entry) => entry.target as HTMLElement));
   });
   controller.observer = new MutationObserver(() => scheduleSync(app, controller));
   controller.observer.observe(app, { childList: true, subtree: true });
@@ -91,13 +94,14 @@ function scheduleSync(app: HTMLElement, controller: ComponentEditorModalControll
 }
 
 function syncController(app: HTMLElement, controller: ComponentEditorModalController): void {
-  app.querySelectorAll<HTMLElement>('[data-hvy-component-editor-gate="true"]').forEach((gate) => {
+  const gates = [...app.querySelectorAll<HTMLElement>('[data-hvy-component-editor-gate="true"]')];
+  gates.forEach((gate) => {
     if (!controller.observedGates.has(gate)) {
       controller.observedGates.add(gate);
       controller.resizeObserver.observe(gate);
     }
-    updateGateWidth(gate);
   });
+  updateGateWidths(controller, gates);
 
   if (controller.contexts.length === 0) {
     return;
@@ -125,7 +129,13 @@ function syncController(app: HTMLElement, controller: ComponentEditorModalContro
   }
 }
 
-function updateGateWidth(gate: HTMLElement): void {
+function updateGateWidths(controller: ComponentEditorModalController, gates: HTMLElement[]): void {
+  let modalContentWidth: number | null = null;
+  const readModalContentWidth = () => modalContentWidth ??= measureModalContentWidth(controller);
+  gates.forEach((gate) => updateGateWidth(gate, readModalContentWidth));
+}
+
+function updateGateWidth(gate: HTMLElement, readModalContentWidth: () => number): void {
   if (!gate.isConnected) {
     return;
   }
@@ -135,7 +145,8 @@ function updateGateWidth(gate: HTMLElement): void {
   }
   const availableWidth = gate.getBoundingClientRect().width;
   const minimumWidth = ruler.getBoundingClientRect().width;
-  const isTooNarrow = availableWidth + 0.5 < minimumWidth;
+  const isTooNarrow = availableWidth + 0.5 < minimumWidth
+    && readModalContentWidth() >= availableWidth * MODAL_WIDTH_GAIN_RATIO;
   gate.classList.toggle('is-component-editor-too-narrow', isTooNarrow);
   const content = gate.querySelector<HTMLElement>(':scope > .component-editor-inline-content');
   content?.toggleAttribute('inert', isTooNarrow);
@@ -144,6 +155,30 @@ function updateGateWidth(gate: HTMLElement): void {
   } else {
     content?.removeAttribute('aria-hidden');
   }
+}
+
+function measureModalContentWidth(controller: ComponentEditorModalController): number {
+  const probe = document.createElement('div');
+  probe.className = 'modal-root component-editor-modal-root component-editor-modal-probe';
+  probe.setAttribute('aria-hidden', 'true');
+  probe.inert = true;
+  probe.innerHTML = '<section class="modal-panel component-editor-modal-panel"><div class="component-editor-modal-body"></div></section>';
+  getModalHost(controller.app).append(probe);
+  const body = probe.querySelector<HTMLElement>('.component-editor-modal-body')!;
+  const bodyStyle = getComputedStyle(body);
+  const contentWidth = body.clientWidth - parseFloat(bodyStyle.paddingLeft) - parseFloat(bodyStyle.paddingRight);
+  probe.remove();
+  const unrelatedMutations = controller.observer.takeRecords().filter((record) => (
+    ![...record.addedNodes, ...record.removedNodes].every((node) => node === probe)
+  ));
+  if (unrelatedMutations.length > 0) {
+    scheduleSync(controller.app, controller);
+  }
+  return contentWidth;
+}
+
+function getModalHost(app: HTMLElement): HTMLElement {
+  return app.querySelector<HTMLElement>('.editor-shell') ?? app.querySelector<HTMLElement>('.layout') ?? app;
 }
 
 function openGate(app: HTMLElement, controller: ComponentEditorModalController, button: HTMLElement): void {
@@ -214,6 +249,8 @@ function portalGate(
   const layer = document.createElement('div');
   layer.className = 'component-editor-modal-layer';
   layer.style.setProperty('--hvy-component-editor-minimum-width', gate.style.getPropertyValue('--hvy-component-editor-minimum-width'));
+  modalRoot.querySelector<HTMLElement>('.component-editor-modal-panel')
+    ?.style.setProperty('--hvy-component-editor-preferred-width', gate.style.getPropertyValue('--hvy-component-editor-preferred-width'));
   layer.append(content);
   body.append(layer);
   controller.layers.push({
@@ -252,7 +289,7 @@ function createModal(app: HTMLElement): HTMLElement {
         ${actions}
       </footer>
     </section>`;
-  (app.querySelector('.editor-shell') ?? app.querySelector('.layout') ?? app).append(modalRoot);
+  getModalHost(app).append(modalRoot);
   return modalRoot;
 }
 

@@ -26,6 +26,17 @@
   margin-bottom: 0;
 }
 
+.hvy-document .pane.document-meta-pane {
+  overflow: clip;
+  padding: 0;
+}
+
+.hvy-document .document-meta-scroll {
+  height: 100%;
+  overflow: auto;
+  padding: 0.8rem;
+}
+
 .hvy-document .template-title {
   font-weight: 700;
   margin-bottom: 0.5rem;

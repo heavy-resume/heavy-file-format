@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 function createSection(id: string, location: 'main' | 'sidebar' = 'main'): VisualSection {
-  const section = createEmptySection(1, '');
+  const section = createEmptySection('');
   section.key = `section-${id}`;
   section.customId = id;
   section.title = id;

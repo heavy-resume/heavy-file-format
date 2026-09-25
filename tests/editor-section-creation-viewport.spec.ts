@@ -14,15 +14,15 @@ for (const flavor of ['tableform', 'linear']) {
     await page.locator('[data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
     await expect(page.locator('.section-template-flavor-modal')).toBeVisible();
     await page.locator('#editorTree').evaluate((element) => { element.dataset.expectedResult = 'same-editor-tree'; });
-    const sectionCount = await page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)').count();
+    const sectionCount = await page.locator('#editorTree .editor-section-card').count();
 
     await page.locator(`[data-modal-action="choose-section-template-flavor"][data-section-template-flavor="${flavor}"]`).click();
 
     await expect(page.locator('.section-template-flavor-modal')).toHaveCount(0);
     const expectedResult = page.locator('#editorTree[data-expected-result="same-editor-tree"]');
     await expect(expectedResult).toHaveCount(1);
-    await expect(expectedResult.locator('.editor-section-card:not(.editor-subsection-card)')).toHaveCount(sectionCount + 1);
-    await expect(expectedResult.locator('.editor-section-card:not(.editor-subsection-card)').last()).toContainText('Projects');
+    await expect(expectedResult.locator('.editor-section-card')).toHaveCount(sectionCount + 1);
+    await expect(expectedResult.locator('.editor-section-card').last()).toContainText('Projects');
   });
 }
 
@@ -46,7 +46,7 @@ test('adding a section keeps the editor surface mounted and reveals the new sect
 
   const expectedResult = page.locator('#editorTree[data-expected-result="same-editor-tree"]');
   await expect(expectedResult).toHaveCount(1);
-  const title = expectedResult.locator('.editor-section-card:not(.editor-subsection-card)').last().locator('[data-field="section-title"]');
+  const title = expectedResult.locator('.editor-section-card').last().locator('[data-field="section-title"]');
   await expect(title).toBeFocused();
   await expect.poll(async () => title.evaluate((input) => {
     const inputRect = input.getBoundingClientRect();
@@ -68,7 +68,7 @@ for (const template of ['Awards', 'Tabular Resume Section']) {
     const picker = page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"]');
     await picker.selectOption(`section-def:${template}`);
     await page.locator('#editorTree').evaluate((element) => { element.dataset.expectedResult = 'same-editor-tree'; });
-    const sectionCount = await page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)').count();
+    const sectionCount = await page.locator('#editorTree .editor-section-card').count();
 
     await page.locator('[data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
 
@@ -82,10 +82,10 @@ for (const template of ['Awards', 'Tabular Resume Section']) {
         const { insertTopLevelSection } = await import(/* @vite-ignore */ sectionActionsPath);
         insertTopLevelSection('section-def:Awards');
       });
-      await expect(page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)')).toHaveCount(sectionCount + 1);
+      await expect(page.locator('#editorTree .editor-section-card')).toHaveCount(sectionCount + 1);
     }
     await page.locator('[data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
-    await expect(page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)')).toHaveCount(sectionCount + 2);
-    await expect(page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)').last()).not.toContainText('Awards');
+    await expect(page.locator('#editorTree .editor-section-card')).toHaveCount(sectionCount + 2);
+    await expect(page.locator('#editorTree .editor-section-card').last()).not.toContainText('Awards');
   });
 }

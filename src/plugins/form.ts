@@ -1,4 +1,5 @@
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml } from 'yaml';
+import { stringifyYamlUnfolded } from '../hvy/yaml-stringify';
 
 import type {
   HvyPlugin,
@@ -407,7 +408,7 @@ export function serializeFormSpec(spec: FormSpec): string {
     return item;
   });
   if (Object.keys(spec.scripts).length > 0) clean.scripts = spec.scripts;
-  return stringifyYaml(clean).trimEnd();
+  return stringifyYamlUnfolded(clean).trimEnd();
 }
 
 function makeUniqueFieldLabel(fields: FormFieldDefinition[]): string {
@@ -1349,6 +1350,7 @@ export const formPluginFactory: HvyPluginFactory = build;
 export const formPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(FORM_PLUGIN_ID),
   displayName: 'Form',
+  mount: { strategy: 'immediate' },
   documentation: {
     filename: 'about-form.txt',
     text: formDocumentation,

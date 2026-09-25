@@ -64,7 +64,11 @@ export function renderPdfTextBlock(
       );
     } else if (bullet) {
       activeListStyle = style;
-      listItems.push(applyTextStyle(applyTextAlignment({ text: renderPdfInlineMarkdown(bullet[1] ?? ''), style }, align), textStyle));
+      listItems.push(applyTextStyle(applyTextAlignment({
+        text: renderPdfInlineMarkdown(bullet[1] ?? ''),
+        style,
+        margin: [0, 0, 0, 0],
+      }, align), textStyle));
     } else {
       flushList();
       stack.push(
@@ -230,7 +234,7 @@ function renderMarkedInlineToken(token: unknown): Array<string | HvyPdfMakeNodeO
     return [{ text: typed.text ?? '', font: 'Roboto' }];
   }
   if (typed.type === 'del') {
-    return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), decoration: 'lineThrough' }];
+    return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), decoration: 'lineThrough', style: 'strikethrough' }];
   }
   if (typed.type === 'link') {
     return [{
@@ -265,7 +269,13 @@ function getPdfTextLineStyle(styleName: string | null, decision: HvyPdfExportDec
 }
 
 function getHeadingStyle(level: number, lineStyle: string): string[] {
-  const headingStyle = level <= 1 ? 'sectionTitle' : level === 2 ? 'sectionTitle2' : 'sectionTitle3';
+  const headingStyle = level <= 1
+    ? 'sectionTitle'
+    : level === 2
+      ? 'sectionTitle2'
+      : level === 3
+        ? 'sectionTitle3'
+        : 'sectionTitle4';
   return lineStyle === 'paragraph' ? [headingStyle] : [headingStyle, lineStyle];
 }
 

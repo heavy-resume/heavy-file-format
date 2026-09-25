@@ -92,7 +92,6 @@ async function populateSectionDescriptions(
       : parentTree;
   }
   updated += await processInBatches(section.blocks, (block) => populateBlockDescriptions(document, section, block, sectionTrail, sectionTree, run, signal), signal);
-  updated += await processInBatches(section.children, (child) => populateSectionDescriptions(document, child, sectionTrail, sectionTree, run, signal), signal);
   return updated;
 }
 
@@ -177,8 +176,7 @@ function countMissingDescriptionTargets(document: VisualDocument): number {
 function countSectionTargets(section: VisualSection): number {
   const sectionTarget = section.description.trim() ? 0 : 1;
   return sectionTarget
-    + section.blocks.reduce((total, block) => total + countBlockTargets(block), 0)
-    + section.children.reduce((total, child) => total + countSectionTargets(child), 0);
+    + section.blocks.reduce((total, block) => total + countBlockTargets(block), 0);
 }
 
 function countBlockTargets(block: VisualBlock): number {
@@ -198,7 +196,6 @@ function countBlockTargets(block: VisualBlock): number {
 function countMissingLeafDescriptions(document: VisualDocument): number {
   return document.sections.reduce((total, section) =>
     total + section.blocks.reduce((blockTotal, block) => blockTotal + countLeafBlockDescriptions(block), 0)
-      + section.children.reduce((childTotal, child) => childTotal + countMissingLeafDescriptions({ ...document, sections: [child] }), 0)
   , 0);
 }
 

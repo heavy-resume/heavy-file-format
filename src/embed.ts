@@ -1,3 +1,5 @@
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
+import { runImportOperation } from './import-errors';
 import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
 import './default-theme.css';
 import {
@@ -23,9 +25,10 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatProvider, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatProvider, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
+import type { TextPlaceholderDefinition } from './editor/component-helpers';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeOverrides as setRuntimeThemeOverrides, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
 import {
@@ -114,9 +117,10 @@ import { bindUserFileAttachmentLinks } from './document-attachment-links';
 import { removeTextFillInMarkers } from './text-fill-in';
 import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider, setRuntimeSemanticFilterWindowLimits } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
-import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
+import { hydrateHostAttachmentDescriptors, hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
 import type { UserFileAttachmentLimits } from './document-attachments';
+import { deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles, type UnusedEmbeddedFile } from './attachment-cleanup';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
@@ -153,6 +157,7 @@ export interface HvyMountOptions {
   showAdvancedEditor?: boolean;
   showComponentEncryptionControls?: boolean;
   chatClient?: HostChatClient | null;
+  chatSettings?: Partial<ChatSettings> | null;
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
@@ -191,9 +196,33 @@ export interface HvyMountOptions {
   webMcp?: boolean | HvyWebMcpOptions;
 }
 
+/** Locate a component list by its persisted ID or its exact item template name. */
+export interface HvyTemplateFormOptions {
+  /** Persisted document ID of the component list. */
+  targetId?: string;
+  /** Exact item component/template name; requires a unique matching list. */
+  targetType?: string;
+}
+
+export type HvyTemplateFormResult =
+  | {
+    status: 'inserted';
+    /** Persisted item ID, if the template supplies one. */
+    itemId: string | null;
+  }
+  | { status: 'cancelled' };
+
 export interface HvyMount {
+  /** Reveal a component list and collect template values. Resolves on insertion or cancellation. */
+  openTemplateForm(options: HvyTemplateFormOptions): Promise<HvyTemplateFormResult>;
   destroy(): void;
   getDocument(): VisualDocument;
+  findUnusedEmbeddedFiles(): UnusedEmbeddedFile[];
+  /** Review unused files without changing views; resolves after keeping or deleting them. */
+  reviewUnusedEmbeddedFiles(): Promise<void>;
+  purgeUnusedEmbeddedFiles(): Promise<UnusedEmbeddedFile[]>;
+  isEmbeddedSqliteDatabaseUnused(): boolean;
+  deleteUnusedEmbeddedSqliteDatabase(): Promise<boolean>;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
   exportDocumentSourceMarkdown(): string;
@@ -429,6 +458,8 @@ function renderLightweightRichToolbar(
     rowIndex?: number;
     includeAlign?: boolean;
     includeFillIn?: boolean;
+    includeTextAi?: boolean;
+    textPlaceholders?: import('./editor/component-helpers').TextPlaceholderDefinition[];
     align?: 'left' | 'center' | 'right';
     currentMarkdown?: string;
   } = {}
@@ -461,7 +492,9 @@ function renderLightweightRichToolbar(
         <button type="button" class="icon-button${selectedClass(blockStyle === 'ordered-list')}" data-rich-action="ordered-list" ${richButtonAttrs} aria-label="Numbered List" title="Numbered List"><span class="toolbar-icon ordered-list-icon" aria-hidden="true"></span></button>
         <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
         <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)" disabled><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+        ${(options.textPlaceholders ?? []).map((placeholder) => `<button type="button" class="icon-button ghost" data-rich-action="text-placeholder" data-text-placeholder-name="${escapeAttr(placeholder.name)}" ${richButtonAttrs} aria-label="${escapeAttr(placeholder.label)}" title="${escapeAttr(placeholder.title ?? placeholder.label)}"><span class="toolbar-icon text-placeholder-toolbar-icon" aria-hidden="true">${placeholder.render(true)}</span></button>`).join('')}
       </div>
+      ${options.includeTextAi ? `<div class="text-ai-toolbar-segment"><button type="button" class="ghost icon-button" data-text-ai="true" ${richButtonAttrs} aria-label="Process with AI" title="Process with AI">✨</button></div>` : ''}
     </div>
   `;
 }
@@ -494,7 +527,8 @@ function renderComponentFragment(
   componentName: string,
   content: string,
   block: { id: string; schema: { codeLanguage?: string; fillIn?: boolean } },
-  sectionKey = ''
+  sectionKey = '',
+  textPlaceholders?: TextPlaceholderDefinition[]
 ): string {
   if (componentName === 'code') {
     const language = block.schema.codeLanguage?.trim() || 'text';
@@ -504,13 +538,14 @@ function renderComponentFragment(
   const answerGroups = componentName === 'text'
     ? getBlockAnswerGroups(getInlineAnswerGroupIndex(state.document.sections), sectionKey, block.id)
     : undefined;
-  return renderTextFragment(source, answerGroups);
+  return renderTextFragment(source, textPlaceholders, answerGroups);
 }
 
-function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
+function renderTextFragment(content: string, textPlaceholders?: TextPlaceholderDefinition[], answerGroups?: Map<number, string>): string {
   const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
   return renderUserFileAttachmentLinksInHtml(addExternalLinkTargets(markdownToReaderHtml(normalized, {
     answerGroups,
+    textPlaceholders,
     crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
   }), { crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true }), state.document);
 }
@@ -537,6 +572,7 @@ function ensureReaderRenderer(): ReaderRenderer {
       get dbTableQueryModal() { return state.dbTableQueryModal; },
       get pdfTemplateImportModal() { return null; },
       get reusableSaveModal() { return null; },
+      get readerNavigationTarget() { return state.readerNavigationTarget; },
       get reusableTemplateModal() { return null; },
       get reusableDefinitionEditModal() { return null; },
       get sectionTemplateFlavorModal() { return null; },
@@ -648,6 +684,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   renderHtmlMs = elapsedMs(renderHtmlStartedAt);
   const domStartedAt = nowMs();
   root.innerHTML = markup;
+  bindResponsiveSidebarShells(root);
   syncActivePdfPreview(root, state.document, pdfDocument);
   domMs = elapsedMs(domStartedAt);
   const postStartedAt = nowMs();
@@ -1021,6 +1058,9 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     `);
   };
   return {
+    openTemplateForm(formOptions) {
+      return ready.then((mount) => mount.openTemplateForm(formOptions));
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -1033,6 +1073,29 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     },
     getDocument() {
       return mounted?.getDocument() ?? options.document;
+    },
+    reviewUnusedEmbeddedFiles() {
+      return ready.then((mount) => mount.reviewUnusedEmbeddedFiles());
+    },
+    findUnusedEmbeddedFiles() {
+      if (mounted) return mounted.findUnusedEmbeddedFiles();
+      hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
+      return findUnusedEmbeddedFiles(options.document);
+    },
+    purgeUnusedEmbeddedFiles() {
+      return mounted?.purgeUnusedEmbeddedFiles()
+        ?? hydrateHostAttachmentDescriptors(options.document, options.attachmentStore ?? null)
+          .then(() => purgeUnusedEmbeddedFiles(options.document, options.attachmentStore ?? null));
+    },
+    isEmbeddedSqliteDatabaseUnused() {
+      if (mounted) return mounted.isEmbeddedSqliteDatabaseUnused();
+      hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
+      return isEmbeddedSqliteDatabaseUnused(options.document);
+    },
+    deleteUnusedEmbeddedSqliteDatabase() {
+      return mounted?.deleteUnusedEmbeddedSqliteDatabase()
+        ?? hydrateHostAttachmentDescriptors(options.document, options.attachmentStore ?? null)
+          .then(() => deleteUnusedEmbeddedSqliteDatabase(options.document, options.attachmentStore ?? null));
     },
     serializeDocumentBytes() {
       if (!mounted && options.document.encryption?.encrypted === true) {
@@ -1139,7 +1202,11 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
   });
 }
 
-async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+  return runImportOperation(() => importFromTextInternal({ ...options, onError: undefined }), options.onError);
+}
+
+async function importFromTextInternal(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
   const { deserializeDocumentWithDiagnostics } = await import('./serialization');
   const { importTextIntoDocument } = await import('./ai-document-edit');
   const refreshAfterImportMutation = (): void => {
@@ -1203,6 +1270,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.encryption ?? null,
     options.crossDocumentLinks === true
   ));
+  if (options.chatSettings) {
+    runtime.state.chat.settings = { ...runtime.state.chat.settings, ...options.chatSettings };
+  }
   configureDatabaseHistoryStore(runtime, options.historyStore);
   configureAttachmentHistoryStore(runtime, options.historyStore);
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
@@ -1315,6 +1385,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     return transition;
   };
   const mount: HvyMount = {
+    openTemplateForm(formOptions) {
+      return ensureFullMount().then((mount) => mount.openTemplateForm(formOptions));
+    },
     setMode,
     destroy() {
       if (destroyed) return;
@@ -1356,6 +1429,33 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
+    },
+    reviewUnusedEmbeddedFiles() {
+      return ensureFullMount().then((mount) => mount.reviewUnusedEmbeddedFiles());
+    },
+    findUnusedEmbeddedFiles() {
+      return runWithStateRuntime(runtime, () => {
+        hydrateHostAttachmentDescriptorsSync(state.document, state.attachmentHost);
+        return findUnusedEmbeddedFiles(state.document);
+      });
+    },
+    purgeUnusedEmbeddedFiles() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await hydrateHostAttachmentDescriptors(state.document, state.attachmentHost);
+        return purgeUnusedEmbeddedFiles(state.document, state.attachmentHost);
+      });
+    },
+    isEmbeddedSqliteDatabaseUnused() {
+      return runWithStateRuntime(runtime, () => {
+        hydrateHostAttachmentDescriptorsSync(state.document, state.attachmentHost);
+        return isEmbeddedSqliteDatabaseUnused(state.document);
+      });
+    },
+    deleteUnusedEmbeddedSqliteDatabase() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await hydrateHostAttachmentDescriptors(state.document, state.attachmentHost);
+        return deleteUnusedEmbeddedSqliteDatabase(state.document, state.attachmentHost);
+      });
     },
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => {
@@ -1531,7 +1631,7 @@ export {
 };
 export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
 export type { HvyWebMcpModelContext, HvyWebMcpOptions, HvyWebMcpTool, HvyWebMcpToolContext } from './webmcp';
-export type { HostChatClient, ProxyChatRequest, ProxyChatResponse } from './chat/chat';
+export type { HostChatClient, ProxyChatRequest, ProxyChatResponse, ProxyChatStreamEvent } from './chat/chat';
 export type {
   ProviderToolCall,
   ProviderToolDefinition,
@@ -1543,6 +1643,8 @@ export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HvyAttachmentAction, HvyAttachmentActionHandler, HvyAttachmentActionRequest, HvyAttachmentActionResult } from './document-attachment-actions';
 export type { UserFileAttachmentLimits } from './document-attachments';
+export { deleteUnusedEmbeddedFiles, deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles } from './attachment-cleanup';
+export type { UnusedEmbeddedFile, UnusedEmbeddedFileKind } from './attachment-cleanup';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';
@@ -1551,6 +1653,7 @@ export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter'
 export type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
+  HvyImportError,
   HvyImportLlmStepEvent,
   HvyImportLlmOptions,
   HvyImportProgressEvent,

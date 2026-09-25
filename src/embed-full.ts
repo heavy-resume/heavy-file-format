@@ -1,3 +1,7 @@
+import type { HvyTemplateFormOptions, HvyTemplateFormResult } from './embed';
+import { openMountedTemplateForm, cancelMountedTemplateForm } from './embed-template-form';
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
+import { runImportOperation } from './import-errors';
 import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
 import { changeDocumentView } from './document-view';
 import type { HvyDocumentChangeApi } from './document-change';
@@ -89,7 +93,7 @@ import {
   type HvyPluginAuthorizationMode,
 } from './plugins/authorization/plugin-authorization-policy';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { createDefaultChatState } from './chat/chat';
+import { createDefaultChatState, mergeChatSettings } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
 import { bindChatThreadUi, refreshRenderedChatSurface } from './chat/chat-thread-ui';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
@@ -149,9 +153,11 @@ import { normalizePdfStylePresets, type HvyPdfStylePreset } from './pdf-style-pr
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { setEditorClipboardHost } from './editor-clipboard';
-import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
+import { hydrateHostAttachmentDescriptors, hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
 import type { UserFileAttachmentLimits } from './document-attachments';
+import { reviewUnusedEmbeddedFiles } from './editor/components/document-attachments/document-attachments';
+import { deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles, type UnusedEmbeddedFile } from './attachment-cleanup';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
@@ -225,8 +231,14 @@ export interface HvyMountOptions {
 }
 
 export interface HvyMount {
+  openTemplateForm(options: HvyTemplateFormOptions): Promise<HvyTemplateFormResult>;
   destroy(): void;
   getDocument(): VisualDocument;
+  findUnusedEmbeddedFiles(): UnusedEmbeddedFile[];
+  reviewUnusedEmbeddedFiles(): Promise<void>;
+  purgeUnusedEmbeddedFiles(): Promise<UnusedEmbeddedFile[]>;
+  isEmbeddedSqliteDatabaseUnused(): boolean;
+  deleteUnusedEmbeddedSqliteDatabase(): Promise<boolean>;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
   exportDocumentSourceMarkdown(): string;
@@ -584,6 +596,7 @@ function ensureRenderers(): void {
       get dbTableQueryModal() { return state.dbTableQueryModal; },
       get pdfTemplateImportModal() { return state.pdfTemplateImportModal; },
       get reusableSaveModal() { return state.reusableSaveModal; },
+      get readerNavigationTarget() { return state.readerNavigationTarget; },
       get reusableTemplateModal() { return state.reusableTemplateModal; },
       get reusableDefinitionEditModal() { return state.reusableDefinitionEditModal; },
       get sectionTemplateFlavorModal() { return state.sectionTemplateFlavorModal; },
@@ -663,11 +676,11 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         <button id="exportPdfBtn" type="button">Export PDF</button>
       </div>
       <section class="workspace-shell hvy-full-workspace-shell">
-        <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane hvy-full-pane${isDocumentMetaView ? '' : ' workspace-content-pane'}">
+        <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane hvy-full-pane${isDocumentMetaView ? ' document-meta-pane' : ' workspace-content-pane'}">
           ${
             isEditor
               ? isDocumentMetaView
-                ? `<div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div>`
+                ? `<div class="document-meta-scroll"><div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div></div>`
                 : `<div class="editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                   ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
@@ -725,6 +738,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       ${readerRenderer.renderLinkInlineModal()}
       ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
     </main>`;
+  bindResponsiveSidebarShells(root);
   syncActivePdfPreview(root, state.document, pdfDocument && state.currentView === 'viewer');
   bindEmbedUi(root, runtime);
   bindChatThreadUi(
@@ -765,7 +779,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
 function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
   const bindGeneration = (embedUiBindGenerations.get(root) ?? 0) + 1;
   embedUiBindGenerations.set(root, bindGeneration);
-  if (state.currentView === 'viewer') {
+  if (state.currentView === 'viewer' && !state.reusableTemplateModal) {
     bindReaderUi(root);
     return;
   }
@@ -1110,9 +1124,7 @@ function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTML
   const parentLocked = section.lock || placeholder.dataset.parentLocked === 'true';
   if (placeholder.dataset.hvyVirtualKind === 'editor') {
     const scroller = placeholder.closest<HTMLElement>('.editor-tree');
-    const isSubsection = placeholder.dataset.hvyVirtualSubsection === 'true'
-      || !state.document.sections.some((candidate) => candidate === section);
-    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, isSubsection, scroller ? {
+    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, scroller ? {
       scrollTop: scroller.scrollTop,
       viewportHeight: scroller.clientHeight,
       layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 90,
@@ -1184,7 +1196,11 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
   });
 }
 
-async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
+  return runImportOperation(() => importFromTextInternal({ ...options, onError: undefined }), options.onError);
+}
+
+async function importFromTextInternal(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
   const refreshAfterImportMutation = async (): Promise<void> => {
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
@@ -1352,10 +1368,7 @@ function createFullEmbedRuntime(options: HvyMountOptions): StateRuntime {
   hydrateHostAttachmentDescriptorsSync(runtimeState.document, options.attachmentStore ?? null);
   applyChatSessionState(runtimeState, options.initialChatState ?? null);
   if (options.chatSettings) {
-    runtimeState.chat.settings = {
-      ...runtimeState.chat.settings,
-      ...options.chatSettings,
-    };
+    runtimeState.chat.settings = mergeChatSettings(options.chatSettings, runtimeState.chat.settings);
   }
   runtimeState.chatContext = options.chatContext ?? null;
   runtimeState.chatContextProvider = options.chatContextProvider ?? null;
@@ -1462,9 +1475,17 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
   }
   let destroyed = false;
   return {
+    openTemplateForm(formOptions) {
+      if (destroyed) return Promise.reject(new Error('HVY mount has been destroyed.'));
+      return Promise.resolve().then(() => {
+        if (destroyed) throw new Error('HVY mount has been destroyed.');
+        return runWithStateRuntime(runtime, () => openMountedTemplateForm(options.root, formOptions));
+      });
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelMountedTemplateForm(runtime);
       webMcpRegistration?.destroy();
       runWithStateRuntime(runtime, () => {
         releasePdfPreviewRuntime(runtime);
@@ -1496,6 +1517,33 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
+    },
+    reviewUnusedEmbeddedFiles() {
+      return runWithStateRuntime(runtime, () => reviewUnusedEmbeddedFiles(options.root));
+    },
+    findUnusedEmbeddedFiles() {
+      return runWithStateRuntime(runtime, () => {
+        hydrateHostAttachmentDescriptorsSync(state.document, state.attachmentHost);
+        return findUnusedEmbeddedFiles(state.document);
+      });
+    },
+    purgeUnusedEmbeddedFiles() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await hydrateHostAttachmentDescriptors(state.document, state.attachmentHost);
+        return purgeUnusedEmbeddedFiles(state.document, state.attachmentHost);
+      });
+    },
+    isEmbeddedSqliteDatabaseUnused() {
+      return runWithStateRuntime(runtime, () => {
+        hydrateHostAttachmentDescriptorsSync(state.document, state.attachmentHost);
+        return isEmbeddedSqliteDatabaseUnused(state.document);
+      });
+    },
+    deleteUnusedEmbeddedSqliteDatabase() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await hydrateHostAttachmentDescriptors(state.document, state.attachmentHost);
+        return deleteUnusedEmbeddedSqliteDatabase(state.document, state.attachmentHost);
+      });
     },
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => {
@@ -1705,6 +1753,8 @@ export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HvyAttachmentAction, HvyAttachmentActionHandler, HvyAttachmentActionRequest, HvyAttachmentActionResult } from './document-attachment-actions';
 export type { UserFileAttachmentLimits } from './document-attachments';
+export { deleteUnusedEmbeddedFiles, deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles } from './attachment-cleanup';
+export type { UnusedEmbeddedFile, UnusedEmbeddedFileKind } from './attachment-cleanup';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';
@@ -1728,7 +1778,7 @@ export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './
 export { createHvyAgentTools, createProxyEmbeddingProvider, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes, registerHvyWebMcpTools };
 export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
 export type { HvyWebMcpModelContext, HvyWebMcpOptions, HvyWebMcpTool, HvyWebMcpToolContext } from './webmcp';
-export type { HostChatClient, ProxyChatRequest, ProxyChatResponse } from './chat/chat';
+export type { HostChatClient, ProxyChatRequest, ProxyChatResponse, ProxyChatStreamEvent } from './chat/chat';
 export type {
   ProviderToolCall,
   ProviderToolDefinition,

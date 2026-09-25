@@ -1,5 +1,7 @@
 import type { TableColumnAlignment, TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
+import { scheduleButtonVisibilityScripts } from './editor/components/button/button-visibility-scheduler';
+import { refreshXrefTargetPicker } from './editor/components/xref-card/xref-card';
 import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState, SortValueDefinition, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
@@ -8,7 +10,7 @@ import { getReusableNameFromSectionKey, getComponentDefs, getSectionDefs, render
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
-import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
+import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, isXrefTargetAvailable, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumnProperties, getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumnProperties, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
 import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeInlineAnswerControls, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
@@ -20,6 +22,7 @@ import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace, INLINE_CHECKBOX_CARET_ANCHOR } from './editor/inline-checkbox';
 import { renderInlineAnswerGroupOption, renderTextRichEditorContent } from './editor/components/text/text';
+import { beginAtomicInlineSelection } from './editor/components/text/text-atomic-selection';
 import {
   getInlineAnswerGroupIndex,
   getNearbyRadioGroupNames,
@@ -35,7 +38,7 @@ import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } f
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
-import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
+import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDocument, syncSortValuesForListItem, listValueFields, type ListValueKind } from './sort-values';
 import { highlightSearchHtml } from './search/highlight';
 import { sanitizeInlineCss } from './css-sanitizer';
 import { syncTextToolbarContextActions } from './editor/components/text/text-toolbar-layout';
@@ -304,10 +307,10 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     } else {
       return false;
     }
+    // The modal previews drafts locally; closing it refreshes readers and runs hooks.
     refreshCaptionModalPreview(target, nextCaption);
     if (block.schema.kind === 'image') {
       syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-      getRefreshReaderPanels()();
     }
     return true;
   }
@@ -406,9 +409,17 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
 
   if (field === 'block-xref-target' && (target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
     const previousTarget = block.schema.xrefTarget;
+    if (!isXrefTargetAvailable(state.document, target.value, { block })) {
+      target.value = normalizeXrefTarget(previousTarget);
+      return true;
+    }
     block.schema.xrefTarget = normalizeXrefTarget(target.value);
     applyXrefTargetDefaults(block, previousTarget);
     syncXrefEditorAfterTargetInput(target, block);
+    target.closest('.hvy-document')?.querySelectorAll<HTMLSelectElement>('select[data-field="block-xref-target"]').forEach((picker) => {
+      const context = resolveBlockContext(picker);
+      if (context) refreshXrefTargetPicker(picker, context.block, getCachedComponentRenderHelpers());
+    });
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     return true;
   }
@@ -739,7 +750,9 @@ function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
 
 export function refreshReaderPanelsOutsideActiveEditor(target: HTMLElement): void {
   const surface = getRefreshSurfaceOutsideActiveEditor(target);
-  getRefreshReaderPanels()({ ...(surface === 'all' ? {} : { surface }), runDocumentHooks: false });
+  const root = target.closest('.hvy-document');
+  getRefreshReaderPanels()({ ...(surface === 'all' ? {} : { surface }), runDocumentHooks: false, runVisibilityScripts: false });
+  if (root) scheduleButtonVisibilityScripts(root);
 }
 
 function getRefreshSurfaceOutsideActiveEditor(target: HTMLElement): ReaderPanelRefreshSurface {
@@ -1282,7 +1295,13 @@ export function getComponentRenderHelpers(editorRenderer: {
   renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[], parentLocked?: boolean) => string;
   renderEditorNestedBlocks: ComponentRenderHelpers['renderEditorNestedBlocks'];
   renderEditorGridBlocks: ComponentRenderHelpers['renderEditorGridBlocks'];
-  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
+  renderPassiveEditorBlock: (
+    sectionKey: string,
+    block: VisualBlock,
+    sections: import('./editor/types').VisualSection[],
+    parentLocked?: boolean,
+    options?: import('./editor/component-helpers').TextPlaceholderContextOptions
+  ) => string;
   renderTextFragment: ComponentRenderHelpers['renderTextFragment'];
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
@@ -1316,17 +1335,18 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml: (markdown, codeLanguageInputAttrs, answerGroups) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
+    markdownToEditorHtml: (markdown, codeLanguageInputAttrs, answerGroups, textPlaceholders) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
       textLineStyles: getTextLineStylesFromMeta(state.document.meta),
       textLineStyleMode: 'editor',
       codeLanguageInputAttrs,
       answerGroups,
+      textPlaceholders,
     })),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderEditorNestedBlocks: editorRenderer.renderEditorNestedBlocks,
     renderEditorGridBlocks: editorRenderer.renderEditorGridBlocks,
-    renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
+    renderPassiveEditorBlock: (sectionKey, block, options) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections, false, options),
     renderReaderBlock: readerRenderer.renderReaderBlock,
     renderReaderGridBlocks: readerRenderer.renderReaderGridBlocks,
     renderReaderBlocks: readerRenderer.renderReaderBlocks,
@@ -1379,7 +1399,14 @@ export function applyRichAction(
   action: string,
   editable: HTMLElement,
   value?: string,
-  options: { sortValueKey?: string; sortValueType?: string; templateVariableName?: string } = {}
+  options: {
+    sortValueKey?: string;
+    sortValueType?: string;
+    templateVariableName?: string;
+    valueKind?: ListValueKind;
+    textPlaceholderName?: string;
+    textPlaceholderHtml?: string;
+  } = {}
 ): void {
   if (action === 'template-value') {
     if (applyTemplateValueSelection(editable, options.templateVariableName)) {
@@ -1390,6 +1417,12 @@ export function applyRichAction(
   if (action === 'fill-in') {
     if (applyTextFillInSlot(editable)) {
     }
+    return;
+  }
+  if (action === 'text-placeholder') {
+    insertTextPlaceholderAtSelection(editable, options.textPlaceholderName, options.textPlaceholderHtml);
+    updateRichToolbarState(editable);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
     return;
   }
   if (action === 'sort-value') {
@@ -1469,6 +1502,22 @@ export function applyRichAction(
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function insertTextPlaceholderAtSelection(editable: HTMLElement, name?: string, html?: string): void {
+  if (editable.dataset.field !== 'block-rich') return;
+  if (!name || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) return;
+  const range = getEditableSelectionRange(editable);
+  if (!range) return;
+  range.deleteContents();
+  const template = editable.ownerDocument.createElement('template');
+  template.innerHTML = `<span class="hvy-text-placeholder" data-hvy-text-placeholder="${escapeAttr(name)}" contenteditable="false" data-rich-atomic="true" tabindex="-1"><span class="hvy-text-placeholder-source">&lt;!-- placeholder ${escapeAttr(name)} --&gt;</span>${html ?? ''}</span>`;
+  const placeholder = template.content.firstElementChild;
+  if (!placeholder) return;
+  const caretAnchor = editable.ownerDocument.createTextNode('\u200b');
+  range.insertNode(caretAnchor);
+  range.insertNode(placeholder);
+  setCollapsedSelection(caretAnchor, caretAnchor.length);
 }
 
 function applyTemplateValueSelection(editable: HTMLElement, requestedName?: string): boolean {
@@ -1559,7 +1608,7 @@ function replaceRichSelectionWithText(
 
 function applySortValueAnnotation(
   editable: HTMLElement,
-  options: { sortValueKey?: string; sortValueType?: string }
+  options: { sortValueKey?: string; sortValueType?: string; valueKind?: ListValueKind }
 ): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range) {
@@ -1567,21 +1616,23 @@ function applySortValueAnnotation(
   }
   const key = (options.sortValueKey ?? '').trim() || inferSortValueKey(range.toString(), options.sortValueType);
   const type: SortValueType = options.sortValueType === 'number' || options.sortValueType === 'date' || options.sortValueType === 'datetime' || options.sortValueType === 'enum' ? options.sortValueType : 'text';
-  const definition = getEditableSortValueDefinition(editable, key);
+  const kind = options.valueKind ?? 'sort';
+  const definition = getEditableSortValueDefinition(editable, key, kind);
   if (definition?.type === 'enum') {
-    return applyEnumSortValueControl(editable, range, key, definition);
+    return applyEnumSortValueControl(editable, range, key, definition, kind);
   }
   if (range.collapsed || range.toString().trim().length === 0) {
     return false;
   }
-  ensureSortValueDefinition(editable, key, type);
+  ensureSortValueDefinition(editable, key, type, kind);
   const wrapper = document.createElement('span');
   wrapper.className = 'hvy-sort-value';
   wrapper.dataset.hvySortValue = 'true';
   wrapper.dataset.sortValueKey = key;
+  wrapper.dataset.valueKind = kind;
   const fragment = range.extractContents();
-  unwrapSortValueAnnotations(fragment, key);
-  unwrapSortValueAnnotations(editable, key);
+  unwrapSortValueAnnotations(fragment, key, kind);
+  unwrapSortValueAnnotations(editable, key, kind);
   wrapper.appendChild(fragment);
   range.insertNode(wrapper);
   moveCaretAfterElement(wrapper);
@@ -1592,7 +1643,8 @@ function applyEnumSortValueControl(
   editable: HTMLElement,
   range: Range,
   key: string,
-  definition: SortValueDefinition
+  definition: SortValueDefinition,
+  kind: ListValueKind
 ): boolean {
   const options = definition.options ?? [];
   if (options.length === 0) {
@@ -1601,12 +1653,13 @@ function applyEnumSortValueControl(
   const selectedText = range.toString().trim();
   const selectedOption = options.find((option) => option.label.trim() === selectedText) ?? options[0];
   range.deleteContents();
-  unwrapSortValueAnnotations(editable, key);
+  unwrapSortValueAnnotations(editable, key, kind);
   const select = document.createElement('select');
   select.className = 'hvy-sort-value hvy-sort-value-enum';
   select.contentEditable = 'false';
   select.dataset.hvySortValue = 'true';
   select.dataset.sortValueKey = key;
+  select.dataset.valueKind = kind;
   select.dataset.field = 'sort-value-enum';
   select.dataset.sectionKey = editable.dataset.sectionKey ?? '';
   select.dataset.blockId = editable.dataset.blockId ?? '';
@@ -1623,9 +1676,9 @@ function applyEnumSortValueControl(
   return true;
 }
 
-function getEditableSortValueDefinition(editable: HTMLElement, key: string): SortValueDefinition | undefined {
+function getEditableSortValueDefinition(editable: HTMLElement, key: string, kind: ListValueKind): SortValueDefinition | undefined {
   const block = findBlockByIds(editable.dataset.sectionKey ?? '', editable.dataset.blockId ?? '');
-  return block ? getSortValueDefsForBlock(state.document, block)[key] : undefined;
+  return block ? getSortValueDefsForBlock(state.document, block, kind)[key] : undefined;
 }
 
 function moveCaretAfterElement(element: HTMLElement): void {
@@ -1640,8 +1693,9 @@ function moveCaretAfterElement(element: HTMLElement): void {
   element.closest<HTMLElement>('[contenteditable="true"]')?.focus({ preventScroll: true });
 }
 
-function unwrapSortValueAnnotations(root: ParentNode, key: string): void {
+function unwrapSortValueAnnotations(root: ParentNode, key: string, kind: ListValueKind): void {
   root.querySelectorAll<HTMLElement>(`[data-hvy-sort-value="true"][data-sort-value-key="${cssEscapeForSelector(key)}"]`).forEach((node) => {
+    if ((node.dataset.valueKind === 'group' ? 'group' : 'sort') !== kind) return;
     const parent = node.parentNode;
     if (!parent) {
       return;
@@ -1664,7 +1718,7 @@ function inferSortValueKey(text: string, type: string | undefined): string {
   return 'Name';
 }
 
-function ensureSortValueDefinition(editable: HTMLElement, key: string, type: SortValueType): void {
+function ensureSortValueDefinition(editable: HTMLElement, key: string, type: SortValueType, kind: ListValueKind): void {
   const blockId = editable.dataset.blockId ?? '';
   if (!blockId) {
     return;
@@ -1678,18 +1732,19 @@ function ensureSortValueDefinition(editable: HTMLElement, key: string, type: Sor
     return;
   }
   const defs = Array.isArray(state.document.meta.component_defs) ? state.document.meta.component_defs : [];
-  const definition = defs.find((item): item is { name: string; sortValueDefs?: Record<string, unknown> } =>
+  const definition = defs.find((item): item is { name: string; sortValueDefs?: Record<string, unknown>; groupValueDefs?: Record<string, unknown> } =>
     !!item && typeof item === 'object' && (item as { name?: unknown }).name === componentName
   );
   if (!definition) {
     return;
   }
-  const sortValueDefs = definition.sortValueDefs && typeof definition.sortValueDefs === 'object' && !Array.isArray(definition.sortValueDefs)
-    ? definition.sortValueDefs
+  const field = listValueFields(kind).definitions;
+  const sortValueDefs = definition[field] && typeof definition[field] === 'object' && !Array.isArray(definition[field])
+    ? definition[field]
     : {};
   if (!sortValueDefs[key]) {
     sortValueDefs[key] = { type };
-    definition.sortValueDefs = sortValueDefs;
+    definition[field] = sortValueDefs;
   }
 }
 
@@ -2749,6 +2804,7 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
 
 export function handleRichEditorPointerDown(event: MouseEvent, editable: HTMLElement): boolean {
   if (event.button !== 0 || !(event.target instanceof Element)) return false;
+  if (beginAtomicInlineSelection(event, editable)) return true;
   const answerRow = findInlineAnswerRowAtPointer(editable, event);
   if (!answerRow) return false;
   const firstControl = answerRow.querySelector<HTMLInputElement>('input.hvy-inline-checkbox');
@@ -5796,8 +5852,7 @@ export function moveBlockByOffset(sectionKey: string, blockId: string, offset: -
     return false;
   }
   if (location.ownerBlockId === null) {
-    // Section-level block: walk the interleaved blocks/subsections sequence so
-    // arrows can swap with adjacent subsections by repositioning their anchors.
+    // Move within the section’s ordered component list.
     const ok = moveBlockInVisualSequence(state.document.sections, sectionKey, blockId, offset);
     if (ok) {
       syncReusableTemplateForBlock(sectionKey, blockId);

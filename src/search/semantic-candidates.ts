@@ -225,9 +225,6 @@ export function buildSemanticFilterCandidates(
     for (const block of section.blocks) {
       visitBlock(document, section, block, nextAncestors, sectionLabel, `section:${targetRef}`);
     }
-    for (const child of section.children) {
-      visitSection(child, nextAncestors);
-    }
   };
 
   const visitBlock = (
@@ -315,7 +312,6 @@ function countSemanticBlockTargetRefs(
   const visitSection = (section: VisualSection): void => {
     if (section.isGhost) return;
     for (const block of section.blocks) visitBlock(block);
-    for (const child of section.children) visitSection(child);
   };
   for (const section of document.sections) visitSection(section);
   return counts;

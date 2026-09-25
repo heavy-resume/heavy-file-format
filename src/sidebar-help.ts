@@ -41,8 +41,6 @@ export function shouldAutoDismissSidebarHelp(shell: HTMLElement | null, kind: Si
 }
 
 export function scheduleSidebarHelpAutoClose(app: HTMLElement): void {
-  updateSidebarHelpPositions(app);
-  window.requestAnimationFrame(() => updateSidebarHelpPositions(app));
   scheduleSidebarHelpAutoCloseFor(app, 'editor');
   scheduleSidebarHelpAutoCloseFor(app, 'viewer');
 }
@@ -119,6 +117,7 @@ function updateSidebarHelpPositionFor(app: HTMLElement, kind: SidebarHelpKind): 
   const tabRect = tab.getBoundingClientRect();
   const balloonRect = balloon.getBoundingClientRect();
   if (shellRect.height <= 0 || sidebarRect.width <= 0 || tabRect.width <= 0 || tabRect.height <= 0 || balloonRect.height <= 0) {
+    balloon.classList.remove('is-positioned');
     return;
   }
 
@@ -135,6 +134,7 @@ function updateSidebarHelpPositionFor(app: HTMLElement, kind: SidebarHelpKind): 
   balloon.style.setProperty('--hvy-sidebar-help-top', `${top}px`);
   balloon.style.setProperty('--hvy-sidebar-help-left', `${left}px`);
   balloon.style.setProperty('--hvy-sidebar-help-arrow-top', `${arrowTop}px`);
+  balloon.classList.add('is-positioned');
 }
 
 function rectsOverlap(left: DOMRect, right: DOMRect): boolean {

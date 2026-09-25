@@ -4,7 +4,7 @@ import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, parseGridItems as _parseGridItems } from './grid-ops';
-import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
+import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, resolveReusableTemplateTokensInBlock, resolveReusableTemplateTokensInSchema } from './reusable-template-values';
 import { getTableColumns, normalizeTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
@@ -30,6 +30,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     css: DEFAULT_BLOCK_CSS,
     sortKeys: {},
     derivedSortKeyNames: [],
+    derivedGroupKeyNames: [],
     groupKeys: {},
     tags: '',
     description: '',
@@ -142,7 +143,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         encryptedError: '',
       } as unknown as BlockSchema;
     case 'plugin':
-      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {}, pluginSortValues: {} } as unknown as BlockSchema;
+      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {}, pluginSortValues: {}, pluginGroupValues: {} } as unknown as BlockSchema;
     case 'xref-card':
       return { ...base, kind: 'xref-card', xrefTarget: '', xrefTargetTagFilter: '' } as unknown as BlockSchema;
     default:
@@ -227,14 +228,13 @@ export function parseVisualBlock(candidate: unknown, seen = new WeakSet<object>(
   };
 }
 
-export function parseVisualSection(candidate: unknown, level = 1, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): VisualSection {
+export function parseVisualSection(candidate: unknown, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): VisualSection {
   if (!candidate || typeof candidate !== 'object' || seen.has(candidate)) {
-    return createEmptySection(level, '', false);
+    return createEmptySection('', false);
   }
   seen.add(candidate);
   const raw = candidate as JsonObject;
   const title = typeof raw.title === 'string' && raw.title.trim().length > 0 ? raw.title : 'Untitled Section';
-  const rawLevel = typeof raw.level === 'number' && Number.isFinite(raw.level) ? raw.level : level;
   return {
     key: makeId('section'),
     customId: sanitizeOptionalId(typeof raw.customId === 'string' ? raw.customId : typeof raw.id === 'string' ? raw.id : ''),
@@ -245,7 +245,6 @@ export function parseVisualSection(candidate: unknown, level = 1, seen = new Wea
     idEditorOpen: false,
     isGhost: false,
     title,
-    level: Math.max(1, Math.min(6, Math.floor(rawLevel))),
     expanded: raw.expanded === false ? false : true,
     highlight: raw.highlight === true,
     priority: raw.priority === true,
@@ -258,9 +257,6 @@ export function parseVisualSection(candidate: unknown, level = 1, seen = new Wea
     protect_from_import: raw.protect_from_import === true,
     templateKey: typeof raw.templateKey === 'string' ? raw.templateKey : undefined,
     blocks: Array.isArray(raw.blocks) ? raw.blocks.map((block) => parseVisualBlock(block, seen, documentMeta)) : [],
-    children: Array.isArray(raw.children)
-      ? raw.children.map((child) => parseVisualSection(child, Math.min(Math.max(1, Math.floor(rawLevel)) + 1, 6), seen, documentMeta))
-      : [],
   };
 }
 
@@ -278,7 +274,7 @@ export function normalizeReusableSectionDefinitions(meta: JsonObject): void {
         name: typeof raw.name === 'string' ? raw.name : '',
         key: typeof raw.key === 'string' ? raw.key : undefined,
         repeatable: raw.repeatable === true,
-        template: parseVisualSection(raw.template, 1, new WeakSet<object>(), meta),
+        template: parseVisualSection(raw.template, new WeakSet<object>(), meta),
         flavors: Array.isArray(raw.flavors)
           ? raw.flavors
             .filter((flavor) => flavor && typeof flavor === 'object')
@@ -288,7 +284,7 @@ export function normalizeReusableSectionDefinitions(meta: JsonObject): void {
                 ...rawFlavor,
                 name: typeof rawFlavor.name === 'string' ? rawFlavor.name : '',
                 description: typeof rawFlavor.description === 'string' ? rawFlavor.description : undefined,
-                template: parseVisualSection(rawFlavor.template, 1, new WeakSet<object>(), meta),
+                template: parseVisualSection(rawFlavor.template, new WeakSet<object>(), meta),
               };
             })
             .filter((flavor) => flavor.name.trim().length > 0)
@@ -315,6 +311,12 @@ export function normalizeReusableComponentDefinitions(meta: JsonObject): void {
         baseType,
       };
       const sortValueDefs = normalizeSortValueDefs(raw.sortValueDefs);
+      const groupValueDefs = normalizeSortValueDefs(raw.groupValueDefs, 'group');
+      if (Object.keys(groupValueDefs).length > 0) {
+        normalized.groupValueDefs = groupValueDefs;
+      } else {
+        delete normalized.groupValueDefs;
+      }
       if (Object.keys(sortValueDefs).length > 0) {
         normalized.sortValueDefs = sortValueDefs;
       } else {
@@ -376,6 +378,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
     sortKeys: parseSortKeys(candidate.sortKeys),
     derivedSortKeyNames: parseStringList(candidate.derivedSortKeyNames),
+    derivedGroupKeyNames: parseStringList(candidate.derivedGroupKeyNames),
     groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
@@ -429,6 +432,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
         ? (candidate.pluginConfig as JsonObject)
         : schema.pluginConfig;
     schema.pluginSortValues = parseSortKeys(candidate.pluginSortValues);
+    schema.pluginGroupValues = parseGroupKeys(candidate.pluginGroupValues);
   }
   if (schema.kind === 'expandable') {
     schema.expandableStubComponent =
@@ -636,10 +640,15 @@ function _createBlockSkip(component: string, _skip: boolean): VisualBlock {
   };
 }
 
-export function createEmptyBlock(component = 'text', skipComponentDefaults = false, documentMeta?: JsonObject | null): VisualBlock {
+export function createEmptyBlock(
+  component = 'text',
+  skipComponentDefaults = false,
+  documentMeta?: JsonObject | null,
+  templateValues: Record<string, string> = {}
+): VisualBlock {
   const reusableInstance = documentMeta
-    ? instantiateReusableBlockFromMeta(component, documentMeta)
-    : instantiateReusableBlock(component);
+    ? instantiateReusableBlockFromMeta(component, documentMeta, templateValues)
+    : instantiateReusableBlock(component, templateValues);
   if (reusableInstance) {
     return reusableInstance;
   }
@@ -655,11 +664,11 @@ export function createEmptyBlock(component = 'text', skipComponentDefaults = fal
   };
 }
 
-export function createEmptySection(level: number, component = 'container', isGhost = false): VisualSection {
-  return createEmptySectionWithMeta(level, component, isGhost, null);
+export function createEmptySection(component = 'container', isGhost = false): VisualSection {
+  return createEmptySectionWithMeta(component, isGhost, null);
 }
 
-export function createEmptySectionWithMeta(level: number, component = 'container', isGhost = false, documentMeta?: JsonObject | null): VisualSection {
+export function createEmptySectionWithMeta(component = 'container', isGhost = false, documentMeta?: JsonObject | null): VisualSection {
   return {
     key: makeId('section'),
     customId: '',
@@ -670,7 +679,6 @@ export function createEmptySectionWithMeta(level: number, component = 'container
     idEditorOpen: false,
     isGhost,
     title: isGhost ? 'New Component' : 'Unnamed Section',
-    level,
     expanded: true,
     highlight: false,
     css: '',
@@ -682,7 +690,6 @@ export function createEmptySectionWithMeta(level: number, component = 'container
     protect_from_import: false,
     templateKey: undefined,
     blocks: component ? [createEmptyBlock(component, false, documentMeta)] : [],
-    children: [],
   };
 }
 
@@ -792,12 +799,7 @@ export function cloneReusableBlockFromMeta(block: VisualBlock, documentMeta: Jso
   };
 }
 
-export function cloneReusableSection(section: VisualSection, targetLevel = section.level, documentMeta?: JsonObject): VisualSection {
-  const levelDelta = targetLevel - section.level;
-  return cloneReusableSectionWithDelta(section, levelDelta, documentMeta);
-}
-
-function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: number, documentMeta?: JsonObject): VisualSection {
+export function cloneReusableSection(section: VisualSection, documentMeta?: JsonObject): VisualSection {
   return {
     key: makeId('section'),
     customId: '',
@@ -806,7 +808,6 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     idEditorOpen: false,
     isGhost: false,
     title: section.title,
-    level: Math.max(1, Math.min(6, section.level + levelDelta)),
     lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,
@@ -819,7 +820,6 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     protect_from_import: section.protect_from_import === true,
     templateKey: section.templateKey,
     blocks: section.blocks.map((block) => documentMeta ? cloneReusableBlockFromMeta(block, documentMeta) : cloneReusableBlock(block)),
-    children: section.children.map((child) => cloneReusableSectionWithDelta(child, levelDelta, documentMeta)),
   };
 }
 
@@ -842,7 +842,7 @@ export function getReusableTemplateByName(name: string): VisualBlock | null {
   return def ? getReusableTemplate(def) : null;
 }
 
-export function instantiateReusableBlock(componentName: string): VisualBlock | null {
+export function instantiateReusableBlock(componentName: string, templateValues: Record<string, string> = {}): VisualBlock | null {
   const def = getComponentDefs().find((item) => item.name === componentName);
   if (!def) {
     return null;
@@ -851,10 +851,11 @@ export function instantiateReusableBlock(componentName: string): VisualBlock | n
   const instance = cloneReusableBlock(template);
   instance.schema.component = componentName;
   instance.schemaMode = false;
+  resolveReusableTemplateTokensInBlock(instance, def, templateValues);
   return instance;
 }
 
-function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject): VisualBlock | null {
+function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject, templateValues: Record<string, string> = {}): VisualBlock | null {
   const def = getComponentDefsFromMeta(documentMeta).find((item) => item.name === componentName);
   if (!def) {
     return null;
@@ -871,10 +872,11 @@ function instantiateReusableBlockFromMeta(componentName: string, documentMeta: J
   const instance = cloneReusableBlockFromMeta(template, documentMeta);
   instance.schema.component = componentName;
   instance.schemaMode = false;
+  resolveReusableTemplateTokensInBlock(instance, def, templateValues);
   return instance;
 }
 
-export function instantiateReusableSection(name: string, level: number, flavorName?: string): VisualSection | null {
+export function instantiateReusableSection(name: string, flavorName?: string): VisualSection | null {
   const normalizedName = name.startsWith(REUSABLE_SECTION_DEF_PREFIX) ? name.slice(REUSABLE_SECTION_DEF_PREFIX.length) : name;
   const def = getSectionDefs().find((item) => item.name === normalizedName || getSectionTemplateKey(item) === normalizedName);
   if (!def) {
@@ -883,7 +885,7 @@ export function instantiateReusableSection(name: string, level: number, flavorNa
   const flavor = flavorName
     ? (def.flavors ?? []).find((item) => item.name.trim() === flavorName.trim() && !!item.template)
     : null;
-  const section = cloneReusableSection(flavor?.template ?? def.template, level);
+  const section = cloneReusableSection(flavor?.template ?? def.template);
   const variables = flavor
     ? extractReusableTemplateVariablesFromSectionFlavor(flavor)
     : extractReusableTemplateVariablesFromSectionDefinition(def);
@@ -904,6 +906,7 @@ export function applyComponentDefaults(schema: BlockSchema, componentName: strin
       ? cloneReusableSchemaFromMeta(def.template.schema, componentName, documentMeta)
       : cloneReusableSchema(def.template.schema, componentName);
     Object.assign(schema, next);
+    resolveReusableTemplateTokensInSchema(schema, def);
     return;
   }
   if (def?.schema) {
@@ -911,6 +914,7 @@ export function applyComponentDefaults(schema: BlockSchema, componentName: strin
       ? cloneReusableSchemaFromMeta(schemaFromUnknown({ ...(def.schema as unknown as JsonObject), component: componentName }, new WeakSet<object>(), documentMeta), componentName, documentMeta)
       : cloneReusableSchema(def.schema, componentName)
     );
+    resolveReusableTemplateTokensInSchema(schema, def);
     return;
   }
   if (base === 'table' && schema.tableRows.length === 0) {

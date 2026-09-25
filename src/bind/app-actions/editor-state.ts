@@ -1,3 +1,4 @@
+import { listValueKindForElement, type ListValueKind } from '../../sort-values';
 import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, getRefreshReaderPanels, getRefreshReaderSection } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
@@ -56,7 +57,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
     scrollPendingEditorActivation(app);
   }
   if (clickedSortValueKey) {
-    openActivatedEnumSortValue(app, sectionKey, blockId, clickedSortValueKey);
+    openActivatedEnumSortValue(app, sectionKey, blockId, clickedSortValueKey, targetElement ? listValueKindForElement(targetElement) : 'sort');
   }
 };
 
@@ -85,11 +86,11 @@ function capturePreferredEditorActivationTarget(
     : null;
 }
 
-function openActivatedEnumSortValue(app: HTMLElement, sectionKey: string, blockId: string, key: string): void {
+function openActivatedEnumSortValue(app: HTMLElement, sectionKey: string, blockId: string, key: string, kind: ListValueKind): void {
   const activeBlock = [...app.querySelectorAll<HTMLElement>('.editor-block[data-active-editor-block="true"]')]
     .find((candidate) => candidate.dataset.sectionKey === sectionKey && candidate.dataset.blockId === blockId);
   const select = [...(activeBlock?.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]') ?? [])]
-    .find((candidate) => candidate.dataset.sortValueKey === key);
+    .find((candidate) => candidate.dataset.sortValueKey === key && listValueKindForElement(candidate) === kind);
   if (!select) {
     return;
   }
@@ -165,7 +166,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   const block = findBlockByIds(sectionKey, blockId);
   const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
   const editorBlock = actionButton.closest?.<HTMLElement>('.editor-block') ?? null;
-  if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block))) {
+  if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block), getSortValueDefsForBlock(state.document, block, 'group'))) {
     return;
   }
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId, editorBlock);
@@ -207,7 +208,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
       if (deactivationAnchor) {
         restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
       }
-    }, sectionKey);
+    }, sectionKey, { callerRefreshedDocumentChange: true });
   }
 };
 

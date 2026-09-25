@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('before, alt draft dialog actions and drag, after: cancel discards and done commits', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

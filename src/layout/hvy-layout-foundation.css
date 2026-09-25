@@ -19,6 +19,12 @@
   line-height: var(--hvy-line-height, 1.4);
 }
 
+/* Reserve double taps for editing while preserving scrolling and pinch zoom. */
+.hvy-document .editor-shell,
+.hvy-document .ai-view-shell {
+  touch-action: manipulation;
+}
+
 .hvy-document.no-transitions .hvy-embed-layout *,
 .hvy-document .hvy-embed-layout.no-transitions * {
   transition: none !important;
@@ -76,4 +82,10 @@
 .hvy-document select option:checked {
   background: var(--hvy-surface-alt);
   color: var(--hvy-text-alt);
+}
+
+.hvy-document.hvy-recolor-strikethrough :is(s, strike, del),
+.hvy-document .theme-demo-rich-text :is(s, strike, del) {
+  color: var(--hvy-strikethrough-color, currentColor);
+  text-decoration-color: var(--hvy-strikethrough-color, currentColor);
 }

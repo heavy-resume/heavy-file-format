@@ -6,10 +6,12 @@ import {
   closeChatPanel,
   createDefaultChatState,
   getEnvChatSettings,
+  getTextProcessingSettings,
   MAX_PROXY_COMPLETION_CONTEXT_CHARS,
   mergeChatSettings,
   requestChatCompletion,
   requestProxyCompletion,
+  requestProxyToolTurn,
   setHostChatClient,
   stopChatRequest,
   stripDocumentHeaderAndComments,
@@ -27,6 +29,44 @@ import type { HvyChatContextPreparationProgress, HvyChatSearchIndexSnapshot, Hvy
 afterEach(() => {
   setHostChatClient(null);
   vi.restoreAllMocks();
+});
+
+test('requestProxyToolTurn consumes host output deltas and returns the final response', async () => {
+  const streamed: string[] = [];
+  const client = {
+    complete: vi.fn(async () => ({ output: 'fallback' })),
+    async *streamToolTurn() {
+      yield { type: 'output_delta' as const, delta: '<!--hvy:text ' };
+      yield { type: 'output_delta' as const, delta: '{"id":"answer"}-->\nFinal answer' };
+      yield {
+        type: 'response' as const,
+        response: {
+          output: '<!--hvy:text {"id":"answer"}-->\nFinal answer',
+          toolCalls: [],
+          nativeMessages: [],
+          toolState: { provider: 'openai' as const, input: [] },
+        },
+      };
+    },
+  };
+
+  const result = await requestProxyToolTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    messages: [{ id: '1', role: 'user', content: 'Go.' }],
+    context: 'Document context',
+    systemInstructions: 'Answer.',
+    mode: 'qa',
+    tools: [],
+    client,
+    onOutput: (output) => streamed.push(output),
+  });
+
+  expect(streamed).toEqual([
+    '<!--hvy:text ',
+    '<!--hvy:text {"id":"answer"}-->\nFinal answer',
+  ]);
+  expect(result.output).toContain('Final answer');
+  expect(client.complete).not.toHaveBeenCalled();
 });
 
 test('stripDocumentHeaderAndComments removes front matter and preserves structural hvy comments', () => {
@@ -1164,6 +1204,8 @@ test('getEnvChatSettings prepopulates provider and model from vite env vars', ()
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-custom',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1182,6 +1224,8 @@ test('getEnvChatSettings exposes tool-loop compaction settings from vite env var
   ).toEqual({
     provider: 'openai',
     model: 'gpt-dev',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
     toolLoopCompaction: {
@@ -1202,6 +1246,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'openai',
     model: 'gpt-dev',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1213,6 +1259,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-sonnet-4-6',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1228,6 +1276,8 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
       {
         provider: 'openai',
         model: 'gpt-5.4-mini',
+        textProcessingProvider: null,
+        textProcessingModel: null,
         compactionProvider: 'openai',
         compactionModel: 'gpt-5.4-nano',
       }
@@ -1235,6 +1285,8 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
   ).toEqual({
     provider: 'openai',
     model: 'gpt-5.4-mini',
+    textProcessingProvider: null,
+    textProcessingModel: null,
     compactionProvider: 'openai',
     compactionModel: 'gpt-5.4-nano',
   });
@@ -1322,3 +1374,60 @@ function getExpectedEmbeddingVector(text: string): number[] {
   }
   return [0, 0, 1];
 }
+
+test('text processing uses independent environment settings and preserves them through persistence merges', () => {
+  const defaults = getEnvChatSettings({
+    VITE_HVY_CHAT_PROVIDER: 'anthropic',
+    VITE_HVY_CHAT_MODEL: 'fake-chat-model',
+    VITE_HVY_TEXT_PROCESSING_PROVIDER: 'qwen',
+    VITE_HVY_TEXT_PROCESSING_MODEL: 'fake-text-model',
+  });
+  expect(getTextProcessingSettings(defaults)).toEqual({ provider: 'qwen', model: 'fake-text-model' });
+  const restored = mergeChatSettings({
+    ...defaults,
+    model: 'fake-changed-chat-model',
+    textProcessingProvider: 'openai',
+    textProcessingModel: 'fake-saved-text-model',
+  }, defaults);
+  expect(getTextProcessingSettings(restored)).toEqual({ provider: 'openai', model: 'fake-saved-text-model' });
+  expect(restored.model).toBe('fake-changed-chat-model');
+  expect(getTextProcessingSettings(mergeChatSettings({ textProcessingModel: '' }, defaults))).toBeNull();
+  expect(getTextProcessingSettings(mergeChatSettings({ textProcessingProvider: 'anthropic' }, defaults))).toBeNull();
+  expect(mergeChatSettings({ textProcessingProvider: null, textProcessingModel: null }, defaults))
+    .toMatchObject({ textProcessingProvider: null, textProcessingModel: null });
+});
+
+test('text processing does not inherit the chat provider or model', () => {
+  expect(getTextProcessingSettings({ provider: 'anthropic', model: 'fake-chat-model' }))
+    .toBeNull();
+  expect(getTextProcessingSettings(mergeChatSettings({ textProcessingProvider: 'anthropic' }, getEnvChatSettings({}))))
+    .toBeNull();
+});
+
+test('unconfigured text processing is explicitly unavailable', () => {
+  expect(getTextProcessingSettings(getEnvChatSettings({}))).toBeNull();
+  expect(getTextProcessingSettings({ provider: 'openai', model: 'fake-chat-model', textProcessingProvider: 'qwen' })).toBeNull();
+  expect(getTextProcessingSettings({ provider: 'openai', model: 'fake-chat-model', textProcessingModel: 'fake-text-model' })).toBeNull();
+});
+
+
+test('backend provider and model identifiers survive environment and host settings', () => {
+  const settings = {
+    provider: 'fake-chat-provider', model: 'fake-chat-model',
+    compactionProvider: 'fake-compact-provider', compactionModel: 'fake-compact-model',
+    textProcessingProvider: 'fake-text-provider', textProcessingModel: 'fake-text-model',
+  };
+  expect(getEnvChatSettings({
+    VITE_HVY_CHAT_PROVIDER: settings.provider,
+    VITE_HVY_CHAT_MODEL: settings.model,
+    VITE_HVY_CHAT_COMPACTION_PROVIDER: settings.compactionProvider,
+    VITE_HVY_CHAT_COMPACTION_MODEL: settings.compactionModel,
+    VITE_HVY_TEXT_PROCESSING_PROVIDER: settings.textProcessingProvider,
+    VITE_HVY_TEXT_PROCESSING_MODEL: settings.textProcessingModel,
+  })).toEqual(settings);
+  expect(mergeChatSettings(settings, getEnvChatSettings({}))).toEqual(settings);
+  expect(getTextProcessingSettings(settings)).toEqual({ provider: 'fake-text-provider', model: 'fake-text-model' });
+  expect(buildProxyChatRequest({ ...settings, mode: 'qa', messages: [], context: '' })).toMatchObject({
+    provider: 'fake-chat-provider', model: 'fake-chat-model',
+  });
+});

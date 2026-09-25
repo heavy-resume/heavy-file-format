@@ -1,6 +1,28 @@
 import type { Align, BlockSchema, TableRow, VisualBlock, VisualSection } from './types';
 import type { TextLineStyles } from '../text-line-styles';
 
+export interface TextPlaceholderDefinition {
+  name: string;
+  label: string;
+  title?: string;
+  render: (editable: boolean) => string;
+}
+
+export interface TextPlaceholderContextOptions {
+  textPlaceholders?: TextPlaceholderDefinition[];
+  omitTextPlaceholderNames?: string[];
+}
+
+export function mergeTextPlaceholders(
+  inherited: TextPlaceholderDefinition[],
+  options: TextPlaceholderContextOptions = {}
+): TextPlaceholderDefinition[] {
+  const omitted = new Set(options.omitTextPlaceholderNames ?? []);
+  const merged = new Map(inherited.filter((item) => !omitted.has(item.name)).map((item) => [item.name, item]));
+  for (const item of options.textPlaceholders ?? []) merged.set(item.name, item);
+  return [...merged.values()];
+}
+
 export interface RichToolbarOptions {
   field?: string;
   gridItemId?: string;
@@ -8,6 +30,8 @@ export interface RichToolbarOptions {
   includeDismiss?: boolean;
   includeAlign?: boolean;
   includeFillIn?: boolean;
+  includeTextAi?: boolean;
+  textPlaceholders?: TextPlaceholderDefinition[];
   align?: Align;
   currentMarkdown?: string;
   textLineStyles?: TextLineStyles;
@@ -26,7 +50,8 @@ export interface ComponentRenderHelpers {
   markdownToEditorHtml: (
     markdown: string,
     codeLanguageInputAttrs?: Record<string, string>,
-    answerGroups?: Map<number, string>
+    answerGroups?: Map<number, string>,
+    textPlaceholders?: TextPlaceholderDefinition[]
   ) => string;
   renderRichToolbar: (sectionKey: string, blockId: string, options?: RichToolbarOptions) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, parentLocked?: boolean) => string;
@@ -37,6 +62,8 @@ export interface ComponentRenderHelpers {
       container: 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
       parentBlockId: string;
       locked: boolean;
+      textPlaceholders?: TextPlaceholderDefinition[];
+      omitTextPlaceholderNames?: string[];
     }
   ) => string;
   renderEditorGridBlocks: (
@@ -45,7 +72,7 @@ export interface ComponentRenderHelpers {
     columns: number,
     parentLocked: boolean
   ) => Array<{ block: VisualBlock; html: string }>;
-  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock) => string;
+  renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, options?: TextPlaceholderContextOptions) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
   renderReaderGridBlocks: (
     section: VisualSection,
@@ -53,19 +80,23 @@ export interface ComponentRenderHelpers {
     columns: number,
     options?: ReaderBlockRenderOptions
   ) => Array<{ block: VisualBlock; html: string }>;
-  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  renderReaderBlocks: (
+    section: VisualSection,
+    blocks: VisualBlock[],
+    options?: TextPlaceholderContextOptions
+  ) => string;
   renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
   orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
   isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
-  renderTextFragment: (content: string) => string;
-  renderComponentFragment: (componentName: string, content: string, block: VisualBlock, sectionKey?: string) => string;
+  renderTextFragment: (content: string, textPlaceholders?: TextPlaceholderDefinition[]) => string;
+  renderComponentFragment: (componentName: string, content: string, block: VisualBlock, sectionKey?: string, textPlaceholders?: TextPlaceholderDefinition[]) => string;
   renderComponentOptions: (selected: string) => string;
   renderAddComponentPicker: (options: AddComponentPickerOptions) => string;
   renderComponentPlacementTarget: (options: ComponentPlacementTargetOptions) => string;
   renderOption: (value: string, selected: string) => string;
   getDocumentComponentCss: (componentName: string) => string;
-  getXrefTargetOptions: (tagFilter?: string) => XrefTargetOption[];
+  getXrefTargetOptions: (tagFilter?: string, context?: import('../xref-ops').XrefPickerContext) => XrefTargetOption[];
   isXrefTargetValid: (target: string, tagFilter?: string) => boolean;
   getEffectiveXrefTargetTagFilter?: (block: VisualBlock) => string;
   isCrossDocumentLinksEnabled?: () => boolean;
@@ -81,6 +112,7 @@ export interface ComponentRenderHelpers {
   isReusableDefinitionEditor?: () => boolean;
   isPdfDocument?: () => boolean;
   getTextLineStyles?: () => TextLineStyles;
+  getTextPlaceholders?: () => TextPlaceholderDefinition[];
 }
 
 export interface ReaderBlockRenderOptions {
@@ -94,6 +126,8 @@ export interface ReaderBlockRenderOptions {
    * document says rather than what someone happened to open while reading.
    */
   ignoreReaderSessionState?: boolean;
+  textPlaceholders?: TextPlaceholderDefinition[];
+  omitTextPlaceholderNames?: string[];
 }
 
 export interface AddComponentPickerOptions {

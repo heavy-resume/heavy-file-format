@@ -945,6 +945,7 @@ export const graphPluginFactory: HvyPluginFactory = build;
 export const graphPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(GRAPH_PLUGIN_ID),
   displayName: 'Graph',
+  mount: { placeholderHeight: '360px' },
   documentation: {
     filename: 'about-graph.txt',
     text: graphDocumentation,

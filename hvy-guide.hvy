@@ -68,7 +68,7 @@ text_line_styles:
 
  <!--hvy:text {}-->
   HVY files are structured as a main viewing pane with a companion sidebar. Sections can be moved between the main pane
-  and the sidebar. Components populate sections with content. Subsections can also be created within a section.
+  and the sidebar. Components populate sections with content. Containers group related components within a section.
   
   The application that displays the HVY is in charge of presenting the information. Unlike a standard DOCX or PDF where
   documents must map back to a page structure typically used for physical, printed pages, a HVY is about providing

@@ -1,3 +1,4 @@
+import { getDocumentRecolorStrikethrough } from '../document-typography';
 import type { Align, CarouselImage, VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 import { getImageAttachment } from '../attachments';
@@ -78,6 +79,10 @@ export function buildPdfExportDocDefinition(
       : mainContent.concat(sidebarContent);
   const background = resolved.defaults.debugPageBounds ? renderPdfDebugPageBounds(resolved.defaults.pageMargins) : undefined;
 
+  const strikethroughColor = getDocumentRecolorStrikethrough(document.meta)
+    ? getCssColorDeclarationValue(document, 'color: var(--hvy-strikethrough-color)', 'color')
+    : null;
+
   return {
     pageSize: resolved.defaults.pageSize,
     pageMargins: resolved.defaults.pageMargins,
@@ -89,10 +94,14 @@ export function buildPdfExportDocDefinition(
       lineHeight: 1.25,
     },
     styles: {
+      strikethrough: strikethroughColor && strikethroughColor.toLowerCase() !== 'currentcolor'
+        ? { color: strikethroughColor, decorationColor: strikethroughColor }
+        : {},
       documentTitle: { fontSize: 18, bold: true, margin: [0, 0, 0, 12] },
       sectionTitle: { fontSize: 14, bold: true, margin: [0, 10, 0, 4] },
       sectionTitle2: { fontSize: 12, bold: true, margin: [0, 8, 0, 3] },
       sectionTitle3: { fontSize: 11, bold: true, margin: [0, 6, 0, 3] },
+      sectionTitle4: { fontSize: 10, bold: true, margin: [0, 4, 0, 2] },
       paragraph: { margin: [0, 0, 0, 5] },
       detailHeading: { bold: true, margin: [0, 4, 0, 1] },
       detailBody: { margin: [6, 0, 0, 4] },
@@ -160,7 +169,6 @@ function renderSection(
     : layout;
   const stack: HvyPdfMakeNode[] = [];
   stack.push(...renderBlocks(document, resolved, section.blocks, childLayout));
-  stack.push(...renderSections(document, resolved, section.children, childSidebar, childLayout));
   if (stack.length === 0) {
     return null;
   }

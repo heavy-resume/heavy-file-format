@@ -142,7 +142,7 @@ function detectLineOwnerId(line: string, currentOwnerId: string | null): string 
     if (typeof payload.id === 'string' && payload.id.trim().length > 0) {
       return payload.id.trim();
     }
-    if (directivePath === '' || directivePath === 'subsection') {
+    if (directivePath === '') {
       return currentOwnerId;
     }
     return currentOwnerId;

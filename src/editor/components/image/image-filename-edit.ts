@@ -99,7 +99,6 @@ function renameSectionImageReferences(section: VisualSection, filename: string, 
       syncReusableTemplateForBlock(section.key, block.id);
     }
   });
-  section.children.forEach((child) => renameSectionImageReferences(child, filename, nextFilename));
 }
 
 function renameBlockImageReferences(block: VisualBlock, filename: string, nextFilename: string): boolean {

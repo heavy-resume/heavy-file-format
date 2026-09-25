@@ -10,6 +10,7 @@ import {
 import { getRichEditorSerializableHtml, markdownToEditorHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, removeNonTextContentFromRichEditor, turndown } from '../markdown';
 import { getCachedComponentRenderHelpers } from '../state';
 import { dismissTextToolbarForEscape, promoteTextToolbarHotkeyAction, syncTextToolbarLayout } from '../editor/components/text/text-toolbar-layout';
+import { openPluginTextAiModal } from '../editor/components/text-ai/text-ai-modal';
 import type { HvyPluginTextEditorInstance, HvyPluginTextEditorMountOptions } from './types';
 
 import '../editor/components/text/text.css';
@@ -72,6 +73,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       field: 'hvy-plugin-text-editor',
       includeAlign: options.includeAlign === true,
       includeFillIn: options.includeFillIn === true,
+      includeTextAi: true,
       align: options.align ?? 'left',
       currentMarkdown: markdown,
     });
@@ -185,7 +187,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       return;
     }
     const target = event.target instanceof Element ? event.target : null;
-    const button = target?.closest<HTMLElement>('[data-rich-action], [data-action]');
+    const button = target?.closest<HTMLElement>('[data-rich-action], [data-action], [data-text-ai]');
     if (!button || !shell.contains(button)) {
       return;
     }
@@ -201,11 +203,28 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       return;
     }
     const target = event.target instanceof Element ? event.target : null;
-    const button = target?.closest<HTMLElement>('[data-rich-action], [data-action]');
+    const button = target?.closest<HTMLElement>('[data-rich-action], [data-action], [data-text-ai]');
     if (!button || !shell.contains(button)) {
       return;
     }
     event.stopPropagation();
+    if (button.dataset.textAi === 'true') {
+      event.preventDefault();
+      openPluginTextAiModal(button, {
+        editable,
+        original: currentMarkdown,
+        isCurrent: (original) => !disabled && editable.isConnected && currentMarkdown === original,
+        apply: (output) => {
+          if (output === currentMarkdown) return;
+          currentMarkdown = output;
+          writeEditable(output);
+          options.onChange(output);
+          refreshRichToolbarState(editable);
+          syncTextToolbarLayout(shell);
+        },
+      });
+      return;
+    }
     const paragraphToolbar = button.closest<HTMLElement>('.paragraph-style-toolbar');
     if (button.dataset.action === 'open-paragraph-style-picker') {
       paragraphToolbar?.classList.add('is-picker-open');

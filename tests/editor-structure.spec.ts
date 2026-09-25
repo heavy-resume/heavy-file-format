@@ -63,7 +63,7 @@ async function useSelectionAsFillIn(page: Page): Promise<void> {
 test('expandable editor keeps stub and expanded slots unlocked without lock controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -111,7 +111,7 @@ hvy_version: 0.1
 test('expandable editor frame keeps light theme text readable under inherited white text', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 theme:
@@ -152,7 +152,7 @@ theme:
 test('text editing inside expandable uses text cursor while buttons use pointer cursor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -197,7 +197,7 @@ test('typing in expandable nested text preserves focus without reader refresh', 
   });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -237,7 +237,7 @@ hvy_version: 0.1
 test('passive empty expandable shows stub and expanded placeholders', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -260,7 +260,7 @@ hvy_version: 0.1
 test('ai xref click waits for double click edit gesture', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -292,7 +292,7 @@ hvy_version: 0.1
 test('ai mode labeled container keeps nested text editor spacing compact', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -337,7 +337,7 @@ hvy_version: 0.1
 test('xref navigation aligns a tall target top near the reader center', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -383,7 +383,7 @@ hvy_version: 0.1
 test('typing an xref title in ai mode preserves focus', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -420,7 +420,7 @@ test('typing a carousel caption in ai mode preserves focus', async ({ page }) =>
   });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -449,7 +449,7 @@ hvy_version: 0.1
 test('typing in an AI image alt dialog preserves the draft control until done', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -479,7 +479,7 @@ hvy_version: 0.1
 test('ai double click opens component menu without leaving text selected', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -500,7 +500,7 @@ hvy_version: 0.1
 test('ai placeholder text inside collapsed expandable expands before editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -602,7 +602,7 @@ test('ai sidebar skill click expands collapsed record before editing', async ({ 
 test('ai filled placeholder text does not open inline editing on click', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -630,7 +630,7 @@ test('canceling a newly added featured xref removes it without opening list edit
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('skill-xref-card');
-  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveText('Software Engineering');
+  await expect(activeEditor.locator('select[data-field="block-xref-target"] option[value="skill-reverse-engineering"]')).toHaveText('Reverse Engineering');
   await activeEditor.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(page.locator('[data-component-id="top-skills-list"]')).not.toContainText('Untitled');
@@ -646,11 +646,11 @@ test('new featured xref populates title from target defaults', async ({ page }) 
   await topSkillsList.locator('[data-action="add-component-list-item"]').click();
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
-  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveCount(1);
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-reverse-engineering"]')).toHaveCount(1);
   await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-python"]')).toHaveCount(0);
-  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-software-engineering');
+  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-reverse-engineering');
 
-  await expect(activeEditor.locator('[data-field="block-xref-title"]')).toHaveText('Software Engineering');
+  await expect(activeEditor.locator('[data-field="block-xref-title"]')).toHaveText('Reverse Engineering');
 });
 
 test('new nested resume tool xref filters targets to tools', async ({ page }) => {
@@ -662,14 +662,14 @@ test('new nested resume tool xref filters targets to tools', async ({ page }) =>
   await page.getByRole('button', { name: /Expanded/ }).first().click();
   await page.locator('[data-component-id="history-tools-technologies-list"] [data-action="add-component-list-item"]', { hasText: 'Add Tool / Tech Reference' }).click();
 
-  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]').last();
   await expect(activeEditor.locator('.editor-block-title').first()).toContainText('tool-tech-xref-card');
-  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-python"]')).toHaveCount(1);
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-c-cpp"]')).toHaveCount(1);
   await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveCount(0);
-  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('tool-python');
+  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('tool-c-cpp');
   await activeEditor.getByRole('button', { name: 'Done' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"tool-python"');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"tool-c-cpp"');
   await expect(page.locator('#rawEditor')).toContainText('reciprocal-xref-generated');
   await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"history-northwind-labs-senior-software-engineer"');
 });
@@ -677,7 +677,7 @@ test('new nested resume tool xref filters targets to tools', async ({ page }) =>
 test('xref template picker explains when no tagged targets are available', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -699,13 +699,13 @@ component_defs:
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
 
   await expect(activeEditor.locator('[data-field="block-xref-target"]')).toBeDisabled();
-  await expect(activeEditor).toContainText('No skill targets available yet.');
+  await expect(activeEditor).toContainText('No skill targets available.');
 });
 
 test('ai done on an xref without a target removes the draft xref', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -743,7 +743,7 @@ component_defs:
 test('featured xref helper script reruns after committing a featured xref', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -799,7 +799,7 @@ component_defs:
 test('ai canceling a newly added education reference removes it without opening list editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -849,7 +849,7 @@ component_defs:
 test('ai deleting an edited education reference does not open the parent list editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -887,7 +887,7 @@ component_defs:
 test('ai adding history reference inside expandable does not collapse expandable', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -964,7 +964,7 @@ test('ai mode template-created skill stays in passive reader mode', async ({ pag
 test('new tagged reusable template record gets an auto id for xref options', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -1091,7 +1091,7 @@ test('ai request popover is centered inside a narrow mobile parent', async ({ pa
 test('ai touch hint stays clear of lower right preview controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1115,7 +1115,7 @@ hvy_version: 0.1
 test('ai context menu allows native inspect gestures', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1172,7 +1172,7 @@ test('ai context menu backdrop click is not swallowed after touch double tap', a
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1186,6 +1186,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'AI' }).click();
 
   const block = page.locator('#aiReaderDocument .reader-block', { hasText: 'Touch target summary words' });
+  await expect(page.locator('.ai-view-shell')).toHaveCSS('touch-action', 'manipulation');
   await block.dispatchEvent('pointerup', {
     bubbles: true,
     pointerType: 'touch',
@@ -1231,7 +1232,7 @@ test('resume xref to sidebar record opens sidebar in viewer and ai modes', async
 test('ai expandable click waits for double click edit gesture', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1283,7 +1284,7 @@ hvy_version: 0.1
 test('nested collapsed container handles clicks without collapsing its expandable', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1344,7 +1345,7 @@ test('viewer expands singleton grouped list expandable with one click', async ({
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1383,7 +1384,7 @@ hvy_version: 0.1
 test('closing context popover does not remove an existing modal', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1423,7 +1424,7 @@ hvy_version: 0.1
 test('ai context edit focuses text before the first keystroke', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1451,7 +1452,7 @@ hvy_version: 0.1
 test('ai context editing collapsed expandable stub cancels in one step', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1527,7 +1528,7 @@ test('ai sidebar expandable hover does not cover active editor delete button', a
 test('ai context clone trims only leading paragraph style margin', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 text_line_styles:
@@ -1563,7 +1564,7 @@ text_line_styles:
 test('ai context clone preserves heading section spacing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1617,7 +1618,7 @@ hvy_version: 0.1
 test('ai context clone preserves target position above preview top', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1664,7 +1665,7 @@ hvy_version: 0.1
 test('expandable pane meta owns always show and pane css controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1704,7 +1705,7 @@ hvy_version: 0.1
   await activeBlock.locator('.expandable-part-expanded .expandable-pane-meta-button').click();
   await activeBlock.locator('[data-field="block-expandable-content-css"]').fill('padding: 0.5rem;');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('"expandableAlwaysShowStub":false');
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:expandable:stub {"css":"padding: 0.25rem;"}-->');
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->');
@@ -1713,7 +1714,7 @@ hvy_version: 0.1
 test('expandable pane meta buttons only render in advanced mode', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1750,7 +1751,7 @@ hvy_version: 0.1
 test('grid cell CSS moves into advanced-only cell meta', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1785,14 +1786,14 @@ hvy_version: 0.1
   await activeBlock.locator('.grid-cell-meta-button').click();
   await expect(activeBlock.locator('[data-field="block-grid-item-id"]')).toHaveValue('content-cell');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:grid:0 {"id":"content-cell","css":"padding: 0.5rem;"}-->');
 });
 
 test('grid cell meta paints above nested active component controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1842,7 +1843,7 @@ hvy_version: 0.1
 test('editor-only scripting maintenance section only renders in advanced mode', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1975,7 +1976,7 @@ hvy_version: 0.1
 test('script-only sections render at the bottom of the editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2023,7 +2024,7 @@ hvy_version: 0.1
 test('expandable reader toggles from the styled outer block padding', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2065,7 +2066,7 @@ hvy_version: 0.1
 test('expandable reader expansion animation does not persist after expanding', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2098,7 +2099,7 @@ hvy_version: 0.1
 test('component-list display defaults sort items into expanded virtual groups when configured', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2191,7 +2192,7 @@ hvy_version: 0.1
 test('activating a sorted component-list item preserves authored editor order', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2227,7 +2228,7 @@ hvy_version: 0.1
 test('component-list reader controls hide unavailable sort and group controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2268,7 +2269,7 @@ hvy_version: 0.1
 test('component-list default display editor hides unavailable controls', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2317,7 +2318,7 @@ hvy_version: 0.1
 test('text toolbar fill-in converts selected text to a fill-in slot', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2356,7 +2357,7 @@ hvy_version: 0.1
   await page.locator('[data-field="text-fill-in-value"]').fill('Ada Lovelace');
 
   await expect(page.locator('#editorTree h1')).toHaveText('Ada Lovelace');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Ada Lovelace');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
@@ -2365,7 +2366,7 @@ hvy_version: 0.1
 test('text toolbar fill-in converts the selected duplicate text occurrence', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2396,14 +2397,14 @@ hvy_version: 0.1
   await page.locator('.rich-editor').dispatchEvent('keyup');
   await useSelectionAsFillIn(page);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Repeat and <!-- value {"placeholder":"Repeat"} -->');
 });
 
 test('undo after browser-selected Use as Fill-in does not enter the fill-in or abort editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2446,7 +2447,7 @@ hvy_version: 0.1
 test('undo while focused in a newly converted fill-in restores rich text editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2484,7 +2485,7 @@ hvy_version: 0.1
 test('text toolbar fill-in uses selected text instead of stale placeholder', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2516,7 +2517,7 @@ hvy_version: 0.1
 
   await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
   await expect(page.locator('[data-field="text-fill-in-value"]')).toHaveAttribute('data-placeholder', 'FILL ME IN');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"FILL ME IN"');
   await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"pronunciation"');
 });
@@ -2524,7 +2525,7 @@ hvy_version: 0.1
 test('text toolbar fill-in button follows the active selection', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2558,7 +2559,7 @@ hvy_version: 0.1
 test('text toolbar fill-in button clears after the selection collapses in the same editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2611,7 +2612,7 @@ hvy_version: 0.1
 test('text toolbar fill-in preserves heading syntax when the whole heading is selected', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2638,7 +2639,7 @@ hvy_version: 0.1
   await richEditor.dispatchEvent('keyup');
   await useSelectionAsFillIn(page);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# <!-- value {"placeholder":"Name"} -->');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value {"placeholder":"# Name"} -->');
 });
@@ -2646,7 +2647,7 @@ hvy_version: 0.1
 test('text fill-in editor keeps rich text toolbar available for heading changes', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2692,14 +2693,14 @@ hvy_version: 0.1
   });
   await activeBlock.getByRole('button', { name: 'H3' }).click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('### <!-- value {"placeholder":"Role"} -->');
 });
 
 test('text fill-in preserves multiple slots while typing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2727,7 +2728,7 @@ hvy_version: 0.1
   await expect(editor).toContainText('Location: Seattle, WA');
   await expect(editor).toContainText('Target Location(s): Greater Seattle area');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('**Location:** Seattle, WA');
   await expect(page.locator('#rawEditor')).toContainText('**Target Location(s):** Greater Seattle area');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
@@ -2737,7 +2738,7 @@ hvy_version: 0.1
 test('location fill-ins keep focus while typing each value', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2770,7 +2771,7 @@ hvy_version: 0.1
 test('completed fill-in slots prune placeholder labels for remaining slots', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2789,7 +2790,7 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="location-details"] .text-fill-in-box').first().click();
   await page.locator('[data-field="text-fill-in-value"]').nth(0).fill('Seattle, WA');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"target location"');
   await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"location, target location"');
 });
@@ -2818,7 +2819,7 @@ test('resume template location fill-ins keep focus in AI view', async ({ page })
 test('single-line text fill-in keeps a compact editor height', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2841,7 +2842,7 @@ hvy_version: 0.1
 test('clicking another passive fill-in enters the new fill-in while editing one', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2870,7 +2871,7 @@ hvy_version: 0.1
   await secondFillIn.click();
   await page.keyboard.type('second value');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('first value');
   await expect(page.locator('#rawEditor')).toContainText('second value');
 });
@@ -2878,7 +2879,7 @@ hvy_version: 0.1
 test('text fill-in enter exits and modifier-enter adds a newline', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2905,14 +2906,14 @@ hvy_version: 0.1
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-field="text-fill-in-value"]:focus')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('Line one\nLine two');
 });
 
 test('cancel restores text edits made after component activation', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2943,7 +2944,7 @@ hvy_version: 0.1
   await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
 
   await page.getByRole('button', { name: 'Cancel' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Name');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
@@ -2952,7 +2953,7 @@ hvy_version: 0.1
 test('removing text fill-in keeps placeholder metadata out of document text', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -2969,7 +2970,7 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
   await page.getByRole('button', { name: 'Remove Fill-in' }).click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"Name"');
   await expect(page.locator('#rawEditor')).toContainText('#');
   await expect(page.locator('#rawEditor')).not.toContainText('# Name');
@@ -2997,7 +2998,7 @@ test('section highlight control lives in section meta next to contained', async 
 
   await metaModal.getByLabel('Highlight').check();
   await metaModal.getByRole('button', { name: 'Close' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('"highlight":true');
 });
 
@@ -3049,7 +3050,7 @@ test('active component remove button is anchored to the editor frame corner', as
 test('ancestor component exposes meta actions while editing descendants', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3073,7 +3074,7 @@ hvy_version: 0.1
 test('component template modal offers update existing, save as new, or add flavor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -3106,7 +3107,7 @@ component_defs:
   await modal.locator('#reusableNameInput').fill('skill-card-alt');
   await modal.getByRole('button', { name: 'Update Existing' }).click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toHaveValue(/name: skill-card/);
   await expect(page.locator('#rawEditor')).not.toHaveValue(/skill-card-alt/);
   await expect(page.locator('#rawEditor')).toHaveValue(/<!--hvy:skill-card \{\}-->/);
@@ -3115,7 +3116,7 @@ component_defs:
 test('component template modal can save an edited instance as a flavor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -3142,7 +3143,7 @@ component_defs:
   await modal.locator('#reusableFlavorDescriptionInput').fill('Use for emphasized skill cards.');
   await modal.getByRole('button', { name: 'Add Flavor' }).click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toHaveValue(/flavors:/);
   await expect(page.locator('#rawEditor')).toHaveValue(/name: emphasis/);
   await expect(page.locator('#rawEditor')).toHaveValue(/description: Use for emphasized skill cards\./);
@@ -3152,7 +3153,7 @@ component_defs:
 test('advanced placeholder input keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3178,7 +3179,7 @@ hvy_version: 0.1
 test('component list display keys are explicit and shared across list items', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3225,7 +3226,7 @@ hvy_version: 0.1
   await addedName.locator('xpath=following-sibling::button[@data-action="remove-block-display-key"]').click();
 
   await page.getByRole('button', { name: 'Close' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toHaveValue(/"second","sortKeys":\{"Self Rating":7\}/);
   await expect(page.locator('#rawEditor')).not.toHaveValue(/Confidence/);
 });
@@ -3233,7 +3234,7 @@ hvy_version: 0.1
 test('unfilled text fill-in renders as an editor box and blank viewer text', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3263,7 +3264,7 @@ hvy_version: 0.1
 test('editor fill-in focuses from passive click and accepts typing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3282,7 +3283,7 @@ hvy_version: 0.1
   await expect(fillIn).toBeFocused();
   await page.keyboard.type('Ada Lovelace');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Ada Lovelace');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
@@ -3290,7 +3291,7 @@ hvy_version: 0.1
 test('editor fill-in text outside the slot activates the rich text editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3317,7 +3318,7 @@ hvy_version: 0.1
 test('text fill-in commits focused DOM value before switching views', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3341,7 +3342,7 @@ hvy_version: 0.1
 
   await page.getByRole('button', { name: 'AI' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Software Engineer');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
 });
@@ -3349,7 +3350,7 @@ hvy_version: 0.1
 test('ai fill-in accepts typing in place without leaving the reader surface', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3377,7 +3378,7 @@ hvy_version: 0.1
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Editor' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Grace Hopper');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
@@ -3385,7 +3386,7 @@ hvy_version: 0.1
 test('ai fill-in text outside the slot does not activate the whole text block', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3413,7 +3414,7 @@ hvy_version: 0.1
 test('editor pullout help balloon stays when it fits beside the document body', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 reader_max_width: 12rem
@@ -3454,7 +3455,7 @@ reader_max_width: 12rem
 test('closing editor pullout help balloon does not remove an existing modal', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 reader_max_width: 12rem
@@ -3503,7 +3504,7 @@ reader_max_width: 12rem
 test('unlocking a section schema allows removing locked child fields', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3534,7 +3535,7 @@ hvy_version: 0.1
   await expect(page.locator('.editor-tree', { hasText: 'Target Location(s)' })).toHaveCount(0);
 });
 
-test('component editors do not render subsection side buttons', async ({ page }) => {
+test('component editors do not render section nesting controls', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
@@ -3543,37 +3544,10 @@ test('component editors do not render subsection side buttons', async ({ page })
   await expect(page.locator('.editor-section-head [data-action="toggle-section-location"]').first()).toBeVisible();
 });
 
-test('subsections do not render sidebar location buttons', async ({ page }) => {
-  await page.goto('/');
-
-  await page.getByRole('button', { name: 'Raw' }).click();
-  await page.locator('#rawEditor').fill(`---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"parent"}-->
-#! Parent
-
- <!--hvy:text {}-->
-  Parent body
-
-<!--hvy: {"id":"child"}-->
-## Child
-
- <!--hvy:text {}-->
-  Child body
-`);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Advanced' }).click();
-
-  await expect(page.locator('.editor-section-card:not(.editor-subsection-card) > .editor-section-head [data-action="toggle-section-location"]').first()).toBeVisible();
-  await expect(page.locator('.editor-subsection-card > .editor-section-head [data-action="toggle-section-location"]')).toHaveCount(0);
-});
-
 test('clicking a nested component-list item opens the item editor on first click', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3607,7 +3581,7 @@ hvy_version: 0.1
 test('active insert above and below controls span the editor block width', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3641,7 +3615,7 @@ hvy_version: 0.1
 test('clicking a scrolled accomplishment opens editor in place', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3717,7 +3691,7 @@ hvy_version: 0.1
 test('cancel preserves the viewport anchor across editor height changes', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3968,7 +3942,7 @@ test('AI mode Done after a minor change preserves scroll for the lower diagram d
 test('nested accomplishment cancel returns to the parent editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4006,7 +3980,7 @@ hvy_version: 0.1
 test('clicking an already revealed nested item skips activation reveal animation', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4167,7 +4141,7 @@ test('cli-created expanded history record can be closed and followed by another 
 
   await page.locator('.passive-list-add-ghost', { hasText: 'Add Job' }).first().click();
   await page.locator('.modal-panel', { hasText: 'Add History Record' }).getByRole('button', { name: 'Add', exact: true }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/<!--hvy:history-record/g) ?? []).toHaveLength(2);
 });
@@ -4175,7 +4149,7 @@ test('cli-created expanded history record can be closed and followed by another 
 test('editing a second component-list item does not overwrite the first item', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4203,7 +4177,7 @@ hvy_version: 0.1
   await expect(activeEditor).toContainText('TypeScript');
   await activeEditor.fill('Rust');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw).toContain('Python');
   expect(raw).toContain('Rust');
@@ -4233,7 +4207,7 @@ test('editing the second resume project does not duplicate it after done', async
   await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
   await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/<!--hvy:project-record/g) ?? []).toHaveLength(2);
 });
@@ -4287,7 +4261,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await expect(page.locator('#editorTree .is-reader-view-dimmed')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('"id":"locations"');
 
   await page.getByRole('button', { name: 'Viewer' }).click();
@@ -4304,7 +4278,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
 test('populated component-list hides the list component type dropdown', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4339,7 +4313,7 @@ hvy_version: 0.1
 
 test('component-list meta edits its item type and shared sort values', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -4382,14 +4356,14 @@ component_defs:
   await expect(expectedResult).toBeFocused();
 
   await componentMeta.locator('[data-modal-action="close"]').click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('label: In Progress');
 });
 
 test('component move and copy use placement boundaries', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4420,7 +4394,7 @@ hvy_version: 0.1
   await page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Beta' }).getByRole('button', { name: 'Move', exact: true }).click();
   await page.locator('[data-action="place-component"][data-placement="before"]').first().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.indexOf('Beta')).toBeLessThan(raw.indexOf('Alpha'));
   expect(raw.match(/Alpha/g)).toHaveLength(2);
@@ -4429,7 +4403,7 @@ hvy_version: 0.1
 test('canceling a pasted component removes the pasted copy', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4453,7 +4427,7 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Alpha');
   await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Cancel' }).click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(page.locator('#rawEditor')).toContainText('Alpha');
   expect((await page.locator('#rawEditor').inputValue()).match(/Alpha/g)).toHaveLength(1);
 });
@@ -4464,7 +4438,7 @@ test('undo restores a deleted component', async ({ page }) => {
   const fillerBlocks = Array.from({ length: 18 }, (_, index) => ` <!--hvy:text {"id":"filler-${index}"}-->
   Filler ${index}
 `).join('\n');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4499,7 +4473,7 @@ ${fillerBlocks}
 test('undo restores a deleted nested component', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4633,7 +4607,7 @@ ${fillerBlocks}
 test('component move and copy work between main and sidebar sections', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4668,7 +4642,7 @@ hvy_version: 0.1
   await expect(page.locator('.component-placement-target')).not.toHaveCount(0);
   await page.locator('#editorTree [data-action="place-component"][data-placement="before"]').first().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.indexOf('Side note')).toBeLessThan(raw.indexOf('Alpha'));
   expect(raw.match(/Alpha/g)).toHaveLength(2);
@@ -4679,7 +4653,7 @@ hvy_version: 0.1
 test('component placement supports grid slots', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4719,7 +4693,7 @@ hvy_version: 0.1
   await expect(page.locator('.grid-add-ghost')).toHaveCount(0);
   await page.locator('[data-placement-container="grid"][data-placement="after"]').first().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/One/g)).toHaveLength(2);
   expect(raw.indexOf('One')).toBeLessThan(raw.indexOf('Two'));
@@ -4728,7 +4702,7 @@ hvy_version: 0.1
 test('context menu paste on a grid add ghost pastes into the grid', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4767,7 +4741,7 @@ hvy_version: 0.1
   });
   await page.getByRole('button', { name: 'Paste component' }).click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/Alpha/g)).toHaveLength(2);
   expect(raw.lastIndexOf('Alpha')).toBeGreaterThan(raw.indexOf('<!--hvy:grid'));
@@ -4778,7 +4752,7 @@ hvy_version: 0.1
 test('component move and copy can place section blocks into a passive grid', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4821,7 +4795,7 @@ hvy_version: 0.1
   await expect(page.locator('[data-placement-container="grid"]').first()).toContainText('Move (in grid)');
   await page.locator('[data-placement-container="grid"][data-placement="after"]').last().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   const alphaMatches = [...raw.matchAll(/Alpha/g)].map((match) => match.index ?? -1);
   expect(alphaMatches).toHaveLength(2);
@@ -4835,7 +4809,7 @@ hvy_version: 0.1
 test('component move and copy can place section blocks into a passive container inside a grid', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4879,7 +4853,7 @@ hvy_version: 0.1
   await expect(page.locator('[data-placement-container="container"]').first()).toContainText('Move (in container)');
   await page.locator('[data-placement-container="container"][data-placement="after"]').last().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   const alphaMatches = [...raw.matchAll(/Alpha/g)].map((match) => match.index ?? -1);
   expect(alphaMatches).toHaveLength(2);
@@ -4894,7 +4868,7 @@ hvy_version: 0.1
 test('component placement supports expandable stub and content children', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4931,7 +4905,7 @@ hvy_version: 0.1
   await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(3);
   await page.locator('[data-placement-container="expandable-content"][data-placement="after"]').first().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/Skill details/g)).toHaveLength(2);
   expect(raw.indexOf('Skill details')).toBeLessThan(raw.indexOf('Skill notes'));
@@ -4940,7 +4914,7 @@ hvy_version: 0.1
 test('component placement persists while activating and opening an expandable destination', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -4977,7 +4951,7 @@ hvy_version: 0.1
   await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(2);
   await page.locator('[data-placement-container="expandable-content"][data-placement="before"]').first().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/Alpha/g)).toHaveLength(2);
   expect(raw.lastIndexOf('Alpha')).toBeGreaterThan(raw.indexOf('<!--hvy:expandable:content'));
@@ -5049,7 +5023,7 @@ hvy_version: 0.1
   await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(1);
   await page.locator('[data-placement-container="expandable-content"][data-placement="end"]').click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw).toMatch(/<!--hvy:expandable:content \{\}-->\n\n   <!--hvy:text \{"id":"details"\}-->\n    Skill details\n\n   <!--hvy:container/);
   expect(raw).toMatch(/<!--hvy:container [\s\S]*?Skill name/);
@@ -5060,7 +5034,7 @@ hvy_version: 0.1
 test('copying a custom expandable component pane enters placement mode', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
@@ -5100,7 +5074,7 @@ component_defs:
 test('component placement works inside expandable children of a locked section', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5135,7 +5109,7 @@ hvy_version: 0.1
   await expect(page.locator('[data-placement-container="section"]')).toHaveCount(0);
   await page.locator('[data-placement-container="expandable-content"][data-placement="before"]').first().click();
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.indexOf('Skill notes')).toBeLessThan(raw.indexOf('Skill details'));
 });
@@ -5153,7 +5127,7 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-up"]')).toHaveCount(1);
   await expect(activeBlock.locator('> .editor-block-head [data-action="move-block-down"]')).toHaveCount(0);
 
-  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  const sections = page.locator('.editor-section-card');
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
@@ -5168,7 +5142,7 @@ test('move arrows only render when there is an adjacent target', async ({ page }
 
 test('section up arrow skips sidebar siblings in the main section order', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5211,11 +5185,11 @@ test('section dragover previews insertion title at the target edge', async ({ pa
   await page.goto('/');
 
   await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
-  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  const sections = page.locator('.editor-section-card');
   await expect(sections).toHaveCount(2);
 
   const expectedResult = await page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll<HTMLElement>('.editor-section-card:not(.editor-subsection-card)'));
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('.editor-section-card'));
     const sourceHandle = cards[0]?.querySelector<HTMLElement>('.section-drag-handle');
     const targetCard = cards[1];
     if (!sourceHandle || !targetCard) {
@@ -5247,7 +5221,7 @@ test('section dragover previews insertion title at the target edge', async ({ pa
 test('named empty sections offer a heading ghost in editor only', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

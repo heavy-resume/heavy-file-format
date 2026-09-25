@@ -45,32 +45,7 @@
   border-radius: 8px;
   background: var(--hvy-surface-alt);
   padding: 0.4rem 0.52rem;
-  padding-left: calc(0.52rem + (var(--nav-level, 1) - 1) * 1rem);
   cursor: pointer;
-}
-
-.hvy-document .hvy-nav-item[data-level="1"] {
-  --nav-level: 1;
-}
-
-.hvy-document .hvy-nav-item[data-level="2"] {
-  --nav-level: 2;
-}
-
-.hvy-document .hvy-nav-item[data-level="3"] {
-  --nav-level: 3;
-}
-
-.hvy-document .hvy-nav-item[data-level="4"] {
-  --nav-level: 4;
-}
-
-.hvy-document .hvy-nav-item[data-level="5"] {
-  --nav-level: 5;
-}
-
-.hvy-document .hvy-nav-item[data-level="6"] {
-  --nav-level: 6;
 }
 
 .hvy-document .reader-section {

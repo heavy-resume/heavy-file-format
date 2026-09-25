@@ -24,6 +24,7 @@ export function createDefaultTextCaption(text = ''): TextCaptionPayload {
     css: 'margin: 0.5rem 0;',
     sortKeys: {},
     derivedSortKeyNames: [],
+    derivedGroupKeyNames: [],
     groupKeys: {},
     tags: '',
     description: '',

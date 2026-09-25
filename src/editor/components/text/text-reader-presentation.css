@@ -3,12 +3,11 @@
 .hvy-document .rich-editor[data-placeholder]:has(> p:only-child:empty)::before,
 .hvy-document .rich-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
   content: attr(data-placeholder);
-  position: absolute;
-  inset: 0.48rem;
   color: var(--hvy-text-muted);
   opacity: 0.72;
   pointer-events: none;
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .hvy-document .text-editor-shell {

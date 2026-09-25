@@ -10,6 +10,9 @@ import {
   orderReaderViewTargets,
 } from '../src/reader/view-filter';
 import { deserializeDocument } from '../src/serialization';
+import { initState } from '../src/state';
+import { createTestState } from './serialization-test-helpers';
+import { refreshLinkDocumentPicker } from '../src/editor/components/link-document-picker/link-document-picker';
 import { defaultBlockSchema } from '../src/document-factory';
 import { createDefaultSearchState } from '../src/search/state';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
@@ -60,7 +63,6 @@ function createSection(id: string, blocks: VisualBlock[] = []): VisualSection {
     idEditorOpen: false,
     isGhost: false,
     title: id,
-    level: 1,
     expanded: true,
     highlight: false,
     css: '',
@@ -68,7 +70,6 @@ function createSection(id: string, blocks: VisualBlock[] = []): VisualSection {
     description: '',
     location: 'main',
     blocks,
-    children: [],
   };
 }
 
@@ -217,6 +218,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
     attachments: [],
     sections: [createSection('summary', [first, second, third]), prioritySection],
   };
+  initState(createTestState(document));
   const state = {
     documentMeta: document.meta,
     documentSections: document.sections,
@@ -327,6 +329,7 @@ hvy_version: 0.1
 <!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 print("maintenance script")
 `, '.hvy');
+  initState(createTestState(document));
   const state = {
     documentMeta: document.meta,
     documentSections: document.sections,
@@ -430,6 +433,7 @@ hvy_version: 0.1
    Nested note
 `, '.hvy');
   let helpers: ComponentRenderHelpers;
+  initState(createTestState(document));
   const state = {
     documentMeta: document.meta,
     documentSections: document.sections,
@@ -519,9 +523,21 @@ hvy_version: 0.1
 
   const expectedResult = renderer.renderLinkInlineModal();
 
-  expect(expectedResult).toContain('value="#summary"');
-  expect(expectedResult).toContain('value="#outer-container"');
-  expect(expectedResult).toContain('value="#nested-note"');
+  expect(expectedResult).toContain('data-link-document-options-list="true"');
+  const optionsRoot = { innerHTML: '' };
+  const status = { textContent: '' };
+  refreshLinkDocumentPicker({
+    querySelector: (selector: string) => ({
+      '[data-link-document-options-list="true"]': optionsRoot,
+      '[data-link-document-result-status="true"]': status,
+      '[data-link-document-search="true"]': { value: '' },
+    } as Record<string, unknown>)[selector],
+  } as unknown as HTMLElement, document);
+
+  expect(optionsRoot.innerHTML).toContain('data-link-document-target="#summary"');
+  expect(optionsRoot.innerHTML).toContain('data-link-document-target="#outer-container"');
+  expect(optionsRoot.innerHTML).toContain('data-link-document-target="#nested-note"');
+  expect(status.textContent).toBe('3 targets');
 });
 
 function escapeHtml(value: string): string {

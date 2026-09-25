@@ -1,6 +1,6 @@
 import type { ProviderProxyChatRequest } from './chat-provider-payload';
 
-export type ToolProvider = 'openai' | 'anthropic' | 'qwen';
+export type ToolProvider = string;
 
 export interface ProviderToolDefinition {
   name: string;

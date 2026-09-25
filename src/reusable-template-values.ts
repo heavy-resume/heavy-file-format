@@ -1,6 +1,7 @@
 import { normalizeLinkInputValue, serializeMarkdownLinkDestination } from './link-value';
 import type { VisualBlock, VisualSection } from './editor/types';
 import { createTextFillInMarker } from './text-fill-in';
+import { inheritTemplateParagraphStyle } from './template-paragraph-styles';
 import type { ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, ReusableTemplateVariableConfig } from './types';
 
 export type ReusableTemplateVariableType = 'text' | 'block' | 'url';
@@ -145,6 +146,49 @@ export function applyReusableSectionTemplateValues(
   );
   normalizeSectionTemplatePlaceholderTextBlocks(section);
   return section;
+}
+
+/**
+ * Materialize an instance of a reusable template: apply the supplied values and resolve every
+ * remaining `{% variable %}` token as a blank value. Definitions keep their tokens; instances
+ * never do, so a variable the caller did not supply renders as a fill-in / empty field instead
+ * of leaking the literal token into the document.
+ */
+export function resolveReusableTemplateTokensInBlock(
+  block: VisualBlock,
+  definition: ComponentDefinition | ComponentTemplateFlavor | null | undefined = null,
+  values: Record<string, string> = {}
+): VisualBlock {
+  const variables = collectInstanceTemplateVariables(block, getReusableTemplateVariableConfig(definition));
+  return variables.length > 0 ? applyReusableTemplateValues(block, values, variables) : block;
+}
+
+// Instance materialization takes the variables from the tokens actually present, so flavors and
+// definition-inherited fields are covered without re-deriving them from the definition. Only the
+// declared `url` type and the label matter here; text/block affects validation, not substitution.
+function collectInstanceTemplateVariables(
+  block: VisualBlock,
+  config: Record<string, ReusableTemplateVariableConfig>
+): ReusableTemplateVariable[] {
+  const names = new Set<string>();
+  visitTemplateStrings(block, (text) => {
+    for (const match of text.matchAll(TEMPLATE_TOKEN_PATTERN)) {
+      names.add(match[1] ?? '');
+    }
+  });
+  return [...names].map((name) => ({
+    name,
+    type: config[name]?.type ?? 'text',
+    label: config[name]?.label || humanizeTemplateVariableName(name),
+  }));
+}
+
+export function resolveReusableTemplateTokensInSchema(
+  schema: VisualBlock['schema'],
+  definition: ComponentDefinition | ComponentTemplateFlavor | null | undefined = null,
+  values: Record<string, string> = {}
+): void {
+  resolveReusableTemplateTokensInBlock({ id: '', text: '', schema, schemaMode: false }, definition, values);
 }
 
 function normalizeTemplateLinkValues(values: Record<string, string>, variables: ReusableTemplateVariable[]): Record<string, string> {
@@ -323,7 +367,6 @@ function replaceTemplateStringsInSection(
     ? replaceTemplateStrings(section.templateKey, values, seen) as string
     : section.templateKey;
   section.blocks.forEach((block) => replaceTemplateStringsInBlock(block, values, labels, seen, urlVariables));
-  section.children.forEach((child) => replaceTemplateStringsInSection(child, values, labels, seen, urlVariables));
 }
 
 function getReusableTemplateVariableLabelMap(variables: ReusableTemplateVariable[]): Record<string, string> {
@@ -448,7 +491,7 @@ function replaceTemplateString(
   urlVariables: Set<string>
 ): { text: string; fillIn: boolean } {
   let fillIn = false;
-  const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string, rawFilter: ReusableTemplateFilter | undefined) => {
+  const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string, rawFilter: ReusableTemplateFilter | undefined, offset: number) => {
     const value = values[name] ?? '';
     if (rawFilter === 'isempty') {
       return value.trim().length === 0 ? 'yes' : 'no';
@@ -458,7 +501,7 @@ function replaceTemplateString(
       fillIn = true;
       return createTextFillInMarker(Object.prototype.hasOwnProperty.call(labels, name) ? labels[name] || humanizeTemplateVariableName(name) : humanizeTemplateVariableName(name));
     }
-    return value;
+    return blankAsFillIn ? inheritTemplateParagraphStyle(text, offset, value) : value;
   });
   return { text: replaced, fillIn };
 }
@@ -506,7 +549,6 @@ function normalizeTemplatePlaceholderTextBlocks(block: VisualBlock): void {
 
 function normalizeSectionTemplatePlaceholderTextBlocks(section: VisualSection): void {
   section.blocks.forEach(normalizeTemplatePlaceholderTextBlocks);
-  section.children.forEach(normalizeSectionTemplatePlaceholderTextBlocks);
 }
 
 function hasVisibleMarkdownText(text: string): boolean {

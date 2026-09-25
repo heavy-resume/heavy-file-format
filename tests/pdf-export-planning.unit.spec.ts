@@ -35,14 +35,14 @@ function createPluginBlock(id: string, plugin = 'example.plugin') {
 }
 
 function createPlanningDocument(): VisualDocument {
-  const summary = createEmptySection(1, '');
+  const summary = createEmptySection('');
   summary.key = 'section-summary';
   summary.customId = 'summary';
   summary.title = 'Summary';
   summary.tags = 'primary';
   summary.blocks = [createTextBlock('intro', 'Intro text', 'script-keep')];
 
-  const plugins = createEmptySection(1, '');
+  const plugins = createEmptySection('');
   plugins.key = 'section-plugins';
   plugins.customId = 'plugins';
   plugins.title = 'Plugins';

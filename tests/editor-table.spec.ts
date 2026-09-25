@@ -348,10 +348,12 @@ hvy_version: 0.1
   expect(expectedResult.buttonCellCenterDeltaY).toBeLessThanOrEqual(1);
 });
 
-test('right-clicking and double-clicking static table grabbers inserts rows and columns on either side', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Raw', exact: true }).click();
-  await page.locator('#rawEditor').fill(`---
+for (const preview of ['Full', 'Phone 390']) {
+  test(`right-clicking and double-clicking static table grabbers inserts rows and columns on either side (${preview})`, async ({ page }) => {
+    test.setTimeout(5000);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Raw', exact: true }).click();
+    await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
 
@@ -360,44 +362,59 @@ hvy_version: 0.1
 
 <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]}]}-->
 `);
-  await page.getByRole('button', { name: 'Apply', exact: true }).click();
-  await page.getByRole('button', { name: 'Basic', exact: true }).click();
-  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
+    await page.getByRole('button', { name: 'Basic', exact: true }).click();
+    await page.getByRole('button', { name: preview, exact: true }).click();
+    await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
 
-  // BEFORE: the table has its two original rows and columns, with no insertion menu open.
-  await expect(page.locator('[data-field="table-cell"]')).toHaveCount(4);
-  await expect(page.locator('[data-field="table-column"]')).toHaveCount(2);
-  await expect(page.locator('.table-grabber-insert-popover:not([hidden])')).toHaveCount(0);
+    // BEFORE: the table has its two original rows and columns, with no insertion menu open.
+    await expect(page.locator('[data-field="table-cell"]')).toHaveCount(4);
+    await expect(page.locator('[data-field="table-column"]')).toHaveCount(2);
+    await expect(page.locator('.table-grabber-insert-popover:not([hidden])')).toHaveCount(0);
 
-  // ACTION: right-click the second row grabber to open its insertion menu.
-  await page.locator('[data-drag-handle="table-row"][data-row-index="1"]').click({ button: 'right' });
-  const rowPopover = page.locator('.table-grabber-insert-popover:not([hidden])');
-  await expect(rowPopover).toBeVisible();
-  await expect(rowPopover.getByRole('menuitem')).toHaveText(['Insert before', 'Insert after']);
-  await page.keyboard.press('Escape');
-  await expect(rowPopover).toHaveCount(0);
-  await expect(page.locator('[data-drag-handle="table-row"][data-row-index="1"]')).toBeFocused();
-  await page.locator('[data-drag-handle="table-row"][data-row-index="1"]').click({ button: 'right' });
-  await rowPopover.getByRole('menuitem', { name: 'Insert before' }).click();
+    // ACTION: right-click the second row grabber to open its insertion menu.
+    await page.locator('[data-drag-handle="table-row"][data-row-index="1"]').click({ button: 'right' });
+    const rowPopover = page.locator('.table-grabber-insert-popover:not([hidden])');
+    await expect(rowPopover).toBeVisible();
+    await expect(rowPopover.getByRole('menuitem')).toHaveText(['Insert before', 'Insert after']);
+    // EXPECTED RESULT: both complete buttons are hit-testable and contained in the preview.
+    expect(await rowPopover.evaluate((menu) => {
+      const bounds = menu.closest('.editor-shell')!.getBoundingClientRect();
+      const rect = menu.getBoundingClientRect();
+      return {
+        outside: [rect.left < bounds.left, rect.right > bounds.right, rect.top < bounds.top, rect.bottom > bounds.bottom],
+        blocked: [...menu.querySelectorAll('button')].map((button) => {
+          const box = button.getBoundingClientRect();
+          return [box.top + 2, box.bottom - 2].map((y) =>
+            !button.contains(document.elementFromPoint(box.left + box.width / 2, y)));
+        }),
+      };
+    })).toEqual({ outside: [false, false, false, false], blocked: [[false, false], [false, false]] });
+    await page.keyboard.press('Escape');
+    await expect(rowPopover).toHaveCount(0);
+    await expect(page.locator('[data-drag-handle="table-row"][data-row-index="1"]')).toBeFocused();
+    await page.locator('[data-drag-handle="table-row"][data-row-index="1"]').click({ button: 'right' });
+    await rowPopover.getByRole('menuitem', { name: 'Insert before' }).click();
 
-  await page.locator('[data-drag-handle="table-column"][data-column-index="0"]').click({ button: 'right' });
-  await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert after' }).click();
+    await page.locator('[data-drag-handle="table-column"][data-column-index="0"]').click({ button: 'right' });
+    await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert after' }).click();
 
-  // AFTER: blank entries were inserted at the requested indexes without displacing existing values.
-  await expect(page.locator('[data-field="table-column"]')).toHaveText(['Role', 'Column 3', 'Scope']);
-  await expect(page.locator('[data-field="table-cell"]')).toHaveCount(9);
-  await expect(page.locator('[data-field="table-cell"][data-row-index="0"]')).toHaveText(['Alpha', '', 'Open']);
-  await expect(page.locator('[data-field="table-cell"][data-row-index="1"]')).toHaveText(['', '', '']);
-  await expect(page.locator('[data-field="table-cell"][data-row-index="2"]')).toHaveText(['Beta', '', 'Closed']);
+    // AFTER: blank entries were inserted at the requested indexes without displacing existing values.
+    await expect(page.locator('[data-field="table-column"]')).toHaveText(['Role', 'Column 3', 'Scope']);
+    await expect(page.locator('[data-field="table-cell"]')).toHaveCount(9);
+    await expect(page.locator('[data-field="table-cell"][data-row-index="0"]')).toHaveText(['Alpha', '', 'Open']);
+    await expect(page.locator('[data-field="table-cell"][data-row-index="1"]')).toHaveText(['', '', '']);
+    await expect(page.locator('[data-field="table-cell"][data-row-index="2"]')).toHaveText(['Beta', '', 'Closed']);
 
-  // ADJACENT: double-click still opens the same menu for either kind of grabber.
-  await page.locator('[data-drag-handle="table-row"][data-row-index="2"]').dblclick();
-  await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert after' }).click();
-  await page.locator('[data-drag-handle="table-column"][data-column-index="0"]').dblclick();
-  await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert before' }).click();
-  await expect(page.locator('[data-field="table-column"]')).toHaveText(['Column 4', 'Role', 'Column 3', 'Scope']);
-  await expect(page.locator('[data-field="table-cell"]')).toHaveCount(16);
-});
+    // ADJACENT: double-click still opens the same menu for either kind of grabber.
+    await page.locator('[data-drag-handle="table-row"][data-row-index="2"]').dblclick();
+    await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert after' }).click();
+    await page.locator('[data-drag-handle="table-column"][data-column-index="0"]').dblclick();
+    await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert before' }).click();
+    await expect(page.locator('[data-field="table-column"]')).toHaveText(['Column 4', 'Role', 'Column 3', 'Scope']);
+    await expect(page.locator('[data-field="table-cell"]')).toHaveCount(16);
+  });
+}
 
 test('table row drag previews matching before or after insertion edges without a custom cursor ghost', async ({ page }) => {
   await page.goto('/');

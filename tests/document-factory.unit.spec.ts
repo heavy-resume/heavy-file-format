@@ -28,7 +28,7 @@ test('createEmptyBlock centers image components by default', () => {
 });
 
 test('createEmptySectionWithMeta uses document section contained default', () => {
-  const expectedResult = createEmptySectionWithMeta(1, '', false, {
+  const expectedResult = createEmptySectionWithMeta('', false, {
     section_defaults: {
       contained: false,
     },

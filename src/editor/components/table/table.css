@@ -362,11 +362,15 @@
 .hvy-document .table-grabber-insert-popover {
   position: absolute;
   z-index: 45;
-  top: calc(100% + 0.3rem);
-  left: 0;
+  inset: auto;
+  margin: 0;
   display: grid;
   width: max-content;
-  min-width: 8.5rem;
+  height: max-content;
+  align-content: start;
+  min-width: min(8.5rem, 100%);
+  box-sizing: border-box;
+  overflow: auto;
   gap: 0.2rem;
   padding: 0.3rem;
   border: 1px solid var(--hvy-border-translucent);

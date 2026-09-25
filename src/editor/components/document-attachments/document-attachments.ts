@@ -19,10 +19,12 @@ import {
   type UserFileAttachmentCategory,
 } from '../../../document-attachments';
 import { performUserFileAttachmentAction } from '../../../document-attachment-actions';
+import { deleteUnusedEmbeddedFiles, findUnusedEmbeddedFiles, type UnusedEmbeddedFile } from '../../../attachment-cleanup';
 import { runUserFileAttachmentHistoryCommand } from '../../../attachment-history-controller';
 import { captureHistoryStackState, recordHistory, restoreHistoryStackState } from '../../../history';
 import { closeIcon, plusIcon } from '../../../icons';
-import { getRenderApp, state } from '../../../state';
+import { getActiveStateRuntime, getRenderApp, runWithStateRuntimeAsync, state } from '../../../state';
+import { hydrateHostAttachmentDescriptors } from '../../../attachment-store';
 import { openRemoveConfirmationModal } from '../../../bind/handlers/remove-confirmation-modal';
 import type { VisualDocument } from '../../../types';
 import { renderDeleteControl } from '../delete-control/delete-control';
@@ -39,6 +41,7 @@ export function renderDocumentAttachmentManager(
   helpers: AttachmentManagerRenderHelpers,
 ): string {
   const attachments = listUserFileAttachments(document);
+  const unusedFiles = findUnusedEmbeddedFiles(document);
   const availableCategories = new Set(attachments.map((attachment) => getUserFileAttachmentCategory(attachment.mediaType)));
   const filters = ([
     { value: 'pdf', label: 'PDF' },
@@ -55,11 +58,14 @@ export function renderDocumentAttachmentManager(
         <strong>Attachments</strong>
         <span>${attachments.length} file${attachments.length === 1 ? '' : 's'}</span>
       </div>
-      <label class="hvy-button secondary document-attachment-add">
-        ${plusIcon()}
-        <span>Add files</span>
-        <input type="file" multiple data-document-attachment-upload="true" />
-      </label>
+      <div class="document-attachment-head-actions">
+        <button type="button" class="hvy-button ghost document-attachment-purge" data-document-attachment-purge="true">Remove unused${unusedFiles.length > 0 ? ` (${unusedFiles.length})` : ''}</button>
+        <label class="hvy-button secondary document-attachment-add">
+          ${plusIcon()}
+          <span>Add files</span>
+          <input type="file" multiple data-document-attachment-upload="true" />
+        </label>
+      </div>
     </div>
     <p class="document-attachment-manager-help">Files live with this document and can be linked from text by name.</p>
     <div class="document-attachment-dropzone" data-document-attachment-dropzone="true" tabindex="0">
@@ -116,6 +122,12 @@ export function bindDocumentAttachmentManager(app: HTMLElement): void {
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const purge = target.closest<HTMLButtonElement>('[data-document-attachment-purge="true"]');
+    if (purge) {
+      const unused = findUnusedEmbeddedFiles(state.document);
+      openUnusedAttachmentReview(app, unused);
+      return;
+    }
     const filter = target.closest<HTMLButtonElement>('[data-document-attachment-filter]');
     if (filter) {
       const manager = filter.closest<HTMLElement>('[data-document-attachment-manager="true"]');
@@ -170,6 +182,90 @@ export function bindDocumentAttachmentManager(app: HTMLElement): void {
     event.stopImmediatePropagation();
     openAttachmentDropConfirmation(app, files);
   });
+}
+
+export async function reviewUnusedEmbeddedFiles(app: HTMLElement): Promise<void> {
+  const runtime = getActiveStateRuntime();
+  const document = state.document;
+  await hydrateHostAttachmentDescriptors(document, state.attachmentHost);
+  const unused = findUnusedEmbeddedFiles(document);
+  if (!unused.length) return;
+  await new Promise<void>((resolve, reject) => {
+    openUnusedAttachmentReview(app, unused, (remove) => {
+      if (!remove) { resolve(); return; }
+      void runWithStateRuntimeAsync(runtime, () => purgeUnusedAttachments(app, unused, true)).then(resolve, reject);
+    });
+  });
+}
+
+function openUnusedAttachmentReview(app: HTMLElement, unused: UnusedEmbeddedFile[], onDecision?: (remove: boolean) => void): void {
+  app.querySelector('.document-attachment-purge-modal-root')?.remove();
+  const root = document.createElement('div');
+  root.className = 'modal-root document-attachment-purge-modal-root';
+  root.innerHTML = `<div class="modal-overlay" data-document-attachment-purge-action="cancel"></div>
+    <section class="modal-panel document-attachment-purge-modal" role="dialog" aria-modal="true" aria-labelledby="documentAttachmentPurgeTitle">
+      <div class="modal-head">
+        <div><h3 id="documentAttachmentPurgeTitle">Remove unused files?</h3><p>${unused.length} embedded file${unused.length === 1 ? '' : 's'} will be deleted.</p></div>
+        <button type="button" class="ghost document-attachment-purge-close" data-document-attachment-purge-action="cancel" aria-label="Cancel removing unused files">${closeIcon()}</button>
+      </div>
+      <div class="document-attachment-purge-list${unused.length === 0 ? ' is-empty' : ''}" role="list" aria-label="Unused embedded files">
+        ${unused.length === 0
+          ? '<div class="document-attachment-purge-empty">No unused embedded files were found.</div>'
+          : unused.map((attachment) => renderUnusedAttachmentReviewRow(attachment)).join('')}
+      </div>
+      <div class="modal-head-actions document-attachment-purge-actions">
+        <button type="button" class="ghost" data-document-attachment-purge-action="cancel">${onDecision ? 'Ignore and save' : 'Cancel'}</button>
+        <button type="button" class="danger" data-document-attachment-purge-action="delete"${unused.length === 0 ? ' disabled' : ''}>Delete ${unused.length} file${unused.length === 1 ? '' : 's'}</button>
+      </div>
+    </section>`;
+  root.addEventListener('click', (event) => {
+    const action = (event.target as HTMLElement).closest<HTMLElement>('[data-document-attachment-purge-action]')?.dataset.documentAttachmentPurgeAction;
+    if (!action) return;
+    event.preventDefault();
+    root.remove();
+    if (onDecision) onDecision(action === 'delete');
+    else if (action === 'delete') void purgeUnusedAttachments(app, unused);
+  });
+  root.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    root.remove();
+    onDecision?.(false);
+  });
+  (onDecision ? app : app.querySelector<HTMLElement>('.document-meta-pane') ?? app).append(root);
+  root.querySelector<HTMLButtonElement>('[data-document-attachment-purge-action="cancel"]')?.focus();
+}
+
+function renderUnusedAttachmentReviewRow(attachment: UnusedEmbeddedFile): string {
+  const metaName = typeof attachment.meta.name === 'string' ? attachment.meta.name.trim() : '';
+  const metaFilename = typeof attachment.meta.filename === 'string' ? attachment.meta.filename.trim() : '';
+  const fallbackName = attachment.id.includes(':') ? attachment.id.slice(attachment.id.indexOf(':') + 1) : attachment.id;
+  const name = metaName || metaFilename || fallbackName;
+  const kind = attachment.kind === 'document-file' ? 'Attachment' : attachment.kind === 'model-3d' ? '3D model' : 'Image';
+  return `<article class="document-attachment-purge-row" role="listitem">
+    <div class="document-attachment-kind is-${attachment.kind === 'document-file' ? 'other' : attachment.kind}">${attachmentTypeIcon(attachment.kind === 'image' ? 'image' : 'other')}<span>${escapeHtmlText(kind)}</span></div>
+    <div><strong title="${escapeAttributeText(name)}">${escapeHtmlText(name)}</strong><span>${escapeHtmlText(kind)} · ${formatUserFileAttachmentByteLength(attachment.length)}</span></div>
+  </article>`;
+}
+
+async function purgeUnusedAttachments(app: HTMLElement, unused: UnusedEmbeddedFile[], propagateError = false): Promise<void> {
+  try {
+    await runUserFileAttachmentHistoryCommand({
+      label: 'Remove unused embedded files',
+      reason: 'Remove unused embedded files',
+      document: state.document,
+      host: state.attachmentHost,
+      affectedIds: unused.map((entry) => entry.id),
+      recordBefore: () => recordHistory(undefined, { notify: false }),
+      captureHistoryState: captureHistoryStackState,
+      rollbackHistory: restoreHistoryStackState,
+      execute: () => deleteUnusedEmbeddedFiles(state.document, unused, state.attachmentHost),
+    });
+    getRenderApp()();
+  } catch (error) {
+    if (propagateError) throw error;
+    setAttachmentManagerStatus(app, attachmentErrorMessage(error));
+  }
 }
 
 function renderAttachmentRow(

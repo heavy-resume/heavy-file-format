@@ -1,0 +1,33 @@
+3D Model plugin (hvy.model-3d)
+
+Renders an interactive 3D model whose bytes are stored in the HVY tail
+attachment named model-3d:<modelFile>. The attachment is the only model source;
+the plugin never fetches a model over the network.
+
+pluginConfig fields:
+  modelFile     attachment filename, e.g. "bracket.stl". Required to render.
+  mediaType     advisory media type recorded on the attachment.
+  title         accessible name for the viewer.
+  height        viewer height in CSS pixels, clamped to 160-1200.
+  showGrid      draw a ground grid using the active theme's border colors.
+  autoRotate    slowly orbit the camera until the reader interacts.
+  wireframe     render mesh formats as wireframe.
+  allowDownload show the download button that saves the attached file.
+
+Supported formats are the pure-JavaScript three.js loaders: .glb, .gltf, .obj,
+.stl, .ply, .fbx, .dae, .3mf, .amf, .vtk, .vtp, .pcd, and .xyz. Formats that
+require a WebAssembly decoder, including Draco-compressed glTF, KTX2 textures,
+and STEP/IGES, are not supported and report an error rather than rendering
+partially.
+
+Textures work when they travel inside the model file: a .glb with images packed
+into its buffer views, or any format using data: URIs, renders fully textured.
+
+Textures that live in separate files do not load. Models referencing external
+textures or buffers by URL render without them, and .obj with a companion .mtl
+renders with the default surface. Clients MUST NOT fetch model-referenced URLs,
+because the attached file is untrusted content and fetching would let it drive
+outbound requests from the reader.
+
+Readers should treat attachment bytes as untrusted, cap accepted model size,
+and release the WebGL context when the component unmounts.

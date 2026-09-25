@@ -30,7 +30,7 @@ async function openNestedGridTextEditor(
   answerText = 'Expected result'
 ): Promise<{ activeTextBlock: Locator; editor: Locator }> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -545,7 +545,7 @@ test('down left up navigation stays inside answer content and returns to the pre
 
 test('enter at the start of a radio label inserts a line without splitting the answer row', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -675,7 +675,7 @@ test('empty toolbar answer rows keep line geometry and survive radio conversion 
     (row as HTMLElement).innerText ?? ''
   ).replaceAll('\u200b', '').trim()));
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const sourceText = await page.locator('#rawEditor').inputValue();
   expect({
     emptyRowHasLineHeight,
@@ -692,7 +692,7 @@ test('empty toolbar answer rows keep line geometry and survive radio conversion 
 
 test('a checkbox added to a new empty text component consumes the placeholder line', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -707,6 +707,10 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
   await page.locator('.editor-block-passive', { hasText: 'Existing' }).click();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
+  // The collapse animation moves the picker anchor; finish it before opening
+  // the menu so this test exercises checkbox insertion in the settled layout.
+  await expect.poll(() => page.locator('.editor-block-passive', { hasText: 'Existing' })
+    .evaluate((node) => node.getAnimations().length)).toBe(0);
   await page.getByRole('button', { name: 'Section component type' }).click();
   await page.getByRole('button', { name: 'Text multipurpose' }).click();
 

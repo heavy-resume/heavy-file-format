@@ -7,6 +7,12 @@
   padding-inline-end: 0.65rem;
   border-inline-end: 1px solid var(--hvy-border-input);
 }
+.hvy-document .rich-toolbar [data-text-ai='true'] .hvy-ui-icon-sparkles {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
+  stroke: none;
+}
 .hvy-document .modal-panel.text-ai-modal {
   width: min(30rem, calc(100% - 2rem));
   display: flex;

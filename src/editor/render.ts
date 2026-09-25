@@ -56,7 +56,7 @@ import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugin
 import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
 import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
-import { closeIcon, plusIcon, wrenchIcon } from '../icons';
+import { closeIcon, plusIcon, sparklesIcon, wrenchIcon } from '../icons';
 import { getEmptySectionHeadingLevel } from '../section-heading-memory';
 import { getDocumentParagraphSpacing, getDocumentRecolorStrikethrough } from '../document-typography';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
@@ -1458,7 +1458,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${(options?.textPlaceholders ?? []).map((placeholder) => `<button type="button" class="icon-button ghost" data-rich-action="text-placeholder" data-text-placeholder-name="${deps.escapeAttr(placeholder.name)}" ${richButtonAttrs} aria-label="${deps.escapeAttr(placeholder.label)}" title="${deps.escapeAttr(placeholder.title ?? placeholder.label)}"><span class="toolbar-icon text-placeholder-toolbar-icon" aria-hidden="true">${placeholder.render(true)}</span></button>`).join('')}
         </div>
         ${textLineStyleControls}
-        ${options?.includeTextAi ? `<div class="text-ai-toolbar-segment"><button type="button" class="ghost icon-button" data-text-ai="true" ${richButtonAttrs} aria-label="Process with AI" title="Process with AI">✨</button></div>` : ''}
+        ${options?.includeTextAi ? `<div class="text-ai-toolbar-segment"><button type="button" class="ghost icon-button" data-text-ai="true" ${richButtonAttrs} aria-label="Process with AI" title="Process with AI">${sparklesIcon()}</button></div>` : ''}
       </div>
     `;
   }

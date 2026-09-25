@@ -5568,6 +5568,40 @@ test('section template dropdown uses themed text when a light paper palette foll
   await expect(page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"]')).toHaveCSS('color', expectedResult);
 });
 
+test('search option controls use themed colors across palettes and color modes', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.search-launcher').click();
+
+  for (const paletteId of ['paper', 'mocha', 'petrichor', 'spring', 'ufo', 'black-widow']) {
+    for (const darkMode of [false, true]) {
+      const expectedResult = await page.locator('#app').evaluate(async (root, { paletteId, darkMode }) => {
+        const { state } = await import('/src/state.ts');
+        const { applyTheme } = await import('/src/theme.ts');
+        state.paletteOverrideId = paletteId;
+        applyTheme();
+        root.classList.toggle('theme-dark', darkMode);
+        const rootStyle = getComputedStyle(root);
+        const probe = document.createElement('span');
+        probe.style.color = rootStyle.getPropertyValue('--hvy-text');
+        probe.style.borderColor = rootStyle.getPropertyValue('--hvy-border-input');
+        root.append(probe);
+        const probeStyle = getComputedStyle(probe);
+        const result = {
+          text: probeStyle.color,
+          checkboxBorder: probeStyle.borderColor,
+        };
+        probe.remove();
+        return result;
+      }, { paletteId, darkMode });
+
+      await expect(page.locator('.search-category-toggle').first()).toHaveCSS('color', expectedResult.text);
+      await expect(page.locator('.search-switch input')).toHaveCSS('appearance', 'none');
+      await expect(page.locator('.search-switch input')).toHaveCSS('border-color', expectedResult.checkboxBorder);
+      await expect(page.locator('.search-switch input')).not.toHaveCSS('background-image', 'none');
+    }
+  }
+});
+
 test('document meta exposes whether a section template allows multiple sections per document', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);

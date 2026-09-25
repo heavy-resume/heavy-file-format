@@ -104,6 +104,13 @@ export function wrenchIcon(): string {
   </svg>`;
 }
 
+export function sparklesIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-sparkles" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 2.5c.65 4.35 2.15 5.85 6.5 6.5-4.35.65-5.85 2.15-6.5 6.5C11.35 11.15 9.85 9.65 5.5 9 9.85 8.35 11.35 6.85 12 2.5Z" />
+    <path d="M19 14.5c.3 2.05.95 2.7 3 3-2.05.3-2.7.95-3 3-.3-2.05-.95-2.7-3-3 2.05-.3 2.7-.95 3-3ZM4.5 3c.25 1.7.8 2.25 2.5 2.5-1.7.25-2.25.8-2.5 2.5C4.25 6.3 3.7 5.75 2 5.5 3.7 5.25 4.25 4.7 4.5 3Z" />
+  </svg>`;
+}
+
 export function componentLocationIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-component-location" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5" />

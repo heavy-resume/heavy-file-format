@@ -190,3 +190,34 @@ test('AI is first inside the surrounding brackets and disappears when expanded',
   await expect(toolbar).toHaveClass(/is-text-toolbar-expanded/);
   await expect(toolbar.locator('[data-text-ai]')).toBeHidden();
 });
+
+test('AI toolbar action uses a visible themed SVG without changing the button surface', async ({ page }) => {
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  const aiButton = page.getByRole('button', { name: 'Process with AI', exact: true });
+
+  for (const paletteId of ['paper', 'mocha', 'petrichor', 'spring', 'ufo', 'black-widow']) {
+    const expectedText = await page.locator('#app').evaluate(async (root, paletteId) => {
+      const { state } = await import('/src/state.ts');
+      const { applyTheme } = await import('/src/theme.ts');
+      state.paletteOverrideId = paletteId;
+      applyTheme();
+      const rootStyle = getComputedStyle(root);
+      const probe = document.createElement('span');
+      probe.style.color = rootStyle.getPropertyValue('--hvy-text');
+      root.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    }, paletteId);
+
+    const neighboringButton = page.locator('.text-toolbar-compact-actions > button').first();
+    const neighboringSurface = await neighboringButton.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return { background: style.backgroundColor, border: style.borderColor };
+    });
+    await expect(aiButton).toHaveCSS('background-color', neighboringSurface.background);
+    await expect(aiButton).toHaveCSS('border-color', neighboringSurface.border);
+    await expect(aiButton).toHaveCSS('color', expectedText);
+    await expect(aiButton.locator('.hvy-ui-icon-sparkles')).toHaveCount(1);
+  }
+});

@@ -1,4 +1,4 @@
-import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getRenderApp } from './state';
+import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getActiveStateRuntime, getRenderApp, runWithStateRuntime, type StateRuntime } from './state';
 import { debugMeasure } from './utils';
 import type { DocumentAttachment, VisualDocument } from './types';
 import { saveSessionState } from './state-persistence';
@@ -32,6 +32,7 @@ import { navigateReusableDefinitionHistory, recordReusableDefinitionHistory } fr
 import {
   prepareHistoryViewportTransition,
 } from './history-viewport-transition';
+import { EDITOR_INPUT_IDLE_MS } from './editor-input-timing';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -87,6 +88,18 @@ let databaseAttachmentChangedSinceHistory = false;
 const editorContextBeforeInput = new WeakMap<HTMLElement, HistoryEditorContext>();
 const editorContextAfterInput = new WeakMap<VisualBlock, HistoryEditorContext>();
 const standaloneEditorContextAfterInput = new WeakMap<VisualDocument, HistoryEditorContext>();
+
+interface PendingInputHistory {
+  changeSource: ReturnType<typeof inferDocumentChangeSource>;
+  document: VisualDocument;
+  endEditorContext: HistoryEditorContext | null;
+  group: string;
+  notify: boolean;
+  startEditorContext: HistoryEditorContext | null;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const pendingInputHistories = new WeakMap<StateRuntime, PendingInputHistory>();
 
 type ActiveEditorRestoreState = Pick<AppState,
   | 'activeEditorBlock'
@@ -160,6 +173,7 @@ export function ensureHistoryInitialized(): void {
 }
 
 export function recordHistory(group?: string, options: { notify?: boolean } = {}): void {
+  flushPendingInputHistory();
   if (state.isRestoring) {
     return;
   }
@@ -234,6 +248,82 @@ export function recordHistory(group?: string, options: { notify?: boolean } = {}
   if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
 }
 
+export function recordInputHistory(group: string, options: { notify?: boolean } = {}): void {
+  if (state.isRestoring) {
+    return;
+  }
+  if (state.reusableDefinitionEditModal || isQueuedDatabaseHistoryCommandActive()) {
+    recordHistory(group, options);
+    return;
+  }
+  markKeywordChatContextDocumentChanged(state.document);
+  invalidateHvyCliSessionVirtualFileSystem(state.cliSession);
+  const changeSource = inferDocumentChangeSource(group);
+  const contextBeforeInput = consumeHistoryEditorContextBeforeInput();
+  const contextAfterInput = captureHistoryEditorContext();
+  const editorContext = contextBeforeInput ?? contextAfterInput;
+  ensureHistoryInitialized();
+
+  const runtime = getActiveStateRuntime();
+  const pending = pendingInputHistories.get(runtime);
+  if (pending && (pending.document !== state.document || pending.group !== group)) {
+    flushPendingInputHistoryForRuntime(runtime);
+  } else if (pending) {
+    clearTimeout(pending.timer);
+  }
+  pendingInputHistories.set(runtime, {
+    changeSource,
+    document: state.document,
+    endEditorContext: pending?.document === state.document && pending.group === group
+      ? pending.endEditorContext
+      : editorContext,
+    group,
+    notify: options.notify !== false,
+    startEditorContext: pending?.document === state.document && pending.group === group
+      ? pending.startEditorContext
+      : editorContext,
+    timer: setTimeout(() => {
+      runWithStateRuntime(runtime, () => flushPendingInputHistoryForRuntime(runtime));
+    }, EDITOR_INPUT_IDLE_MS),
+  });
+  state.future = [];
+}
+
+export function updatePendingInputHistoryContext(): void {
+  const pending = pendingInputHistories.get(getActiveStateRuntime());
+  if (!pending || pending.document !== state.document) {
+    return;
+  }
+  pending.endEditorContext = captureHistoryEditorContext() ?? pending.endEditorContext;
+}
+
+export function flushPendingInputHistory(): void {
+  flushPendingInputHistoryForRuntime(getActiveStateRuntime());
+}
+
+function flushPendingInputHistoryForRuntime(runtime: StateRuntime): void {
+  const pending = pendingInputHistories.get(runtime);
+  if (!pending) {
+    return;
+  }
+  clearTimeout(pending.timer);
+  pendingInputHistories.delete(runtime);
+  if (state.isRestoring || pending.document !== state.document) {
+    return;
+  }
+  const snap = snapshotState();
+  if (getLastHistorySnapshot() !== snap) {
+    const endEditorContext = pending.endEditorContext ?? captureHistoryEditorContext() ?? pending.startEditorContext;
+    updateLastHistoryEditorContext(pending.startEditorContext);
+    pushHistorySnapshot(snap, { editorContext: endEditorContext });
+    rememberHistoryEditorContextAfterInput(endEditorContext);
+    state.future = [];
+  } else {
+    updateLastHistoryEditorContext(captureHistoryEditorContext() ?? pending.startEditorContext);
+  }
+  if (pending.notify) notifyDocumentMayHaveChanged(pending.group, pending.changeSource);
+}
+
 export function recordDatabaseAttachmentHistory(): void {
   if (state.isRestoring) {
     return;
@@ -274,6 +364,7 @@ export function restoreHistoryStackState(value: unknown): void {
 }
 
 export function undoState(): void {
+  flushPendingInputHistory();
   if (navigateReusableDefinitionHistory('undo')) return;
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
@@ -314,6 +405,7 @@ export function undoState(): void {
 }
 
 export function redoState(): void {
+  flushPendingInputHistory();
   if (navigateReusableDefinitionHistory('redo')) return;
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
@@ -338,6 +430,7 @@ export function redoState(): void {
 }
 
 export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
+  flushPendingInputHistory();
   if (navigateReusableDefinitionHistory('undo')) return Promise.resolve();
   return enqueueDatabaseHistoryNavigation('Undo database edit', async () => {
     ensureHistoryInitialized();
@@ -385,6 +478,7 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
 }
 
 export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
+  flushPendingInputHistory();
   if (navigateReusableDefinitionHistory('redo')) return Promise.resolve();
   return enqueueDatabaseHistoryNavigation('Redo database edit', async () => {
     ensureHistoryInitialized();

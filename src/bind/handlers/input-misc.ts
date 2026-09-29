@@ -1,11 +1,11 @@
-import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordInputHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers, assignSectionTitleAndGeneratedId, updatePendingInputHistoryContext } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
 import { refreshSearchFilterButton, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
-import { saveSessionState } from '../../state-persistence';
+import { scheduleSessionStateSave } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { clearSortValueValidation } from '../../sort-value-validation';
@@ -133,9 +133,9 @@ export function bindInputMisc(app: HTMLElement): void {
       const rowIndex = target.dataset.rowIndex ?? '';
       const cellIndex = target.dataset.cellIndex ?? '';
       const columnIndex = target.dataset.columnIndex ?? '';
-      recordHistory(`table-edit:${sectionKey}:${blockIdForHistory}:${rowIndex}:${cellIndex}:${columnIndex}`);
+      recordInputHistory(`table-edit:${sectionKey}:${blockIdForHistory}:${rowIndex}:${cellIndex}:${columnIndex}`);
     } else if (field && field !== 'new-component-type') {
-      recordHistory(`input:${sectionKey}:${blockIdForHistory}:${field}`);
+      recordInputHistory(`input:${sectionKey}:${blockIdForHistory}:${field}`);
       clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
     }
 
@@ -688,7 +688,8 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     if (handleBlockFieldInput(target)) {
-      saveSessionState(state);
+      updatePendingInputHistoryContext();
+      scheduleSessionStateSave(state);
       if (field === 'block-rich' || field === 'text-fill-in-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'caption-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);
       }

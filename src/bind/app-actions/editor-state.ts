@@ -3,7 +3,8 @@ import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, ge
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { splitTextParagraphsOnCommit } from '../../text-paragraph-split';
-import { recordHistory } from '../../history';
+import { flushPendingInputHistory, recordHistory } from '../../history';
+import { saveSessionState } from '../../state-persistence';
 import { captureEditorDeactivationAnchor, capturePaneScroll, hasEditorViewportMovedSinceActivation, restoreCapturedEditorDeactivationScrollTop, restoreEditorActivationScrollTop, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
@@ -176,6 +177,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   const splitBlocks = richEditor
     ? splitTextParagraphsOnCommit(state.document, sectionKey, blockId, richEditor)
     : null;
+  flushPendingInputHistory();
   const blockChanged = hasActiveEditorBlockChanges(sectionKey, blockId);
   const aiSectionHost = state.aiEditorHostSectionKey;
   const result = deactivateEditorBlock(sectionKey, blockId);
@@ -210,6 +212,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
       }
     }, sectionKey, { callerRefreshedDocumentChange: true });
   }
+  saveSessionState(state);
 };
 
 function commitActiveInlineTableEdit(sectionKey: string, blockId: string): void {

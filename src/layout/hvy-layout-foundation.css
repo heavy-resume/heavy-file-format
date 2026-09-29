@@ -1,4 +1,5 @@
 .hvy-document {
+  -webkit-tap-highlight-color: transparent;
   --hvy-floating-control-size: 3.2rem;
   --hvy-sidebar-tab-gap: 0.25rem;
   --hvy-sidebar-footprint: 3.25rem;

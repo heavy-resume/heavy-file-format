@@ -9,8 +9,10 @@ import {
   removeSessionAttachmentTail,
   storeSessionAttachmentTail,
 } from './session-attachment-tail-storage';
+import { EDITOR_INPUT_IDLE_MS } from './editor-input-timing';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
+const pendingSessionStateSaves = new WeakMap<AppState, ReturnType<typeof setTimeout>>();
 const CHAT_SESSION_STORAGE_SUFFIX = ':chat';
 const LEGACY_SESSION_STORAGE_KEYS = [
   'hvy-editor-resume-state-v2',
@@ -162,6 +164,11 @@ export async function loadSessionStateAsync(storageKey?: string | null): Promise
 }
 
 export function saveSessionState(state: AppState): void {
+  const pendingSave = pendingSessionStateSaves.get(state);
+  if (pendingSave !== undefined) {
+    clearTimeout(pendingSave);
+    pendingSessionStateSaves.delete(state);
+  }
   if (state.sessionStorageKey === null) {
     return;
   }
@@ -207,6 +214,17 @@ export function saveSessionState(state: AppState): void {
   } catch (error) {
     console.warn('[hvy:session] failed to save state', error);
   }
+}
+
+export function scheduleSessionStateSave(state: AppState): void {
+  const pendingSave = pendingSessionStateSaves.get(state);
+  if (pendingSave !== undefined) {
+    clearTimeout(pendingSave);
+  }
+  pendingSessionStateSaves.set(state, setTimeout(() => {
+    pendingSessionStateSaves.delete(state);
+    saveSessionState(state);
+  }, EDITOR_INPUT_IDLE_MS));
 }
 
 export async function saveSessionStateAsync(state: AppState): Promise<void> {

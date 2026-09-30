@@ -136,6 +136,8 @@ import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } fro
 import { createHvyAgentTools } from './agent-tools';
 import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
 import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
+import { exportTargetHvy, type HvyTarget } from './embed-target';
+import { destroyTargetRenderHookController, getTargetRenderHookController, type HvyTargetRenderHook } from './target-render-hooks';
 
 export type {
   HvyHistoryArtifactKind,
@@ -144,6 +146,8 @@ export type {
   HvyHistoryArtifactStored,
 } from './history-artifact-store';
 export type { HvyDatabaseTableSource } from './plugins/database-table-source';
+export type { HvyTarget } from './embed-target';
+export type { HvyTargetRenderContext, HvyTargetRenderHook, HvyTargetRenderMode, HvyTargetRenderSurface } from './target-render-hooks';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 export type HvyEditorMode = 'basic' | 'advanced' | 'mobile-adjustment';
@@ -192,6 +196,8 @@ export interface HvyMountOptions {
   getPluginAuthorization?: HvyGetPluginAuthorization;
   onPluginAuthorizationChanged?: HvyPluginAuthorizationChanged;
   onSaveRequest?: HvySaveRequestHandler;
+  /** Host-owned behavior mounted against rendered section or component targets. */
+  targetRenderHooks?: readonly HvyTargetRenderHook[];
   /** Opt in to document-scoped WebMCP tools. Disabled when omitted or false. */
   webMcp?: boolean | HvyWebMcpOptions;
 }
@@ -226,6 +232,12 @@ export interface HvyMount {
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
   exportDocumentSourceMarkdown(): string;
+  /** Serialize one section or component, including its recursively owned HVY content. */
+  exportTargetHvy(target: HvyTarget): string;
+  /** Reveal a component editor, or section authoring controls when blockId is omitted. */
+  openTargetEditor(target: HvyTarget): Promise<void>;
+  /** Replace the host-owned hooks associated with rendered document targets. */
+  setTargetRenderHooks(hooks: readonly HvyTargetRenderHook[]): void;
   encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
   encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
   decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
@@ -710,6 +722,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   syncTextToolbarLayout(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
+  getTargetRenderHookController(root, () => state.currentView).reconcile();
   postMs = elapsedMs(postStartedAt);
   logPerfTrace('renderApp', {
     elapsedMs: elapsedMs(startedAt),
@@ -1113,6 +1126,16 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     exportDocumentSourceMarkdown() {
       return mounted?.exportDocumentSourceMarkdown() ?? exportDocumentSourceMarkdown(options.document);
     },
+    exportTargetHvy(target) {
+      return mounted?.exportTargetHvy(target) ?? exportTargetHvy(options.document, target);
+    },
+    openTargetEditor(target) {
+      return ready.then((mount) => mount.openTargetEditor(target));
+    },
+    setTargetRenderHooks(hooks) {
+      options.targetRenderHooks = [...hooks];
+      withMount((mount) => mount.setTargetRenderHooks(hooks));
+    },
     encryptDocumentAsync() {
       return ready.then((mount) => mount.encryptDocumentAsync());
     },
@@ -1322,6 +1345,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
+  const targetRenderHookController = getTargetRenderHookController(options.root, () => runtime.state.currentView);
+  targetRenderHookController.setHooks(options.targetRenderHooks ?? []);
   currentLinkObserver = linkObserver;
   if ('paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
@@ -1403,6 +1428,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         return;
       }
       runWithStateRuntime(runtime, () => {
+        destroyTargetRenderHookController(options.root);
         releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
         disposeScriptingCallbacks(runtime);
@@ -1471,6 +1497,16 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     exportDocumentSourceMarkdown() {
       return runWithStateRuntime(runtime, () => exportDocumentSourceMarkdown(state.document));
+    },
+    exportTargetHvy(target) {
+      return runWithStateRuntime(runtime, () => exportTargetHvy(state.document, target));
+    },
+    openTargetEditor(target) {
+      return ensureFullMount().then((mount) => mount.openTargetEditor(target));
+    },
+    setTargetRenderHooks(hooks) {
+      options.targetRenderHooks = [...hooks];
+      targetRenderHookController.setHooks(hooks);
     },
     encryptDocumentAsync() {
       return runWithStateRuntimeAsync(runtime, async () => {

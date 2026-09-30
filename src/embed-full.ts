@@ -53,10 +53,12 @@ import {
   resolveBaseComponent,
 } from './component-defs';
 import {
+  clearActiveEditorBlock,
   findBlockByIds,
   getComponentRenderHelpers,
   isActiveEditorBlock,
   isActiveEditorSectionTitle,
+  setActiveEditorBlock,
 } from './block-ops';
 import {
   ensureComponentListBlocks,
@@ -101,6 +103,7 @@ import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingInd
 import { createHvyAgentTools } from './agent-tools';
 import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
 import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
+import { activateAiComponentEditor } from './ai-component-editor-activation';
 import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider, setRuntimeSemanticFilterWindowLimits } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
@@ -143,6 +146,8 @@ import {
   type ImportFromTextResult,
 } from './ai-document-edit';
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
+import { exportTargetHvy, type HvyTarget } from './embed-target';
+import { destroyTargetRenderHookController, getTargetRenderHookController, type HvyTargetRenderHook } from './target-render-hooks';
 import {
   createDocumentChangeApi,
   notifyDocumentMayHaveChanged,
@@ -171,6 +176,8 @@ import { setHostDatabaseTableSources, type HvyDatabaseTableSource } from './plug
 export type { HvyDatabaseTableSource } from './plugins/database-table-source';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
+export type { HvyTarget } from './embed-target';
+export type { HvyTargetRenderContext, HvyTargetRenderHook, HvyTargetRenderMode, HvyTargetRenderSurface } from './target-render-hooks';
 
 export interface HvyChatSessionState {
   settings?: ChatSettings;
@@ -226,6 +233,8 @@ export interface HvyMountOptions {
   getPluginAuthorization?: HvyGetPluginAuthorization;
   onPluginAuthorizationChanged?: HvyPluginAuthorizationChanged;
   onSaveRequest?: HvySaveRequestHandler;
+  /** Host-owned behavior mounted against rendered section or component targets. */
+  targetRenderHooks?: readonly HvyTargetRenderHook[];
   /** Opt in to document-scoped WebMCP tools. Disabled when omitted or false. */
   webMcp?: boolean | HvyWebMcpOptions;
 }
@@ -242,6 +251,10 @@ export interface HvyMount {
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
   exportDocumentSourceMarkdown(): string;
+  exportTargetHvy(target: HvyTarget): string;
+  /** Reveal a component editor, or section authoring controls when blockId is omitted. */
+  openTargetEditor(target: HvyTarget): Promise<void>;
+  setTargetRenderHooks(hooks: readonly HvyTargetRenderHook[]): void;
   encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
   encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
   decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
@@ -767,6 +780,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   scrollPendingEditorActivation(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
+  getTargetRenderHookController(root, () => state.currentView).reconcile();
   logPerfTrace('renderApp', {
     elapsedMs: elapsedMs(startedAt),
     currentView: state.currentView,
@@ -1412,6 +1426,59 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return attachFullEmbed(options);
 }
 
+async function openMountedTargetEditor(root: HTMLElement, runtime: StateRuntime, target: HvyTarget): Promise<void> {
+  const section = findSectionByKey(state.document.sections, target.sectionKey);
+  if (!section) {
+    throw new Error(`HVY section target was not found: ${target.sectionKey}`);
+  }
+  const block = target.blockId ? findBlockByIds(target.sectionKey, target.blockId) : null;
+  if (target.blockId && !block) {
+    throw new Error(`HVY component target was not found in section ${target.sectionKey}: ${target.blockId}`);
+  }
+
+  if (!block) {
+    if (state.currentView === 'ai') {
+      state.aiModeTipDismissed = true;
+      const firstBlock = section.blocks[0] ?? null;
+      if (firstBlock) {
+        activateAiComponentEditor(root, section.key, firstBlock.id, { hostSection: true });
+      } else {
+        clearActiveEditorBlock();
+        state.aiEditorHostSectionKey = section.key;
+        runtime.callbacks.renderApp();
+      }
+      await Promise.resolve();
+      return;
+    }
+    if (state.currentView !== 'editor') {
+      changeDocumentView('editor', root);
+    }
+    state.activeEditorSectionTitleKey = section.key;
+    state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(section.title) ? section.key : null;
+    state.pendingEditorCenterSectionKey = section.key;
+    runtime.callbacks.renderApp();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    return;
+  }
+
+  if (state.currentView === 'viewer') {
+    changeDocumentView('editor', root);
+  }
+  const inAiMode = state.currentView === 'ai';
+  if (inAiMode) {
+    activateAiComponentEditor(root, section.key, block.id);
+  } else {
+    setActiveEditorBlock(section.key, block.id);
+    if (state.pendingEditorActivation) {
+      const suppressFocus = block.schema.kind === 'table' || block.schema.component === 'table';
+      state.pendingEditorActivation.suppressFocus = suppressFocus;
+      state.pendingEditorActivation.immediateFocus = !suppressFocus;
+    }
+    runtime.callbacks.renderApp();
+  }
+  await Promise.resolve();
+}
+
 function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRuntime; documentChangeApi: HvyDocumentChangeApi }): HvyMount {
   const runtime = existing?.runtime ?? createFullEmbedRuntime(options);
   const persistSessionState = options.persistSessionState === true;
@@ -1422,6 +1489,8 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
+  const targetRenderHookController = getTargetRenderHookController(options.root, () => runtime.state.currentView);
+  targetRenderHookController.setHooks(options.targetRenderHooks ?? []);
   currentLinkObserver = linkObserver;
   if (!existing && 'paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
@@ -1488,6 +1557,7 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
       cancelMountedTemplateForm(runtime);
       webMcpRegistration?.destroy();
       runWithStateRuntime(runtime, () => {
+        destroyTargetRenderHookController(options.root);
         releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
         disposeScriptingCallbacks(runtime);
@@ -1559,6 +1629,17 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
     },
     exportDocumentSourceMarkdown() {
       return runWithStateRuntime(runtime, () => exportDocumentSourceMarkdown(state.document));
+    },
+    exportTargetHvy(target) {
+      return runWithStateRuntime(runtime, () => exportTargetHvy(state.document, target));
+    },
+    openTargetEditor(target) {
+      if (destroyed) return Promise.reject(new Error('HVY mount has been destroyed.'));
+      return runWithStateRuntimeAsync(runtime, () => openMountedTargetEditor(options.root, runtime, target));
+    },
+    setTargetRenderHooks(hooks) {
+      options.targetRenderHooks = [...hooks];
+      targetRenderHookController.setHooks(hooks);
     },
     encryptDocumentAsync() {
       return runWithStateRuntimeAsync(runtime, async () => {

@@ -419,7 +419,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       ? renderReaderPreviewBlocks(section, section.blocks)
       : renderReaderSectionChildren(section, windowOptions);
     const childrenHtml = '';
-    if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
+    if (
+      !blocksHtml.trim()
+      && !childrenHtml.trim()
+      && !isSectionSearchMatch(searchContext, section)
+      && !(state.currentView === 'ai' && isAiEditorHostSection(section.key))
+    ) {
       return '';
     }
     const content = `<div class="${contentClass}">${blocksHtml}${childrenHtml}${renderAiActiveSectionAddAffordance(section)}</div>`;

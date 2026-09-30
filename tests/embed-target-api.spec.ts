@@ -216,8 +216,8 @@ test('target text comparison previews a character diff and accepted replacement 
     const { deserializeDocumentBytes, mountHvy } = await import('/src/embed.ts');
     document.body.innerHTML = `
       <div id="target-text-mount" style="height:500px"></div>
-      <div id="target-text-before"></div>
-      <div id="target-text-after"></div>
+      <div id="target-text-before" style="width:400px"></div>
+      <div id="target-text-after" style="width:400px"></div>
     `;
     const root = document.querySelector<HTMLElement>('#target-text-mount')!;
     const beforeRoot = document.querySelector<HTMLElement>('#target-text-before')!;
@@ -236,13 +236,34 @@ component_defs:
 
   <!--hvy:text {"id":"fake-copy"}-->
    We build **small** tools.
+
+  <!--hvy:text {"id":"fake-link"}-->
+   See [details](https://example.com).
+
+  <!--hvy:grid {"id":"fake-grid","gridColumns":2,"gridStackWidth":"48rem"}-->
+
+   <!--hvy:grid:0 {}-->
+
+    <!--hvy:text {}-->
+     Relevant skills
+
+   <!--hvy:grid:1 {}-->
+
+    <!--hvy:text {}-->
+     Tools and technologies
+
+  <!--hvy:component-list {"id":"fake-references","componentListComponent":"xref-card","componentListItemLabel":"reference"}-->
+
+   <!--hvy:component-list:0 {}-->
+
+    <!--hvy:xref-card {"xrefTitle":"Existing reference","xrefTarget":"fake-copy"}-->
 `), '.hvy');
     const sectionKey = hvyDocument.sections[0]!.key;
     const blockId = hvyDocument.sections[0]!.blocks[0]!.id;
     const changes: Array<{ dirty: boolean; source?: string }> = [];
     const mount = mountHvy({
       root,
-      mode: 'editor',
+      mode: 'ai',
       document: hvyDocument,
       onDocumentChange(event) {
         changes.push({ dirty: event.dirty, source: event.source });
@@ -251,24 +272,41 @@ component_defs:
 
     const comparison = await mount.renderTargetTextComparison({
       target: { sectionKey, blockId },
-      proposedHvy: '<!--hvy:block {"component":"Job History Item","containerTitle":"Updated role"}-->\n\n <!--hvy:text {"id":"fake-copy"}-->\n  We build **smarter** tools!',
+      proposedHvy: '<!--hvy:block {"component":"Job History Item","containerTitle":"Updated role"}-->\n\n <!--hvy:text {"id":"fake-copy"}-->\n  We build **smarter** tools!\n\n <!--hvy:text {"id":"fake-link"}-->\n  See [details](https://example.com).\n\n <!--hvy:grid {"id":"fake-grid","gridColumns":2,"gridStackWidth":"48rem"}-->\n\n  <!--hvy:grid:0 {}-->\n\n   <!--hvy:text {}-->\n    Relevant skills\n\n  <!--hvy:grid:1 {}-->\n\n   <!--hvy:text {}-->\n    Tools and technologies\n\n <!--hvy:component-list {"id":"fake-references","componentListComponent":"xref-card","componentListItemLabel":"reference"}-->\n\n  <!--hvy:component-list:0 {}-->\n\n   <!--hvy:xref-card {"xrefTitle":"Existing reference","xrefTarget":"fake-copy"}-->',
       beforeRoot,
       afterRoot,
     });
+    const comparisonSurface = beforeRoot.querySelector<HTMLElement>('.hvy-target-text-comparison-surface')!;
+    const comparisonTarget = comparisonSurface.firstElementChild as HTMLElement;
+    const addedMarker = afterRoot.querySelector<HTMLElement>('ins');
+    const removedMarker = beforeRoot.querySelector<HTMLElement>('del');
+    const previewLinks = Array.from(beforeRoot.querySelectorAll<HTMLAnchorElement>('a'));
+    const locationBeforeClicks = window.location.href;
+    previewLinks.forEach((link) => link.click());
     const preview = {
       added: Array.from(afterRoot.querySelectorAll('ins'), (element) => element.textContent).join(''),
-      addedColor: getComputedStyle(afterRoot.querySelector('ins')!).color,
+      addedColor: addedMarker ? getComputedStyle(addedMarker).color : '',
       after: afterRoot.querySelector('.reader-block-text')?.textContent?.trim(),
       afterComposite: afterRoot.querySelector('.reader-block-container')?.textContent?.includes('Updated role'),
       before: beforeRoot.querySelector('.reader-block-text')?.textContent?.trim(),
       beforeComposite: beforeRoot.querySelector('.reader-block-container')?.textContent?.includes('Original role'),
+      containerColumns: getComputedStyle(comparisonTarget.querySelector<HTMLElement>('.reader-grid-layout')!).gridTemplateColumns.split(' ').length,
+      editingControls: beforeRoot.querySelectorAll('[data-action], .component-list-add-ghost').length
+        + afterRoot.querySelectorAll('[data-action], .component-list-add-ghost').length,
+      linkCount: previewLinks.length,
+      linksDisabled: previewLinks.every((link) => (
+        !link.hasAttribute('href') && link.getAttribute('aria-disabled') === 'true' && link.tabIndex === -1
+      )),
+      linksStayedPut: window.location.href === locationBeforeClicks,
       removed: Array.from(beforeRoot.querySelectorAll('del'), (element) => element.textContent).join(''),
-      removedColor: getComputedStyle(beforeRoot.querySelector('del')!).color,
+      removedColor: removedMarker ? getComputedStyle(removedMarker).color : '',
+      surfaceContainerName: getComputedStyle(comparisonSurface).containerName,
+      xrefDisabled: beforeRoot.querySelector('.reader-xref-card')?.getAttribute('aria-disabled'),
     };
 
     const replacement = await mount.replaceTargetHvy(
       { sectionKey, blockId },
-      '<!--hvy:block {"component":"Job History Item","containerTitle":"Updated role"}-->\n\n <!--hvy:text {"id":"fake-copy"}-->\n  We build **smarter** tools!'
+      '<!--hvy:block {"component":"Job History Item","containerTitle":"Updated role"}-->\n\n <!--hvy:text {"id":"fake-copy"}-->\n  We build **smarter** tools!\n\n <!--hvy:text {"id":"fake-link"}-->\n  See [details](https://example.com).\n\n <!--hvy:grid {"id":"fake-grid","gridColumns":2,"gridStackWidth":"48rem"}-->\n\n  <!--hvy:grid:0 {}-->\n\n   <!--hvy:text {}-->\n    Relevant skills\n\n  <!--hvy:grid:1 {}-->\n\n   <!--hvy:text {}-->\n    Tools and technologies\n\n <!--hvy:component-list {"id":"fake-references","componentListComponent":"xref-card","componentListItemLabel":"reference"}-->\n\n  <!--hvy:component-list:0 {}-->\n\n   <!--hvy:xref-card {"xrefTitle":"Existing reference","xrefTarget":"fake-copy"}-->'
     );
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     const afterApply = {
@@ -303,9 +341,148 @@ component_defs:
       afterComposite: true,
       before: 'We build small tools.',
       beforeComposite: true,
+      containerColumns: 1,
+      editingControls: 0,
+      linkCount: 2,
+      linksDisabled: true,
+      linksStayedPut: true,
       removed: 'll.',
+      surfaceContainerName: 'hvy-surface',
+      xrefDisabled: 'true',
     },
     previewDestroyed: true,
   });
   expect(expectedResult.preview.addedColor).not.toBe(expectedResult.preview.removedColor);
+});
+
+test('target comparison expands nested expandable content by default without mutating the document', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/');
+  const expectedResult = await page.evaluate(async () => {
+    const { deserializeDocumentBytes, mountHvy } = await import('/src/embed.ts');
+    document.body.innerHTML = `
+      <div id="expandable-comparison-mount" style="height:500px"></div>
+      <div id="expandable-comparison-before"></div>
+      <div id="expandable-comparison-after"></div>
+    `;
+    const root = document.querySelector<HTMLElement>('#expandable-comparison-mount')!;
+    const beforeRoot = document.querySelector<HTMLElement>('#expandable-comparison-before')!;
+    const afterRoot = document.querySelector<HTMLElement>('#expandable-comparison-after')!;
+    const hvyDocument = deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+
+ <!--hvy:expandable {"id":"fake-expandable","expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"fake-summary"}-->
+    Fake summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"fake-detail"}-->
+    Hidden original detail.
+`), '.hvy');
+    const sectionKey = hvyDocument.sections[0]!.key;
+    const block = hvyDocument.sections[0]!.blocks[0]!;
+    const mount = mountHvy({ root, mode: 'editor', document: hvyDocument });
+    const proposedHvy = `<!--hvy:expandable {"expandableExpanded":false}-->
+
+ <!--hvy:expandable:stub {}-->
+
+  <!--hvy:text {"id":"fake-summary"}-->
+   Fake summary
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:text {"id":"fake-detail"}-->
+   Hidden revised detail.`;
+
+    const expanded = await mount.renderTargetTextComparison({
+      target: { sectionKey, blockId: block.id },
+      proposedHvy,
+      beforeRoot,
+      afterRoot,
+    });
+    const expandedResult = {
+      added: Boolean(afterRoot.querySelector('ins')),
+      afterContent: afterRoot.textContent?.includes('Hidden revised detail.'),
+      beforeContent: beforeRoot.textContent?.includes('Hidden original detail.'),
+      beforeExpanded: Boolean(beforeRoot.querySelector('.expandable-reader.is-expanded')),
+      documentStayedCollapsed: block.schema.expandableExpanded === false,
+      removed: Boolean(beforeRoot.querySelector('del')),
+    };
+    beforeRoot.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')!.click();
+    const clickedCollapsedResult = {
+      afterStayedExpanded: Boolean(afterRoot.querySelector('.expandable-reader.is-expanded')),
+      beforeCollapsed: Boolean(beforeRoot.querySelector('.expandable-reader.is-collapsed')),
+      beforeContentAbsent: !beforeRoot.textContent?.includes('Hidden original detail.'),
+      documentStayedCollapsed: block.schema.expandableExpanded === false,
+    };
+    beforeRoot.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')!.click();
+    const clickedExpandedResult = {
+      beforeContent: beforeRoot.textContent?.includes('Hidden original detail.'),
+      beforeExpanded: Boolean(beforeRoot.querySelector('.expandable-reader.is-expanded')),
+      removed: Boolean(beforeRoot.querySelector('del')),
+    };
+    expanded.destroy();
+
+    const configured = await mount.renderTargetTextComparison({
+      target: { sectionKey, blockId: block.id },
+      proposedHvy,
+      beforeRoot,
+      afterRoot,
+      expandableMode: 'configured',
+    });
+    const configuredResult = {
+      beforeCollapsed: Boolean(beforeRoot.querySelector('.expandable-reader.is-collapsed')),
+      hiddenContentAbsent: !beforeRoot.textContent?.includes('Hidden original detail.'),
+      summaryVisible: beforeRoot.textContent?.includes('Fake summary'),
+    };
+    beforeRoot.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')!.click();
+    const configuredClickedResult = {
+      beforeContent: beforeRoot.textContent?.includes('Hidden original detail.'),
+      beforeExpanded: Boolean(beforeRoot.querySelector('.expandable-reader.is-expanded')),
+      documentStayedCollapsed: block.schema.expandableExpanded === false,
+    };
+    configured.destroy();
+    mount.destroy();
+    return { clickedCollapsedResult, clickedExpandedResult, configuredClickedResult, configuredResult, expandedResult };
+  });
+
+  expect(expectedResult).toEqual({
+    clickedCollapsedResult: {
+      afterStayedExpanded: true,
+      beforeCollapsed: true,
+      beforeContentAbsent: true,
+      documentStayedCollapsed: true,
+    },
+    clickedExpandedResult: {
+      beforeContent: true,
+      beforeExpanded: true,
+      removed: true,
+    },
+    configuredClickedResult: {
+      beforeContent: true,
+      beforeExpanded: true,
+      documentStayedCollapsed: true,
+    },
+    configuredResult: {
+      beforeCollapsed: true,
+      hiddenContentAbsent: true,
+      summaryVisible: true,
+    },
+    expandedResult: {
+      added: true,
+      afterContent: true,
+      beforeContent: true,
+      beforeExpanded: true,
+      documentStayedCollapsed: true,
+      removed: true,
+    },
+  });
 });

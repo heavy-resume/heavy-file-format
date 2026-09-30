@@ -117,6 +117,8 @@ export interface ComponentRenderHelpers {
 
 export interface ReaderBlockRenderOptions {
   suppressAiEditorDelegation?: boolean;
+  /** Preserve reader interactions while omitting controls that mutate document content. */
+  suppressEditingAffordances?: boolean;
   trimVerticalEdgeMargin?: boolean;
   trimVerticalStartMargin?: boolean;
   trimVerticalEndMargin?: boolean;

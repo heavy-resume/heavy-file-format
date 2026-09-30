@@ -1662,6 +1662,7 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
           themeSource: options.root,
           beforeRoot: comparisonOptions.beforeRoot,
           afterRoot: comparisonOptions.afterRoot,
+          expandableMode: comparisonOptions.expandableMode,
         });
       });
     },

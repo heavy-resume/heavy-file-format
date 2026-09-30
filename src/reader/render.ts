@@ -159,6 +159,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   let activeReaderViewContext: ReaderViewContext | null = null;
   let activeSearchFilterContext: SearchFilterContext | null = null;
   let activeTextPlaceholders: TextPlaceholderDefinition[] = [];
+  let editingAffordancesSuppressed = false;
 
   function withTextPlaceholders<T>(options: TextPlaceholderContextOptions, render: () => T): T {
     const previous = activeTextPlaceholders;
@@ -540,6 +541,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
+    const previous = editingAffordancesSuppressed;
+    editingAffordancesSuppressed = previous || options.suppressEditingAffordances === true;
+    try {
+      return renderReaderBlockContent(section, block, options);
+    } finally {
+      editingAffordancesSuppressed = previous;
+    }
+  }
+
+  function renderReaderBlockContent(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions): string {
     if (options.textPlaceholders || options.omitTextPlaceholderNames) {
       const { textPlaceholders, omitTextPlaceholderNames, ...remainingOptions } = options;
       return withTextPlaceholders({ textPlaceholders, omitTextPlaceholderNames }, () => (
@@ -562,10 +573,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (base === 'location-marker') {
       return '';
     }
-    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
+    if (!editingAffordancesSuppressed && !options.suppressAiEditorDelegation && state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
       return deps.renderEditorBlock(section.key, block);
     }
-    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
+    if (!editingAffordancesSuppressed && !options.suppressAiEditorDelegation && state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
       return deps.renderEditorBlock(section.key, block);
     }
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
@@ -589,7 +600,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
       state.contextMenu?.kind === 'ai' && state.contextMenu.sectionKey === section.key && state.contextMenu.blockId === block.id ? 'is-context-menu-target' : '',
-      state.currentView === 'ai' && base === 'text' && isAiEditablePlaceholderTextBlock(block) ? 'is-ai-editable-placeholder' : '',
+      !editingAffordancesSuppressed && state.currentView === 'ai' && base === 'text' && isAiEditablePlaceholderTextBlock(block) ? 'is-ai-editable-placeholder' : '',
       modifiers.has('highlight') ? 'is-highlighted' : '',
       isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',
@@ -697,7 +708,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'component-list') {
       const listHtml = renderComponentListReader(section, block, helpers);
-      const addAffordance = renderAiActiveComponentListAddAffordance(section, block);
+      const addAffordance = editingAffordancesSuppressed ? '' : renderAiActiveComponentListAddAffordance(section, block);
       return renderNonEmptyMaybeCollapsedBlockShell(`${listHtml}${addAffordance}`);
     }
     if (base === 'grid') {
@@ -1040,7 +1051,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function getReaderButtonAnchor(section: VisualSection, block: VisualBlock): { className: string; attrs: string; overlay: string } {
-    if (state.currentView !== 'ai') {
+    if (editingAffordancesSuppressed || state.currentView !== 'ai') {
       return { className: '', attrs: '', overlay: '' };
     }
     const componentId = block.schema.id.trim();

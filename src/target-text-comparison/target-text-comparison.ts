@@ -1,4 +1,5 @@
 import './target-text-comparison.css';
+import type { VisualBlock } from '../editor/types';
 import type { ReaderRenderer } from '../reader/render';
 import { createReaderBlockElement } from '../reader/block-refresh';
 import type { HvyTarget } from '../embed-target';
@@ -10,6 +11,8 @@ export interface HvyTargetTextComparisonOptions {
   proposedHvy: string;
   beforeRoot: HTMLElement;
   afterRoot: HTMLElement;
+  /** Defaults to expanded so all expandable content participates in review. */
+  expandableMode?: 'expanded' | 'configured' | 'collapsed';
 }
 
 export interface HvyTargetTextComparison {
@@ -31,41 +34,155 @@ export function renderPreparedTargetTextComparison(options: {
   themeSource: HTMLElement;
   beforeRoot: HTMLElement;
   afterRoot: HTMLElement;
+  expandableMode?: HvyTargetTextComparisonOptions['expandableMode'];
 }): HvyTargetTextComparison {
+  const beforePreviewBlock = createComparisonBlock(options.prepared.originalBlock, options.expandableMode ?? 'expanded');
+  const afterPreviewBlock = createComparisonBlock(options.prepared.proposedBlock, options.expandableMode ?? 'expanded');
   const beforeHost = createPreviewHost(options.beforeRoot.ownerDocument, options.themeSource, 'removed');
   const afterHost = createPreviewHost(options.afterRoot.ownerDocument, options.themeSource, 'added');
-  const beforeBlock = createReaderBlockElement(
-    options.beforeRoot.ownerDocument,
-    options.readerRenderer,
-    options.prepared.section,
-    options.prepared.originalBlock,
-    { ignoreReaderSessionState: true, suppressAiEditorDelegation: true }
-  );
-  const afterBlock = createReaderBlockElement(
-    options.afterRoot.ownerDocument,
-    options.readerRenderer,
-    options.prepared.section,
-    options.prepared.proposedBlock,
-    { ignoreReaderSessionState: true, suppressAiEditorDelegation: true }
-  );
-  if (!beforeBlock || !afterBlock) {
-    throw new Error('The target component did not produce a visible preview.');
-  }
-  beforeHost.surface.append(beforeBlock);
-  afterHost.surface.append(afterBlock);
   options.beforeRoot.append(beforeHost.host);
   options.afterRoot.append(afterHost.host);
 
-  decorateRenderedTextChanges(beforeBlock, afterBlock);
+  const renderComparison = (): void => {
+    const beforeBlock = createReaderBlockElement(
+      options.beforeRoot.ownerDocument,
+      options.readerRenderer,
+      options.prepared.section,
+      beforePreviewBlock,
+      { ignoreReaderSessionState: true, suppressAiEditorDelegation: true, suppressEditingAffordances: true }
+    );
+    const afterBlock = createReaderBlockElement(
+      options.afterRoot.ownerDocument,
+      options.readerRenderer,
+      options.prepared.section,
+      afterPreviewBlock,
+      { ignoreReaderSessionState: true, suppressAiEditorDelegation: true, suppressEditingAffordances: true }
+    );
+    if (!beforeBlock || !afterBlock) {
+      throw new Error('The target component did not produce a visible preview.');
+    }
+    disablePreviewNavigation(beforeBlock);
+    disablePreviewNavigation(afterBlock);
+    beforeHost.surface.replaceChildren(beforeBlock);
+    afterHost.surface.replaceChildren(afterBlock);
+    decorateRenderedTextChanges(beforeBlock, afterBlock);
+  };
+  const handleBeforeClick = createExpandableClickHandler(beforeHost.host, beforePreviewBlock, renderComparison);
+  const handleAfterClick = createExpandableClickHandler(afterHost.host, afterPreviewBlock, renderComparison);
+  const blockBeforeNavigation = createDisabledNavigationHandler(beforeHost.host);
+  const blockAfterNavigation = createDisabledNavigationHandler(afterHost.host);
+  beforeHost.host.addEventListener('click', handleBeforeClick);
+  afterHost.host.addEventListener('click', handleAfterClick);
+  beforeHost.host.addEventListener('click', blockBeforeNavigation, true);
+  afterHost.host.addEventListener('click', blockAfterNavigation, true);
+  try {
+    renderComparison();
+  } catch (error) {
+    beforeHost.host.removeEventListener('click', handleBeforeClick);
+    afterHost.host.removeEventListener('click', handleAfterClick);
+    beforeHost.host.removeEventListener('click', blockBeforeNavigation, true);
+    afterHost.host.removeEventListener('click', blockAfterNavigation, true);
+    beforeHost.host.remove();
+    afterHost.host.remove();
+    throw error;
+  }
 
   return {
     originalHvy: options.prepared.originalHvy,
     proposedHvy: options.prepared.proposedHvy,
     destroy() {
+      beforeHost.host.removeEventListener('click', handleBeforeClick);
+      afterHost.host.removeEventListener('click', handleAfterClick);
+      beforeHost.host.removeEventListener('click', blockBeforeNavigation, true);
+      afterHost.host.removeEventListener('click', blockAfterNavigation, true);
       beforeHost.host.remove();
       afterHost.host.remove();
     },
   };
+}
+
+function createDisabledNavigationHandler(host: HTMLElement): (event: MouseEvent) => void {
+  return (event) => {
+    const target = event.target as Element | null;
+    const link = target?.closest?.<HTMLElement>('[data-hvy-comparison-disabled-link="true"]');
+    if (!link || !host.contains(link)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+}
+
+function disablePreviewNavigation(root: HTMLElement): void {
+  const selector = 'a, [data-hvy-link-kind="xref-card"]';
+  const links = [
+    ...(root.matches(selector) ? [root] : []),
+    ...Array.from(root.querySelectorAll<HTMLElement>(selector)),
+  ];
+  links.forEach((link) => {
+    link.removeAttribute('href');
+    link.removeAttribute('target');
+    link.setAttribute('aria-disabled', 'true');
+    link.setAttribute('tabindex', '-1');
+    link.dataset.hvyComparisonDisabledLink = 'true';
+  });
+}
+
+function createExpandableClickHandler(
+  host: HTMLElement,
+  previewBlock: VisualBlock,
+  renderComparison: () => void
+): (event: MouseEvent) => void {
+  return (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
+    if (!expandable || !host.contains(expandable)) return;
+    if (target.closest('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')) return;
+    const blockId = expandable.dataset.blockId;
+    const block = blockId ? findOwnedBlock(previewBlock, blockId) : null;
+    if (!block || block.schema.kind !== 'expandable') return;
+    event.preventDefault();
+    event.stopPropagation();
+    block.schema.expandableExpanded = !block.schema.expandableExpanded;
+    renderComparison();
+  };
+}
+
+function createComparisonBlock(
+  source: VisualBlock,
+  expandableMode: NonNullable<HvyTargetTextComparisonOptions['expandableMode']>
+): VisualBlock {
+  const block = JSON.parse(JSON.stringify(source)) as VisualBlock;
+  if (expandableMode === 'configured') return block;
+  visitOwnedBlocks([block], (candidate) => {
+    if (candidate.schema.kind === 'expandable') {
+      candidate.schema.expandableExpanded = expandableMode === 'expanded';
+    }
+  });
+  return block;
+}
+
+function visitOwnedBlocks(blocks: readonly VisualBlock[], visit: (block: VisualBlock) => void, seen = new Set<VisualBlock>()): void {
+  blocks.forEach((block) => {
+    if (seen.has(block)) return;
+    seen.add(block);
+    visit(block);
+    visitOwnedBlocks([
+      ...(block.schema.containerBlocks ?? []),
+      ...(block.schema.componentListBlocks ?? []),
+      ...(block.schema.gridItems ?? []).map((item) => item.block),
+      ...(block.schema.expandableStubBlocks?.children ?? []),
+      ...(block.schema.expandableContentBlocks?.children ?? []),
+      ...(block.schema.encryptedBlock ? [block.schema.encryptedBlock] : []),
+    ], visit, seen);
+  });
+}
+
+function findOwnedBlock(root: VisualBlock, blockId: string): VisualBlock | null {
+  let match: VisualBlock | null = null;
+  visitOwnedBlocks([root], (block) => {
+    if (!match && block.id === blockId) match = block;
+  });
+  return match;
 }
 
 function createPreviewHost(ownerDocument: Document, themeSource: HTMLElement, side: 'removed' | 'added'): {
@@ -82,7 +199,7 @@ function createPreviewHost(ownerDocument: Document, themeSource: HTMLElement, si
     if (name.startsWith('--hvy-')) host.style.setProperty(name, themeSource.style.getPropertyValue(name));
   }
   const surface = ownerDocument.createElement('div');
-  surface.className = 'reader-document hvy-reader-surface hvy-target-text-comparison-surface';
+  surface.className = 'reader-document hvy-reader-surface hvy-surface hvy-target-text-comparison-surface';
   host.append(surface);
   return { host, surface };
 }

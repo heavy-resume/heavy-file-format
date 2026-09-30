@@ -11,6 +11,18 @@
   overflow: visible;
 }
 
+.hvy-target-text-comparison-preview [data-hvy-comparison-disabled-link="true"] {
+  cursor: default;
+}
+
+.hvy-target-text-comparison-preview .reader-xref-card[data-hvy-comparison-disabled-link="true"]:hover,
+.hvy-target-text-comparison-preview .reader-xref-card[data-hvy-comparison-disabled-link="true"]:focus-visible {
+  border-color: var(--hvy-border);
+  background: var(--hvy-xref-card-bg);
+  box-shadow: 0 1px 2px var(--hvy-shadow);
+  transform: none;
+}
+
 .hvy-target-text-comparison-preview .hvy-target-text-diff-removed,
 .hvy-target-text-comparison-preview .hvy-target-text-diff-added {
   border-radius: 0.18em;

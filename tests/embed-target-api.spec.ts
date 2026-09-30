@@ -208,3 +208,104 @@ hvy_version: 0.1
     sectionOnly: true,
   });
 });
+
+test('target text comparison previews a character diff and accepted replacement uses history', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/');
+  const expectedResult = await page.evaluate(async () => {
+    const { deserializeDocumentBytes, mountHvy } = await import('/src/embed.ts');
+    document.body.innerHTML = `
+      <div id="target-text-mount" style="height:500px"></div>
+      <div id="target-text-before"></div>
+      <div id="target-text-after"></div>
+    `;
+    const root = document.querySelector<HTMLElement>('#target-text-mount')!;
+    const beforeRoot = document.querySelector<HTMLElement>('#target-text-before')!;
+    const afterRoot = document.querySelector<HTMLElement>('#target-text-after')!;
+    const hvyDocument = deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+component_defs:
+  - name: Job History Item
+    baseType: container
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+
+ <!--hvy:block {"id":"fake-job","component":"Job History Item","containerTitle":"Original role"}-->
+
+  <!--hvy:text {"id":"fake-copy"}-->
+   We build **small** tools.
+`), '.hvy');
+    const sectionKey = hvyDocument.sections[0]!.key;
+    const blockId = hvyDocument.sections[0]!.blocks[0]!.id;
+    const changes: Array<{ dirty: boolean; source?: string }> = [];
+    const mount = mountHvy({
+      root,
+      mode: 'editor',
+      document: hvyDocument,
+      onDocumentChange(event) {
+        changes.push({ dirty: event.dirty, source: event.source });
+      },
+    });
+
+    const comparison = await mount.renderTargetTextComparison({
+      target: { sectionKey, blockId },
+      proposedHvy: '<!--hvy:block {"component":"Job History Item","containerTitle":"Updated role"}-->\n\n <!--hvy:text {"id":"fake-copy"}-->\n  We build **smarter** tools!',
+      beforeRoot,
+      afterRoot,
+    });
+    const preview = {
+      added: Array.from(afterRoot.querySelectorAll('ins'), (element) => element.textContent).join(''),
+      addedColor: getComputedStyle(afterRoot.querySelector('ins')!).color,
+      after: afterRoot.querySelector('.reader-block-text')?.textContent?.trim(),
+      afterComposite: afterRoot.querySelector('.reader-block-container')?.textContent?.includes('Updated role'),
+      before: beforeRoot.querySelector('.reader-block-text')?.textContent?.trim(),
+      beforeComposite: beforeRoot.querySelector('.reader-block-container')?.textContent?.includes('Original role'),
+      removed: Array.from(beforeRoot.querySelectorAll('del'), (element) => element.textContent).join(''),
+      removedColor: getComputedStyle(beforeRoot.querySelector('del')!).color,
+    };
+
+    const replacement = await mount.replaceTargetHvy(
+      { sectionKey, blockId },
+      '<!--hvy:block {"component":"Job History Item","containerTitle":"Updated role"}-->\n\n <!--hvy:text {"id":"fake-copy"}-->\n  We build **smarter** tools!'
+    );
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    const afterApply = {
+      dirty: mount.isDirty(),
+      id: mount.getDocument().sections[0]!.blocks[0]!.schema.id,
+      source: changes.at(-1)?.source,
+      text: mount.getDocument().sections[0]!.blocks[0]!.schema.containerBlocks[0]!.text,
+      previous: replacement.previousHvy.includes('small'),
+      replacement: replacement.replacementHvy.includes('smarter'),
+    };
+    await mount.undo();
+    const afterUndo = mount.getDocument().sections[0]!.blocks[0]!.schema.containerBlocks[0]!.text;
+    comparison.destroy();
+    const previewDestroyed = beforeRoot.childElementCount === 0 && afterRoot.childElementCount === 0;
+    mount.destroy();
+    return { afterApply, afterUndo, preview, previewDestroyed };
+  });
+
+  expect(expectedResult).toMatchObject({
+    afterApply: {
+      dirty: true,
+      id: 'fake-job',
+      source: 'script',
+      text: 'We build **smarter** tools!',
+      previous: true,
+      replacement: true,
+    },
+    afterUndo: 'We build **small** tools.',
+    preview: {
+      added: 'rter!',
+      after: 'We build smarter tools!',
+      afterComposite: true,
+      before: 'We build small tools.',
+      beforeComposite: true,
+      removed: 'll.',
+    },
+    previewDestroyed: true,
+  });
+  expect(expectedResult.preview.addedColor).not.toBe(expectedResult.preview.removedColor);
+});

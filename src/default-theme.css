@@ -66,6 +66,10 @@
   --hvy-success: #1c6231;
   --hvy-success-bg: #e7f9ee;
   --hvy-success-border: #95d8a9;
+  --hvy-diff-removed-text: #8f2430;
+  --hvy-diff-removed-bg: #f7dadd;
+  --hvy-diff-added-text: #17653a;
+  --hvy-diff-added-bg: #d9f0e1;
 
   /* Expandable toggle state indicators */
   --hvy-expandable-stub: #e2b100;
@@ -153,6 +157,10 @@
   --hvy-success: #4cae68;
   --hvy-success-bg: #152b1e;
   --hvy-success-border: #2e7a46;
+  --hvy-diff-removed-text: #ffb4ba;
+  --hvy-diff-removed-bg: #4b252b;
+  --hvy-diff-added-text: #91e6b1;
+  --hvy-diff-added-bg: #193c27;
 
   --hvy-expandable-stub: #c79200;
   --hvy-expandable-stub-border: #6b5200;

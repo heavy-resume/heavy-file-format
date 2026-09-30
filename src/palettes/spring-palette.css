@@ -50,6 +50,10 @@
   --hvy-success: #2ca05e;
   --hvy-success-bg: rgba(16, 245, 75, 0.2);
   --hvy-success-border: rgb(104, 223, 197);
+  --hvy-diff-removed-text: #7a2028;
+  --hvy-diff-removed-bg: #efd0d2;
+  --hvy-diff-added-text: #145c36;
+  --hvy-diff-added-bg: #cfeadb;
   --hvy-code-bg: #eef7f1;
   --hvy-code-text: #0b1d0c;
   --hvy-code-muted: #707070;

@@ -149,6 +149,16 @@ import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import { exportTargetHvy, type HvyTarget } from './embed-target';
 import { destroyTargetRenderHookController, getTargetRenderHookController, type HvyTargetRenderHook } from './target-render-hooks';
 import {
+  renderPreparedTargetTextComparison,
+  type HvyTargetTextComparison,
+  type HvyTargetTextComparisonOptions,
+} from './target-text-comparison/target-text-comparison';
+import {
+  applyPreparedTargetReplacement,
+  prepareTargetReplacement,
+  type HvyTargetReplacementResult,
+} from './embed-target-edit';
+import {
   createDocumentChangeApi,
   notifyDocumentMayHaveChanged,
   type HvyDocumentChangeCallback,
@@ -178,6 +188,8 @@ export type { HvyDatabaseTableSource } from './plugins/database-table-source';
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 export type { HvyTarget } from './embed-target';
 export type { HvyTargetRenderContext, HvyTargetRenderHook, HvyTargetRenderMode, HvyTargetRenderSurface } from './target-render-hooks';
+export type { HvyTargetReplacementResult } from './embed-target-edit';
+export type { HvyTargetTextComparison, HvyTargetTextComparisonOptions } from './target-text-comparison/target-text-comparison';
 
 export interface HvyChatSessionState {
   settings?: ChatSettings;
@@ -254,6 +266,8 @@ export interface HvyMount {
   exportTargetHvy(target: HvyTarget): string;
   /** Reveal a component editor, or section authoring controls when blockId is omitted. */
   openTargetEditor(target: HvyTarget): Promise<void>;
+  renderTargetTextComparison(options: HvyTargetTextComparisonOptions): Promise<HvyTargetTextComparison>;
+  replaceTargetHvy(target: HvyTarget & { blockId: string }, proposedHvy: string): Promise<HvyTargetReplacementResult>;
   setTargetRenderHooks(hooks: readonly HvyTargetRenderHook[]): void;
   encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
   encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
@@ -1636,6 +1650,36 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
     openTargetEditor(target) {
       if (destroyed) return Promise.reject(new Error('HVY mount has been destroyed.'));
       return runWithStateRuntimeAsync(runtime, () => openMountedTargetEditor(options.root, runtime, target));
+    },
+    renderTargetTextComparison(comparisonOptions) {
+      if (destroyed) return Promise.reject(new Error('HVY mount has been destroyed.'));
+      return runWithStateRuntimeAsync(runtime, async () => {
+        ensureRenderers();
+        const prepared = prepareTargetReplacement(state.document, comparisonOptions.target, comparisonOptions.proposedHvy);
+        return renderPreparedTargetTextComparison({
+          prepared,
+          readerRenderer,
+          themeSource: options.root,
+          beforeRoot: comparisonOptions.beforeRoot,
+          afterRoot: comparisonOptions.afterRoot,
+        });
+      });
+    },
+    replaceTargetHvy(target, proposedHvy) {
+      if (destroyed) return Promise.reject(new Error('HVY mount has been destroyed.'));
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const prepared = prepareTargetReplacement(state.document, target, proposedHvy);
+        if (prepared.originalHvy === prepared.proposedHvy) {
+          return { previousHvy: prepared.originalHvy, replacementHvy: prepared.proposedHvy };
+        }
+        recordHistory(undefined, { notify: false });
+        const result = applyPreparedTargetReplacement(prepared);
+        state.rawEditorText = serializeDocument(state.document);
+        notifyDocumentMayHaveChanged('script:target-replace', 'script', { authoritative: true });
+        await runPluginDocumentHooks('edit');
+        runtime.callbacks.renderApp();
+        return result;
+      });
     },
     setTargetRenderHooks(hooks) {
       options.targetRenderHooks = [...hooks];

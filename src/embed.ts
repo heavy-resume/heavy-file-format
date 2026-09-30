@@ -138,6 +138,11 @@ import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycl
 import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
 import { exportTargetHvy, type HvyTarget } from './embed-target';
 import { destroyTargetRenderHookController, getTargetRenderHookController, type HvyTargetRenderHook } from './target-render-hooks';
+import type {
+  HvyTargetTextComparison,
+  HvyTargetTextComparisonOptions,
+} from './target-text-comparison/target-text-comparison';
+import type { HvyTargetReplacementResult } from './embed-target-edit';
 
 export type {
   HvyHistoryArtifactKind,
@@ -148,6 +153,8 @@ export type {
 export type { HvyDatabaseTableSource } from './plugins/database-table-source';
 export type { HvyTarget } from './embed-target';
 export type { HvyTargetRenderContext, HvyTargetRenderHook, HvyTargetRenderMode, HvyTargetRenderSurface } from './target-render-hooks';
+export type { HvyTargetReplacementResult } from './embed-target-edit';
+export type { HvyTargetTextComparison, HvyTargetTextComparisonOptions } from './target-text-comparison/target-text-comparison';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 export type HvyEditorMode = 'basic' | 'advanced' | 'mobile-adjustment';
@@ -236,6 +243,10 @@ export interface HvyMount {
   exportTargetHvy(target: HvyTarget): string;
   /** Reveal a component editor, or section authoring controls when blockId is omitted. */
   openTargetEditor(target: HvyTarget): Promise<void>;
+  /** Render isolated current/proposed components with character markings on visible text components. */
+  renderTargetTextComparison(options: HvyTargetTextComparisonOptions): Promise<HvyTargetTextComparison>;
+  /** Atomically replace one component through normal history and dirty-state handling. */
+  replaceTargetHvy(target: HvyTarget & { blockId: string }, proposedHvy: string): Promise<HvyTargetReplacementResult>;
   /** Replace the host-owned hooks associated with rendered document targets. */
   setTargetRenderHooks(hooks: readonly HvyTargetRenderHook[]): void;
   encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
@@ -1132,6 +1143,12 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     openTargetEditor(target) {
       return ready.then((mount) => mount.openTargetEditor(target));
     },
+    renderTargetTextComparison(comparisonOptions) {
+      return ready.then((mount) => mount.renderTargetTextComparison(comparisonOptions));
+    },
+    replaceTargetHvy(target, proposedHvy) {
+      return ready.then((mount) => mount.replaceTargetHvy(target, proposedHvy));
+    },
     setTargetRenderHooks(hooks) {
       options.targetRenderHooks = [...hooks];
       withMount((mount) => mount.setTargetRenderHooks(hooks));
@@ -1503,6 +1520,12 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     openTargetEditor(target) {
       return ensureFullMount().then((mount) => mount.openTargetEditor(target));
+    },
+    renderTargetTextComparison(comparisonOptions) {
+      return ensureFullMount().then((mount) => mount.renderTargetTextComparison(comparisonOptions));
+    },
+    replaceTargetHvy(target, proposedHvy) {
+      return ensureFullMount().then((mount) => mount.replaceTargetHvy(target, proposedHvy));
     },
     setTargetRenderHooks(hooks) {
       options.targetRenderHooks = [...hooks];

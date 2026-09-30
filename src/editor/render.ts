@@ -444,7 +444,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       !isUntitled
       && section.title.trim().length > 0
       && section.blocks.length === 0
-     ;
+      ;
     const emptyHeadingLevel = getEmptySectionHeadingLevel(section.key);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
       ? `<input autofocus class="section-title-input" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-title" value="${deps.escapeAttr(
@@ -1231,10 +1231,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const hasStubContent = stubHtml.trim().length > 0;
       const contentHtml = expanded || !hasStubContent
         ? renderEditorNestedBlocks(sectionKey, block.schema.expandableContentBlocks.children, {
-            container: 'expandable-content',
-            parentBlockId: block.id,
-            locked: true,
-          })
+          container: 'expandable-content',
+          parentBlockId: block.id,
+          locked: true,
+        })
         : '';
       const hasExpandedContent = contentHtml.trim().length > 0;
       const stubBody = hasStubContent ? stubHtml : '<div class="expandable-passive-empty-ghost">Empty stub</div>';
@@ -1374,8 +1374,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <div class="image-empty image-empty-editable muted">
           <span>No image</span>
           <button type="button" class="ghost image-empty-edit-button" data-action="activate-block" data-section-key="${deps.escapeAttr(
-            sectionKey
-          )}" data-block-id="${deps.escapeAttr(block.id)}">Edit</button>
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Edit</button>
         </div>
       </div>`;
     }
@@ -1615,6 +1615,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const colorCount = Object.keys(theme.colors).length;
     const textLineStyles = getTextLineStylesFromMeta(state.documentMeta);
     const headingStyles = getHeadingStylesFromMeta(state.documentMeta);
+    const sectionDefaults = state.documentMeta.section_defaults && typeof state.documentMeta.section_defaults === 'object' && !Array.isArray(state.documentMeta.section_defaults)
+      ? state.documentMeta.section_defaults as JsonObject
+      : {};
+    const sectionDefaultCss = typeof sectionDefaults.css === 'string' ? sectionDefaults.css : '';
     const imageAttachmentMaxDimensions = state.documentMeta.image_attachment_max_dimensions && typeof state.documentMeta.image_attachment_max_dimensions === 'object' && !Array.isArray(state.documentMeta.image_attachment_max_dimensions)
       ? state.documentMeta.image_attachment_max_dimensions as { width?: unknown; height?: unknown }
       : {};
@@ -1739,6 +1743,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span aria-hidden="true">h</span>
           <button type="button" class="${deps.escapeAttr(imageAttachmentReductionButtonClass)}" data-action="reduce-existing-image-attachments"${imageAttachmentReductionButtonDisabled ? ' disabled' : ''}>${deps.escapeHtml(imageAttachmentReductionButtonLabel)}</button>
         </div>
+        <label>
+          <span>Section Default CSS</span>
+          <input
+            data-field="meta-section-default-css"
+            spellcheck="false"
+            placeholder="margin: 0 0 0.5rem;"
+            value="${deps.escapeAttr(sectionDefaultCss)}"
+          />
+        </label>
+        <div class="muted">Applied to every section before its section-specific CSS.</p>
         <label class="checkbox-label">
           <span>New Sections Contained</span>
           <input
@@ -1830,14 +1844,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   <span class="template-def-summary-actions">
                     <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
                     ${renderDeleteControl({
-                      className: 'template-def-remove-button',
-                      label: `Remove ${templateDefDisplayName(def)}`,
-                      title: 'Delete component template',
-                      attributes: {
-                        'data-action': 'remove-component-def',
-                        'data-def-index': String(index),
-                      },
-                    })}
+                className: 'template-def-remove-button',
+                label: `Remove ${templateDefDisplayName(def)}`,
+                title: 'Delete component template',
+                attributes: {
+                  'data-action': 'remove-component-def',
+                  'data-def-index': String(index),
+                },
+              })}
                   </span>
                 </div>
               </div>`;
@@ -2316,11 +2330,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${textMetaFields}
         ${gridMetaFields}
         ${renderVisibilityScriptDisclosure(
-          'block-visible-script',
-          block.schema.visibleScript,
-          `data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`,
-          'Controls when this component is visible. The script must return a boolean.'
-        )}
+      'block-visible-script',
+      block.schema.visibleScript,
+      `data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`,
+      'Controls when this component is visible. The script must return a boolean.'
+    )}
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
         ${component === 'container'
         ? `<label>
@@ -2352,8 +2366,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             >${componentHelpers?.renderComponentOptions(listItemComponent) ?? ''}</select>
           </label>
           ${block.schema.componentListBlocks.length > 0
-            ? '<p class="component-list-type-note">Remove all list items before changing the item type.</p>'
-            : ''}
+          ? '<p class="component-list-type-note">Remove all list items before changing the item type.</p>'
+          : ''}
           <label>
           <span>List Item Label</span>
           <input
@@ -2463,11 +2477,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <input type="number" min="1" step="1" ${attr} data-field="block-button-output-char-limit" value="${deps.escapeAttr(String(block.schema.buttonOutputCharLimit))}" />
       </label>
       ${renderVisibilityScriptDisclosure(
-        'block-button-visible-script',
-        block.schema.buttonVisibleScript,
-        attr,
-        'Controls when the button is visible. The script must return a boolean.'
-      )}
+      'block-button-visible-script',
+      block.schema.buttonVisibleScript,
+      attr,
+      'Controls when the button is visible. The script must return a boolean.'
+    )}
       <label>
         <div>Context Builder Function Body</div>
         <div>This is provided to the LLM</div>
@@ -2581,8 +2595,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   data-sort-value-name="${deps.escapeAttr(name)}"
                 >
                   ${(kind === 'group' ? ['text', 'enum'] as const : ['text', 'number', 'date', 'datetime', 'enum'] as const).map((type) =>
-                    `<option value="${type}"${sortDefinition.type === type ? ' selected' : ''}>${type === 'datetime' ? 'Date & Time' : type[0].toUpperCase() + type.slice(1)}</option>`
-                  ).join('')}
+            `<option value="${type}"${sortDefinition.type === type ? ' selected' : ''}>${type === 'datetime' ? 'Date & Time' : type[0].toUpperCase() + type.slice(1)}</option>`
+          ).join('')}
                 </select>
               </label>
               <button
@@ -2599,8 +2613,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 <span>Date Format</span>
                 <select data-field="def-sort-value-format" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}">
                   ${(['YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY'] as const).map((format) =>
-                    `<option value="${format}"${sortDefinition.format === format ? ' selected' : ''}>${format}</option>`
-                  ).join('')}
+                `<option value="${format}"${sortDefinition.format === format ? ' selected' : ''}>${format}</option>`
+              ).join('')}
                 </select>
               </label>`
               : ''}
@@ -2617,8 +2631,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   >${plusIcon()} Add Option</button>
                 </div>
                 ${options.length === 0
-                  ? '<p class="muted component-sort-value-empty">No enum options defined.</p>'
-                  : options.map((option, optionIndex) => `<div class="component-enum-option-row">
+                ? '<p class="muted component-sort-value-empty">No enum options defined.</p>'
+                : options.map((option, optionIndex) => `<div class="component-enum-option-row">
                     <label>
                       <span>Label</span>
                       <input data-field="def-enum-option-label" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}" data-option-index="${optionIndex}" value="${deps.escapeAttr(option.label)}" />

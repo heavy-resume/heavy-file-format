@@ -301,6 +301,20 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-section-default-css' && target instanceof HTMLInputElement) {
+      recordHistory('meta:section-default-css');
+      const existingDefaults = state.document.meta.section_defaults;
+      const sectionDefaults = existingDefaults && typeof existingDefaults === 'object' && !Array.isArray(existingDefaults)
+        ? existingDefaults as JsonObject
+        : {};
+      state.document.meta.section_defaults = {
+        ...sectionDefaults,
+        css: target.value,
+      };
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'meta-pdf-debug' && target instanceof HTMLInputElement) {
       recordHistory('meta:pdf-debug');
       const pdfPage = readPdfPageMetaObject(state.document.meta);

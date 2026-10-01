@@ -47,7 +47,7 @@ section_defs:
 }
 
 for (const kind of ['component', 'section'] as const) {
-  test(`embedded ${kind} template save emits a dirty document change event to its host`, async ({ page }) => {
+  test(`embedded ${kind} template draft and save emit dirty document change events to its host`, async ({ page }) => {
     test.setTimeout(5_000);
     await page.goto('/');
     await page.evaluate(async () => {
@@ -89,12 +89,21 @@ section_defs:
     await expect(page.locator('.document-meta-scroll')).toBeVisible();
     await page.locator(`[data-action="open-reusable-definition-editor"][data-template-kind="${kind}"]`).click();
     const modal = page.locator('.reusable-definition-modal');
-    if (kind === 'component') {
-      await modal.locator('.editor-block-passive').click();
-      await modal.locator('.rich-editor[data-field="block-rich"]').fill('Edited embedded component content');
-    } else {
-      await modal.locator('[data-field="section-title"]').fill('Edited embedded section title');
-    }
+    await expect(page.locator('#modalRoot')).toHaveAttribute('data-template-draft-history', 'true');
+    await modal.locator('[data-field="builder-definition-name"]').fill(`edited-${kind}`);
+    await expect.poll(() => page.evaluate(() => {
+      const testWindow = window as unknown as {
+        testTemplateMount: { isDirty(): boolean };
+        testTemplateChangeEvents: Array<{ dirty: boolean; reason?: string }>;
+      };
+      return {
+        dirty: testWindow.testTemplateMount.isDirty(),
+        event: testWindow.testTemplateChangeEvents.at(-1),
+      };
+    })).toEqual({
+      dirty: true,
+      event: expect.objectContaining({ dirty: true, reason: 'template:draft' }),
+    });
     await modal.getByRole('button', { name: 'Save Template', exact: true }).click();
 
     await expect.poll(() => page.evaluate(() => {
@@ -169,10 +178,18 @@ section_defs:
     expect(await snapshot()).toBe(before);
 
     await edit.click();
-    await modal.locator('[data-field="builder-definition-name"]').fill('fake-canceled');
+    const draftName = modal.locator('[data-field="builder-definition-name"]');
+    await draftName.fill('fake-canceled');
+    await expect(status).toHaveText('Unsaved');
+    await draftName.press('ControlOrMeta+z');
+    await expect(draftName).toHaveValue(kind === 'component' ? 'fake-card' : 'fake-section');
+    await expect(status).toHaveText('Saved');
+    await draftName.fill('fake-canceled');
+    await expect(status).toHaveText('Unsaved');
     await modal.locator('.modal-head .remove-x').click();
     await page.getByRole('dialog', { name: 'Discard changes?' }).getByRole('button', { name: 'Keep editing' }).click();
     await expect(modal.locator('[data-field="builder-definition-name"]')).toHaveValue('fake-canceled');
+    await expect(status).toHaveText('Unsaved');
     await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(status).toHaveText('Saved');
     expect(await snapshot()).toBe(before);

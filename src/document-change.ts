@@ -1,6 +1,7 @@
 import { serializeDocumentBytes } from './serialization';
 import { getActiveStateRuntime, runWithStateRuntime, state, type StateRuntime } from './state';
 import type { VisualSection } from './editor/types';
+import { hasReusableDefinitionChanges } from './reusable-definition-changes';
 
 export type HvyDocumentChangeSource = 'editor' | 'ai' | 'script' | 'import';
 
@@ -94,7 +95,7 @@ export function isDocumentDirty(runtime: StateRuntime): boolean {
     return false;
   }
   return runWithStateRuntime(runtime, () => {
-    const dirty = !bytesEqual(getCurrentDocumentSignature(), tracker.baseline);
+    const dirty = hasActiveReusableDefinitionChanges() || !bytesEqual(getCurrentDocumentSignature(), tracker.baseline);
     if (!dirty) {
       tracker.baselineRevision = tracker.currentRevision;
       tracker.lastNotifiedRevision = tracker.currentRevision;
@@ -163,7 +164,7 @@ function flushDocumentChangeTracker(runtime: StateRuntime): void {
   let changed = tracker.currentRevision !== tracker.lastNotifiedRevision;
   if (authoritative) {
     const signature = getCurrentDocumentSignature();
-    dirty = !bytesEqual(signature, tracker.baseline);
+    dirty = hasActiveReusableDefinitionChanges() || !bytesEqual(signature, tracker.baseline);
     changed = changed || dirty !== tracker.lastDirty;
     if (!dirty) {
       tracker.baselineRevision = tracker.currentRevision;
@@ -180,6 +181,12 @@ function flushDocumentChangeTracker(runtime: StateRuntime): void {
     source,
     changedSectionTitles: dirty ? getChangedSectionTitles(tracker.baselineSections, state.document.sections) : [],
   });
+}
+
+function hasActiveReusableDefinitionChanges(): boolean {
+  return state.reusableDefinitionEditModal
+    ? hasReusableDefinitionChanges(state.document, state.reusableDefinitionEditModal)
+    : false;
 }
 
 function snapshotSections(sections: VisualSection[]): Map<string, SectionChangeSnapshot> {

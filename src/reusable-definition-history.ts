@@ -5,6 +5,7 @@ import { restorePreferredEditorSelection } from './scroll';
 import { serializeDocumentHeaderYaml } from './serialization';
 import { getActiveStateRuntime, getRenderApp, HISTORY_GROUP_WINDOW_MS, runWithStateRuntime, state } from './state';
 import type { AppState, ReusableDefinitionEditModalState } from './types';
+import { notifyDocumentMayHaveChanged } from './document-change';
 
 type DraftOwner = NonNullable<ReusableDefinitionEditModalState['historyBeforeDraft']>;
 
@@ -121,6 +122,7 @@ function commitDraft(history: DraftHistory, context?: DraftContext): void {
   history.future = [];
   history.lastGroup = group;
   history.lastAt = now;
+  notifyDocumentMayHaveChanged('template:draft', 'editor', { authoritative: true });
 }
 
 export function recordReusableDefinitionHistory(group?: string): void {
@@ -248,6 +250,7 @@ export function navigateReusableDefinitionHistory(direction: 'undo' | 'redo'): b
     restoreActiveEditorState(entry.context.activeEditor, null, findBlockByIds);
     getRenderApp()();
     restoreDraftUi(history, entry.context, scroll);
+    notifyDocumentMayHaveChanged('template:draft', 'editor', { authoritative: true });
   } finally {
     history.restoring = false;
   }

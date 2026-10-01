@@ -37,6 +37,16 @@ const PDF_SIDEBAR_COLUMN_GAP = 24;
 const PDF_CSS_REM_IN_POINTS = 12;
 const PDF_IMAGE_CSS_REM_IN_POINTS = 8;
 const PDF_DEFAULT_CAPTION_FONT_SIZE = 8;
+const PDF_TEXT_FLOW_STYLE_MARGINS: Record<string, [number, number, number, number]> = {
+  sectionTitle: [0, 10, 0, 4],
+  sectionTitle2: [0, 8, 0, 3],
+  sectionTitle3: [0, 6, 0, 3],
+  sectionTitle4: [0, 4, 0, 2],
+  paragraph: [0, 0, 0, 5],
+  detailHeading: [0, 4, 0, 1],
+  detailBody: [6, 0, 0, 4],
+  list: [10, 0, 0, 5],
+};
 interface PdfLayoutContext {
   availableWidth: number;
 }
@@ -98,14 +108,14 @@ export function buildPdfExportDocDefinition(
         ? { color: strikethroughColor, decorationColor: strikethroughColor }
         : {},
       documentTitle: { fontSize: 18, bold: true, margin: [0, 0, 0, 12] },
-      sectionTitle: { fontSize: 14, bold: true, margin: [0, 10, 0, 4] },
-      sectionTitle2: { fontSize: 12, bold: true, margin: [0, 8, 0, 3] },
-      sectionTitle3: { fontSize: 11, bold: true, margin: [0, 6, 0, 3] },
-      sectionTitle4: { fontSize: 10, bold: true, margin: [0, 4, 0, 2] },
-      paragraph: { margin: [0, 0, 0, 5] },
-      detailHeading: { bold: true, margin: [0, 4, 0, 1] },
-      detailBody: { margin: [6, 0, 0, 4] },
-      list: { margin: [10, 0, 0, 5] },
+      sectionTitle: { fontSize: 14, bold: true, margin: PDF_TEXT_FLOW_STYLE_MARGINS.sectionTitle },
+      sectionTitle2: { fontSize: 12, bold: true, margin: PDF_TEXT_FLOW_STYLE_MARGINS.sectionTitle2 },
+      sectionTitle3: { fontSize: 11, bold: true, margin: PDF_TEXT_FLOW_STYLE_MARGINS.sectionTitle3 },
+      sectionTitle4: { fontSize: 10, bold: true, margin: PDF_TEXT_FLOW_STYLE_MARGINS.sectionTitle4 },
+      paragraph: { margin: PDF_TEXT_FLOW_STYLE_MARGINS.paragraph },
+      detailHeading: { bold: true, margin: PDF_TEXT_FLOW_STYLE_MARGINS.detailHeading },
+      detailBody: { margin: PDF_TEXT_FLOW_STYLE_MARGINS.detailBody },
+      list: { margin: PDF_TEXT_FLOW_STYLE_MARGINS.list },
       codeBlock: { font: 'Roboto', fontSize: 8, margin: [0, 0, 0, 6], fillColor: '#f3f4f6' },
       metadata: { fontSize: 8, color: '#4b5563' },
       dimmed: { color: '#6b7280' },
@@ -251,6 +261,9 @@ function renderBlock(
   if (!node) {
     return null;
   }
+  if (baseComponent === 'text') {
+    node = wrapPdfTextComponentFlow(node);
+  }
   const rendered = applyPdfBoxStyle(
     document,
     block.schema.css,
@@ -264,6 +277,50 @@ function renderBlock(
 function applyBlockCssMargin(node: HvyPdfMakeNodeObject, css: string): HvyPdfMakeNodeObject {
   const margin = getPdfCssMargin(css, normalizePdfNodeMargin(node.margin));
   return margin ? { ...node, margin } : node;
+}
+
+function wrapPdfTextComponentFlow(node: HvyPdfMakeNodeObject): HvyPdfMakeNodeObject {
+  const stack = node.stack ? node.stack.slice() : [node];
+  const objectIndexes = stack.flatMap((child, index) => typeof child === 'string' ? [] : [index]);
+  const firstIndex = objectIndexes[0];
+  const lastIndex = objectIndexes.at(-1);
+  if (firstIndex !== undefined) {
+    stack[firstIndex] = trimPdfTextFlowEdge(stack[firstIndex] as HvyPdfMakeNodeObject, true, firstIndex === lastIndex);
+  }
+  if (lastIndex !== undefined && lastIndex !== firstIndex) {
+    stack[lastIndex] = trimPdfTextFlowEdge(stack[lastIndex] as HvyPdfMakeNodeObject, false, true);
+  }
+  return node.stack ? { ...node, stack } : { stack };
+}
+
+function trimPdfTextFlowEdge(
+  node: HvyPdfMakeNodeObject,
+  trimTop: boolean,
+  trimBottom: boolean
+): HvyPdfMakeNodeObject {
+  const margin = resolvePdfTextFlowMargin(node);
+  if (!margin || (!trimTop && !trimBottom)) {
+    return node;
+  }
+  const next = margin.slice() as [number, number, number, number];
+  if (trimTop) next[1] = 0;
+  if (trimBottom) next[3] = 0;
+  return next.every((value, index) => value === margin[index]) ? node : { ...node, margin: next };
+}
+
+function resolvePdfTextFlowMargin(node: HvyPdfMakeNodeObject): [number, number, number, number] | undefined {
+  const explicit = normalizePdfNodeMargin(node.margin);
+  if (explicit) {
+    return explicit;
+  }
+  const styles = Array.isArray(node.style) ? node.style : node.style ? [node.style] : [];
+  for (let index = styles.length - 1; index >= 0; index -= 1) {
+    const margin = PDF_TEXT_FLOW_STYLE_MARGINS[styles[index] ?? ''];
+    if (margin) {
+      return margin;
+    }
+  }
+  return undefined;
 }
 
 function applyPdfBoxStyle(

@@ -304,10 +304,10 @@ describe('PDF export strategy', () => {
     const pdfDefinition = JSON.parse(await expectedResult.text());
     const gridNode = pdfDefinition.content[0].stack.find((node: { columns?: unknown[] }) => Array.isArray(node.columns));
 
-    expect(gridNode.columns[0].stack[0]).toEqual(expect.objectContaining({ text: 'Left cell' }));
-    expect(gridNode.columns[0].stack[0]).not.toHaveProperty('alignment');
+    expect(gridNode.columns[0].stack[0].stack[0]).toEqual(expect.objectContaining({ text: 'Left cell' }));
+    expect(gridNode.columns[0].stack[0].stack[0]).not.toHaveProperty('alignment');
     expect(gridNode.columns[1]).not.toHaveProperty('alignment');
-    expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
+    expect(gridNode.columns[1].stack[0].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
   });
 
   test('exports text css font weight into the PDF definition', () => {
@@ -378,7 +378,10 @@ hvy_version: 0.1
     expect(gridNode?.columns?.[1]).not.toHaveProperty('alignment');
     expect(gridNode?.columns?.[1]).toEqual(expect.objectContaining({ stack: expect.any(Array) }));
     if (typeof gridNode?.columns?.[1] === 'string') return;
-    expect(gridNode?.columns?.[1]?.stack?.[0]).toEqual(expect.objectContaining({ text: 'Q4 2018', alignment: 'right' }));
+    const dateWrapper = gridNode?.columns?.[1]?.stack?.[0];
+    expect(typeof dateWrapper).not.toBe('string');
+    if (typeof dateWrapper === 'string') return;
+    expect(dateWrapper?.stack?.[0]).toEqual(expect.objectContaining({ text: 'Q4 2018', alignment: 'right' }));
   });
 
   test('exports bold text from parsed PHVY font weight CSS', () => {
@@ -417,7 +420,7 @@ hvy_version: 0.1
     const pdfDefinition = JSON.parse(await expectedResult.text());
     const gridNode = pdfDefinition.content[0].stack.find((node: { columns?: unknown[] }) => Array.isArray(node.columns));
 
-    expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
+    expect(gridNode.columns[1].stack[0].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
   });
 
   test('honors hidden targets and strategy-selected expandable pane', () => {

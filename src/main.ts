@@ -154,6 +154,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     },
     paneScroll: {
       fullPaneTop: 0,
+      documentMetaTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,

@@ -352,7 +352,7 @@ function createEmbedState(
       popupY: 0,
       requestNonce: 0,
     },
-    paneScroll: { fullPaneTop: 0, editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
+    paneScroll: { fullPaneTop: 0, documentMetaTop: 0, editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
     showAdvancedEditor,
     showComponentEncryptionControls,
     rawEditorText: serializeDocument(document),

@@ -40,6 +40,7 @@ export function restoreElementScrollAnchor(root: HTMLElement, anchor: ElementScr
 
 export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): PaneScrollState {
   const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
+  const documentMeta = app.querySelector<HTMLDivElement>('.document-meta-scroll');
   const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
   const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
   const viewerSidebarPanel = app.querySelector<HTMLDivElement>('.viewer-sidebar-panel');
@@ -48,6 +49,7 @@ export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): 
     app.querySelector<HTMLDivElement>('.reader-pane');
   return {
     fullPaneTop: fullPane?.scrollTop ?? previous.fullPaneTop,
+    documentMetaTop: documentMeta?.scrollTop ?? previous.documentMetaTop,
     editorTop: editorTree?.scrollTop ?? previous.editorTop,
     editorSidebarTop: editorSidebarPanel?.scrollTop ?? previous.editorSidebarTop,
     viewerSidebarTop: viewerSidebarPanel?.scrollTop ?? previous.viewerSidebarTop,
@@ -66,11 +68,15 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
     const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
     const viewerSidebarPanel = app.querySelector<HTMLDivElement>('.viewer-sidebar-panel');
     const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
+    const documentMeta = app.querySelector<HTMLDivElement>('.document-meta-scroll');
     const readerPane =
       app.querySelector<HTMLDivElement>('.viewer-shell .reader-document') ??
       app.querySelector<HTMLDivElement>('.reader-pane');
     if (fullPane) {
       fullPane.scrollTop = scroll.fullPaneTop;
+    }
+    if (documentMeta) {
+      documentMeta.scrollTop = scroll.documentMetaTop;
     }
     if (editorTree) {
       preserveEditorScrollTop(editorTree, scroll.editorTop);

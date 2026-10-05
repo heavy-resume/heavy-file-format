@@ -1,8 +1,7 @@
 import {
   serializeDocument,
-  serializeDocumentBytesAsync,
-  type HvyDocumentSerializerAdapter,
 } from './serialization';
+import { serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './document-byte-serialization';
 import {
   ensureDocumentAttachmentStore,
   normalizeAttachmentBytes,

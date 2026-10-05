@@ -1,5 +1,6 @@
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
-import { serializeDocumentBytes, serializeDocumentBytesAsync } from '../../serialization';
+import { serializeDocumentBytes } from '../../serialization';
+import { serializeDocumentBytesAsync } from '../../document-byte-serialization';
 import { normalizeFilename } from '../../utils';
 import { refreshMountedPlugins } from '../mount';
 import type { HvyCanvasApi } from '../canvas/canvas';

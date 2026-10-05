@@ -12,6 +12,7 @@ build/
 develop-eggs/
 dist/
 dist-embed/
+dist-reader/
 downloads/
 eggs/
 .eggs/

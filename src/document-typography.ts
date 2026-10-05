@@ -1,7 +1,8 @@
 import type { JsonObject } from './hvy/types';
 import { getStyleSpacing, updateStyleSpacingCss } from './text-line-styles';
+import { DEFAULT_PARAGRAPH_SPACING } from './document-typography-defaults';
+export { DEFAULT_PARAGRAPH_SPACING } from './document-typography-defaults';
 
-export const DEFAULT_PARAGRAPH_SPACING = '0.45rem';
 const DOCUMENT_PARAGRAPH_SPACING = /^(?:0|(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|ch|ex|cap|ic|lh|rlh|vw|vh|vmin|vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pc|pt|%))$/i;
 
 export function isDocumentParagraphSpacing(value: unknown): value is string {

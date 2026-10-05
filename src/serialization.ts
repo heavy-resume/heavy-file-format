@@ -10,10 +10,9 @@ import {
   ensureDocumentAttachmentStore,
   getAttachmentDescriptors,
   type HvyAttachmentDescriptor,
-  type MaybePromise,
 } from './attachment-store';
 import { makeId, sanitizeOptionalId } from './utils';
-import { resolveBaseComponentFromMeta, isBuiltinComponentName, getComponentDefsFromMeta } from './component-defs';
+import { resolveBaseComponentFromMeta, isBuiltinComponentName, getComponentDefsFromMeta } from './component-definition-helpers';
 import { resolveReusableTemplateTokensInBlock } from './reusable-template-values';
 import {
   DEFAULT_READER_MAX_WIDTH,
@@ -27,14 +26,14 @@ import {
   normalizeReusableSectionDefinitions,
   parseTableColumnProperties,
 } from './document-factory';
-import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
+import { isPdfAllowedDocumentComponentInstance, isPdfDocument } from './pdf-document-rules';
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
-import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
+import { decryptEncryptedComponents } from './encrypted-component-reader';
 import { classifyXrefTarget } from './workspace-links';
 import { validateDocumentMetadata } from './document-metadata';
 import { parseStaticTableValueMarkdown, serializeStaticTableValueMarkdown } from './table-value-markdown';
 import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './plugins/declarations';
-import { visitBlocks } from './section-ops';
+import { visitBlocks } from './block-traversal';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -48,16 +47,6 @@ export interface DeserializeDocumentResult {
 }
 
 export const HVY_TAIL_SENTINEL = '--HVY-TAIL--';
-
-export interface HvyDocumentSerializerRequest {
-  textBody: string;
-  tail: HvyAttachmentDescriptor[];
-  recallAttachment(id: string): MaybePromise<Uint8Array | null>;
-}
-
-export interface HvyDocumentSerializerAdapter {
-  serializeDocumentBytes(request: HvyDocumentSerializerRequest): MaybePromise<Uint8Array>;
-}
 
 export function deserializeDocument(text: string, extension: VisualDocument['extension']): VisualDocument {
   return deserializeDocumentWithDiagnostics(text, extension).document;
@@ -737,7 +726,7 @@ function validateSectionSemantics(section: VisualSection, document: VisualDocume
 function validateBlockSemantics(block: VisualBlock, sectionLabel: string, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
 
-  if (isPdfDocument(document) && !isPdfAllowedComponentInstance(block.schema.component, document.meta, block.schema.plugin)) {
+  if (isPdfDocument(document) && !isPdfAllowedDocumentComponentInstance(block.schema.component, document.meta, block.schema.plugin)) {
     const label = block.schema.component === 'plugin' ? block.schema.plugin || 'plugin' : block.schema.component;
     diagnostics.push({
       severity: 'error',
@@ -1029,27 +1018,6 @@ export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
     offset += entry.bytes.length;
   }
   return combined;
-}
-
-export async function serializeDocumentBytesAsync(
-  document: VisualDocument,
-  serializer?: HvyDocumentSerializerAdapter | null,
-  options?: { encryption?: HvyEncryptionOptions | null }
-): Promise<Uint8Array> {
-  await prepareEncryptedComponentsForSerialization(document, options?.encryption ?? null);
-  if (!serializer) {
-    return serializeDocumentBytes(document);
-  }
-  const store = ensureDocumentAttachmentStore(document);
-  const textBody = serializeDocument(document);
-  const result = await serializer.serializeDocumentBytes({
-    textBody,
-    tail: store.listDescriptors(),
-    recallAttachment(id) {
-      return store.get(id)?.bytes ?? null;
-    },
-  });
-  return result;
 }
 
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {

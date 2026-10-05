@@ -30,7 +30,8 @@ import {
   type StateRuntime,
 } from './state';
 import type { AppState, ChatAttachment, ChatMessage, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
-import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
+import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes } from './serialization';
+import { serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './document-byte-serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
 import { applyTheme, getThemeConfig, getThemeOverrides, initColorModeSync, setThemeOverrides as setRuntimeThemeOverrides, setThemeRoot } from './theme';
@@ -1882,7 +1883,7 @@ export type { UserFileAttachmentLimits } from './document-attachments';
 export { deleteUnusedEmbeddedFiles, deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles } from './attachment-cleanup';
 export type { UnusedEmbeddedFile, UnusedEmbeddedFileKind } from './attachment-cleanup';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
-export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
+export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './document-byte-serialization';
 export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';

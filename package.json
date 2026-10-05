@@ -4,6 +4,7 @@
   "type": "module",
   "files": [
     "dist-embed",
+    "dist-reader",
     "scripts/hvy-mcp-cli.mjs",
     "src",
     "AI-RESPONSE-FORMAT.md",
@@ -18,6 +19,10 @@
     "./embed": {
       "types": "./src/embed.ts",
       "default": "./dist-embed/hvy-embed.js"
+    },
+    "./reader": {
+      "types": "./src/reader.ts",
+      "default": "./dist-reader/hvy-reader.js"
     },
     "./cli-core": {
       "types": "./src/cli-core/index.ts",
@@ -64,11 +69,12 @@
     "install:pwdeps": "bash ./scripts/install-playwright-deps.sh",
     "install:devcontainer": "bash ./scripts/install-devcontainer.sh",
     "dev": "vite",
-    "build": "tsc -b && vite build && npm run build:embed",
+    "build": "tsc -b && vite build && npm run build:embed && npm run build:reader",
     "build:embed": "tsc -p tsconfig.app.json --noEmit && vite build --config vite.embed.config.ts",
+    "build:reader": "tsc -p tsconfig.app.json --noEmit && vite build --config vite.reader.config.ts",
     "extract:hosted": "node scripts/extract-hvy-assets.mjs",
     "docker:hosted": "bash scripts/build-hosted-viewer-image.sh",
-    "prepare": "npm run build:embed",
+    "prepare": "npm run build:embed && npm run build:reader",
     "preview": "vite preview",
     "browser:start": "node scripts/browser-harness.mjs start",
     "browser:smoke": "node scripts/browser-harness.mjs smoke",
@@ -103,6 +109,7 @@
     "@types/sql.js": "^1.4.11",
     "@types/three": "^0.186.0",
     "@types/turndown": "^5.0.6",
+    "esbuild": "^0.25.12",
     "typescript": "^5.8.3",
     "vite": "^6.3.3",
     "vitest": "^3.2.4"

@@ -2,14 +2,15 @@ import type { Align, BaseBlockSchema, BlockSchema, BuiltinComponentName, Carouse
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
-import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
+import { getComponentDefs, getSectionDefs, resolveBaseComponent } from './component-definition-state';
+import { getComponentDefsFromMeta, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponentFromMeta } from './component-definition-helpers';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, resolveReusableTemplateTokensInBlock, resolveReusableTemplateTokensInSchema } from './reusable-template-values';
 import { getTableColumns, normalizeTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
 import { normalizeSortValueDefs } from './sort-values';
-import { DEFAULT_PARAGRAPH_SPACING } from './document-typography';
+import { DEFAULT_PARAGRAPH_SPACING } from './document-typography-defaults';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SIDEBAR_MAX_WIDTH = '40rem';

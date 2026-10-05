@@ -4,6 +4,7 @@ import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponentF
 import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
 import { REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX, state } from './state';
 import { sanitizeOptionalId } from './utils';
+export { visitBlocks, visitBlocksInList } from './block-traversal';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
   return sections.slice();
@@ -488,26 +489,4 @@ export function isDefaultUntitledSectionTitle(title: string): boolean {
 
 export function formatSectionTitle(title: string): string {
   return isDefaultUntitledSectionTitle(title) ? 'Unnamed Section' : title;
-}
-
-export function visitBlocks(sections: VisualSection[], visitor: (block: VisualBlock) => void): void {
-  const seen = new Set<VisualBlock>();
-  sections.forEach((section) => {
-    visitBlocksInList(section.blocks, visitor, seen);
-  });
-}
-
-export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: VisualBlock) => void, seen = new Set<VisualBlock>()): void {
-  blocks.forEach((block) => {
-    if (seen.has(block)) {
-      return;
-    }
-    seen.add(block);
-    visitor(block);
-    visitBlocksInList(block.schema.containerBlocks ?? [], visitor, seen);
-    visitBlocksInList(block.schema.componentListBlocks ?? [], visitor, seen);
-    visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor, seen);
-    visitBlocksInList(block.schema.expandableStubBlocks?.children ?? [], visitor, seen);
-    visitBlocksInList(block.schema.expandableContentBlocks?.children ?? [], visitor, seen);
-  });
 }

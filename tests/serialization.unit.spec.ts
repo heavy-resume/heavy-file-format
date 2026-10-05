@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { serializeDocumentBytesAsync } from '../src/document-byte-serialization';
 import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
 import { markdownToReaderHtml } from '../src/markdown';
 import { getTextLineStylesFromMeta } from '../src/text-line-styles';

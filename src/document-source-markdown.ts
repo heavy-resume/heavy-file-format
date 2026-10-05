@@ -1,6 +1,6 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { VisualDocument } from './types';
-import { renderAltAnnotationsAsFullText } from './markdown';
+import { renderAltAnnotationsAsFullText } from './responsive-annotation-text';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from './template-hide';
 import { hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
 import { getTextCaptionMarkdown } from './caption';
@@ -80,6 +80,11 @@ function renderBlockMarkdown(block: VisualBlock, excludedComponents: ReadonlySet
       ...block.schema.expandableStubBlocks.children.flatMap((child) => renderBlockMarkdown(child, excludedComponents)),
       ...block.schema.expandableContentBlocks.children.flatMap((child) => renderBlockMarkdown(child, excludedComponents)),
     ];
+  }
+  if (component === 'encrypted') {
+    return block.schema.encryptedBlock
+      ? renderBlockMarkdown(block.schema.encryptedBlock, excludedComponents)
+      : [];
   }
   return textPart(block.text);
 }

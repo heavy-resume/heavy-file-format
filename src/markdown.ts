@@ -15,6 +15,11 @@ import {
   scanInlineAnswers,
 } from './inline-answer-groups';
 import type { TextPlaceholderDefinition } from './editor/component-helpers';
+import {
+  parseAltAnnotationPayload,
+  renderAltAnnotationsAsFullText,
+} from './responsive-annotation-text';
+export { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from './responsive-annotation-text';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
@@ -629,14 +634,6 @@ function isBareAnswerMarkerLine(line: string): boolean {
 }
 
 
-export function renderAltAnnotationsAsFullText(markdown: string): string {
-  return replaceAltAnnotations(markdown, (_rawJson, fullText) => fullText);
-}
-
-export function renderAltAnnotationsAsMobileText(markdown: string): string {
-  return replaceAltAnnotations(markdown, (rawJson, fullText) => parseAltAnnotationPayload(rawJson)?.compact ?? fullText);
-}
-
 export function applyMobileAltAdjustment(fullMarkdown: string, mobileMarkdown: string): string {
   const full = renderAltAnnotationsAsFullText(fullMarkdown).trim();
   const mobile = mobileMarkdown.trim();
@@ -731,23 +728,8 @@ function parseSimpleAtxHeading(markdown: string): { prefix: string; text: string
   return text.length > 0 ? { prefix: `${match[1]}${match[2]}`, text } : null;
 }
 
-function replaceAltAnnotations(markdown: string, replacement: (rawJson: string, fullText: string) => string): string {
-  return (markdown || '').replace(/<!--hvy:alt\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:alt-->/g, (_match, rawJson, fullText) =>
-    replacement(rawJson, fullText)
-  );
-}
-
 function restoreResponsiveAnnotationTokens(html: string, tokens: ResponsiveAnnotationToken[]): string {
   return tokens.reduce((result, token) => result.replaceAll(token.token, token.html), html);
-}
-
-function parseAltAnnotationPayload(rawJson: string): { compact: string } | null {
-  try {
-    const parsed = JSON.parse(rawJson) as { compact?: unknown };
-    return typeof parsed.compact === 'string' ? { compact: parsed.compact } : null;
-  } catch {
-    return null;
-  }
 }
 
 function renderAltAnnotationHtml(fullText: string, compactText: string, editable: boolean): string {

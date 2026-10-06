@@ -1,5 +1,4 @@
 import { removeAttachment, setAttachment } from './attachments';
-import type { VisualBlock } from './editor/types';
 import { fernetEncryptBytes, forgetEncryptionKey, generateEncryptionKey, getEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { createEmptyBlock } from './document-factory';
 import { findBlockContainerById, replaceBlockById } from './section-ops';
@@ -7,35 +6,11 @@ import { serializeBlockFragment } from './serialization';
 import type { VisualDocument } from './types';
 import { decryptEncryptedBlock, getEncryptedAttachmentId } from './encrypted-component-reader';
 export { decryptEncryptedComponents, getEncryptedAttachmentId } from './encrypted-component-reader';
+export { prepareEncryptedComponentsForSerialization } from './encrypted-component-writer';
 
 export interface HvyEncryptedComponentResult extends HvyGeneratedEncryptionKey {
   attachmentId: string;
   encryptedBlockId: string;
-}
-
-export async function prepareEncryptedComponentsForSerialization(
-  document: VisualDocument,
-  options: HvyEncryptionOptions | null | undefined
-): Promise<void> {
-  const tasks: Promise<void>[] = [];
-  visitDocumentBlocks(document, (block) => {
-    if (block.schema.kind !== 'encrypted' || !block.schema.encryptedBlock) {
-      return;
-    }
-    const keyId = block.schema.keyId.trim();
-    const key = getEncryptionKey(options, keyId);
-    if (!key) {
-      throw new Error(`Missing Fernet key for encrypted component: ${keyId}`);
-    }
-    tasks.push((async () => {
-      const fragment = serializeBlockFragment(block.schema.encryptedBlock!, document.meta);
-      const tokenBytes = await fernetEncryptBytes(new TextEncoder().encode(fragment), key);
-      setAttachment(document, getEncryptedAttachmentId(keyId), { mediaType: 'application/vnd.hvy.encrypted-component+fernet' }, tokenBytes);
-      block.schema.encryptedDirty = false;
-      block.schema.encryptedError = '';
-    })());
-  });
-  await Promise.all(tasks);
 }
 
 export async function encryptComponentInDocument(
@@ -120,26 +95,5 @@ export async function decryptComponentInDocument(
     }
     removeAttachment(document, previousAttachmentId);
     forgetEncryptionKey(options, previousKeyId);
-  }
-}
-
-function visitDocumentBlocks(document: VisualDocument, visitor: (block: VisualBlock) => void): void {
-  for (const section of document.sections) {
-    const visitBlocks = (blocks: VisualBlock[]): void => {
-      for (const block of blocks) {
-        visitor(block);
-        visitBlocks(block.schema.containerBlocks ?? []);
-        visitBlocks(block.schema.componentListBlocks ?? []);
-        visitBlocks(block.schema.expandableStubBlocks?.children ?? []);
-        visitBlocks(block.schema.expandableContentBlocks?.children ?? []);
-        for (const item of block.schema.gridItems ?? []) {
-          visitBlocks([item.block]);
-        }
-        if (block.schema.kind === 'encrypted' && block.schema.encryptedBlock) {
-          visitBlocks([block.schema.encryptedBlock]);
-        }
-      }
-    };
-    visitBlocks(section.blocks);
   }
 }

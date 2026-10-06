@@ -1,6 +1,6 @@
 import { ensureDocumentAttachmentStore } from './attachment-store';
 import type { HvyAttachmentDescriptor } from './attachment-store';
-import { prepareEncryptedComponentsForSerialization } from './encrypted-components';
+import { prepareEncryptedComponentsForSerialization } from './encrypted-component-writer';
 import type { HvyEncryptionOptions } from './encryption';
 import { serializeDocument, serializeDocumentBytes } from './serialization';
 import type { VisualDocument } from './types';

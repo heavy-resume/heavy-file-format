@@ -10,7 +10,7 @@ import {
 } from './attachment-store';
 import type { VisualDocument } from './types';
 import { encryptDocumentBytes, getEncryptionKey, type HvyEncryptionOptions } from './encryption';
-import { prepareEncryptedComponentsForSerialization } from './encrypted-components';
+import { prepareEncryptedComponentsForSerialization } from './encrypted-component-writer';
 import { persistPreparedEmbeddingAttachments } from './chat/embedding-context';
 
 export async function serializeMountedDocumentBytesAsync(

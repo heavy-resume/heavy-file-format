@@ -856,7 +856,7 @@ export function instantiateReusableBlock(componentName: string, templateValues: 
   return instance;
 }
 
-function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject, templateValues: Record<string, string> = {}): VisualBlock | null {
+export function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject, templateValues: Record<string, string> = {}): VisualBlock | null {
   const def = getComponentDefsFromMeta(documentMeta).find((item) => item.name === componentName);
   if (!def) {
     return null;

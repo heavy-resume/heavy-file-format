@@ -28,6 +28,7 @@ import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
 import { changeEncryptedComponentKeyInDocument, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
 import { showTransientNotice } from './transient-notice';
+import type { ComponentDefinition } from './types';
 
 const loadDbTableRuntime = () => import('./plugins/db-table');
 
@@ -1047,10 +1048,15 @@ function saveReusableDefinitionModalAndClose(): void {
   }
   const syncDocumentInstances = modal.kind === 'component' && modal.pendingDocumentSync
     && hasReusableDefinitionChanges(state.document, modal);
+  const previousComponentDefinition = modal.kind === 'component' && modal.originalRaw
+    ? parseYaml(modal.originalRaw) as ComponentDefinition
+    : null;
   clearActiveEditorBlock();
   closeReusableDefinitionBuilder();
   if (syncDocumentInstances) {
-    applyReusableTemplateToDocument(active.definition.name, active.definition.template, null);
+    applyReusableTemplateToDocument(active.definition.name, active.definition.template, null, {
+      previousDefinition: previousComponentDefinition,
+    });
   }
   getRenderApp()();
   restoreReusableDefinitionHistory(modal);

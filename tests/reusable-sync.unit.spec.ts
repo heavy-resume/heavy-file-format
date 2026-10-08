@@ -2,7 +2,8 @@ import { beforeEach, expect, test } from 'vitest';
 
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
-import { saveReusableFromModal, syncReusableTemplateForBlock } from '../src/reusable';
+import { applyReusableTemplateToDocument, saveReusableFromModal, syncReusableTemplateForBlock } from '../src/reusable';
+import { getReusableTemplate, instantiateReusableBlock } from '../src/document-factory';
 import { createTestState } from './serialization-test-helpers';
 
 beforeEach(() => {
@@ -82,6 +83,105 @@ component_defs:
   expect(firstName.text).toBe('TypeScripts');
   expect(secondName.text).toBe('Python');
   expect(JSON.stringify(document.meta.component_defs)).toBe(expectedDefinitions);
+});
+
+test('expected result: editing a template child preserves definition metadata', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-record
+    baseType: container
+    description: Fake definition description
+    template:
+      id: fake-template
+      text: ""
+      schema:
+        component: container
+        containerBlocks:
+          - id: fake-child
+            text: Fake child
+            schema:
+              component: text
+---
+
+#! Fake body
+`, '.hvy');
+  initState(createTestState(document));
+  state.reusableDefinitionEditModal = {
+    kind: 'component',
+    index: 0,
+    error: null,
+    originalRaw: '',
+  };
+
+  document.meta.component_defs![0]!.template!.schema.component = 'fake-record';
+  const child = document.meta.component_defs![0]!.template!.schema.containerBlocks[0]!;
+  syncReusableTemplateForBlock('__reusable__:fake-record', child.id);
+
+  expect(document.meta.component_defs![0]!.description).toBe('Fake definition description');
+  expect(state.reusableDefinitionEditModal.pendingDocumentSync).toBe(true);
+});
+
+test('expected result: template updates preserve populated instances and update untouched instances', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-record
+    baseType: expandable
+    templateVariables:
+      company:
+        label: Company
+    template:
+      id: fake-template
+      text: ""
+      schema:
+        component: expandable
+        css: "padding: 1rem;"
+        expandableStubBlocks:
+          children:
+            - id: fake-company
+              text: "**{% company %}**"
+              schema:
+                component: text
+        expandableContentBlocks:
+          children:
+            - id: fake-plugin
+              text: ""
+              schema:
+                component: plugin
+                plugin: fake.plugin
+---
+
+#! Fake body
+`, '.hvy');
+  initState(createTestState(document));
+  const definition = document.meta.component_defs![0]!;
+  const previousDefinition = JSON.parse(JSON.stringify(definition));
+  const customized = instantiateReusableBlock('fake-record', { company: 'Fake Company' })!;
+  customized.schema.id = 'fake-customized-record';
+  customized.schema.sortKeys = { Company: 'Fake Company', Interviews: 3 };
+  customized.schema.groupKeys = { Stage: 'Interviewing' };
+  customized.schema.expandableContentBlocks.children[0]!.schema.pluginConfig = { reportId: 'fake-report' };
+  const untouched = instantiateReusableBlock('fake-record')!;
+  untouched.schema.id = 'fake-untouched-record';
+  untouched.schema.expandableStubBlocks.children[0]!.schema.id = 'fake-untouched-company';
+  document.sections[0]!.blocks.push(customized, untouched);
+  const customizedBefore = JSON.stringify(customized);
+  const untouchedIdBefore = untouched.id;
+  const untouchedSchemaIdBefore = untouched.schema.id;
+  const untouchedChildIdBefore = untouched.schema.expandableStubBlocks.children[0]!.id;
+  const untouchedChildSchemaIdBefore = untouched.schema.expandableStubBlocks.children[0]!.schema.id;
+  const template = getReusableTemplate(definition);
+  template.schema.css = 'padding: 2rem;';
+
+  applyReusableTemplateToDocument('fake-record', template, null, { previousDefinition });
+
+  expect(JSON.stringify(customized)).toBe(customizedBefore);
+  expect(untouched.schema.css).toBe('padding: 2rem;');
+  expect(untouched.id).toBe(untouchedIdBefore);
+  expect(untouched.schema.id).toBe(untouchedSchemaIdBefore);
+  expect(untouched.schema.expandableStubBlocks.children[0]!.id).toBe(untouchedChildIdBefore);
+  expect(untouched.schema.expandableStubBlocks.children[0]!.schema.id).toBe(untouchedChildSchemaIdBefore);
 });
 
 test('saving a new container component template preserves copied child blocks', () => {

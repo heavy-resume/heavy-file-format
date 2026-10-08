@@ -4,13 +4,28 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 
 import {
+  createHvyDocumentDelta,
+  decryptDocumentEnvelopeBytes,
   deserializeDocumentBytesAsync,
+  encryptDocumentBytes as encryptDocumentEnvelopeBytes,
   instantiateReusableBlockFromDocument,
   serializeDocumentBytesAsync,
 } from '../src/document';
 import { encryptComponentInDocument } from '../src/encrypted-components';
 import { encryptDocumentBytes, isEncryptedDocumentBytes } from '../src/encryption';
 import { deserializeDocument, serializeDocumentBytes } from '../src/serialization';
+
+test('expected result: document entry exposes saved-history persistence primitives', async () => {
+  const currentBytes = new TextEncoder().encode('current document bytes');
+  const previousBytes = new TextEncoder().encode('previous document bytes');
+  const reverseDelta = createHvyDocumentDelta(currentBytes, previousBytes);
+  const encrypted = await encryptDocumentEnvelopeBytes(previousBytes);
+
+  expect(reverseDelta).not.toBeNull();
+  await expect(decryptDocumentEnvelopeBytes(encrypted.bytes, {
+    keyring: { [encrypted.keyId]: encrypted.key },
+  })).resolves.toEqual({ bytes: previousBytes, keyId: encrypted.keyId });
+});
 
 test('expected result: document entry instantiates reusable blocks from the supplied document metadata', () => {
   const document = deserializeDocument(`---

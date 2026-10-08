@@ -376,8 +376,29 @@ function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRen
 
 function renderSanitizedMarkdownHtml(markdown: string): string {
   return normalizeRenderedMarkdownSoftBreaks(
-    sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string)
+    sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(separateBareUrlHardBreaks(markdown)))) as string)
   );
+}
+
+function separateBareUrlHardBreaks(markdown: string): string {
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+  return markdown.split(/(\r?\n)/).map((segment, index) => {
+    if (index % 2 === 1) return segment;
+    if (fence) {
+      const closingFence = segment.match(/^ {0,3}([`~]{3,})\s*$/)?.[1];
+      if (closingFence?.[0] === fence.marker && closingFence.length >= fence.length) fence = null;
+      return segment;
+    }
+    const openingFence = segment.match(/^ {0,3}(`{3,}|~{3,})/)?.[1];
+    if (openingFence) {
+      const run = openingFence;
+      const marker = run[0] as '`' | '~';
+      fence = { marker, length: run.length };
+      return segment;
+    }
+    if (/^(?: {4}|\t)/.test(segment)) return segment;
+    return segment.replace(/(https?:\/\/[^\s<\\]+)\\$/, '$1 \\');
+  }).join('');
 }
 
 type TextLineStyleSegment =

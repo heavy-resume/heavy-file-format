@@ -8,6 +8,7 @@ hvy_version: 0.1
 component_defs:
   - name: fake-card
     baseType: text
+    description: Fake definition description
     template:
       id: fake-template-root
       text: "Fake original {% fake-value | text %}"
@@ -182,39 +183,60 @@ test('draft undo preserves scrolling and typing can continue after restoring the
   await expect(name).toHaveValue('fakeQ-card');
 });
 
-test('template drafts update document instances only on save and undo restores their overrides', async ({ page }) => {
+test('template drafts update untouched instances without replacing populated instance values', async ({ page }) => {
   test.setTimeout(5_000);
+  await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const { instantiateReusableBlock } = await import('/src/document-factory.ts');
+    const untouched = instantiateReusableBlock('fake-card');
+    if (!untouched) throw new Error('Expected fake-card template instance.');
+    untouched.schema.id = 'fake-untouched-instance';
+    state.document.sections[0].blocks.push(untouched);
+  });
   const instanceText = () => page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
-    return state.document.sections[0].blocks.find(block => block.schema.component === 'fake-card')?.text;
+    return state.document.sections[0].blocks
+      .filter(block => block.schema.component === 'fake-card')
+      .map(block => block.text);
   });
-  expect(await instanceText()).toBe('Fake instance override.');
+  expect(await instanceText()).toEqual([
+    'Fake instance override.',
+    'Fake original <!-- value {"placeholder":"Fake Value"} -->',
+  ]);
   const edit = page.locator('[data-action="open-reusable-definition-editor"][data-template-kind="component"]');
   const modal = page.locator('.reusable-definition-modal');
   await edit.click();
   await modal.getByRole('button', { name: 'Save Template', exact: true }).click();
-  expect(await instanceText()).toBe('Fake instance override.');
+  expect(await instanceText()).toEqual([
+    'Fake instance override.',
+    'Fake original <!-- value {"placeholder":"Fake Value"} -->',
+  ]);
 
   await edit.click();
   await modal.locator('.editor-block-passive').click();
   await modal.locator('.rich-editor[data-field="block-rich"]').fill('Fake draft text');
-  expect(await instanceText()).toBe('Fake instance override.');
+  expect((await instanceText())[0]).toBe('Fake instance override.');
   await page.evaluate(async () => (await import('/src/history.ts')).undoStateAsync());
-  expect(await instanceText()).toBe('Fake instance override.');
+  expect((await instanceText())[0]).toBe('Fake instance override.');
   await page.evaluate(async () => (await import('/src/history.ts')).redoStateAsync());
   await expect(modal.locator('.rich-editor[data-field="block-rich"]')).toHaveText('Fake draft text');
   await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
-  expect(await instanceText()).toBe('Fake instance override.');
+  expect((await instanceText())[0]).toBe('Fake instance override.');
 
   await edit.click();
   await modal.locator('.editor-block-passive').click();
   await modal.locator('.rich-editor[data-field="block-rich"]').fill('Fake saved text');
   await modal.getByRole('button', { name: 'Save Template', exact: true }).click();
-  expect(await instanceText()).toBe('Fake saved text');
+  expect(await instanceText()).toEqual(['Fake instance override.', 'Fake saved text']);
+  expect(await page.evaluate(async () => (await import('/src/state.ts')).state.document.meta.component_defs?.[0]?.description))
+    .toBe('Fake definition description');
   await page.evaluate(async () => (await import('/src/history.ts')).undoStateAsync());
-  expect(await instanceText()).toBe('Fake instance override.');
+  expect(await instanceText()).toEqual([
+    'Fake instance override.',
+    'Fake original <!-- value {"placeholder":"Fake Value"} -->',
+  ]);
   await page.evaluate(async () => (await import('/src/history.ts')).redoStateAsync());
-  expect(await instanceText()).toBe('Fake saved text');
+  expect(await instanceText()).toEqual(['Fake instance override.', 'Fake saved text']);
 });
 
 test('undo commits a pending template-value rename before stepping back', async ({ page }) => {

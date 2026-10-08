@@ -1,5 +1,7 @@
 export * from './reader';
+export { createHvyDocumentDelta } from './document-delta';
 export { instantiateReusableBlockFromDocument } from './document-templates';
+export { decryptDocumentEnvelopeBytes, encryptDocumentBytes } from './encryption';
 export { serializeDocument } from './serialization';
 export type {
   HvyDocumentSerializerAdapter,

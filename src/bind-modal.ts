@@ -4,7 +4,7 @@ import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } f
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
 import { applyReusableTemplateToDocument, saveReusableFromModal } from './reusable';
-import { clearActiveEditorBlock, findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
+import { clearActiveEditorBlock, refreshReaderPanelsOutsideActiveEditor, findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 import { hasReusableDefinitionChanges } from './reusable-definition-changes';
@@ -530,7 +530,7 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
     section.css = cssInput.value;
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(cssInput);
     getRefreshModalPreview()();
   });
 }

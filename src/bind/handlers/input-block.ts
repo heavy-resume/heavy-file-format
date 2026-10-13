@@ -1,16 +1,16 @@
+import { refreshReaderPanelsOutsideActiveEditor } from '../../block-ops';
+import { renameTextLineStyleFromInput } from '../../editor/text-line-style-rename';
 import { listValueFields, syncSortValuesForDocument, listValueKindForElement, renameListValueKey } from '../../sort-values';
 import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { prepareKeywordChatContext } from '../../chat/chat-context';
 import {
-  TEXT_LINE_STYLE_NAME_PATTERN,
   formatTextLineStyleCssLines,
   getTextLineStylePreviewCss,
   getTextLineStyleSpacing,
   getTextLineStylesFromMeta,
   getTextLineStyleLabel,
-  replaceTextLineStyleMarkerName,
   sanitizeTextLineStyleCss,
   updateTextLineStyleSpacingCss,
   writeTextLineStylesToMeta,
@@ -193,7 +193,7 @@ export function bindInputBlock(app: HTMLElement): void {
       if (editorTreeBody) {
         editorTreeBody.style.maxWidth = target.value.trim();
       }
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -205,7 +205,7 @@ export function bindInputBlock(app: HTMLElement): void {
         delete state.document.meta.sidebar_max_width;
       }
       applyTheme();
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -220,7 +220,7 @@ export function bindInputBlock(app: HTMLElement): void {
       recordHistory('meta:paragraph-spacing');
       writeDocumentParagraphSpacing(state.document.meta, target.value);
       applyTheme();
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -231,7 +231,7 @@ export function bindInputBlock(app: HTMLElement): void {
       } else {
         delete state.document.meta.database_table_max_column_width;
       }
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -283,7 +283,7 @@ export function bindInputBlock(app: HTMLElement): void {
         margins[index] = null;
       }
       writePdfPageMarginDraft(margins, unit);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -311,7 +311,7 @@ export function bindInputBlock(app: HTMLElement): void {
         ...sectionDefaults,
         css: target.value,
       };
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -349,22 +349,8 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'text-line-style-name' && target instanceof HTMLInputElement) {
-      const oldName = target.dataset.styleName ?? '';
-      const newName = target.value.trim();
-      if (!oldName || !newName || oldName === newName || !TEXT_LINE_STYLE_NAME_PATTERN.test(newName)) return;
-      const styles = getTextLineStylesFromMeta(state.document.meta);
-      if (styles[newName]) return;
-      recordHistory(`meta:text-line-style:rename:${oldName}`);
-      styles[newName] = styles[oldName] ?? { label: '', css: '' };
-      delete styles[oldName];
-      writeTextLineStylesToMeta(state.document.meta, styles);
-      visitBlocks(state.document.sections, (block) => {
-        block.text = replaceTextLineStyleMarkerName(block.text, oldName, newName);
-      });
-      state.openTextLineStyleName = newName;
-      target.dataset.styleName = newName;
-      getRefreshReaderPanels()();
-      getRenderApp()();
+      renameTextLineStyleFromInput(app, target);
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -376,7 +362,7 @@ export function bindInputBlock(app: HTMLElement): void {
       styles[name] = { ...(styles[name] ?? { label: '', css: '' }), label: target.value };
       writeTextLineStylesToMeta(state.document.meta, styles);
       refreshTextLineStyleLabelUi(app, name, getTextLineStyleLabel(name, styles[name]));
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -388,7 +374,7 @@ export function bindInputBlock(app: HTMLElement): void {
       styles[name] = { ...(styles[name] ?? { label: '', css: '' }), css: sanitizeTextLineStyleCss(target.value) };
       writeTextLineStylesToMeta(state.document.meta, styles);
       refreshTextLineStyleEditingUi(app, name, styles[name]?.css ?? '');
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -402,7 +388,7 @@ export function bindInputBlock(app: HTMLElement): void {
       styles[name] = { ...(styles[name] ?? { label: '', css: '' }), css: nextCss };
       writeTextLineStylesToMeta(state.document.meta, styles);
       refreshTextLineStyleEditingUi(app, name, nextCss);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -415,7 +401,7 @@ export function bindInputBlock(app: HTMLElement): void {
       writeHeadingStylesToMeta(state.document.meta, styles);
       refreshHeadingStyleLabelUi(app, name, getHeadingStyleLabel(name, styles[name]));
       refreshHeadingStyleSurfaces(app);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -429,7 +415,7 @@ export function bindInputBlock(app: HTMLElement): void {
       refreshHeadingStyleEditingUi(app, name, styles[name].css);
       refreshHeadingStyleAfterMarginUi(app, name, styles[name].afterContentMarginTop);
       refreshHeadingStyleSurfaces(app);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -445,7 +431,7 @@ export function bindInputBlock(app: HTMLElement): void {
       refreshHeadingStyleEditingUi(app, name, nextCss);
       refreshHeadingStyleAfterMarginUi(app, name, styles[name].afterContentMarginTop);
       refreshHeadingStyleSurfaces(app);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -457,7 +443,7 @@ export function bindInputBlock(app: HTMLElement): void {
       styles[name] = { ...styles[name], afterContentMarginTop: target.value };
       writeHeadingStylesToMeta(state.document.meta, styles);
       refreshHeadingStyleSurfaces(app);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 

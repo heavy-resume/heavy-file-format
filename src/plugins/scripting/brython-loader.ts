@@ -1,3 +1,5 @@
+import { installBrythonInteropPolicy, type BrythonInteropRuntime } from './brython-interop-policy';
+
 // Lazy-loads the local Brython core bundle. Only triggered the first time a
 // scripting plugin actually needs to run user code, so a document with no
 // scripting blocks pays nothing. HVY scripts disallow user imports, so we load
@@ -73,6 +75,7 @@ export function loadBrython(): Promise<void> {
       // debug: 0 = no source maps, faster init.
       window.brython({ debug: 0 });
     }
+    installBrythonInteropPolicy(window.__BRYTHON__ as unknown as BrythonInteropRuntime);
   })();
   return loadPromise;
 }

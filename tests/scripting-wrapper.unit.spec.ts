@@ -154,8 +154,8 @@ test('buildPythonProgram executes user code with restricted builtins', () => {
   expect(program).toContain("'hasattr': __hvy_hasattr__");
   expect(program).toContain("'setattr': __hvy_setattr__");
   expect(program).toContain("'delattr': __hvy_delattr__");
-  expect(program).toContain("'__func__',");
-  expect(program).toContain("'__globals__',");
+  expect(program).toContain('if "__" in name and name not in __hvy_public_dunder_names__:');
+  expect(program).toContain('__hvy_globals__.sourcePolicyError(expression)');
   expect(program).toContain("'getattr': __hvy_getattr__,\n        'globals': __hvy_safe_globals__");
   expect(program).toContain('__hvy_runtime__.doc.log_json(__hvy_to_json__([text]))');
   expect(program).toContain('raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")');

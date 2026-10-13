@@ -56,3 +56,13 @@ function pluralizeLabel(label: string): string {
 function toTitleCase(label: string): string {
   return label.replace(/\b[a-z]/g, (char) => char.toUpperCase());
 }
+
+/** Keep list controls current while the metadata editor retains focus. */
+export function refreshComponentListLabels(root: HTMLElement, sectionKey: string, block: VisualBlock): void {
+  root.querySelectorAll<HTMLElement>('.component-list-add-ghost').forEach((control) => {
+    const owner = control.closest<HTMLElement>('[data-section-key][data-block-id]');
+    if (owner?.dataset.sectionKey !== sectionKey || owner.dataset.blockId !== block.id) return;
+    const label = control.querySelector('.ghost-label');
+    if (label) label.textContent = block.schema.lock ? getComponentListEditLabel(block) : getComponentListAddLabel(block);
+  });
+}

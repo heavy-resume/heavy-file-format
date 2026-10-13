@@ -6,7 +6,9 @@
   color: var(--hvy-text-muted);
   opacity: 0.72;
   pointer-events: none;
-  display: block;
+  position: absolute;
+  inset: 0;
+  padding: inherit;
   overflow-wrap: anywhere;
 }
 

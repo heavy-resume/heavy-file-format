@@ -109,3 +109,17 @@ return nested(values)
   expect(result.output).toBe('No lint issues.');
   expect(serializeDocument(document)).toBe(before);
 });
+
+test('hvy lint reports the shared script policy without executing the script', async () => {
+  // BEFORE
+  const document = scriptDocument('doc.header.set("changed", True)\nvalue = doc.__class__');
+  const before = serializeDocument(document);
+
+  // TOOL CALL
+  const result = await executeHvyCliCommand(document, createHvyCliSession(), 'hvy lint');
+
+  // AFTER
+  expect(result.output).toContain('script.py: line 2, column 13: ScriptPolicyError');
+  expect(result.output).toContain("private name '__class__' is not allowed");
+  expect(serializeDocument(document)).toBe(before);
+});

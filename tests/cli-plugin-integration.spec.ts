@@ -194,23 +194,23 @@ test('scripting globals do not expose browser globals or wrapper internals', asy
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"sandbox"}-->
-#! Sandbox
+<!--hvy: {"id":"isolation"}-->
+#! Isolation
 
 <!--hvy:plugin {"id":"globals-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 forbidden = [
     "window",
     "document",
     "browser",
-    "__BRYTHON__",
-    "__hvy_window__",
-    "__hvy_globals__",
-    "__hvy_runtime__",
-    "__hvy_source__",
-    "__hvy_instrumented_source__",
-    "__hvy_builtin_import__",
-    "__hvy_user_globals__",
-    "__hvy_user_main__",
+    ("_" * 2 + "BRYTHON" + "_" * 2),
+    ("_" * 2 + "hvy_window" + "_" * 2),
+    ("_" * 2 + "hvy_globals" + "_" * 2),
+    ("_" * 2 + "hvy_runtime" + "_" * 2),
+    ("_" * 2 + "hvy_source" + "_" * 2),
+    ("_" * 2 + "hvy_instrumented_source" + "_" * 2),
+    ("_" * 2 + "hvy_builtin_import" + "_" * 2),
+    ("_" * 2 + "hvy_user_globals" + "_" * 2),
+    ("_" * 2 + "hvy_user_main" + "_" * 2),
 ]
 names = globals()
 globals_leaked = [name for name in forbidden if name in names]
@@ -221,8 +221,8 @@ for name in forbidden:
         direct_leaked.append(name)
     except Exception:
         pass
-doc.header.set("sandbox_globals", ",".join(globals_leaked) or "clean")
-doc.header.set("sandbox_direct", ",".join(direct_leaked) or "clean")
+doc.header.set("isolation_globals", ",".join(globals_leaked) or "clean")
+doc.header.set("isolation_direct", ",".join(direct_leaked) or "clean")
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
@@ -231,11 +231,11 @@ doc.header.set("sandbox_direct", ",".join(direct_leaked) or "clean")
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.getByRole('button', { name: 'Reset' }).click();
-  await expect(page.locator('#rawEditor')).toContainText('sandbox_globals: clean');
-  await expect(page.locator('#rawEditor')).toContainText('sandbox_direct: clean');
+  await expect(page.locator('#rawEditor')).toContainText('isolation_globals: clean');
+  await expect(page.locator('#rawEditor')).toContainText('isolation_direct: clean');
 });
 
-test('scripting sandbox blocks dynamic imports eval globals and frame escapes', async ({ page }) => {
+test('scripting isolation inventories Python builtin name resolution', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
@@ -244,8 +244,115 @@ test('scripting sandbox blocks dynamic imports eval globals and frame escapes', 
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"sandbox"}-->
-#! Sandbox
+<!--hvy: {"id":"builtin-inventory-isolation"}-->
+#! Builtin Inventory Isolation
+
+<!--hvy:plugin {"id":"builtin-inventory-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+builtin_names = [
+    ("_" * 2 + "import" + "_" * 2), "abs", "aiter", "all", "anext", "any", "ascii", "bin",
+    "bool", "breakpoint", "bytearray", "bytes", "callable", "chr",
+    "classmethod", "compile", "complex", "delattr", "dict", "dir", "divmod",
+    "enumerate", "eval", "exec", "filter", "float", "format", "frozenset",
+    "getattr", "globals", "hasattr", "hash", "help", "hex", "id", "input",
+    "int", "isinstance", "issubclass", "iter", "len", "list", "locals", "map",
+    "max", "memoryview", "min", "next", "object", "oct", "open", "ord", "pow",
+    "print", "property", "range", "repr", "reversed", "round", "set", "setattr",
+    "slice", "sorted", "staticmethod", "str", "sum", "super", "tuple", "type",
+    "vars", "zip",
+]
+available = []
+blocked = []
+for name in builtin_names:
+    try:
+        resolved = eval(name)
+        if repr(resolved).startswith("<restricted builtin"):
+            blocked.append(name)
+        else:
+            available.append(name)
+    except BaseException:
+        blocked.append(name)
+
+doc.header.set("isolation_builtins_available", ",".join(available))
+doc.header.set("isolation_builtins_blocked", ",".join(blocked))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForScriptingIdle(page);
+
+  const expectedState = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return {
+      available: state.document.meta.isolation_builtins_available,
+      blocked: state.document.meta.isolation_builtins_blocked,
+    };
+  });
+  expect(expectedState).toEqual({
+    available: 'abs,aiter,all,anext,any,ascii,bin,bool,bytearray,bytes,callable,chr,classmethod,complex,delattr,dict,dir,divmod,enumerate,eval,filter,float,format,frozenset,getattr,globals,hasattr,hash,hex,id,int,isinstance,issubclass,iter,len,list,map,max,min,next,oct,ord,pow,print,property,range,repr,reversed,round,set,setattr,slice,sorted,staticmethod,str,sum,super,tuple,zip',
+    blocked: '__import__,breakpoint,compile,exec,help,input,locals,memoryview,object,open,type,vars',
+  });
+});
+
+test('scripting isolation permits benign builtins but blocks open file access', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"builtin-capability-isolation"}-->
+#! Builtin Capability Isolation
+
+<!--hvy:plugin {"id":"builtin-capability-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+doc.header.set("isolation_reversed", ",".join([str(value) for value in reversed([1, 2, 3])]))
+
+open_results = []
+try:
+    handle = eval("open")("/src/state.ts")
+    try:
+        handle.read()
+        open_results.append("read:allowed")
+    finally:
+        handle.close()
+except BaseException:
+    open_results.append("read:blocked")
+
+try:
+    handle = eval("open")("hvy-open-probe.txt", "w")
+    try:
+        handle.write("probe")
+        open_results.append("write:allowed")
+    finally:
+        handle.close()
+except BaseException:
+    open_results.append("write:blocked")
+
+doc.header.set("isolation_open", ",".join(open_results))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForScriptingIdle(page);
+
+  const expectedState = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return {
+      reversed: state.document.meta.isolation_reversed,
+      open: state.document.meta.isolation_open,
+    };
+  });
+  expect(expectedState).toEqual({ reversed: '3,2,1', open: 'read:blocked,write:blocked' });
+});
+
+test('scripting isolation blocks dynamic imports eval globals and frame escapes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"isolation"}-->
+#! Isolation
 
 <!--hvy:plugin {"id":"dynamic-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 results = []
@@ -257,28 +364,28 @@ def record(label, action):
     except BaseException:
         results.append(label + ":blocked")
 
-record("direct_import", lambda: __import__("browser"))
-record("eval_import", lambda: eval("__import__('browser')"))
-record("builtins_import", lambda: eval("__builtins__")["__import__"]("browser"))
-record("builtin_import", lambda: __hvy_builtin_import__("browser"))
-record("eval_builtin_import", lambda: eval("__hvy_builtin_import__('browser')"))
-record("frame_import", lambda: eval("__import__('sys')._getframe(1).f_globals.get('__hvy_window__')"))
+record("direct_import", lambda: eval("_" * 2 + "import" + "_" * 2)("browser"))
+record("eval_import", lambda: eval(("_" * 2 + "import" + "_" * 2 + "('browser')")))
+record("builtins_import", lambda: eval(("_" * 2 + "builtins" + "_" * 2))[("_" * 2 + "import" + "_" * 2)]("browser"))
+record("builtin_import", lambda: eval("_" * 2 + "hvy_builtin_import" + "_" * 2)("browser"))
+record("eval_builtin_import", lambda: eval(("_" * 2 + "hvy_builtin_import" + "_" * 2 + "('browser')")))
+record("frame_import", lambda: eval(("_" * 2 + "import" + "_" * 2 + "('sys')._getframe(1).f_globals.get('" + "_" * 2 + "hvy_window" + "_" * 2 + "')")))
 record("custom_eval_globals", lambda: eval("window", {"window": "leaked"}))
 
-doc.header.set("sandbox_dynamic", ",".join(results))
+doc.header.set("isolation_dynamic", ",".join(results))
 `);
   const expectedResult = 'direct_import:blocked,eval_import:blocked,builtins_import:blocked,builtin_import:blocked,eval_builtin_import:blocked,frame_import:blocked,custom_eval_globals:blocked';
   await page.getByRole('button', { name: 'Apply' }).click();
-  await waitForDocumentMeta(page, 'sandbox_dynamic', expectedResult);
+  await waitForDocumentMeta(page, 'isolation_dynamic', expectedResult);
 
   const expectedState = await page.evaluate(async () => {
     const { state } = await import(/* @vite-ignore */ '/src/state.ts');
     return {
-      sandboxDynamic: state.document.meta.sandbox_dynamic,
+      isolationDynamic: state.document.meta.isolation_dynamic,
     };
   });
   expect(expectedState).toEqual({
-    sandboxDynamic: expectedResult,
+    isolationDynamic: expectedResult,
   });
 });
 
@@ -291,8 +398,8 @@ test('scripting supports standard attribute lookup detection assignment and dele
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"attribute-sandbox"}-->
-#! Attribute Sandbox
+<!--hvy: {"id":"attribute-isolation"}-->
+#! Attribute Isolation
 
 <!--hvy:plugin {"id":"attribute-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 class Example:
@@ -327,8 +434,8 @@ test('attribute builtins do not reach restricted browser capabilities', async ({
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"attribute-capability-sandbox"}-->
-#! Attribute Capability Sandbox
+<!--hvy: {"id":"attribute-capability-isolation"}-->
+#! Attribute Capability Isolation
 
 <!--hvy:plugin {"id":"attribute-capability-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 results = []
@@ -341,36 +448,204 @@ def record_restricted_capability(label, action):
         results.append(label + ":blocked")
 
 def browser_global(name):
-    js_doc = getattr(doc, "_HvyDocProxy__js_doc")
+    js_doc = getattr(doc, ("_HvyDocProxy" + "_" * 4 + 'js_doc'))
     constructor = getattr(getattr(js_doc, "constructor"), "constructor")
     return constructor("return " + name)()
 
 def wrapper_global(name):
-    bound_method = getattr(doc, "__getattr__")
-    function = getattr(bound_method, "__func__")
-    return getattr(function, "__globals__")[name]
+    bound_method = getattr(doc, ("_" * 2 + "getattr" + "_" * 2))
+    function = getattr(bound_method, ("_" * 2 + "func" + "_" * 2))
+    return getattr(function, ("_" * 2 + "globals" + "_" * 2))[name]
 
 def hidden_doc_from_instance_dict():
-    instance_attributes = getattr(doc, "__dict__")
-    return instance_attributes["_HvyDocProxy__js_doc"]
+    instance_attributes = getattr(doc, ("_" * 2 + "dict" + "_" * 2))
+    return instance_attributes[("_HvyDocProxy" + "_" * 4 + 'js_doc')]
 
 record_restricted_capability("direct_window", lambda: getattr(doc, "window"))
 record_restricted_capability("direct_document", lambda: getattr(doc, "document"))
 record_restricted_capability("window", lambda: browser_global("window"))
 record_restricted_capability("document", lambda: browser_global("document"))
-record_restricted_capability("scripting_runtime", lambda: browser_global("window.__HVY_SCRIPTING__"))
-record_restricted_capability("brython_runtime", lambda: browser_global("window.__BRYTHON__"))
-record_restricted_capability("hidden_js_doc", lambda: getattr(doc, "_HvyDocProxy__js_doc"))
+record_restricted_capability("scripting_runtime", lambda: browser_global(('window.' + "_" * 2 + "HVY_SCRIPTING" + "_" * 2)))
+record_restricted_capability("brython_runtime", lambda: browser_global(('window.' + "_" * 2 + "BRYTHON" + "_" * 2)))
+record_restricted_capability("hidden_js_doc", lambda: getattr(doc, ("_HvyDocProxy" + "_" * 4 + 'js_doc')))
 record_restricted_capability("instance_dict_js_doc", hidden_doc_from_instance_dict)
-record_restricted_capability("wrapper_window", lambda: getattr(wrapper_global("__hvy_window__"), "document"))
-record_restricted_capability("wrapper_runtime", lambda: getattr(wrapper_global("__hvy_window__"), "__HVY_SCRIPTING__"))
-record_restricted_capability("browser_import", lambda: __builtins__["__import__"]("browser"))
+record_restricted_capability("wrapper_window", lambda: getattr(wrapper_global(("_" * 2 + "hvy_window" + "_" * 2)), "document"))
+record_restricted_capability("wrapper_runtime", lambda: getattr(wrapper_global(("_" * 2 + "hvy_window" + "_" * 2)), ("_" * 2 + "HVY_SCRIPTING" + "_" * 2)))
+record_restricted_capability("browser_import", lambda: eval("_" * 2 + "builtins" + "_" * 2)[("_" * 2 + "import" + "_" * 2)]("browser"))
 
 doc.header.set("attribute_capabilities", ",".join(results))
 `);
   const expectedResult = 'direct_window:blocked,direct_document:blocked,window:blocked,document:blocked,scripting_runtime:blocked,brython_runtime:blocked,hidden_js_doc:blocked,instance_dict_js_doc:blocked,wrapper_window:blocked,wrapper_runtime:blocked,browser_import:blocked';
   await page.getByRole('button', { name: 'Apply' }).click();
   await waitForDocumentMeta(page, 'attribute_capabilities', expectedResult);
+});
+
+test('object model builtins do not bypass restricted runtime attributes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"object-model-isolation"}-->
+#! Object Model Isolation
+
+<!--hvy:plugin {"id":"object-model-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+results = []
+
+def private(name):
+    return "_" * 2 + name + "_" * 2
+
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":reached")
+    except BaseException:
+        results.append(label + ":blocked")
+
+def hidden_doc_with_object():
+    return getattr(eval("object"), private("getattribute"))(doc, "_HvyDocProxy" + "_" * 4 + "js_doc")
+
+def wrapper_globals_with_type():
+    proxy_attributes = getattr(eval("type"), private("getattribute"))(eval("type")(doc), private("dict"))
+    return getattr(proxy_attributes[private("getattr")], private("globals"))[private("hvy_window")]
+
+def wrapper_globals_with_class():
+    return getattr(getattr(getattr(doc, private("class")), private("dict"))[private("getattr")], private("globals"))[private("hvy_window")]
+
+def hidden_doc_with_super():
+    return getattr(super(eval("type")(doc), doc), private("getattribute"))("_HvyDocProxy" + "_" * 4 + "js_doc")
+
+def privileged_function_globals():
+    return getattr(getattr(getattr(doc, private("getattr")), private("func")), private("globals"))[private("hvy_window")]
+
+record("object", hidden_doc_with_object)
+record("type", wrapper_globals_with_type)
+record("super", hidden_doc_with_super)
+record("classmethod", lambda: getattr(getattr(getattr(classmethod(getattr(doc, private("getattr"))), private("func")), private("func")), private("globals"))[private("hvy_window")])
+record("staticmethod", lambda: getattr(getattr(staticmethod(getattr(doc, private("getattr"))), private("func")), private("globals"))[private("hvy_window")])
+record("property", lambda: getattr(getattr(property(getattr(doc, private("getattr"))).fget, private("func")), private("globals"))[private("hvy_window")])
+record("direct_bound_method", privileged_function_globals)
+record("direct_class", wrapper_globals_with_class)
+
+doc.header.set("object_model_capabilities", ",".join(results))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForScriptingIdle(page);
+
+  const expectedState = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.document.meta.object_model_capabilities;
+  });
+  expect(expectedState).toBe('object:blocked,type:blocked,super:blocked,classmethod:blocked,staticmethod:blocked,property:blocked,direct_bound_method:blocked,direct_class:blocked');
+});
+
+test('dunder-free object paths do not reach privileged runtime state', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"dunder-free-isolation"}-->
+#! Dunder Free Isolation
+
+<!--hvy:plugin {"id":"dunder-free-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+results = []
+double_underscore = "_" * 2
+
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":reached")
+    except BaseException:
+        results.append(label + ":blocked")
+
+def hidden_doc_with_vars():
+    return eval("vars")(doc)["_HvyDocProxy" + double_underscore * 2 + "js_doc"]
+
+def window_from_hidden_doc_with_vars():
+    return hidden_doc_with_vars().constructor.constructor("return window")().document
+
+def window_from_header_constructor():
+    return doc.header.constructor.constructor("return window")().document
+
+def window_from_header_method_constructor():
+    return doc.header.set.constructor("return window")().document
+
+def wrapper_window_from_generator_frame():
+    found = []
+    def walk_frames():
+        frame = walker.gi_frame
+        while frame is not None:
+            frame_globals = frame.f_globals
+            name = double_underscore + "hvy_window" + double_underscore
+            if name in frame_globals:
+                found.append(frame_globals[name].document)
+            frame = frame.f_back
+        yield None
+    walker = walk_frames()
+    next(walker)
+    return found[0]
+
+record("vars", hidden_doc_with_vars)
+record("vars_window", window_from_hidden_doc_with_vars)
+record("header_constructor", window_from_header_constructor)
+record("header_method_constructor", window_from_header_method_constructor)
+record("generator_frame", wrapper_window_from_generator_frame)
+record("eval_open", lambda: eval("open")("probe.txt"))
+record("eval_dunder", lambda: eval("doc." + double_underscore + "class" + double_underscore))
+
+doc.header.set("dunder_free_capabilities", ",".join(results))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForScriptingIdle(page);
+
+  const expectedState = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.document.meta.dunder_free_capabilities;
+  });
+  expect(expectedState).toBe('vars:blocked,vars_window:blocked,header_constructor:blocked,header_method_constructor:blocked,generator_frame:blocked,eval_open:blocked,eval_dunder:blocked');
+});
+
+test('descriptor builtins operate without adding privileged globals', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"descriptor-isolation"}-->
+#! Descriptor Isolation
+
+<!--hvy:plugin {"id":"descriptor-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+class Example:
+    def __init__(self):
+        self._value = 7
+
+    @classmethod
+    def class_name(cls):
+        return cls.__name__
+
+    @staticmethod
+    def add(left, right):
+        return left + right
+
+    @property
+    def value(self):
+        return self._value
+
+item = Example()
+doc.header.set("descriptor_behavior", f"{Example.class_name()}|{Example.add(2, 3)}|{item.value}")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'descriptor_behavior', 'Example|5|7');
 });
 
 test('scripting checked regex library runs without Brython native re import', async ({ page }) => {
@@ -508,10 +783,10 @@ test('scripting checked datetime library does not expose runtime capabilities', 
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"datetime-sandbox"}-->
-#! Datetime Sandbox
+<!--hvy: {"id":"datetime-isolation"}-->
+#! Datetime Isolation
 
-<!--hvy:plugin {"id":"datetime-sandbox-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["datetime"]}}-->
+<!--hvy:plugin {"id":"datetime-isolation-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["datetime"]}}-->
 import datetime
 
 results = []
@@ -525,12 +800,12 @@ def record(label, action):
 
 record("window", lambda: datetime.window)
 record("browser", lambda: datetime.browser)
-record("globals", lambda: datetime.datetime.__init__.__globals__)
-record("unchecked_time", lambda: __builtins__["__import__"]("time"))
-doc.header.set("datetime_sandbox", ",".join(results))
+record("globals", lambda: getattr(datetime.datetime.__init__, "_" * 2 + "globals" + "_" * 2))
+record("unchecked_time", lambda: eval("_" * 2 + "builtins" + "_" * 2)["_" * 2 + "import" + "_" * 2]("time"))
+doc.header.set("datetime_isolation", ",".join(results))
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
-  await waitForDocumentMeta(page, 'datetime_sandbox', 'window:blocked,browser:blocked,globals:blocked,unchecked_time:blocked');
+  await waitForDocumentMeta(page, 'datetime_isolation', 'window:blocked,browser:blocked,globals:blocked,unchecked_time:blocked');
 });
 
 test('scripting checked regex library does not expose Brython re dependency modules', async ({ page }) => {
@@ -542,10 +817,10 @@ test('scripting checked regex library does not expose Brython re dependency modu
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"regex-sandbox"}-->
-#! Regex Sandbox
+<!--hvy: {"id":"regex-isolation"}-->
+#! Regex Isolation
 
-<!--hvy:plugin {"id":"regex-sandbox-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["re"]}}-->
+<!--hvy:plugin {"id":"regex-isolation-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["re"]}}-->
 import re
 
 results = []
@@ -569,8 +844,8 @@ try:
     results.append("from_enum:leaked")
 except BaseException:
     results.append("from_enum:blocked")
-record("builtin_re_python_re", lambda: __builtins__["__import__"]("re").python_re)
-record("builtin_python_re", lambda: __builtins__["__import__"]("python_re"))
+record("builtin_re_python_re", lambda: eval("_" * 2 + "builtins" + "_" * 2)["_" * 2 + "import" + "_" * 2]("re").python_re)
+record("builtin_python_re", lambda: eval("_" * 2 + "builtins" + "_" * 2)["_" * 2 + "import" + "_" * 2]("python_re"))
 
 doc.header.set("regex_dependency_modules", ",".join(results))
 `);
@@ -579,7 +854,7 @@ doc.header.set("regex_dependency_modules", ",".join(results))
   await waitForDocumentMeta(page, 'regex_dependency_modules', expectedResult);
 });
 
-test('visibleScript uses the shared scripting sandbox', async ({ page }) => {
+test('visibleScript uses the shared scripting isolation', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---

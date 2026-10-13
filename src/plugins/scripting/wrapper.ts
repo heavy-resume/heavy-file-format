@@ -1,5 +1,6 @@
 import { loadBrython, getBrython } from './brython-loader';
 import { wrapPythonSourceInFunction } from './python-source';
+import { checkScriptSourcePolicy, SCRIPT_PUBLIC_DUNDER_NAMES, SCRIPT_RESTRICTED_BUILTIN_NAMES } from './script-source-policy';
 export { wrapPythonSourceInFunction } from './python-source';
 import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import { createScriptingPluginsApi } from './plugin-apis';
@@ -41,6 +42,7 @@ interface HvyScriptingGlobal {
   results: Record<string, unknown>;
   callbacks: Record<string, () => void>;
   regex: HvyScriptingRegexBridge;
+  sourcePolicyError(source: string): string | null;
   compiledDefinitionSources: Map<string, string>;
   compiledDefinitions: Map<string, unknown>;
   activeRuntimeIds: Map<string, string>;
@@ -98,6 +100,7 @@ function getScriptingGlobal(): HvyScriptingGlobal {
       results: {},
       callbacks: {},
       regex: createScriptingRegexBridge(),
+      sourcePolicyError: (source) => checkScriptSourcePolicy(source)?.message ?? null,
       compiledDefinitionSources: new Map(),
       compiledDefinitions: new Map(),
       activeRuntimeIds: new Map(),
@@ -662,11 +665,25 @@ def __hvy_safe_globals__():
     }
 
 
+# Copy string subclasses through the base operation, bypassing user overrides.
+# Check and use this exact text for both policy and execution / lookup.
+def __hvy_plain_string__(value):
+    if not isinstance(value, str):
+        raise TypeError("HVY attribute names and eval expressions must be strings.")
+    if type(value) is str:
+        return value
+    return str.__getitem__(value, slice(None))
+
+
 def __hvy_safe_eval__(expression, globals=None, locals=None):
-    if isinstance(expression, str) and expression.strip() in __hvy_forbidden_global_names__:
+    expression = __hvy_plain_string__(expression)
+    if expression.strip() in __hvy_forbidden_global_names__:
         raise NameError("name '" + expression.strip() + "' is not defined")
     if globals is not None or locals is not None:
         raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")
+    __hvy_policy_error__ = __hvy_globals__.sourcePolicyError(expression)
+    if __hvy_policy_error__:
+        raise RuntimeError(__hvy_policy_error__)
     __hvy_sanitize_user_globals__()
     return __hvy_builtin_eval__(expression, __hvy_user_globals__, __hvy_user_globals__)
 
@@ -675,24 +692,34 @@ def __hvy_blocked_import__(*args, **kwargs):
     raise RuntimeError("Import statements are not allowed in HVY scripts.")
 
 
-__hvy_private_attribute_names__ = (
-    '__dict__',
-    '__func__',
-    '__globals__',
-    '__getattr__',
-    '__getattribute__',
-    '_HvyDocProxy__js_doc',
-    '_HvyToolProxy__js_doc',
-)
+# Installed as user globals so they shadow Brython's real builtins while still
+# letting scripts bind the same names (methods, parameters, locals) normally.
+class __HvyRestrictedBuiltin__:
+    def __init__(self, name):
+        self.name = name
+
+    def __call__(self, *args, **kwargs):
+        raise NameError("builtin '" + self.name + "' is not available in HVY scripts.")
+
+    def __repr__(self):
+        return "<restricted builtin '" + self.name + "'>"
+
+
+__hvy_restricted_builtin_names__ = ${JSON.stringify(SCRIPT_RESTRICTED_BUILTIN_NAMES)}
+
+
+__hvy_public_dunder_names__ = ${JSON.stringify(SCRIPT_PUBLIC_DUNDER_NAMES)}
 
 
 def __hvy_require_public_attribute__(name):
-    if str(name) in __hvy_private_attribute_names__:
-        raise AttributeError("HVY scripts cannot access private runtime attribute '" + str(name) + "'.")
+    name = __hvy_plain_string__(name)
+    if "__" in name and name not in __hvy_public_dunder_names__:
+        raise AttributeError("HVY scripts cannot access private runtime attribute '" + name + "'.")
+    return name
 
 
 def __hvy_getattr__(value, name, *default):
-    __hvy_require_public_attribute__(name)
+    name = __hvy_require_public_attribute__(name)
     if len(default) > 1:
         raise TypeError("getattr expected at most 3 arguments")
     if len(default) == 1:
@@ -709,12 +736,12 @@ def __hvy_hasattr__(value, name):
 
 
 def __hvy_setattr__(value, name, replacement):
-    __hvy_require_public_attribute__(name)
+    name = __hvy_require_public_attribute__(name)
     return setattr(value, name, replacement)
 
 
 def __hvy_delattr__(value, name):
-    __hvy_require_public_attribute__(name)
+    name = __hvy_require_public_attribute__(name)
     return delattr(value, name)
 
 
@@ -1573,6 +1600,8 @@ try:
         'delattr': __hvy_delattr__,
         '__name__': '__hvy_script__',
     }
+    for __hvy_restricted_name__ in __hvy_restricted_builtin_names__:
+        __hvy_user_globals__[__hvy_restricted_name__] = __HvyRestrictedBuiltin__(__hvy_restricted_name__)
     for __hvy_library__ in __hvy_allowed_libraries__:
         __hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)
 ${injectedAssignments}
@@ -1672,6 +1701,20 @@ export interface RunUserScriptOptions {
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
   if (options.source.trim().length === 0) {
     return { ok: true, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, toolCalls: 0 };
+  }
+
+  const policyIssue = checkScriptSourcePolicy(options.source);
+  if (policyIssue) {
+    const error = `${policyIssue.message} (line ${policyIssue.line}, column ${policyIssue.column})`;
+    return {
+      ok: false,
+      error,
+      errorDetail: error,
+      stepsExecuted: 0,
+      stepBudget: options.maxLines ?? 100_000,
+      linesExecuted: 0,
+      toolCalls: 0,
+    };
   }
 
   const requestedVersion = getScriptingPluginVersion(options.pluginVersion ? { version: options.pluginVersion } : undefined);

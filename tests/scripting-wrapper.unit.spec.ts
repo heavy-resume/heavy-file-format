@@ -1,17 +1,10 @@
 import { expect, test, vi } from 'vitest';
 
-import {
-  buildPythonProgram,
-  buildScriptingVersionMismatchMessage,
-  cleanScriptingErrorDetail,
-  comparePluginVersions,
-  getScriptingTraceLabel,
-  instrumentPythonSource,
-  stripPythonImports,
-  summarizeScriptingError,
-  runUserScript,
-  wrapPythonSourceInFunction,
-} from '../src/plugins/scripting/wrapper';
+import { buildPythonProgram, getScriptingTraceLabel } from '../src/plugins/scripting/python-program';
+import { instrumentPythonSource, stripPythonImports, wrapPythonSourceInFunction } from '../src/plugins/scripting/python-source';
+import { cleanScriptingErrorDetail, summarizeScriptingError } from '../src/plugins/scripting/script-error-text';
+import { buildScriptingVersionMismatchMessage, comparePluginVersions } from '../src/plugins/scripting/version';
+import { runUserScript } from '../src/plugins/scripting/wrapper';
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
@@ -137,7 +130,8 @@ test('buildPythonProgram traces user frames and falls back to instrumented sourc
   const program = buildPythonProgram('r7');
   expect(program).toContain("import sys as __hvy_sys__");
   expect(program).toContain("__hvy_sys__.settrace(__hvy_trace__)");
-  expect(program).toContain("if frame.f_code.co_filename != '<hvy-script>':");
+  expect(program).toContain('__hvy_trace_filename__ = "<hvy-script>"');
+  expect(program).toContain('if frame.f_code.co_filename != __hvy_trace_filename__:');
   expect(program).toContain("__hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__");
   expect(program).not.toContain('NodeTransformer');
   expect(program).not.toContain('visit_Compare');
@@ -177,14 +171,16 @@ doc.header.set("phase", "after")`
 });
 
 test('buildPythonProgram uses the component id in tracebacks when available', () => {
-  expect(buildPythonProgram('r7', 'import-example-script')).toContain(
-    "__hvy_code__ = compile(__hvy_compilable_source__, '<import-example-script>', 'exec')"
-  );
+  const program = buildPythonProgram('r7', 'import-example-script');
+
+  expect(program).toContain('__hvy_trace_filename__ = "<import-example-script>"');
+  expect(program).toContain("__hvy_code__ = compile(__hvy_compilable_source__, __hvy_trace_filename__, 'exec')");
 });
 
 test('buildPythonProgram reuses a cached compiled definition while its source is unchanged', () => {
   const program = buildPythonProgram('r7', 'cached-example-script', {}, [], 'cached-example-script');
 
+  expect(program).toContain('__hvy_definition_key__ = "cached-example-script"');
   expect(program).toContain("__hvy_code__ = __hvy_globals__.compiledDefinitions.get(__hvy_definition_key__)");
   expect(program).toContain("__hvy_globals__.compiledDefinitionSources.get(__hvy_definition_key__) != __hvy_compilable_source__");
   expect(program).toContain("__hvy_globals__.compiledDefinitions.set(__hvy_definition_key__, __hvy_code__)");
@@ -193,7 +189,7 @@ test('buildPythonProgram reuses a cached compiled definition while its source is
 test('buildPythonProgram preloads checked libraries', () => {
   const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're', 'datetime']);
 
-  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re", "datetime"]');
+  expect(program).toContain('__hvy_allowed_libraries__ = ["random","re","datetime"]');
   expect(program).toContain("__hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)");
   expect(program).toContain('if root_name == "re":');
   expect(program).toContain('return __HvyReModule__()');

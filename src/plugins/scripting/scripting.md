@@ -10,7 +10,18 @@ in `block.schema.pluginConfig`.
 
 - `scripting.ts`: plugin mount UI for editor and reader modes
 - `scripting.css`: editor and reader styling for the plugin
-- `wrapper.ts`: script preparation, version checks, Brython execution, and error cleanup
+- `wrapper.ts`: `runUserScript` — source policy and version checks, runtime setup, Brython execution
+- `python-program.ts`: assembles the executed Python program from a per-run header plus `python/*.py`
+- `python/`: the Python side of the runtime, kept as real `.py` files (imported as text, no template interpolation)
+  - `sandbox-prelude.py`: wrapper globals, guarded builtins, restricted builtin stubs, import hook
+  - `random-shim.py`, `datetime-shim.py`, `re-shim.py`: checked library implementations
+  - `host-bridge.py`: JSON marshaling, plugin callbacks, and the `doc` proxies
+  - `program-runner.py`: tracing, compile / definition cache, user globals, `exec`
+- `python-source.ts`: source transforms (function wrapping, import stripping, step instrumentation)
+- `script-source-policy.ts`: lexical policy shared by execution, `eval`, and lint
+- `script-error-text.ts`: traceback summary and cleanup for display
+- `regex-bridge.ts`: JavaScript regex engine behind `re-shim.py`
+- `brython-interop-policy.ts`: JavaScript-object property guard installed on Brython
 - `runtime.ts`: restricted runtime surface exposed to user scripts as `doc`
 - `brython-loader.ts`: lazy-loads the locally bundled Brython runtime on first execution
 - `help.hvy` / `help-modal.ts`: user-facing help content and modal
@@ -42,7 +53,7 @@ expressions during `compile(...)`.
 
 Document scripts use `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
 virtual filesystem containing only `browser` and `sys`. Keep checked libraries
-such as `random`, `re`, and `datetime` in `wrapper.ts` shims instead of bundling Brython's
+such as `random`, `re`, and `datetime` in the `python/*-shim.py` files instead of bundling Brython's
 real stdlib modules such as `re`, `python_re`, or `enum`; otherwise checked
 imports can expose a larger module object graph than the restricted environment intends.
 

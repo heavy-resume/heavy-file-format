@@ -121,3 +121,5 @@ Always repro before fixing! Always test adjacent tests when changing things!
 Don't make README.md changes unless explicilty instructed. If you want to update things for future agents update README.foragents.md instead
 
 Don't update HVY-SPEC.md with features of clients. Its defining the file format not the client.
+
+Please make sure that inputs aren't doing a re-render on each character, where applicable

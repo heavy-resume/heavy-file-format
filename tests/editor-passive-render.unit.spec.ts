@@ -92,7 +92,7 @@ test('passive editor fallback renders plain reader content without re-entering A
 
   expect(expectedResult).toContain('Plain reader card');
   // Editing surfaces render from the document, never from ephemeral viewer session state.
-  expect(expectedOptions).toEqual({ suppressAiEditorDelegation: true, ignoreReaderSessionState: true });
+  expect(expectedOptions).toEqual({ suppressAiEditorDelegation: true, ignoreReaderSessionState: true, textPlaceholders: [] });
 });
 
 test('expected result: passive editor grid cells do not apply document slot CSS', () => {

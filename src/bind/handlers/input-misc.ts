@@ -2,7 +2,7 @@ import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, 
 import { refreshComponentListLabels } from '../../editor/components/component-list/component-list-labels';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
-import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
+import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/python-program';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
 import { refreshSearchFilterButton, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';

@@ -53,7 +53,7 @@ import {
 } from './editor-render-tree-window';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugins/scripting/version';
-import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
+import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/python-program';
 import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon, sparklesIcon, wrenchIcon } from '../icons';

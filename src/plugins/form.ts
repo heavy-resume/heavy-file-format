@@ -8,7 +8,8 @@ import type {
   HvyPluginInstance,
 } from './types';
 import { createBuiltInPluginMetadata, FORM_PLUGIN_ID } from './registry';
-import { SCRIPTING_LIBRARY_OPTIONS, type ScriptingRunResult, type ScriptingLibraryName } from './scripting/wrapper';
+import { SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './scripting/python-program';
+import type { ScriptingRunResult } from './scripting/wrapper';
 import type { ScriptingFormApi, ScriptingFormOption } from './scripting/runtime';
 import { requestProxyCompletion } from '../chat/chat';
 import { sanitizeInlineCss } from '../css-sanitizer';

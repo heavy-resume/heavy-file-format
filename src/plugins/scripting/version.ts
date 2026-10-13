@@ -16,3 +16,24 @@ export function getScriptingPluginMaxLines(pluginConfig: JsonObject | null | und
 }
 
 export const getScriptingPluginMaxSteps = getScriptingPluginMaxLines;
+
+export function comparePluginVersions(left: string, right: string): number {
+  const leftParts = left.split('.').map((part) => Number.parseInt(part, 10));
+  const rightParts = right.split('.').map((part) => Number.parseInt(part, 10));
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = Number.isFinite(leftParts[index]) ? leftParts[index] : 0;
+    const rightValue = Number.isFinite(rightParts[index]) ? rightParts[index] : 0;
+    if (leftValue > rightValue) {
+      return 1;
+    }
+    if (leftValue < rightValue) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+export function buildScriptingVersionMismatchMessage(requestedVersion: string): string {
+  return `This HVY scripting block requires plugin version ${requestedVersion}, but this client supports ${SCRIPTING_PLUGIN_VERSION}.`;
+}

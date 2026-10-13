@@ -354,15 +354,15 @@ export function bindUi(app: HTMLElement): void {
     }
   };
 
-  const runReaderAction = (event: Event, action: () => void): void => {
+  const runReaderAction = (_event: Event, action: () => void): void => {
     clearPendingAiReaderAction();
     if (state.currentView !== 'ai') {
       runInBoundRuntime(action);
       return;
     }
-    if (event instanceof MouseEvent && event.detail > 1) {
-      return;
-    }
+    // Context-open gestures cancel this pending action through the reader event.
+    // Browser click counts can include a preceding backdrop dismissal, so they
+    // do not reliably identify double taps on the current reader target.
     pendingAiReaderAction = window.setTimeout(() => {
       runInBoundRuntime(() => {
         pendingAiReaderAction = null;

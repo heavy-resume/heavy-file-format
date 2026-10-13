@@ -17,6 +17,7 @@ export function createTestState(document: VisualDocument): AppState {
     crossDocumentLinksEnabled: false,
     chat: createDefaultChatState(),
     search: createDefaultSearchState(),
+    searchRevealedAncestors: {},
     metaFilter: {
       query: '',
       mode: 'semantic',

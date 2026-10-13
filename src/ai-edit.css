@@ -1,3 +1,16 @@
+.hvy-document .hvy-ai-reader-surface {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Active editors and native controls retain their editing/selection behavior. */
+.hvy-document .hvy-ai-reader-surface :is(a[href], input, textarea, select, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 .hvy-document .ai-view-hint {
   position: absolute;
   left: 1rem;

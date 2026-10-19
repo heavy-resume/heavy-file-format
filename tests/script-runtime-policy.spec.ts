@@ -4,7 +4,7 @@ for (const source of [
   'doc.header.set("policy_mutation", True)\nvalue = doc.__class__',
   'value = "{doc.__class__}".format(doc=doc)',
   String.raw`value = f"{1:\{doc.__class__}}"`,
-  ...['getattr', 'setattr', 'delattr', 'hasattr', 'eval', 'globals', 'open', 'type'].map(
+  ...['getattr', 'setattr', 'delattr', 'hasattr', 'eval', 'globals', 'print', 'open', 'type'].map(
     (name) => `global ${name}\ndel ${name}\n${name}("open")`,
   ),
 ]) {
@@ -185,3 +185,25 @@ doc.header.set("runtime_builtin_results", ",".join(results))
     outcomes: 'call:blocked,fstring:blocked,format_spec:blocked,method_body:blocked,eval:blocked,type:blocked,vars:blocked',
   });
 });
+
+for (const [source, expectedResult] of [
+  ['print("captured", 2)\nprint("a", "b", sep="-", end="!")', { ok: true, logs: ['captured 2', 'a-b!'] }],
+  ['print("before")\nprint("hidden", file=[])', {
+    ok: false, error: expect.stringContaining('print(file=...) is not supported'), logs: ['before'],
+  }],
+  ['for index in range(205):\n    print(index)', {
+    ok: true, logs: [...Array.from({ length: 200 }, (_, index) => String(index)), '[log limit reached]'],
+  }],
+] as const) {
+  test(`script print writes to run logs: ${source}`, async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
+    const result = await page.evaluate(async (source) => {
+      const { runUserScript } = await import('/src/plugins/scripting/wrapper.ts');
+      const { deserializeDocument } = await import('/src/serialization.ts');
+      const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+      return runUserScript({ document, source });
+    }, source);
+    expect(result).toMatchObject(expectedResult);
+  });
+}

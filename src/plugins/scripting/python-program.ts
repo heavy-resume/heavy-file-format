@@ -2,16 +2,33 @@ import { SCRIPT_PUBLIC_DUNDER_NAMES, SCRIPT_RESTRICTED_BUILTIN_NAMES } from './s
 import sandboxPrelude from './python/sandbox-prelude.py?raw';
 import randomShim from './python/random-shim.py?raw';
 import datetimeShim from './python/datetime-shim.py?raw';
+import datetimeFormatShim from './python/datetime-format-shim.py?raw';
+import timezoneShim from './python/timezone-shim.py?raw';
 import reShim from './python/re-shim.py?raw';
 import hostBridge from './python/host-bridge.py?raw';
 import programRunner from './python/program-runner.py?raw';
 
-export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're', 'datetime'] as const;
+export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're', 'datetime', 'zoneinfo', 'tzlocal'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
+
+// `zoneinfo` and `tzlocal` hand out tzinfo objects for the checked `datetime`
+// classes, so every date/time library loads the same files.
+const DATE_TIME_LIBRARY_FILES = [datetimeShim, datetimeFormatShim, timezoneShim];
+const LIBRARY_FILES: Record<ScriptingLibraryName, readonly string[]> = {
+  random: [randomShim],
+  re: [reShim],
+  datetime: DATE_TIME_LIBRARY_FILES,
+  zoneinfo: DATE_TIME_LIBRARY_FILES,
+  tzlocal: DATE_TIME_LIBRARY_FILES,
+};
 
 // Order matters: later files call functions and classes defined by earlier ones,
 // and the runner executes the user script once everything else is defined.
-const PROGRAM_FILES = [sandboxPrelude, randomShim, datetimeShim, reShim, hostBridge, programRunner];
+// Library files are only compiled into programs that enable that library.
+function getProgramFiles(libraries: readonly ScriptingLibraryName[]): string[] {
+  const libraryFiles = new Set(libraries.flatMap((library) => LIBRARY_FILES[library]));
+  return [sandboxPrelude, ...libraryFiles, hostBridge, programRunner];
+}
 
 export function getScriptingTraceLabel(componentId?: string): string {
   const trimmed = componentId?.trim() ?? '';
@@ -56,5 +73,5 @@ export function buildPythonProgram(
     `__hvy_public_dunder_names__ = ${JSON.stringify(SCRIPT_PUBLIC_DUNDER_NAMES)}`,
     `__hvy_injected_globals__ = {${injectedEntries.join(', ')}}`,
   ].join('\n');
-  return [header, ...PROGRAM_FILES].join('\n\n');
+  return [header, ...getProgramFiles(allowedLibraries)].join('\n\n');
 }

@@ -1,6 +1,6 @@
 import { findSortValueOwnerBlock, syncSortValuesForListItem, syncSortValuesForDocument } from '../sort-values';
 import { cliBlockMetadata } from './block-metadata-fields';
-import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment } from './template-directories';
+import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment, type TemplateDirectory } from './template-directories';
 import { parse as parseYaml } from 'yaml';
 import { stringifyYamlUnfolded } from '../hvy/yaml-stringify';
 import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
@@ -225,11 +225,7 @@ export function findBlockForVirtualDirectory(document: VisualDocument, path: str
   const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
   if (normalized.startsWith('/templates/')) {
     const root = findTemplateDirectory(document, normalized);
-    const blocks = new Map<string, VisualBlock>();
-    const entries = new Map<string, HvyVirtualEntry>();
-    if (root?.block) addBlockLookup(document.meta, entries, blocks, root.block, root.contentPath, naming);
-    if (root?.section) addSectionBlockLookup(document.meta, entries, blocks, root.section, root.contentPath, naming);
-    return blocks.get(normalized) ?? null;
+    return root ? buildTemplateDirectoryBlockLookup(document, root, naming).get(normalized) ?? null : null;
   }
   const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();
@@ -283,6 +279,41 @@ export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlo
     }
   }
   return null;
+}
+
+/**
+ * Every directory that resolves to the block, in body or template content:
+ * canonical paths first, then `/id` aliases when requested (they cost an extra pass).
+ */
+export function findVirtualDirectoriesForBlock(
+  document: VisualDocument,
+  targetBlock: VisualBlock,
+  options: { naming?: HvyVirtualPathNamingState; includeIdAliases?: boolean } = {}
+): string[] {
+  const { naming, includeIdAliases = false } = options;
+  const lookups = [
+    () => includeIdAliases ? buildVirtualDirectoryBlockLookupWithAliases(document, naming) : buildVirtualDirectoryBlockLookup(document, naming),
+    ...getTemplateDirectories(document).map((root) => () => buildTemplateDirectoryBlockLookup(document, root, naming)),
+  ];
+  for (const buildLookup of lookups) {
+    const paths = [...buildLookup()].filter(([, block]) => block === targetBlock).map(([path]) => path);
+    if (paths.length > 0) {
+      return paths;
+    }
+  }
+  return [];
+}
+
+function buildTemplateDirectoryBlockLookup(
+  document: VisualDocument,
+  root: TemplateDirectory,
+  naming?: HvyVirtualPathNamingState
+): Map<string, VisualBlock> {
+  const blocks = new Map<string, VisualBlock>();
+  const entries = new Map<string, HvyVirtualEntry>();
+  if (root.block) addBlockLookup(document.meta, entries, blocks, root.block, root.contentPath, naming);
+  if (root.section) addSectionBlockLookup(document.meta, entries, blocks, root.section, root.contentPath, naming);
+  return blocks;
 }
 
 export function buildVirtualDirectorySectionLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {

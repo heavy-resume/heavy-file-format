@@ -2891,7 +2891,7 @@ hvy_version: 0.1
   const session = createHvyCliSession();
 
   await expect(executeHvyCliCommand(document, session, 'hvy insert -1 plugin /quality bad-db db-table')).rejects.toThrow(
-    'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID" or plugin id "hvy.db-table".'
+    'hvy insert plugin: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH [ID|--id ID]" or plugin id "hvy.db-table".'
   );
 
   const result = await executeHvyCliCommand(
@@ -2944,7 +2944,7 @@ test('hvy plugin db-table help shows canonical creation and operations', async (
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin db-table')).output;
 
-  expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
+  expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH [ID|--id ID]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('hvy plugin db-table presentation COMPONENT_PATH [JSON]');
@@ -2963,8 +2963,8 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy recipe [NAME]');
   expect(help).toContain('Cheatsheets:\n- common-patterns\n- components\n- db-table\n- forms\n- header\n- reusable-component\n- scripting\n- styling');
   expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting');
-  expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH ID');
-  expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
+  expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH [ID|--id ID]');
+  expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH [ID|--id ID]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('hvy plugin db-table tables');
@@ -3060,7 +3060,7 @@ test('hvy plugin form help explains script and submit options', async () => {
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin form')).output;
 
-  expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH ID');
+  expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH [ID|--id ID]');
   expect(help).toContain('plugin.txt\n  Stores form YAML');
   expect(help).toContain('plugin.json\n  Stores form-level behavior');
   expect(help).toContain('load.py, on_submit.py, etc.');
@@ -3113,7 +3113,7 @@ test('registered plugin help topics work without special-case command handlers',
   const manHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting')).output;
   const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting')).output;
 
-  expect(manHelp).toContain('hvy insert INDEX plugin SECTION_PATH ID hvy.scripting');
+  expect(manHelp).toContain('hvy insert INDEX plugin SECTION_PATH [ID|--id ID] hvy.scripting');
   expect(manHelp).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
   expect(manHelp).toContain('get_updated_components, get_components');

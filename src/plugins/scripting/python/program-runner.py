@@ -37,6 +37,7 @@ try:
         'hasattr': __hvy_hasattr__,
         'setattr': __hvy_setattr__,
         'delattr': __hvy_delattr__,
+        'print': __hvy_print__,
         '__name__': '__hvy_script__',
     }
     for __hvy_restricted_name__ in __hvy_restricted_builtin_names__:

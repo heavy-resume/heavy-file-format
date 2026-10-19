@@ -14,7 +14,10 @@ in `block.schema.pluginConfig`.
 - `python-program.ts`: assembles the executed Python program from a per-run header plus `python/*.py`
 - `python/`: the Python side of the runtime, kept as real `.py` files (imported as text, no template interpolation)
   - `sandbox-prelude.py`: wrapper globals, guarded builtins, restricted builtin stubs, import hook
-  - `random-shim.py`, `datetime-shim.py`, `re-shim.py`: checked library implementations
+  - `random-shim.py`, `re-shim.py`: checked library implementations
+  - `datetime-shim.py`, `datetime-format-shim.py`, `timezone-shim.py`: checked `datetime`, `zoneinfo`, and `tzlocal`
+  - Library files are compiled only into programs that enable that library
+- `clock-bridge.ts`: current time and Intl time zone lookups for the checked date/time libraries
   - `host-bridge.py`: JSON marshaling, plugin callbacks, and the `doc` proxies
   - `program-runner.py`: tracing, compile / definition cache, user globals, `exec`
 - `python-source.ts`: source transforms (function wrapping, import stripping, step instrumentation)
@@ -53,7 +56,7 @@ expressions during `compile(...)`.
 
 Document scripts use `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
 virtual filesystem containing only `browser` and `sys`. Keep checked libraries
-such as `random`, `re`, and `datetime` in the `python/*-shim.py` files instead of bundling Brython's
+such as `random`, `re`, `datetime`, `zoneinfo`, and `tzlocal` in the `python/*-shim.py` files instead of bundling Brython's
 real stdlib modules such as `re`, `python_re`, or `enum`; otherwise checked
 imports can expose a larger module object graph than the restricted environment intends.
 

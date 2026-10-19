@@ -140,6 +140,10 @@ def __hvy_script_import__(name, globals=None, locals=None, fromlist=(), level=0)
         return __HvyReModule__()
     if root_name == "datetime":
         return __HvyDatetimeModule__()
+    if root_name == "zoneinfo":
+        return __HvyZoneinfoModule__()
+    if root_name == "tzlocal":
+        return __HvyTzlocalModule__()
     return __hvy_builtin_import__(name, globals, locals, fromlist, level)
 
 

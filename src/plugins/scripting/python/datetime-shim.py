@@ -1,4 +1,11 @@
 # Checked `datetime` library: date, datetime and timedelta implemented in Python.
+# Time zone classes live in timezone-shim.py and parsing / formatting lives in
+# datetime-format-shim.py. Aware values follow CPython semantics.
+
+__hvy_us_per_second__ = 1000000
+__hvy_us_per_day__ = 86400000000
+__hvy_keep__ = object()
+
 
 def __hvy_is_leap_year__(year):
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
@@ -37,6 +44,9 @@ def __hvy_ordinal_to_date__(ordinal):
         day_of_year -= __hvy_days_in_month__(year, month)
         month += 1
     return year, month, day_of_year
+
+
+__hvy_epoch_naive_us__ = (__hvy_date_to_ordinal__(1970, 1, 1) - 1) * __hvy_us_per_day__
 
 
 class __HvyTimedelta__:
@@ -89,6 +99,18 @@ class __HvyTimedelta__:
     def __neg__(self):
         return __HvyTimedelta__(microseconds=-self.__total_microseconds)
 
+    def __pos__(self):
+        return self
+
+    def __abs__(self):
+        return -self if self.__total_microseconds < 0 else self
+
+    def __bool__(self):
+        return self.__total_microseconds != 0
+
+    def __hash__(self):
+        return hash(self.__total_microseconds)
+
     def __eq__(self, other):
         return isinstance(other, __HvyTimedelta__) and self.__total_microseconds == other._total_microseconds_value()
 
@@ -101,6 +123,10 @@ class __HvyTimedelta__:
         if not isinstance(other, __HvyTimedelta__):
             return NotImplemented
         return self.__total_microseconds <= other._total_microseconds_value()
+
+
+def __hvy_timedelta_us__(us):
+    return __HvyTimedelta__(microseconds=us)
 
 
 class __HvyDate__:
@@ -120,8 +146,14 @@ class __HvyDate__:
     def __ordinal(self):
         return __hvy_date_to_ordinal__(self.year, self.month, self.day)
 
+    def toordinal(self):
+        return self.__ordinal()
+
     def weekday(self):
         return (self.__ordinal() - 1) % 7
+
+    def isoweekday(self):
+        return self.weekday() + 1
 
     def isocalendar(self):
         ordinal = self.__ordinal()
@@ -130,6 +162,13 @@ class __HvyDate__:
         first_thursday = __hvy_date_to_ordinal__(iso_year, 1, 4)
         first_thursday += 3 - ((first_thursday - 1) % 7)
         return iso_year, (thursday - first_thursday) // 7 + 1, self.weekday() + 1
+
+    def replace(self, year=None, month=None, day=None):
+        return __HvyDate__(
+            self.year if year is None else year,
+            self.month if month is None else month,
+            self.day if day is None else day,
+        )
 
     def isoformat(self):
         return f"{self.year:04d}-{self.month:02d}-{self.day:02d}"
@@ -143,11 +182,17 @@ class __HvyDate__:
     def strftime(self, format):
         return __hvy_strftime__(self, str(format))
 
+    def __format__(self, format):
+        return self.strftime(format) if format else str(self)
+
     def __add__(self, other):
         if isinstance(other, __HvyTimedelta__):
             year, month, day = __hvy_ordinal_to_date__(self.__ordinal() + other.days)
             return __HvyDate__(year, month, day)
         return NotImplemented
+
+    def __radd__(self, other):
+        return self.__add__(other)
 
     def __sub__(self, other):
         if isinstance(other, __HvyTimedelta__):
@@ -155,6 +200,9 @@ class __HvyDate__:
         if isinstance(other, __HvyDate__):
             return __HvyTimedelta__(days=self.__ordinal() - other.__ordinal())
         return NotImplemented
+
+    def __hash__(self):
+        return hash((self.year, self.month, self.day))
 
     def __eq__(self, other):
         return isinstance(other, __HvyDate__) and (self.year, self.month, self.day) == (other.year, other.month, other.day)
@@ -171,7 +219,7 @@ class __HvyDate__:
 
 
 class __HvyDateTime__(__HvyDate__):
-    def __init__(self, year, month, day, hour=0, minute=0, second=0, microsecond=0):
+    def __init__(self, year, month, day, hour=0, minute=0, second=0, microsecond=0, tzinfo=None, *, fold=0):
         super().__init__(year, month, day)
         if not all(isinstance(value, int) for value in (hour, minute, second, microsecond)):
             raise TypeError("datetime arguments must be integers")
@@ -183,93 +231,72 @@ class __HvyDateTime__(__HvyDate__):
             raise ValueError("second must be in 0..59")
         if microsecond < 0 or microsecond > 999999:
             raise ValueError("microsecond must be in 0..999999")
+        if fold not in (0, 1):
+            raise ValueError("fold must be either 0 or 1")
+        __hvy_require_tzinfo__(tzinfo)
         self.hour = hour
         self.minute = minute
         self.second = second
         self.microsecond = microsecond
+        self.tzinfo = tzinfo
+        self.fold = fold
 
-    def __total_microseconds(self):
+    def _naive_us(self):
         return ((self._ordinal_value() - 1) * 86400 + self.hour * 3600 + self.minute * 60 + self.second) * 1000000 + self.microsecond
 
     def _ordinal_value(self):
         return __hvy_date_to_ordinal__(self.year, self.month, self.day)
 
-    @classmethod
-    def fromisoformat(cls, value):
-        source = str(value)
-        if source.endswith("Z") or "+" in source[10:] or "-" in source[10:]:
-            raise ValueError("timezone-aware datetimes are not supported")
-        parts = source.replace("T", " ", 1).split(" ")
-        date_parts = parts[0].split("-")
-        if len(date_parts) != 3 or len(parts) > 2:
-            raise ValueError("Invalid isoformat string")
-        time_values = [0, 0, 0, 0]
-        if len(parts) == 2 and parts[1] != "":
-            time_source = parts[1]
-            fraction = ""
-            if "." in time_source:
-                time_source, fraction = time_source.split(".", 1)
-                if not fraction.isdigit() or len(fraction) > 6:
-                    raise ValueError("Invalid isoformat string")
-                time_values[3] = int((fraction + "000000")[:6])
-            clock = time_source.split(":")
-            if len(clock) < 2 or len(clock) > 3 or not all(item.isdigit() for item in clock):
-                raise ValueError("Invalid isoformat string")
-            for index, item in enumerate(clock):
-                time_values[index] = int(item)
-        if not all(item.isdigit() for item in date_parts):
-            raise ValueError("Invalid isoformat string")
-        return cls(int(date_parts[0]), int(date_parts[1]), int(date_parts[2]), *time_values)
-
-    @classmethod
-    def strptime(cls, value, format):
-        source = str(value)
-        template = str(format)
-        fields = {"Y": 1900, "m": 1, "d": 1, "H": 0, "M": 0, "S": 0, "f": 0}
-        widths = {"Y": 4, "m": 2, "d": 2, "H": 2, "M": 2, "S": 2}
-        source_index = 0
-        format_index = 0
-        while format_index < len(template):
-            if template[format_index] != "%":
-                if source_index >= len(source) or source[source_index] != template[format_index]:
-                    raise ValueError("time data does not match format")
-                source_index += 1
-                format_index += 1
-                continue
-            format_index += 1
-            if format_index >= len(template):
-                raise ValueError("stray % in format")
-            directive = template[format_index]
-            format_index += 1
-            if directive == "%":
-                if source_index >= len(source) or source[source_index] != "%":
-                    raise ValueError("time data does not match format")
-                source_index += 1
-                continue
-            if directive == "f":
-                end = source_index
-                while end < len(source) and end - source_index < 6 and source[end].isdigit():
-                    end += 1
-                token = source[source_index:end]
-                if token == "":
-                    raise ValueError("time data does not match format")
-                fields[directive] = int((token + "000000")[:6])
-                source_index = end
-                continue
-            if directive not in widths:
-                raise ValueError("unsupported datetime format directive: %" + directive)
-            width = widths[directive]
-            token = source[source_index:source_index + width]
-            if len(token) != width or not token.isdigit():
-                raise ValueError("time data does not match format")
-            fields[directive] = int(token)
-            source_index += width
-        if source_index != len(source):
-            raise ValueError("unconverted data remains")
-        return cls(fields["Y"], fields["m"], fields["d"], fields["H"], fields["M"], fields["S"], fields["f"])
+    def _offset_us(self):
+        offset = self.utcoffset()
+        return None if offset is None else offset._total_microseconds_value()
 
     def date(self):
         return __HvyDate__(self.year, self.month, self.day)
+
+    def utcoffset(self):
+        if self.tzinfo is None:
+            return None
+        return __hvy_checked_offset__(self.tzinfo.utcoffset(self), "utcoffset")
+
+    def dst(self):
+        if self.tzinfo is None:
+            return None
+        return __hvy_checked_offset__(self.tzinfo.dst(self), "dst")
+
+    def tzname(self):
+        if self.tzinfo is None:
+            return None
+        name = self.tzinfo.tzname(self)
+        if name is not None and not isinstance(name, str):
+            raise TypeError("tzinfo.tzname() must return None or a string")
+        return name
+
+    def replace(self, year=None, month=None, day=None, hour=None, minute=None, second=None, microsecond=None, tzinfo=__hvy_keep__, *, fold=None):
+        return __HvyDateTime__(
+            self.year if year is None else year,
+            self.month if month is None else month,
+            self.day if day is None else day,
+            self.hour if hour is None else hour,
+            self.minute if minute is None else minute,
+            self.second if second is None else second,
+            self.microsecond if microsecond is None else microsecond,
+            self.tzinfo if tzinfo is __hvy_keep__ else tzinfo,
+            fold=self.fold if fold is None else fold,
+        )
+
+    def astimezone(self, tz=None):
+        if tz is not None:
+            __hvy_require_tzinfo__(tz)
+            if self.tzinfo is tz:
+                return self
+        instant = __hvy_instant_us__(self)
+        if tz is None:
+            tz = __hvy_local_fixed_timezone__(instant)
+        return tz.fromutc(__hvy_datetime_from_naive_us__(instant, tz))
+
+    def timestamp(self):
+        return (__hvy_instant_us__(self) - __hvy_epoch_naive_us__) / __hvy_us_per_second__
 
     def isoformat(self, sep="T", timespec="auto"):
         if timespec not in ("auto", "hours", "minutes", "seconds", "milliseconds", "microseconds"):
@@ -284,6 +311,9 @@ class __HvyDateTime__(__HvyDate__):
             output += f".{self.microsecond // 1000:03d}"
         elif timespec == "microseconds" or (timespec == "auto" and self.microsecond):
             output += f".{self.microsecond:06d}"
+        offset = self._offset_us()
+        if offset is not None:
+            output += __hvy_format_utc_offset__(offset, ":")
         return output
 
     def __str__(self):
@@ -295,81 +325,158 @@ class __HvyDateTime__(__HvyDate__):
             values.append(self.second)
         if self.microsecond:
             values.append(self.microsecond)
-        return "datetime.datetime(" + ", ".join(str(value) for value in values) + ")"
+        parts = [str(value) for value in values]
+        if self.fold:
+            parts.append("fold=1")
+        if self.tzinfo is not None:
+            parts.append("tzinfo=" + repr(self.tzinfo))
+        return "datetime.datetime(" + ", ".join(parts) + ")"
 
     def __add__(self, other):
         if not isinstance(other, __HvyTimedelta__):
             return NotImplemented
-        total = self.__total_microseconds() + other._total_microseconds_value()
-        ordinal_minus_one, remainder = divmod(total, 86400000000)
-        year, month, day = __hvy_ordinal_to_date__(ordinal_minus_one + 1)
-        hour, remainder = divmod(remainder, 3600000000)
-        minute, remainder = divmod(remainder, 60000000)
-        second, microsecond = divmod(remainder, 1000000)
-        return __HvyDateTime__(year, month, day, hour, minute, second, microsecond)
+        return __hvy_datetime_from_naive_us__(self._naive_us() + other._total_microseconds_value(), self.tzinfo)
+
+    def __radd__(self, other):
+        return self.__add__(other)
 
     def __sub__(self, other):
         if isinstance(other, __HvyTimedelta__):
             return self + (-other)
         if isinstance(other, __HvyDateTime__):
-            return __HvyTimedelta__(microseconds=self.__total_microseconds() - other.__total_microseconds())
+            left, right = __hvy_datetime_comparison_keys__(self, other, "subtract")
+            return __HvyTimedelta__(microseconds=left - right)
         return NotImplemented
 
+    def __hash__(self):
+        offset = self.replace(fold=0)._offset_us()
+        return hash(self._naive_us() - (offset or 0))
+
     def __eq__(self, other):
-        return isinstance(other, __HvyDateTime__) and self.__total_microseconds() == other.__total_microseconds()
+        if not isinstance(other, __HvyDateTime__):
+            return False
+        if self.tzinfo is not other.tzinfo and (self._offset_us() is None) != (other._offset_us() is None):
+            return False
+        left, right = __hvy_datetime_comparison_keys__(self, other, "compare")
+        return left == right
 
     def __lt__(self, other):
         if not isinstance(other, __HvyDateTime__):
             return NotImplemented
-        return self.__total_microseconds() < other.__total_microseconds()
+        left, right = __hvy_datetime_comparison_keys__(self, other, "compare")
+        return left < right
 
     def __le__(self, other):
         if not isinstance(other, __HvyDateTime__):
             return NotImplemented
-        return self.__total_microseconds() <= other.__total_microseconds()
+        left, right = __hvy_datetime_comparison_keys__(self, other, "compare")
+        return left <= right
 
 
-def __hvy_strftime__(value, format):
-    iso_year, iso_week, iso_weekday = value.isocalendar()
-    day_of_year = __hvy_date_to_ordinal__(value.year, value.month, value.day) - __hvy_date_to_ordinal__(value.year, 1, 1) + 1
-    replacements = {
-        "Y": f"{value.year:04d}", "y": f"{value.year % 100:02d}", "m": f"{value.month:02d}",
-        "d": f"{value.day:02d}", "j": f"{day_of_year:03d}", "w": str((value.weekday() + 1) % 7),
-        "u": str(value.weekday() + 1), "V": f"{iso_week:02d}", "G": f"{iso_year:04d}", "g": f"{iso_year % 100:02d}",
-        "H": f"{getattr(value, 'hour', 0):02d}", "M": f"{getattr(value, 'minute', 0):02d}",
-        "S": f"{getattr(value, 'second', 0):02d}", "f": f"{getattr(value, 'microsecond', 0):06d}", "%": "%",
-    }
-    output = ""
-    index = 0
-    while index < len(format):
-        if format[index] != "%":
-            output += format[index]
-            index += 1
-            continue
-        index += 1
-        if index >= len(format) or format[index] not in replacements:
-            raise ValueError("unsupported datetime format directive")
-        output += replacements[format[index]]
-        index += 1
-    return output
+def __hvy_datetime_from_naive_us__(total, tzinfo=None, fold=0):
+    ordinal_minus_one, remainder = divmod(total, __hvy_us_per_day__)
+    year, month, day = __hvy_ordinal_to_date__(ordinal_minus_one + 1)
+    hour, remainder = divmod(remainder, 3600000000)
+    minute, remainder = divmod(remainder, 60000000)
+    second, microsecond = divmod(remainder, 1000000)
+    return __HvyDateTime__(year, month, day, hour, minute, second, microsecond, tzinfo, fold=fold)
+
+
+# Values sharing one tzinfo object compare by wall clock, as in CPython;
+# otherwise aware values compare by their UTC instant.
+def __hvy_datetime_comparison_keys__(left, right, action):
+    if left.tzinfo is right.tzinfo:
+        return left._naive_us(), right._naive_us()
+    left_offset = left._offset_us()
+    right_offset = right._offset_us()
+    if (left_offset is None) != (right_offset is None):
+        raise TypeError("can't " + action + " offset-naive and offset-aware datetimes")
+    if left_offset is None:
+        return left._naive_us(), right._naive_us()
+    return left._naive_us() - left_offset, right._naive_us() - right_offset
+
+
+# UTC instant (as naive microseconds) of an aware value, or of a naive value
+# interpreted as the viewer's local time.
+def __hvy_instant_us__(value):
+    offset = value._offset_us()
+    if offset is None:
+        offset = __hvy_local_zoneinfo__().utcoffset(value)._total_microseconds_value()
+    return value._naive_us() - offset
+
+
+def __hvy_datetime_from_epoch_us__(epoch_us, tz=None):
+    utc_us = __hvy_epoch_naive_us__ + epoch_us
+    if tz is None:
+        local_zone = __hvy_local_zoneinfo__()
+        return local_zone.fromutc(__hvy_datetime_from_naive_us__(utc_us, local_zone)).replace(tzinfo=None)
+    __hvy_require_tzinfo__(tz)
+    return tz.fromutc(__hvy_datetime_from_naive_us__(utc_us, tz))
+
+
+def __hvy_epoch_us_from_seconds__(timestamp):
+    if not isinstance(timestamp, (int, float)):
+        raise TypeError("timestamp must be a number")
+    return int(round(timestamp * __hvy_us_per_second__))
+
+
+def __hvy_now_epoch_us__():
+    return int(__hvy_runtime__.clock.now_ms()) * 1000
+
+
+class __HvyDateFacade__:
+    def __call__(self, year, month, day):
+        return __HvyDate__(year, month, day)
+
+    def __instancecheck__(self, value):
+        return isinstance(value, __HvyDate__)
+
+    def today(self):
+        return __hvy_datetime_from_epoch_us__(__hvy_now_epoch_us__()).date()
+
+    def fromtimestamp(self, timestamp):
+        return __hvy_datetime_from_epoch_us__(__hvy_epoch_us_from_seconds__(timestamp)).date()
+
+    def fromordinal(self, ordinal):
+        year, month, day = __hvy_ordinal_to_date__(ordinal)
+        return __HvyDate__(year, month, day)
+
+    def fromisoformat(self, value):
+        return __hvy_parse_iso_date__(str(value))
 
 
 class __HvyDateTimeFacade__:
-    def __call__(self, year, month, day, hour=0, minute=0, second=0, microsecond=0):
-        return __HvyDateTime__(year, month, day, hour, minute, second, microsecond)
+    def __call__(self, year, month, day, hour=0, minute=0, second=0, microsecond=0, tzinfo=None, *, fold=0):
+        return __HvyDateTime__(year, month, day, hour, minute, second, microsecond, tzinfo, fold=fold)
+
+    def __instancecheck__(self, value):
+        return isinstance(value, __HvyDateTime__)
+
+    def now(self, tz=None):
+        return __hvy_datetime_from_epoch_us__(__hvy_now_epoch_us__(), tz)
+
+    def today(self):
+        return self.now()
+
+    def utcnow(self):
+        return __hvy_datetime_from_naive_us__(__hvy_epoch_naive_us__ + __hvy_now_epoch_us__())
+
+    def fromtimestamp(self, timestamp, tz=None):
+        return __hvy_datetime_from_epoch_us__(__hvy_epoch_us_from_seconds__(timestamp), tz)
+
+    def utcfromtimestamp(self, timestamp):
+        return __hvy_datetime_from_naive_us__(__hvy_epoch_naive_us__ + __hvy_epoch_us_from_seconds__(timestamp))
 
     def fromisoformat(self, value):
-        return __HvyDateTime__.fromisoformat(value)
+        return __hvy_parse_iso_datetime__(str(value))
 
     def strptime(self, value, format):
-        return __HvyDateTime__.strptime(value, format)
+        return __hvy_strptime__(str(value), str(format))
 
 
 class __HvyTimedeltaFacade__:
     def __call__(self, days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0, hours=0, weeks=0):
         return __HvyTimedelta__(days, seconds, microseconds, milliseconds, minutes, hours, weeks)
 
-
-class __HvyDatetimeModule__:
-    datetime = __HvyDateTimeFacade__()
-    timedelta = __HvyTimedeltaFacade__()
+    def __instancecheck__(self, value):
+        return isinstance(value, __HvyTimedelta__)

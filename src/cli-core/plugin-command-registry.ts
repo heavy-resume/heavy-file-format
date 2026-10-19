@@ -191,7 +191,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin form SECTION_PATH ID',
+      command: 'hvy insert INDEX plugin form SECTION_PATH [ID|--id ID]',
       description: 'Create a blank Form plugin component. Edit plugin.txt for fields/scripts and plugin.json for submit settings.',
     },
   ],
@@ -431,8 +431,8 @@ registerHvyCliPluginCommands({
     'Asynchronous plugin APIs, including network-backed calls, require an authorized power script.',
     'doc.cli.run(command) runs one synchronous virtual CLI command and returns stdout; use doc.db for SQL.',
     'doc.json.parse(response), doc.json.parse_array(response), and doc.json.parse_object(response) extract structured JSON from LLM responses, including fenced JSON or wrapper prose.',
-    'doc.time.now_iso(), doc.time.now_local(), doc.time.now_unix_ms(), and doc.time.today_iso() read the current client time.',
-    'pluginConfig.libraries may enable checked random, re, and datetime libraries. datetime exposes timezone-naive datetime and timedelta operations.',
+    'pluginConfig.libraries may enable checked random, re, datetime, zoneinfo, and tzlocal libraries. datetime follows CPython, including timezone-aware values; zoneinfo provides IANA zones and tzlocal provides the viewer zone.',
+    'Read the current client time with datetime, for example datetime.now(timezone.utc).isoformat() or datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"). The older doc.time helpers are deprecated aliases.',
     'doc.form exists only while running form plugin scripts. Use form plugin help for doc.form methods.',
     'doc.rerender() flushes pending rendering work, but scripts usually do not need it because the host rerenders after the script finishes.',
     'Example: summary = doc.tool.request_structure(); doc.header.set("script_summary", summary[:200])',
@@ -441,7 +441,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin SECTION_PATH ID hvy.scripting',
+      command: 'hvy insert INDEX plugin SECTION_PATH [ID|--id ID] hvy.scripting',
       description: 'Create a blank scripting plugin block. Edit plugin.txt or script.py after creation.',
     },
   ],
@@ -487,7 +487,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin db-table SECTION_PATH ID',
+      command: 'hvy insert INDEX plugin db-table SECTION_PATH [ID|--id ID]',
       description: 'Create a blank dynamic table plugin. Edit plugin.json for table/view and plugin.txt for optional display SQL.',
     },
   ],

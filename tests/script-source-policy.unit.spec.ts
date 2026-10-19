@@ -8,6 +8,7 @@ test.each([
   'global eval\ndel eval', 'global value, getattr\ndel getattr',
   'global value, \\\n    globals', 'global ｅｖａｌ',
   'global open\ndel open', 'global value, type', 'global ｏｐｅｎ',
+  'global print\ndel print',
   'doc.＿＿class＿＿',
   String.raw`getattr(doc, "\x5f\x5fglobals\x5f\x5f")`,
   String.raw`getattr(doc, "_\137globals\U0000005f\x5f")`,

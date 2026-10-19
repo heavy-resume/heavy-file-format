@@ -18,6 +18,8 @@ import { hasTextFillInMarker } from '../../text-fill-in';
 import type { VisualBlock } from '../../editor/types';
 import type { ScriptingPluginsApi } from './plugin-apis';
 import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
+import { getTimeZoneOffsetMs } from '../../time-zone-lookup';
+import { createScriptingClock, type ScriptingClock } from './clock-bridge';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -37,6 +39,8 @@ export interface ScriptingRuntimeStats {
 
 export interface ScriptingRuntime {
   doc: ScriptingDocApi;
+  /** Internal clock for the checked datetime libraries; not exposed on `doc`. */
+  clock: ScriptingClock;
   stats: ScriptingRuntimeStats;
   step(): string | null;
   markMutated(): void;
@@ -119,6 +123,10 @@ export interface ScriptingJsonApi {
   parse_object(response: string): JsonObject;
 }
 
+/**
+ * @deprecated Kept as an alias with no removal date. Scripts should use the
+ * checked `datetime`, `zoneinfo` and `tzlocal` libraries instead.
+ */
 export interface ScriptingTimeApi {
   now_iso(): string;
   now_local(): string;
@@ -151,6 +159,8 @@ export interface ScriptingRuntimeOptions {
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   plugins?: ScriptingPluginsApi;
   now?: () => Date;
+  /** IANA zone scripts treat as local. Defaults to the browser zone. */
+  timeZone?: string;
   onMutationFlushed?: () => void;
   beforeMutationRender?: () => void;
   databaseChanges?: DatabaseChangeSnapshot;
@@ -260,17 +270,18 @@ function createJsonApi(): ScriptingJsonApi {
   };
 }
 
-function createTimeApi(now: () => Date): ScriptingTimeApi {
+function createTimeApi(clock: ScriptingClock): ScriptingTimeApi {
   return {
-    now_iso: () => now().toISOString(),
-    now_local: () => formatLocalDateTime(now()),
-    now_unix_ms: () => now().getTime(),
-    today_iso: () => formatLocalDate(now()),
+    now_iso: () => new Date(clock.now_ms()).toISOString(),
+    now_local: () => formatLocalDateTime(new Date(clock.now_ms()), clock.local_zone()),
+    now_unix_ms: () => clock.now_ms(),
+    today_iso: () => formatLocalDate(new Date(clock.now_ms()), clock.local_zone()),
   };
 }
 
-function formatLocalDateTime(date: Date): string {
+function formatLocalDateTime(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', {
+    timeZone,
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -280,15 +291,17 @@ function formatLocalDateTime(date: Date): string {
   }).format(date);
 }
 
-function formatLocalDate(date: Date): string {
-  const year = String(date.getFullYear()).padStart(4, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+function formatLocalDate(date: Date, timeZone: string): string {
+  const local = new Date(date.getTime() + getTimeZoneOffsetMs(date, timeZone));
+  const year = String(local.getUTCFullYear()).padStart(4, '0');
+  const month = String(local.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(local.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 export function createScriptingRuntime(options: ScriptingRuntimeOptions): ScriptingRuntime {
   const stats: ScriptingRuntimeStats = { toolCalls: 0, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, logs: [] };
+  const clock = createScriptingClock({ now: options.now, timeZone: options.timeZone });
   let mutated = false;
   const pendingExpansions = new Map<string, { sectionKey: string; blockId: string }>();
 
@@ -464,7 +477,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       execute_json: (sql, paramsJson) => database.execute(sql, JSON.parse(String(paramsJson))),
     },
     json: createJsonApi(),
-    time: createTimeApi(options.now ?? (() => new Date())),
+    time: createTimeApi(clock),
     export: options.exportRuleRecorder ? createExportApi(options.exportRuleRecorder) : createUnavailableExportApi(),
     cli: {
       run: (command) => {
@@ -495,6 +508,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
 
   return {
     doc,
+    clock,
     stats,
     step: () => {
       stats.stepsExecuted += 1;

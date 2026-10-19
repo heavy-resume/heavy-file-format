@@ -13,7 +13,7 @@ export const SCRIPT_RESTRICTED_BUILTIN_NAMES = [
 ] as const;
 const installedGlobals = new Set<string>([
   ...SCRIPT_RESTRICTED_BUILTIN_NAMES,
-  'getattr', 'setattr', 'delattr', 'hasattr', 'eval', 'globals',
+  'getattr', 'setattr', 'delattr', 'hasattr', 'eval', 'globals', 'print',
 ]);
 const identifierStart = /[_\p{ID_Start}]/u;
 const identifierContinue = /[_\p{ID_Continue}]/u;

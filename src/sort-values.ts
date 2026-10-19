@@ -1,6 +1,7 @@
 import type { SortKeyValue, VisualBlock } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, SectionDefinition, SortValueDateFormat, SortValueDefinition, SortValueEnumOption, VisualDocument } from './types';
+import { isSupportedIanaTimeZone, resolveTimezoneAbbreviationOffset, wallClockFieldsToUtcMs, type WallClockFields } from './time-zone-lookup';
 
 export interface SortValueAnnotation {
   key: string;
@@ -302,47 +303,6 @@ function coerceDatetimeSortValue(text: string): string | null {
   return new Date(timestampMs).toISOString();
 }
 
-const TIMEZONE_ABBREVIATION_OFFSETS: Record<string, string> = {
-  UTC: '+00:00',
-  GMT: '+00:00',
-  EST: '-05:00',
-  EDT: '-04:00',
-  CST: '-06:00',
-  CDT: '-05:00',
-  MST: '-07:00',
-  MDT: '-06:00',
-  PST: '-08:00',
-  PDT: '-07:00',
-  AKST: '-09:00',
-  AKDT: '-08:00',
-  HST: '-10:00',
-  CET: '+01:00',
-  CEST: '+02:00',
-  EET: '+02:00',
-  EEST: '+03:00',
-  WET: '+00:00',
-  WEST: '+01:00',
-  JST: '+09:00',
-  KST: '+09:00',
-  HKT: '+08:00',
-  SGT: '+08:00',
-  PHT: '+08:00',
-  ICT: '+07:00',
-  WIB: '+07:00',
-  WITA: '+08:00',
-  WIT: '+09:00',
-  PKT: '+05:00',
-  NPT: '+05:45',
-  AEST: '+10:00',
-  AEDT: '+11:00',
-  ACST: '+09:30',
-  ACDT: '+10:30',
-  AWST: '+08:00',
-  NZST: '+12:00',
-  NZDT: '+13:00',
-  MSK: '+03:00',
-};
-
 function parseDatetimeSortTimestampMs(text: string): number {
   const zoned = parseIanaZonedDatetime(text);
   if (zoned !== null) {
@@ -357,6 +317,11 @@ function normalizeDatetimeTimezone(text: string): string | null {
   if (/(?:[zZ]|[+-]\d{2}:?\d{2})\s*$/.test(trimmed)) {
     return trimmed;
   }
+  // tz database style labels such as "+09" have no minutes part.
+  const hourOffsetMatch = trimmed.match(/\s([+-]\d{2})\s*$/);
+  if (hourOffsetMatch) {
+    return trimmed.replace(/[+-]\d{2}\s*$/, `${hourOffsetMatch[1]}:00`);
+  }
   const gmtMatch = trimmed.match(/\bGMT([+-])(\d{1,2})(?::?(\d{2}))?\s*$/i);
   if (gmtMatch) {
     const sign = gmtMatch[1] ?? '+';
@@ -370,60 +335,12 @@ function normalizeDatetimeTimezone(text: string): string | null {
   }
   const abbreviation = abbreviationMatch[1] ?? '';
   const source = trimmed.slice(0, abbreviationMatch.index).trim();
-  const offset = TIMEZONE_ABBREVIATION_OFFSETS[abbreviation] ?? resolveShortTimezoneOffset(source, abbreviation);
+  const offset = resolveTimezoneAbbreviationOffset(abbreviation, parseDatetimeFields(source));
   return offset ? trimmed.replace(/\b[A-Z]{2,5}\s*$/, offset) : null;
 }
 
 function normalizeHumanDatetimeSeparators(text: string): string {
   return text.replace(/\s+at\s+/i, ', ');
-}
-
-const shortTimezoneOffsetCache = new Map<string, string | null>();
-
-function resolveShortTimezoneOffset(sourceText: string, abbreviation: string): string | null {
-  const fields = parseDatetimeFields(sourceText);
-  const zones = getSupportedIanaTimeZones();
-  if (!fields || zones.length === 0) {
-    return null;
-  }
-  const cacheKey = `${abbreviation}|${fields.year}-${fields.month}-${fields.day}T${fields.hour}:${fields.minute}:${fields.second}`;
-  if (shortTimezoneOffsetCache.has(cacheKey)) {
-    return shortTimezoneOffsetCache.get(cacheKey) ?? null;
-  }
-  const offsets = new Set<string>();
-  for (const zone of zones) {
-    const utcMs = zonedFieldsToUtcMs(fields, zone);
-    const label = getShortTimezoneName(new Date(utcMs), zone);
-    if (label === abbreviation) {
-      offsets.add(formatOffsetMs(getTimeZoneOffsetMs(new Date(utcMs), zone)));
-    }
-  }
-  const resolved = offsets.size === 1 ? [...offsets][0] ?? null : null;
-  shortTimezoneOffsetCache.set(cacheKey, resolved);
-  return resolved;
-}
-
-function getSupportedIanaTimeZones(): string[] {
-  try {
-    return typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-  } catch {
-    return [];
-  }
-}
-
-function getShortTimezoneName(date: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    timeZoneName: 'short',
-  }).formatToParts(date).find((part) => part.type === 'timeZoneName')?.value ?? '';
-}
-
-function formatOffsetMs(offsetMs: number): string {
-  const sign = offsetMs < 0 ? '-' : '+';
-  const absMinutes = Math.abs(Math.trunc(offsetMs / 60_000));
-  const hours = String(Math.trunc(absMinutes / 60)).padStart(2, '0');
-  const minutes = String(absMinutes % 60).padStart(2, '0');
-  return `${sign}${hours}:${minutes}`;
 }
 
 function parseIanaZonedDatetime(text: string): number | null {
@@ -440,29 +357,10 @@ function parseIanaZonedDatetime(text: string): number | null {
       ? trimmed.slice(0, bareMatch.index).trim()
       : '';
   const fields = parseDatetimeFields(source);
-  return fields ? zonedFieldsToUtcMs(fields, zone) : null;
+  return fields ? wallClockFieldsToUtcMs(fields, zone) : null;
 }
 
-function isSupportedIanaTimeZone(timeZone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date(0));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-interface DatetimeFields {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-  millisecond: number;
-}
-
-function parseDatetimeFields(text: string): DatetimeFields | null {
+function parseDatetimeFields(text: string): WallClockFields | null {
   const timestampMs = Date.parse(text);
   if (!Number.isFinite(timestampMs)) {
     return null;
@@ -477,51 +375,6 @@ function parseDatetimeFields(text: string): DatetimeFields | null {
     second: parsed.getSeconds(),
     millisecond: parsed.getMilliseconds(),
   };
-}
-
-function zonedFieldsToUtcMs(fields: DatetimeFields, timeZone: string): number {
-  const wallClockUtcMs = Date.UTC(
-    fields.year,
-    fields.month - 1,
-    fields.day,
-    fields.hour,
-    fields.minute,
-    fields.second,
-    fields.millisecond
-  );
-  let utcMs = wallClockUtcMs;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const offsetMs = getTimeZoneOffsetMs(new Date(utcMs), timeZone);
-    const nextUtcMs = wallClockUtcMs - offsetMs;
-    if (nextUtcMs === utcMs) {
-      break;
-    }
-    utcMs = nextUtcMs;
-  }
-  return utcMs;
-}
-
-function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const zonedAsUtcMs = Date.UTC(
-    Number(values.year),
-    Number(values.month) - 1,
-    Number(values.day),
-    Number(values.hour),
-    Number(values.minute),
-    Number(values.second)
-  );
-  return zonedAsUtcMs - date.getTime();
 }
 
 function normalizeEnumOption(value: unknown): SortValueEnumOption | null {

@@ -728,9 +728,10 @@ test('meeting minutes template uses reusable timestamped minute entries', async 
   expect(parsed.spec.submitScript).toBe('add_entry');
   expect(parsed.spec.scripts.add_entry).toContain('def note_to_markdown(value):');
   expect(parsed.spec.scripts.add_entry).toContain('output.append(line + "  ")');
-  expect(parsed.spec.scripts.add_entry).toContain('sort_id = doc.time.now_unix_ms()');
-  expect(parsed.spec.scripts.add_entry).not.toContain('sort_time = doc.time.now_iso()');
-  expect(parsed.spec.scripts.add_entry).toContain('display_time = doc.time.now_local()');
+  expect(parsed.spec.scriptLibraries).toEqual(['datetime']);
+  expect(parsed.spec.scripts.add_entry).toContain('now = datetime.now().astimezone()');
+  expect(parsed.spec.scripts.add_entry).toContain('sort_id = int(now.timestamp() * 1000)');
+  expect(parsed.spec.scripts.add_entry).toContain('display_time = now.strftime("%B %d, %Y at %H:%M %Z")');
   expect(parsed.spec.scripts.add_entry).toContain('hvy:sort-value');
   expect(parsed.spec.scripts.add_entry).toContain('\\"key\\":\\"Time\\"');
   expect(parsed.spec.scripts.add_entry).toContain('"id": "minute-entry-" + str(sort_id)');

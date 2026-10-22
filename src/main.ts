@@ -70,6 +70,7 @@ import { decryptEncryptedComponents } from './encrypted-components';
 import { createReferenceEncryptionOptions } from './reference-encryption-keyring';
 import { registerHvyWebMcpTools } from './webmcp';
 import { notifyDocumentMayHaveChanged } from './document-change';
+import { isAdvancedEditorActive } from './component-availability';
 import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -456,16 +457,7 @@ editorRenderer = createEditorRenderer(
       return state.document.sections;
     },
     get showAdvancedEditor() {
-      const rowModal = state.dbTableRowComponentModal;
-      if (rowModal && !rowModal.readOnly) {
-        if (rowModal.mode === 'advanced') {
-          return true;
-        }
-        if (rowModal.mode === 'basic' || rowModal.mode === 'raw') {
-          return false;
-        }
-      }
-      return state.showAdvancedEditor;
+      return isAdvancedEditorActive();
     },
     get addComponentBySection() {
       return state.addComponentBySection;

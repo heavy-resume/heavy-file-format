@@ -880,7 +880,7 @@ test('createScriptingRuntime points db-table SQL callers at doc.db instead of cl
   );
 });
 
-test('scripting hooks run editor-only scripts in editor and AI views', () => {
+test('scripting hooks run editor scripts in editor, viewer scripts in viewer, and both in AI', () => {
   const targets = [
     {
       sectionKey: 'section',
@@ -904,7 +904,7 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
 
   expect(getRunnableScriptingTargetsForView(targets, 'editor').map((target) => target.blockId)).toEqual(['editor-script']);
   expect(getRunnableScriptingTargetsForView(targets, 'viewer').map((target) => target.blockId)).toEqual(['document-script']);
-  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script']);
+  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script', 'document-script']);
 });
 
 test('component handle expand applies transient reader state without changing serialized defaults', () => {

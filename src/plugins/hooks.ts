@@ -128,12 +128,18 @@ export function resetPluginDocumentHookState(): void {
   hookState.hookRun = Promise.resolve();
 }
 
+// The view is part of the signature because hooks receive it and may behave
+// differently per view; entering another view must rerun them.
+function getHookSignature(document: VisualDocument): string {
+  return `${state.currentView}\u0000${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
+}
+
 export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason = 'unknown'): Promise<PluginDocumentHookResult> {
   const runtime = getActiveStateRuntime();
   const hookState = getHookState();
   const document = state.document;
   const signatureStartedAt = nowMs();
-  const signature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
+  const signature = getHookSignature(document);
   const signatureMs = elapsedMs(signatureStartedAt);
   const hookName: DocumentHookName | null = hookState.lastHookDocument !== document
     ? 'documentLoad'
@@ -173,7 +179,7 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
     const result = await runWithStateRuntimeAsync(runtime, async (): Promise<PluginDocumentHookResult> => {
       await runHookHandlers(hookName, ctx);
       if (ctx.isCurrentDocument()) {
-        const nextSignature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
+        const nextSignature = getHookSignature(document);
         hookState.lastHookDocument = document;
         hookState.lastHookSignature = nextSignature;
         notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });

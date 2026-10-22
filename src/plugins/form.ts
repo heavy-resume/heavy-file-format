@@ -560,6 +560,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     },
   });
 
+  // Form scripts follow the viewer-script rule (HVY-SPEC 7.14): they run in the
+  // viewer and AI views, never in the editor, including its passive previews.
+  const canRunFormScripts = (): boolean => ctx.view !== 'editor';
+
   const runFormScript = async (
     scriptName: string,
     reason: string,
@@ -602,7 +606,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   const runNamedScript = (scriptName: string, reason: string, databaseChanges?: DatabaseChangeSnapshot): void => {
     const name = scriptName.trim();
-    if (name.length === 0) {
+    if (name.length === 0 || !canRunFormScripts()) {
       return;
     }
     const { spec } = parseCurrent();
@@ -932,6 +936,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       root.appendChild(status);
     }
 
+    if (!canRunFormScripts()) {
+      return;
+    }
     const initializing = claimFormInitialization(ctx.rawDocument, ctx.block);
     if (initializing) {
       lifecycle.lastDatabaseRevision = getDatabaseChangeRevision(ctx.rawDocument);
@@ -1267,6 +1274,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   const onSubmit = (event: Event) => {
     event.preventDefault();
+    if (!canRunFormScripts()) {
+      return;
+    }
     const { spec } = parseCurrent();
     if (spec.submitAction === 'ai-generate') {
       runAiSubmit();

@@ -2053,8 +2053,13 @@ Plugin-specific rules:
   `pluginConfig.initialScript`, `pluginConfig.changeScript`,
   `pluginConfig.submitSourceScript`, `pluginConfig.submitScript`, and field
   trigger values reference keys in this map.
+- Form scripts follow the viewer-script rule of the sandboxed scripting
+  contract (section 7.14): clients MUST execute them only in the `viewer` view
+  and document AI mode, and MUST NOT execute them in the editor, including
+  editor previews of the form.
 - `pluginConfig.initialScript` runs once for the form component during the
-  current in-memory document lifecycle. DOM remounts, reader refreshes,
+  current in-memory document lifecycle, the first time the form is shown in a
+  view that executes form scripts. DOM remounts, reader refreshes,
   database-driven rerenders, and view changes MUST NOT cause it to run again.
   Loading a new document or creating a new form component starts a new
   lifecycle.
@@ -2294,7 +2299,41 @@ Normative configuration and data:
   scripts can discover the surface and draw non-persistent overlays. Document
   content itself MUST NOT be executed as script.
 
-### 7.14 Power scripting plugin contract
+### 7.14 Sandboxed scripting plugin contract
+
+The built-in sandboxed scripting plugin is `hvy.scripting`. The plugin text body
+is the script source, and `pluginConfig.version` declares its requested
+scripting API version (see section 7.5).
+
+```markdown
+<!--hvy:plugin {"id":"example-viewer-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
+print("runs while the document is viewed")
+
+<!--hvy:plugin {"id":"example-editor-script","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
+print("runs while the document is edited")
+```
+
+A scripting block has one of two roles, selected by the block's `editorOnly`
+flag. The role decides which document views execute it:
+
+- **Viewer scripts** (`editorOnly` absent or false) are the document's
+  execution mode. They make the document behave as a finished document, for
+  example by computing derived content on load or reacting to database changes.
+  Clients MUST execute viewer scripts in viewing surfaces: the `viewer` view and
+  document AI mode. They MUST NOT execute them in the editor.
+- **Editor scripts** (`editorOnly: true`) assist with building the document,
+  for example by guiding a user who is filling in a starting template. Clients
+  MUST execute editor scripts in editing surfaces: the editor and document AI
+  mode. They MUST NOT execute them in the `viewer` view.
+
+Document AI mode is both a viewing and an editing surface. It shows the
+document as viewed while allowing corrections, so it executes both roles.
+
+In whichever views run a script, clients SHOULD run it when the document loads,
+when the view is entered, and after document changes. Clients SHOULD coalesce
+repeated runs for an unchanged document, view, and database revision.
+
+### 7.15 Power scripting plugin contract
 
 The built-in power scripting plugin is `hvy.power-scripting`. It contains
 unrestricted JavaScript for interactive, performance-sensitive behavior that
@@ -2350,7 +2389,7 @@ acceptance SHOULD be keyed to a collision-resistant digest of the ordered
 identities and source of all power scripts so that adding, removing, renaming,
 reordering, or editing trusted code requires a new approval.
 
-### 7.15 3D model plugin contract
+### 7.16 3D model plugin contract
 
 The built-in 3D model plugin is `hvy.model-3d`. It renders an interactive 3D
 model whose bytes are stored as an HVY tail attachment, so documents containing

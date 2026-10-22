@@ -3,7 +3,7 @@ import type { ComponentDefinition } from '../types';
 import type { AddComponentPickerOptions } from './component-helpers';
 import { getRenderableHostPlugins } from '../plugins/registry';
 import { plusIcon } from '../icons';
-import { isReusableDefinitionSectionKey } from '../component-defs';
+import { getComponentTypeAvailability, getCurrentComponentSurface, type ComponentSurface } from '../component-availability';
 
 interface RenderDeps {
   escapeAttr: (value: string) => string;
@@ -18,6 +18,7 @@ interface PickerItem {
   pluginId?: string;
   disabled?: boolean;
   disabledReason?: string;
+  badge?: string;
 }
 
 interface PickerGroup {
@@ -30,9 +31,10 @@ interface PickerGroup {
 }
 
 export function renderAddComponentPicker(options: AddComponentPickerOptions, deps: RenderDeps): string {
-  const visibleGroups = getPickerGroups(deps.getComponentDefs(), isReusableDefinitionSectionKey(options.sectionKey)).map((group) => ({
+  const surface = getCurrentComponentSurface(options.sectionKey);
+  const visibleGroups = getPickerGroups(deps.getComponentDefs()).map((group) => ({
     ...group,
-    items: orderPickerItems(group.id, group.items.map((item) => withPickerItemAvailability(options, item))),
+    items: orderPickerItems(group.id, group.items.flatMap((item) => withPickerItemAvailability(options, surface, item))),
   }));
   const paneStyle = `--component-picker-groups: ${visibleGroups.length};`;
   const pasteTargetAttrs = renderPickerPasteTargetAttrs(options, deps);
@@ -146,7 +148,7 @@ function renderComponentButton(
   display: { className?: string; position?: PickerGroup['position'] } = {}
 ): string {
   const disabledReason = item.disabled ? item.disabledReason || 'Unavailable here' : '';
-  const description = disabledReason ? `${item.description} - ${disabledReason}` : item.description;
+  const description = disabledReason && !item.badge ? `${item.description} - ${disabledReason}` : item.description;
   const extraAttrs = Object.entries(options.extraAttrs ?? {})
     .map(([key, value]) => ` ${deps.escapeAttr(key)}="${deps.escapeAttr(value)}"`)
     .join('');
@@ -165,24 +167,34 @@ function renderComponentButton(
       data-section-key="${deps.escapeAttr(options.sectionKey)}"${blockIdAttr}
       data-component="${deps.escapeAttr(item.value)}"${positionAttr}${pluginAttr}${extraAttrs}${disabledAttrs}
     >
-      <span class="component-picker-row-title">${deps.escapeHtml(item.label)}</span>
+      <span class="component-picker-row-title">${deps.escapeHtml(item.label)}${item.badge ? `<span class="component-picker-row-badge">${deps.escapeHtml(item.badge)}</span>` : ''}</span>
       <span class="component-picker-row-description">${deps.escapeHtml(description)}</span>
     </button>
   `;
 }
 
-function withPickerItemAvailability(options: AddComponentPickerOptions, item: PickerItem): PickerItem {
-  if (!options.componentFilter || options.componentFilter(item.value, item.pluginId)) {
-    return item;
+function withPickerItemAvailability(options: AddComponentPickerOptions, surface: ComponentSurface, item: PickerItem): PickerItem[] {
+  const availability = getComponentTypeAvailability(item.value, item.pluginId, surface);
+  if (availability.kind === 'not-offered') {
+    return [];
   }
-  return {
+  if (availability.kind === 'unavailable') {
+    return [{ ...item, disabled: true, disabledReason: availability.reason }];
+  }
+  if (availability.kind === 'advanced') {
+    return [{ ...item, disabled: true, disabledReason: 'Advanced component', badge: 'Advanced' }];
+  }
+  if (!options.componentFilter || options.componentFilter(item.value, item.pluginId)) {
+    return [item];
+  }
+  return [{
     ...item,
     disabled: true,
     disabledReason: options.componentDisabledReason?.(item.value, item.pluginId) || 'Unavailable here',
-  };
+  }];
 }
 
-function getPickerGroups(componentDefs: ComponentDefinition[], isTemplateEditing: boolean): PickerGroup[] {
+function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
   const pluginItems = getRenderableHostPlugins().map((entry) => ({
     value: 'plugin',
     label: entry.displayName,
@@ -218,7 +230,7 @@ function getPickerGroups(componentDefs: ComponentDefinition[], isTemplateEditing
       items: [
         ...(areTablesEnabled() ? [{ value: 'table', label: 'Table', description: 'a static table of information' }] : []),
         { value: 'xref-card', label: 'Reference', description: 'reference another document item' },
-        ...(isTemplateEditing ? [{ value: 'location-marker', label: 'Component Location', description: 'mark where plugin-supplied components can appear' }] : []),
+        { value: 'location-marker', label: 'Component Location', description: 'mark where plugin-supplied components can appear' },
       ],
     },
   ];

@@ -320,6 +320,11 @@ export interface HvyPlugin {
     strategy?: 'viewport' | 'immediate';
     placeholderHeight?: string;
   };
+  // Advanced components are shown and added only while the advanced editor is
+  // on. Basic editing surfaces hide their blocks, and the add-component picker
+  // lists them disabled with an "Advanced" badge. Hidden blocks still run their
+  // document hooks.
+  advancedComponent?: boolean;
   // Conditional registrations expose metadata without loading executable
   // plugin code. The host calls load only after per-file authorization.
   authorization?: 'required';

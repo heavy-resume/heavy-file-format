@@ -34,7 +34,7 @@ import {
 } from './inline-answer-groups';
 import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
-import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
@@ -1326,12 +1326,6 @@ export function getComponentRenderHelpers(editorRenderer: {
       .map((option) => renderOption(option, selected))
       .join('');
   };
-  const pdfComponentFilter = (componentName: string, pluginId?: string): boolean => {
-    return !isPdfDocument(state.document) || isPdfAllowedComponentInstance(componentName, state.document.meta, pluginId);
-  };
-  const pdfComponentDisabledReason = (componentName: string, pluginId?: string): string | null => {
-    return pdfComponentFilter(componentName, pluginId) ? null : 'Not supported in PHVY';
-  };
   return {
     escapeAttr,
     escapeHtml,
@@ -1357,10 +1351,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderTextFragment: editorRenderer.renderTextFragment,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions: renderAllowedComponentOptions,
-    renderAddComponentPicker: (options) => renderAddComponentPicker(
-      { ...options, ...(isPdfDocument(state.document) ? { componentFilter: pdfComponentFilter, componentDisabledReason: pdfComponentDisabledReason } : {}) },
-      { escapeAttr, escapeHtml, getComponentDefs }
-    ),
+    renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),
     renderComponentPlacementTarget: (options) => editorRenderer.renderComponentPlacementTarget(options),
     renderOption,
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),

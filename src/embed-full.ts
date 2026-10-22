@@ -183,6 +183,7 @@ import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { setHostDatabaseTableSources, type HvyDatabaseTableSource } from './plugins/database-table-source';
+import { isAdvancedEditorActive } from './component-availability';
 
 export type { HvyDatabaseTableSource } from './plugins/database-table-source';
 
@@ -556,7 +557,7 @@ function ensureRenderers(): void {
       get imageAttachmentMaxDimensions() { return state.imageAttachmentMaxDimensions; },
       get imageAttachmentReductionStatus() { return state.imageAttachmentReductionStatus; },
       get documentSections() { return state.document.sections; },
-      get showAdvancedEditor() { return state.showAdvancedEditor; },
+      get showAdvancedEditor() { return isAdvancedEditorActive(); },
       get showComponentEncryptionControls() { return state.showComponentEncryptionControls; },
       get addComponentBySection() { return state.addComponentBySection; },
       get activeEditorBlock() { return state.activeEditorBlock; },

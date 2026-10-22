@@ -78,8 +78,8 @@ import {
   getHeadingStylesFromMeta,
   renderHeadingStyleElement,
 } from '../heading-styles';
-import { isPdfAllowedComponentInstance } from '../pdf-document-capabilities';
-import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection, visitBlocksInList } from '../section-ops';
+import { getSectionFilteredMoveAvailability, isHiddenAdvancedOnlySection, visitBlocksInList } from '../section-ops';
+import { isAdvancedComponentBlock } from '../component-availability';
 import { getDefaultSectionContained } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
 import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
@@ -266,13 +266,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return state.documentExtension === '.phvy';
   }
 
-  function isPdfAllowedEditorComponent(componentName: string, pluginId?: string): boolean {
-    return isPdfAllowedComponentInstance(componentName, state.documentMeta, pluginId);
-  }
-
-  function getPdfDisabledComponentReason(componentName: string, pluginId?: string): string | null {
-    return isPdfAllowedEditorComponent(componentName, pluginId) ? null : 'Not supported in PHVY';
-  }
 
   function renderSidebarEditorSections(sections: VisualSection[]): string {
     if (isPdfEditorDocument()) {
@@ -319,7 +312,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderSectionEditorTree(sections: VisualSection[], windowOptions?: EditorRenderTreeWindowOptions): string {
     const mainSections = sections.filter((s) =>
       s.location !== 'sidebar'
-      && (!isHiddenEditorOnlySection(s, state.documentMeta, state.showAdvancedEditor) || hasOpenEditorInSectionTree(s))
+      && (!isHiddenAdvancedOnlySection(s, state.documentMeta, state.showAdvancedEditor) || hasOpenEditorInSectionTree(s))
     );
     const sectionCards = editorRenderTreeHeightLedger.plan(
       mainSections.map(createEditorSectionRenderTreeNode),
@@ -465,7 +458,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           'data-section-insertion': 'true',
           'data-section-before-kind': 'end',
         },
-        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
       })}
               </div>`;
     return `
@@ -532,7 +524,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     windowOptions?: EditorRenderTreeWindowOptions
   ): string {
     const items = section.blocks.filter((block) =>
-      !isHiddenEditorOnlyScriptingBlock(block, section.key)
+      !isHiddenAdvancedComponentBlock(block, section.key)
       && (!isAnchoredButtonInSection(section, block) || deps.isActiveEditorBlock(section.key, block.id))
     ).map((block) => ({ kind: 'block' as const, block }));
     if (windowOptions && !state.componentPlacement && !state.mobileAdjustmentMode) {
@@ -847,7 +839,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderEditorBlock(sectionKey: string, block: VisualBlock, rootSections?: VisualSection[], parentLocked = false): string {
-    if (isHiddenEditorOnlyScriptingBlock(block, sectionKey)) {
+    if (isHiddenAdvancedComponentBlock(block, sectionKey)) {
       return '';
     }
     const component = block.schema.component || 'text';
@@ -1035,7 +1027,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ...(sectionBoundary.beforeId ? { 'data-section-before-id': sectionBoundary.beforeId } : {}),
         } : {}),
       },
-      ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
     })}
     </div>`;
   }
@@ -1050,7 +1041,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (placeholderOptions.textPlaceholders || placeholderOptions.omitTextPlaceholderNames) {
       return withTextPlaceholders(placeholderOptions, () => renderPassiveEditorBlock(sectionKey, block, rootSections, parentLocked));
     }
-    if (isHiddenEditorOnlyScriptingBlock(block, sectionKey)) {
+    if (isHiddenAdvancedComponentBlock(block, sectionKey)) {
       return '';
     }
     const section = deps.findSectionByKey(rootSections, sectionKey);
@@ -1092,12 +1083,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return section.blocks.some((candidate) => candidate !== block && candidate.schema.id.trim() === targetId);
   }
 
-  function isHiddenEditorOnlyScriptingBlock(block: VisualBlock, sectionKey: string): boolean {
+  function isHiddenAdvancedComponentBlock(block: VisualBlock, sectionKey: string): boolean {
     return !state.showAdvancedEditor
       && !deps.isActiveEditorBlock(sectionKey, block.id)
-      && block.schema.editorOnly
-      && deps.resolveBaseComponent(block.schema.component) === 'plugin'
-      && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+      && isAdvancedComponentBlock(block, state.documentMeta as JsonObject);
   }
 
   function hasOpenEditorInSectionTree(section: VisualSection): boolean {
@@ -1151,7 +1140,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function isEditorOrderSibling(candidate: VisualSection, target: VisualSection): boolean {
-    if (candidate.isGhost || isHiddenEditorOnlySection(candidate, state.documentMeta, state.showAdvancedEditor)) {
+    if (candidate.isGhost || isHiddenAdvancedOnlySection(candidate, state.documentMeta, state.showAdvancedEditor)) {
       return false;
     }
     return candidate.location === target.location;

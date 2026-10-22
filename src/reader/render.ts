@@ -39,6 +39,7 @@ import { visitBlocksInList } from '../section-ops';
 import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getAvailableOutputGenerators, getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { isAdvancedComponentBlock, isAdvancedOnlySection } from '../component-availability';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { REUSABLE_SECTION_PREFIX } from '../state';
 import { extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../reusable-template-values';
@@ -1010,36 +1011,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.currentView === 'viewer') {
       return section.editorOnly || isSectionHiddenByTemplateMarker(section);
     }
-    return state.currentView === 'ai'
-      && !state.showAdvancedEditor
-      && section.editorOnly
-      && sectionContainsAdvancedOnlyScriptingBlock(section);
-  }
-
-  function isAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
-    return block.schema.editorOnly
-      && deps.resolveBaseComponent(block.schema.component) === 'plugin'
-      && block.schema.plugin === SCRIPTING_PLUGIN_ID;
-  }
-
-  function sectionContainsAdvancedOnlyScriptingBlock(section: VisualSection): boolean {
-    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock);
-  }
-
-  function blockContainsAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
-    return isAdvancedOnlyScriptingBlock(block)
-      || (block.schema.containerBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
-      || (block.schema.componentListBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
-      || (block.schema.gridItems ?? []).some((item) => blockContainsAdvancedOnlyScriptingBlock(item.block))
-      || (block.schema.expandableStubBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
-      || (block.schema.expandableContentBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock);
+    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlySection(section, state.documentMeta);
   }
 
   function isViewerHiddenBlock(block: VisualBlock): boolean {
     if (state.currentView === 'viewer' && (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block))) {
       return true;
     }
-    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlyScriptingBlock(block);
+    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedComponentBlock(block, state.documentMeta);
   }
 
   function isAnchoredReaderButton(section: VisualSection | null, block: VisualBlock): boolean {

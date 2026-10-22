@@ -32,10 +32,16 @@ in `block.schema.pluginConfig`.
 
 ## Runtime Model
 
-- Scripts do not execute in `editor` view.
-- Scripts execute in `viewer` and document `ai` view.
-- `viewer` may hide the source code while still running the script.
-- Document `ai` view should still show the code preview and also mount the
+See HVY-SPEC.md section 7.14 for the normative view rules.
+
+- Viewer scripts (no `editorOnly`) execute in `viewer` and document `ai` view.
+- Editor scripts (`editorOnly: true`) execute in `editor` and document `ai` view.
+- The plugin declares `advancedComponent: true`, so the editor and `ai` view
+  hide script blocks unless the advanced editor is on, and the add-component
+  picker lists Scripting disabled with an "Advanced" badge. Hidden scripts
+  still run. Visibility rules live in `src/component-availability.ts`.
+- `viewer` hides the source and only surfaces script errors.
+- With the advanced editor on, `ai` view shows the code preview and mounts the
   scripting reader UI so errors can be surfaced there.
 
 Execution is kicked off from the app layer in `src/main.ts`, not from the

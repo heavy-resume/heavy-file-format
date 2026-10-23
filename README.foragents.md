@@ -473,13 +473,6 @@ dist-hvy-viewer/
   image/<encoded image filename>
 ```
 
-The reusable viewer image can also mount an extracted directory at `/site`:
-
-```bash
-docker build -t hvy-hosted-viewer .
-docker run --rm -p 8080:8080 -v "$PWD/dist-hvy-viewer:/site:ro" hvy-hosted-viewer
-```
-
 The viewer loads `document.hvy` and `attachments.json` first, then resolves
 regular image and carousel attachments through the manifest so images are fetched
 from `./image/...` only when the browser/component needs them.

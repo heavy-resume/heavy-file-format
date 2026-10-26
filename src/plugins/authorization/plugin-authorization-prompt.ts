@@ -17,10 +17,10 @@ export function createPluginAuthorizationPrompt(options: PluginAuthorizationProm
   root.className = 'hvy-plugin-authorization';
   const title = document.createElement('strong');
   title.className = 'hvy-plugin-authorization-title';
-  title.textContent = `${options.plugin.displayName} is blocked`;
+  title.textContent = `${options.plugin.displayName} needs your approval`;
   const detail = document.createElement('p');
   detail.className = 'hvy-plugin-authorization-detail';
-  detail.textContent = 'This plugin can run code. Allow it only if you trust this file and the plugin.';
+  detail.textContent = 'This plugin asks to be approved for each file that uses it. Allow it if you trust this file to use it.';
   const status = document.createElement('p');
   status.className = 'hvy-plugin-authorization-status';
   const actions = document.createElement('div');

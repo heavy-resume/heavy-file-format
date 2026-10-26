@@ -191,7 +191,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin form SECTION_PATH [ID|--id ID]',
+      command: 'hvy insert INDEX plugin form PARENT_PATH [ID|--id ID]',
       description: 'Create a blank Form plugin component. Edit plugin.txt for fields/scripts and plugin.json for submit settings.',
     },
   ],
@@ -441,7 +441,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin SECTION_PATH [ID|--id ID] hvy.scripting',
+      command: 'hvy insert INDEX plugin PARENT_PATH [ID|--id ID] hvy.scripting',
       description: 'Create a blank scripting plugin block. Edit plugin.txt or script.py after creation.',
     },
   ],
@@ -487,7 +487,7 @@ registerHvyCliPluginCommands({
   ],
   addCommands: [
     {
-      command: 'hvy insert INDEX plugin db-table SECTION_PATH [ID|--id ID]',
+      command: 'hvy insert INDEX plugin db-table PARENT_PATH [ID|--id ID]',
       description: 'Create a blank dynamic table plugin. Edit plugin.json for table/view and plugin.txt for optional display SQL.',
     },
   ],

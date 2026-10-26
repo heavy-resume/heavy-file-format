@@ -39,7 +39,7 @@ import { visitBlocksInList } from '../section-ops';
 import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getAvailableOutputGenerators, getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
-import { isAdvancedComponentBlock, isAdvancedOnlySection } from '../component-availability';
+import { isAdvancedComponentBlock, isAdvancedOnlySection, isHostHiddenPluginBlock } from '../component-availability';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { REUSABLE_SECTION_PREFIX } from '../state';
 import { extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../reusable-template-values';
@@ -1015,7 +1015,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function isViewerHiddenBlock(block: VisualBlock): boolean {
-    if (state.currentView === 'viewer' && (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block))) {
+    if (state.currentView === 'viewer'
+      && (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block) || isHostHiddenPluginBlock(block, state.documentMeta))) {
       return true;
     }
     return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedComponentBlock(block, state.documentMeta);

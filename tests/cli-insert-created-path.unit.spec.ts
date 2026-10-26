@@ -27,6 +27,9 @@ test.each([
   ['hvy insert -1 plugin db-table /body/fake-section "Fake Table"', '/body/fake-section/fake-table'],
   ['hvy insert 0 section /body "Fake Other" "Fake Other"', '/body/fake-other'],
   ['hvy insert -1 text /templates/components/fake-card/schema "Fake Child"', '/templates/components/fake-card/schema/container/fake-child'],
+  ['hvy insert -1 plugin /templates/components/fake-card/schema "Fake Plugin" hvy.fake', '/templates/components/fake-card/schema/container/fake-plugin'],
+  ['hvy insert -1 plugin form /templates/components/fake-card/schema "Fake Form"', '/templates/components/fake-card/schema/container/fake-form'],
+  ['hvy insert -1 plugin db-table /templates/components/fake-card/schema "Fake Table"', '/templates/components/fake-card/schema/container/fake-table'],
 ])('%s reports and enters the listed directory', async (command, expectedPath) => {
   const document = createFakeDocument();
   const session = createHvyCliSession();

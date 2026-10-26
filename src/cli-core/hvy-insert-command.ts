@@ -22,7 +22,6 @@ import {
   buildHvyVirtualBlockSubtreeFileSystem,
   buildHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
-  findSectionForVirtualDirectory,
   findVirtualDirectoriesForBlock,
   findVirtualDirectoryForSection,
   findBlockInsertionTargetForVirtualDirectory,
@@ -255,17 +254,39 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
   const id = params.id || generateStableCliComponentId(ctx.fs, resolvedParentPath, params.component);
   const block = createCliComponentBlock(ctx.document, params.component, id, !params.id, params.templateValues ?? null);
+  return insertBlockAtPath(ctx, {
+    parentPath: params.parentPath,
+    block,
+    commandName: params.commandName,
+    index: params.index,
+    returnAboutTxtOnCreation: params.returnAboutTxtOnCreation,
+    returnOrderOnCreation: params.returnOrderOnCreation,
+    returnStructureOnCreation: params.returnStructureOnCreation,
+  });
+}
+
+/** Inserts a created block into any component parent: a section, container, grid, expandable pane, component-list, or template slot. */
+function insertBlockAtPath(ctx: HvyDocumentCommandContext, params: {
+  parentPath: string;
+  block: VisualBlock;
+  commandName: string;
+  index?: HvyInsertIndex;
+  returnAboutTxtOnCreation?: boolean;
+  returnOrderOnCreation?: boolean;
+  returnStructureOnCreation?: boolean;
+}): HvyDocumentCommandResult {
+  const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
   const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming);
   const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming)
     ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
   if (!target) {
     throw new Error(`${params.commandName}: no component insertion target: ${params.parentPath}`);
   }
-  target.insert(block, params.index ?? -1);
+  target.insert(params.block, params.index ?? -1);
   commitTemplateDirectory(ctx.document, resolvedParentPath);
-  const path = requireCreatedBlockDirectory(ctx, block, resolvedParentPath);
+  const path = requireCreatedBlockDirectory(ctx, params.block, resolvedParentPath);
   return {
-    output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedParentPath, parentBlock, target.kind, {
+    output: formatCreatedComponentDirectory(ctx.document, path, params.block, resolvedParentPath, parentBlock, target.kind, {
       returnAboutTxtOnCreation: params.returnAboutTxtOnCreation,
       returnOrderOnCreation: params.returnOrderOnCreation,
       returnStructureOnCreation: params.returnStructureOnCreation,
@@ -437,11 +458,10 @@ function formatCreatedComponentStructureDisplay(document: VisualDocument, fs: Hv
 }
 
 function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
-  const [sectionPath = '', ...rest] = args;
-  const section = requireSection(ctx, sectionPath, 'hvy insert plugin');
+  const [parentPath = '', ...rest] = args;
   const { id, trailing: [plugin = ''], extra } = parseInsertIdArguments('hvy insert plugin', rest, 1);
   if (!id || !plugin) {
-    throw new Error('hvy insert plugin: expected SECTION_PATH [ID|--id ID] PLUGIN_ID');
+    throw new Error('hvy insert plugin: expected PARENT_PATH [ID|--id ID] PLUGIN_ID');
   }
   if (extra.length > 0) {
     throw new Error('hvy insert plugin: creation does not accept inline config or body; create it blank, then edit plugin.json and plugin.txt.');
@@ -451,18 +471,15 @@ function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: H
     throw new Error(aliasError);
   }
   const block = createPluginBlock(id, plugin, {}, '');
-  insertChild(section.blocks, block, index);
-  const resolvedSectionPath = resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath);
-  const path = requireCreatedBlockDirectory(ctx, block, resolvedSectionPath);
-  return { output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedSectionPath, null, 'blocks'), mutated: true, cwd: path };
+  return insertBlockAtPath(ctx, { parentPath, block, commandName: 'hvy insert plugin', index });
 }
 
 function formatRawPluginAliasError(plugin: string): string {
   if (plugin === 'form') {
-    return 'hvy insert plugin: "form" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin form SECTION_PATH [ID|--id ID]" or plugin id "hvy.form".';
+    return 'hvy insert plugin: "form" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin form PARENT_PATH [ID|--id ID]" or plugin id "hvy.form".';
   }
   if (plugin === 'db-table') {
-    return 'hvy insert plugin: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH [ID|--id ID]" or plugin id "hvy.db-table".';
+    return 'hvy insert plugin: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table PARENT_PATH [ID|--id ID]" or plugin id "hvy.db-table".';
   }
   if (plugin === 'scripting') {
     return 'hvy insert plugin: "scripting" is a CLI command alias, not a stored plugin id. Use plugin id "hvy.scripting".';
@@ -471,11 +488,10 @@ function formatRawPluginAliasError(plugin: string): string {
 }
 
 function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
-  const [sectionPath = '', ...rest] = args;
-  const section = requireSection(ctx, sectionPath, 'hvy insert plugin form');
+  const [parentPath = '', ...rest] = args;
   const { id, extra } = parseInsertIdArguments('hvy insert plugin form', rest);
   if (!id) {
-    throw new Error('hvy insert plugin form: expected SECTION_PATH [ID|--id ID]');
+    throw new Error('hvy insert plugin form: expected PARENT_PATH [ID|--id ID]');
   }
   if (extra.length > 0) {
     throw new Error('hvy insert plugin form: creation does not accept fields, scripts, or submit settings; create it blank, then edit plugin.txt and plugin.json.');
@@ -484,27 +500,20 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[], inde
     version: '0.1',
     showSubmit: false,
   }, 'fields: []');
-  insertChild(section.blocks, block, index);
-  const resolvedSectionPath = resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath);
-  const path = requireCreatedBlockDirectory(ctx, block, resolvedSectionPath);
-  return { output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedSectionPath, null, 'blocks'), mutated: true, cwd: path };
+  return insertBlockAtPath(ctx, { parentPath, block, commandName: 'hvy insert plugin form', index });
 }
 
 function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
-  const [sectionPath = '', ...rest] = args;
-  const section = requireSection(ctx, sectionPath, 'hvy insert plugin db-table');
+  const [parentPath = '', ...rest] = args;
   const { id, extra } = parseInsertIdArguments('hvy insert plugin db-table', rest);
   if (!id) {
-    throw new Error('hvy insert plugin db-table: expected SECTION_PATH [ID|--id ID]');
+    throw new Error('hvy insert plugin db-table: expected PARENT_PATH [ID|--id ID]');
   }
   if (extra.length > 0) {
     throw new Error('hvy insert plugin db-table: creation does not accept table or query inline; create it blank, then edit plugin.json and plugin.txt.');
   }
   const block = createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: '', queryLimit: 10 }, '');
-  insertChild(section.blocks, block, index);
-  const resolvedSectionPath = resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath);
-  const path = requireCreatedBlockDirectory(ctx, block, resolvedSectionPath);
-  return { output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedSectionPath, null, 'blocks'), mutated: true, cwd: path };
+  return insertBlockAtPath(ctx, { parentPath, block, commandName: 'hvy insert plugin db-table', index });
 }
 
 function requireSectionRoot(ctx: HvyDocumentCommandContext, path: string): void {
@@ -513,16 +522,6 @@ function requireSectionRoot(ctx: HvyDocumentCommandContext, path: string): void 
     throw new Error('hvy insert section: sections must be added at /body. Use a container to group components inside a section.');
   }
 }
-
-function requireSection(ctx: HvyDocumentCommandContext, path: string, command: string): VisualSection {
-  const resolved = resolveVirtualPath(ctx.fs, ctx.cwd, path);
-  const section = findSectionForVirtualDirectory(ctx.document, resolved, ctx.pathNaming);
-  if (!section) {
-    throw new Error(`${command}: no such section: ${path}`);
-  }
-  return section;
-}
-
 
 function createSection(id: string, title: string, documentMeta: JsonObject): VisualSection {
   return {

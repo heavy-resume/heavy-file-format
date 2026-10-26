@@ -369,7 +369,7 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
     if (registration.authorization === 'required') {
       const authorizationMode = getPluginAuthorizationMode(state.document, registration);
       if (authorizationMode === 'hidden') {
-        placeholder.textContent = `Plugin "${pluginId}" is blocked by the host.`;
+        placeholder.textContent = `${registration.displayName} isn't available in this app.`;
         placeholder.classList.add('hvy-plugin-missing');
         return;
       }

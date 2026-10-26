@@ -35,7 +35,7 @@ test.each([
   ['hvy insert -1 plugin /body/fake-section --fake-flag fake-raw hvy.fake', 'hvy insert plugin: unsupported option --fake-flag'],
   ['hvy insert -1 plugin /body/fake-section hvy.fake --id', 'hvy insert plugin: --id requires a value.'],
   ['hvy insert -1 plugin /body/fake-section fake-raw --id fake-other hvy.fake', 'hvy insert plugin: creation accepts either positional ID or --id ID, not both.'],
-  ['hvy insert -1 plugin /body/fake-section hvy.fake', 'hvy insert plugin: expected SECTION_PATH [ID|--id ID] PLUGIN_ID'],
+  ['hvy insert -1 plugin /body/fake-section hvy.fake', 'hvy insert plugin: expected PARENT_PATH [ID|--id ID] PLUGIN_ID'],
   ['hvy insert -1 plugin form /body/fake-section --fake-flag fake-form', 'hvy insert plugin form: unsupported option --fake-flag'],
   ['hvy insert -1 plugin db-table /body/fake-section --id fake-table extra', 'hvy insert plugin db-table: creation accepts either positional ID or --id ID, not both.'],
 ])('%s is rejected without changing the document', async (command, expectedError) => {
@@ -45,4 +45,40 @@ test.each([
   await expect(executeHvyCliCommand(document, createHvyCliSession(), command)).rejects.toThrow(expectedError);
 
   expect(serializeDocument(document)).toBe(before);
+});
+
+test('hvy insert plugin form adds the form inside a component template slot', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-card
+    baseType: container
+    schema: {}
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+`, '.hvy');
+
+  await executeHvyCliCommand(document, createHvyCliSession(), 'hvy insert -1 plugin form /templates/components/fake-card/schema --id fake-form');
+
+  const expectedTemplateChild = { schema: { id: 'fake-form', plugin: 'hvy.form', pluginConfig: { version: '0.1', showSubmit: false } }, text: 'fields: []' };
+  expect(document.meta.component_defs).toMatchObject([{ name: 'fake-card', schema: { containerBlocks: [expectedTemplateChild] } }]);
+});
+
+test('hvy insert plugin adds the plugin inside a container in a section', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+<!--hvy:container {"id":"fake-container"}-->
+`, '.hvy');
+
+  await executeHvyCliCommand(document, createHvyCliSession(), 'hvy insert -1 plugin /id/fake-container --id fake-raw hvy.fake');
+
+  const expectedContainerChild = { schema: { id: 'fake-raw', plugin: 'hvy.fake' } };
+  expect(document.sections[0]?.blocks).toMatchObject([{ schema: { id: 'fake-container', containerBlocks: [expectedContainerChild] } }]);
 });

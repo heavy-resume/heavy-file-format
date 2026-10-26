@@ -1,7 +1,8 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import { isReusableDefinitionSectionKey, resolveBaseComponentFromMeta } from './component-defs';
-import { isAdvancedComponentPlugin } from './plugins/registry';
+import { getPluginAuthorizationMode } from './plugins/authorization/plugin-authorization-policy';
+import { getHostPlugin, isAdvancedComponentPlugin } from './plugins/registry';
 import { isPdfAllowedComponentInstance } from './pdf-document-capabilities';
 import { isPdfDocument } from './pdf-document-rules';
 import { state } from './state';
@@ -55,6 +56,9 @@ export function getComponentTypeAvailability(
   if (componentName === 'location-marker' && !surface.templateEditing) {
     return { kind: 'not-offered' };
   }
+  if (componentName === 'plugin' && !!pluginId && isHostHiddenPlugin(pluginId)) {
+    return { kind: 'not-offered' };
+  }
   if (surface.pdfDocument && !isPdfAllowedComponentInstance(componentName, surface.documentMeta, pluginId)) {
     return { kind: 'unavailable', reason: 'Not supported in PHVY' };
   }
@@ -70,7 +74,19 @@ function isAdvancedComponentType(componentName: string, pluginId: string | undef
 
 export function isAdvancedComponentBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
   return resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'plugin'
-    && isAdvancedComponentType('plugin', block.schema.plugin);
+    && (isAdvancedComponentType('plugin', block.schema.plugin) || isHostHiddenPlugin(block.schema.plugin));
+}
+
+/** A plugin block the host's authorization policy says must not be offered; it never loads. */
+export function isHostHiddenPluginBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
+  return resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'plugin'
+    && isHostHiddenPlugin(block.schema.plugin);
+}
+
+function isHostHiddenPlugin(pluginId: string): boolean {
+  const registration = getHostPlugin(pluginId);
+  return registration?.authorization === 'required'
+    && getPluginAuthorizationMode(state.document, registration) === 'hidden';
 }
 
 /** A section whose every top-level block is an advanced component. */

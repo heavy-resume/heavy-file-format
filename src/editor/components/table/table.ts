@@ -3,6 +3,7 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../com
 import type { TableRow } from '../../types';
 import { closeIcon, plusIcon, settingsIcon } from '../../../icons';
 import { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from '../../../markdown';
+import { markdownToPlainText } from '../../../markdown-plain-text';
 import { findSortValueOwnerBlock, getComponentSortValueDefs, replaceSortValueAnnotations, type ListValueKind } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { state } from '../../../state';
@@ -83,6 +84,11 @@ function unwrapTableParagraphs(html: string): string {
 
 function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentReaderRenderer>[1], helpers: Parameters<ComponentReaderRenderer>[2]): string {
   return unwrapTableParagraphs(helpers.renderComponentFragment('text', value, block));
+}
+
+function renderTableHoverTitleAttr(markdown: string, helpers: Parameters<ComponentReaderRenderer>[2]): string {
+  const visibleText = markdownToPlainText(markdown);
+  return visibleText ? ` title="${helpers.escapeAttr(visibleText)}"` : '';
 }
 
 function renderTableInlineToolbar(
@@ -333,7 +339,7 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column, columnIndex) => `<th class="${tableColumnClassNames(block, column, true)}" data-table-column-index="${columnIndex}" title="${helpers.escapeAttr(renderAltAnnotationsAsFullText(column))}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
+      <tr>${columns.map((column, columnIndex) => `<th class="${tableColumnClassNames(block, column, true)}" data-table-column-index="${columnIndex}"${renderTableHoverTitleAttr(column, helpers)}>${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }
@@ -347,9 +353,8 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
               ${columns.map((_column, cellIndex) => {
                 const rawValue = row.cells[cellIndex] ?? '';
                 const value = helpers.escapeHtml(rawValue);
-                const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
                 if (value) {
-                  return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}" title="${title}">${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`;
+                  return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}"${renderTableHoverTitleAttr(rawValue, helpers)}>${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`;
                 }
                 if (!isEmptyRow) {
                   return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}"></td>`;

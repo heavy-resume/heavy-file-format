@@ -124,3 +124,19 @@ test('equivalent photo defaults preserve live changes while edited photo default
 
   expect(live.values['Fake photo']).toEqual({ attachmentId: 'fake-b', imageFile: 'fake-b.png', mediaType: 'image/png' });
 });
+
+test('script submit overrides persist across refreshes until the document submit defaults change', () => {
+  const spec = parseFormSpec('', { submitDisabled: true, submitDisabledReason: 'Fake document reason' }).spec;
+  const live = createLiveState(spec);
+  expect(live.submit).toEqual({ disabled: true, reason: 'Fake document reason' });
+
+  live.submit = { disabled: false, reason: '' };
+  reconcileLiveState(live, structuredClone(spec));
+
+  expect(live.submit).toEqual({ disabled: false, reason: '' });
+
+  spec.submitDisabledReason = 'Fake edited reason';
+  reconcileLiveState(live, spec);
+
+  expect(live.submit).toEqual({ disabled: true, reason: 'Fake edited reason' });
+});

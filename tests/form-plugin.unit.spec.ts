@@ -143,6 +143,22 @@ scripts:
     });
   });
 
+  test('parses and serializes disabled submit state with its reason', () => {
+    expect(parseFormSpec('').spec).toMatchObject({ submitDisabled: false, submitDisabledReason: '' });
+
+    const parsed = parseFormSpec('', {
+      submitDisabled: true,
+      submitDisabledReason: 'Fake reason for waiting',
+    });
+
+    expect(parsed.spec.submitDisabled).toBe(true);
+    expect(parsed.spec.submitDisabledReason).toBe('Fake reason for waiting');
+    expect(serializeFormConfig(parsed.spec)).toMatchObject({
+      submitDisabled: true,
+      submitDisabledReason: 'Fake reason for waiting',
+    });
+  });
+
   test('normalizes AI submit behavior from plugin config', () => {
     const parsed = parseFormSpec(`fields:
   - label: Topic

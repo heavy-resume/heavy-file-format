@@ -6,11 +6,18 @@ interface FieldDefinitionSnapshot {
   options: string;
 }
 
+export interface LiveSubmitState {
+  disabled: boolean;
+  reason: string;
+}
+
 export interface LiveFormState {
   values: Record<string, FormFieldValue>;
   options: Record<string, FormOption[]>;
   errors: Record<string, string>;
   definitions: Map<string, FieldDefinitionSnapshot>;
+  submit: LiveSubmitState;
+  submitDefinition: string;
 }
 
 export function reconcileSelectValue(value: FormFieldValue, options: FormOption[]): string {
@@ -21,12 +28,26 @@ export function reconcileSelectValue(value: FormFieldValue, options: FormOption[
 }
 
 export function createLiveState(spec: FormSpec): LiveFormState {
-  const live: LiveFormState = { values: {}, options: {}, errors: {}, definitions: new Map() };
+  const live: LiveFormState = {
+    values: {},
+    options: {},
+    errors: {},
+    definitions: new Map(),
+    submit: { disabled: false, reason: '' },
+    submitDefinition: '',
+  };
   reconcileLiveState(live, spec);
   return live;
 }
 
 export function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
+  // Like field values, scripts may override the submit state until the
+  // document's own submit defaults change.
+  const submitDefinition = JSON.stringify([spec.submitDisabled, spec.submitDisabledReason]);
+  if (live.submitDefinition !== submitDefinition) {
+    live.submit = { disabled: spec.submitDisabled, reason: spec.submitDisabledReason };
+    live.submitDefinition = submitDefinition;
+  }
   const fieldLabels = new Set(spec.fields.map((field) => field.label));
   for (const field of spec.fields) {
     const previous = live.definitions.get(field.label);

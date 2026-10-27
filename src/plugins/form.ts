@@ -97,6 +97,8 @@ export interface FormSpec {
   submitOutputCharLimit: number;
   submitLabel: string;
   showSubmit: boolean;
+  submitDisabled: boolean;
+  submitDisabledReason: string;
   scriptLibraries: ScriptingLibraryName[];
   scriptStepBudget: number;
 }
@@ -125,6 +127,8 @@ function defaultFormSpec(): FormSpec {
     submitOutputCharLimit: 4000,
     submitLabel: 'Submit',
     showSubmit: true,
+    submitDisabled: false,
+    submitDisabledReason: '',
     scriptLibraries: [],
     scriptStepBudget: 100_000,
   };
@@ -310,7 +314,7 @@ function coerceReturnedText(value: unknown): string {
   return String(value).trim();
 }
 
-function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'formCss' | 'actionsCss' | 'submitCss' | 'initialScript' | 'changeScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'scriptLibraries' | 'scriptStepBudget'> {
+function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'formCss' | 'actionsCss' | 'submitCss' | 'initialScript' | 'changeScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'submitDisabled' | 'submitDisabledReason' | 'scriptLibraries' | 'scriptStepBudget'> {
   return {
     formCss: typeof config?.formCss === 'string' ? config.formCss : '',
     actionsCss: typeof config?.actionsCss === 'string' ? config.actionsCss : '',
@@ -325,6 +329,8 @@ function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'formCss' | 'actio
     submitOutputCharLimit: normalizePositiveInt(config?.submitOutputCharLimit, 4000),
     submitLabel: typeof config?.submitLabel === 'string' && config.submitLabel.trim().length > 0 ? config.submitLabel : 'Submit',
     showSubmit: config?.showSubmit !== false,
+    submitDisabled: config?.submitDisabled === true,
+    submitDisabledReason: typeof config?.submitDisabledReason === 'string' ? config.submitDisabledReason : '',
     scriptLibraries: normalizeScriptLibraries(config?.scriptLibraries),
     scriptStepBudget: normalizePositiveInt(config?.scriptStepBudget ?? config?.maxLines, 100_000),
   };
@@ -346,6 +352,8 @@ export function serializeFormConfig(spec: FormSpec): JsonObject {
     submitOutputCharLimit: spec.submitOutputCharLimit,
     submitLabel: spec.submitLabel,
     showSubmit: spec.showSubmit,
+    submitDisabled: spec.submitDisabled,
+    submitDisabledReason: spec.submitDisabledReason,
     scriptLibraries: spec.scriptLibraries,
     scriptStepBudget: spec.scriptStepBudget,
   };
@@ -558,6 +566,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       delete live.errors[fieldName];
       renderReader();
     },
+    set_submit_disabled: (disabled, reason) => {
+      live.submit = { disabled: disabled === true, reason: disabled === true ? String(reason ?? '') : '' };
+      renderReader();
+    },
+    get_submit_disabled: () => live.submit.disabled,
   });
 
   // Form scripts follow the viewer-script rule (HVY-SPEC 7.14): they run in the
@@ -850,6 +863,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       <label><span>Script Step Budget</span><input type="number" min="1" data-form-top-number="scriptStepBudget" value="${spec.scriptStepBudget}"></label>
       <label><span>Submit Label</span><input data-form-top-text="submitLabel" value="${escapeAttr(spec.submitLabel)}"></label>
       <label class="hvy-form-checkbox-label"><span>Show Submit</span><input type="checkbox" data-form-top-checkbox="showSubmit" ${spec.showSubmit ? 'checked' : ''}></label>
+      <label class="hvy-form-checkbox-label"><span>Disable Submit</span><input type="checkbox" data-form-top-checkbox="submitDisabled" ${spec.submitDisabled ? 'checked' : ''}></label>
+      <label><span>Disabled Reason</span><input data-form-top-text="submitDisabledReason" value="${escapeAttr(spec.submitDisabledReason)}" placeholder="Shown under the disabled submit button"></label>
       <label><span>Form CSS</span><textarea rows="4" data-form-top-text="formCss" placeholder="display: grid; gap: 0.75rem;">${escapeHtml(spec.formCss)}</textarea></label>
       <label><span>Actions CSS</span><textarea rows="4" data-form-top-text="actionsCss" placeholder="grid-column: 1 / -1;">${escapeHtml(spec.actionsCss)}</textarea></label>
       <label><span>Submit CSS</span><textarea rows="4" data-form-top-text="submitCss" placeholder="justify-self: end;">${escapeHtml(spec.submitCss)}</textarea></label>
@@ -882,6 +897,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   function renderReader(): void {
     const { spec, error } = parseCurrent();
     reconcileLiveState(live, spec);
+    const focus = captureReaderFocus();
     root.innerHTML = '';
     if (error) {
       const errorBox = document.createElement('div');
@@ -908,11 +924,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       submit.type = 'submit';
       submit.className = 'secondary';
       submit.textContent = submitBusy ? 'Generating...' : spec.submitLabel || 'Submit';
-      submit.disabled = submitBusy;
+      submit.disabled = submitBusy || live.submit.disabled;
       if (spec.submitCss.trim().length > 0) {
         submit.setAttribute('style', sanitizeInlineCss(spec.submitCss));
       }
       actions.appendChild(submit);
+      if (live.submit.disabled && live.submit.reason.trim().length > 0) {
+        const reason = document.createElement('div');
+        reason.className = 'hvy-form-submit-reason';
+        reason.id = `hvy-form-submit-reason-${ctx.block.id}`;
+        reason.textContent = live.submit.reason;
+        submit.setAttribute('aria-describedby', reason.id);
+        actions.appendChild(reason);
+      }
       form.appendChild(actions);
     }
     root.appendChild(form);
@@ -935,6 +959,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       }
       root.appendChild(status);
     }
+    restoreReaderFocus(focus);
 
     if (!canRunFormScripts()) {
       return;
@@ -950,6 +975,42 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (databaseChanges.revision > lifecycle.lastDatabaseRevision) {
         lifecycle.lastDatabaseRevision = databaseChanges.revision;
         runNamedScript(spec.changeScript, 'change', databaseChanges);
+      }
+    }
+  }
+
+  // Scripts (including debounced input triggers) rebuild the reader form, so
+  // carry focus and caret across to the equivalent new control.
+  function captureReaderFocus(): ReaderFocus | null {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !root.contains(active)) {
+      return null;
+    }
+    const selection = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
+      ? { start: readSelectionOffset(active, 'selectionStart'), end: readSelectionOffset(active, 'selectionEnd') }
+      : null;
+    if (active.dataset.formFieldLabel !== undefined) {
+      const selector = `[data-form-control][data-form-field-label="${CSS.escape(active.dataset.formFieldLabel)}"]`
+        + (active instanceof HTMLInputElement && active.type === 'radio' ? `[value="${CSS.escape(active.value)}"]` : '');
+      return { selector, selection };
+    }
+    if (active instanceof HTMLButtonElement && active.type === 'submit') {
+      return { selector: 'button[type="submit"]', selection: null };
+    }
+    return null;
+  }
+
+  function restoreReaderFocus(focus: ReaderFocus | null): void {
+    const target = focus ? root.querySelector<HTMLElement>(focus.selector) : null;
+    if (!focus || !target || (target instanceof HTMLButtonElement && target.disabled)) {
+      return;
+    }
+    target.focus({ preventScroll: true });
+    if (focus.selection && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      try {
+        target.setSelectionRange(focus.selection.start, focus.selection.end);
+      } catch {
+        // Input types such as number and email do not support selection ranges.
       }
     }
   }
@@ -1159,8 +1220,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       commitBehavior(spec);
       return;
     }
-    if (target.dataset.formTopText === 'submitLabel' || target.dataset.formTopText === 'submitPrompt' || target.dataset.formTopText === 'formCss' || target.dataset.formTopText === 'actionsCss' || target.dataset.formTopText === 'submitCss') {
-      const key = target.dataset.formTopText as 'submitLabel' | 'submitPrompt' | 'formCss' | 'actionsCss' | 'submitCss';
+    if (target.dataset.formTopText === 'submitLabel' || target.dataset.formTopText === 'submitDisabledReason' || target.dataset.formTopText === 'submitPrompt' || target.dataset.formTopText === 'formCss' || target.dataset.formTopText === 'actionsCss' || target.dataset.formTopText === 'submitCss') {
+      const key = target.dataset.formTopText as 'submitLabel' | 'submitDisabledReason' | 'submitPrompt' | 'formCss' | 'actionsCss' | 'submitCss';
       spec[key] = target.value;
       commitBehavior(spec);
       return;
@@ -1171,8 +1232,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       commitBehavior(spec);
       return;
     }
-    if (target.dataset.formTopCheckbox === 'showSubmit' && target instanceof HTMLInputElement) {
-      spec.showSubmit = target.checked;
+    if ((target.dataset.formTopCheckbox === 'showSubmit' || target.dataset.formTopCheckbox === 'submitDisabled') && target instanceof HTMLInputElement) {
+      spec[target.dataset.formTopCheckbox] = target.checked;
       commitBehavior(spec);
       return;
     }
@@ -1277,6 +1338,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (!canRunFormScripts()) {
       return;
     }
+    if (live.submit.disabled) {
+      return;
+    }
     const { spec } = parseCurrent();
     if (spec.submitAction === 'ai-generate') {
       runAiSubmit();
@@ -1329,6 +1393,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 }
 
+interface ReaderFocus {
+  selector: string;
+  selection: { start: number; end: number } | null;
+}
+
+function readSelectionOffset(control: HTMLInputElement | HTMLTextAreaElement, key: 'selectionStart' | 'selectionEnd'): number {
+  try {
+    return control[key] ?? control.value.length;
+  } catch {
+    return control.value.length;
+  }
+}
+
 function renderTextInput(label: string, prop: string, value: string, index: number): string {
   return `<label><span>${escapeHtml(label)}</span><input data-form-field-index="${index}" data-form-field-prop="${escapeAttr(prop)}" value="${escapeAttr(value)}"></label>`;
 }
@@ -1371,7 +1448,7 @@ export const formPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported form YAML keys include `fields` and `scripts`.',
-    'Form-level behavior and styling keys live in pluginConfig: `formCss`, `actionsCss`, `submitCss`, `submitLabel`, `showSubmit`, `initialScript`, `changeScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
+    'Form-level behavior and styling keys live in pluginConfig: `formCss`, `actionsCss`, `submitCss`, `submitLabel`, `showSubmit`, `submitDisabled`, `submitDisabledReason`, `initialScript`, `changeScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key. Type `photo` stores an HVY image attachment before submit and exposes an object with `attachmentId`, `imageFile`, and `mediaType` through `doc.form`.',
     'Photo field `meta` supports `accept`, `maxBytes`, `maxWidth`, and `maxHeight`; dimension limits preserve aspect ratio and fall back to document or host image limits when omitted.',
     '`formCss`, `actionsCss`, `submitCss`, and field `meta.css` are sanitized inline CSS applied to the form, action wrapper, submit button, and field wrapper respectively.',

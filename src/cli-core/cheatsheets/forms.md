@@ -41,6 +41,8 @@ echo '{"id":"widget-submit-form","plugin":"hvy.form","pluginConfig":{"version":"
 
 Store fields and named scripts in `plugin.txt`. Use `pluginConfig.submitScript` in `plugin.json` to run a named script when the submit button is pressed.
 
+Disable the submit button with `"submitDisabled":true` and explain why with `"submitDisabledReason":"..."`; the reason renders under the disabled button. Scripts can toggle it with `doc.form.set_submit_disabled(True, "reason")` and `doc.form.set_submit_disabled(False)`.
+
 Populate a select from the current SQL backend when the form renders:
 
 ```shell

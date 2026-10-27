@@ -430,6 +430,8 @@ test('createScriptingRuntime exposes a supplied form API', () => {
       get_options: () => [{ label: 'Soup', value: 'soup' }],
       set_error: () => {},
       clear_error: () => {},
+      set_submit_disabled: () => {},
+      get_submit_disabled: () => false,
     },
   });
 

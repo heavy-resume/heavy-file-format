@@ -98,6 +98,8 @@ export interface ScriptingFormApi {
   get_options(label: string): ScriptingFormOption[];
   set_error(label: string, message: string): void;
   clear_error(label: string): void;
+  set_submit_disabled(disabled: boolean, reason?: string): void;
+  get_submit_disabled(): boolean;
 }
 
 export interface ScriptingDbApi {
@@ -179,6 +181,8 @@ function createUnavailableFormApi(): ScriptingFormApi {
     get_options: fail,
     set_error: fail,
     clear_error: fail,
+    set_submit_disabled: fail,
+    get_submit_disabled: fail,
   };
 }
 

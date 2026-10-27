@@ -1997,6 +1997,11 @@ Plugin-specific rules:
   defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
   `false`, clients MUST omit the visible submit button while preserving the form
   and any non-submit triggers.
+  `pluginConfig.submitDisabled` defaults to `false`; when `true`, clients MUST
+  render the submit button disabled and MUST NOT run the submit action.
+  `pluginConfig.submitDisabledReason` is optional plain text; while the submit
+  button is disabled by `submitDisabled` and the reason is non-empty, clients
+  SHOULD render it beneath the button inside the submit/action wrapper.
 - Form-level presentation MAY be stored in `pluginConfig.formCss`,
   `pluginConfig.actionsCss`, and `pluginConfig.submitCss`. These optional inline
   CSS strings apply to the rendered `<form>`, submit/action wrapper, and submit
@@ -2088,7 +2093,12 @@ Plugin-specific rules:
 - Form scripts run through the installed scripting runtime. During form script
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,
-  `set_error(label, message)`, and `clear_error(label)`.
+  `set_error(label, message)`, `clear_error(label)`,
+  `set_submit_disabled(disabled, reason)`, and `get_submit_disabled()`.
+  `set_submit_disabled` overrides `submitDisabled` and `submitDisabledReason`
+  for the current form lifecycle; `reason` is optional and is cleared when
+  `disabled` is false. The override is not serialized and is discarded when the
+  document's `submitDisabled` or `submitDisabledReason` values change.
 - `doc.db.get_tables()` returns handles for the current attached SQLite tables.
   `doc.db.get_updated_tables(table_name="")` returns handles for tables changed
   since the preceding document-change script lifecycle; each handle exposes

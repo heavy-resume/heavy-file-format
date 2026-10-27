@@ -167,7 +167,15 @@
 
 .hvy-document .hvy-form-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
+}
+
+.hvy-document .hvy-form-submit-reason {
+  flex-basis: 100%;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--hvy-muted);
 }
 
 .hvy-document .hvy-form-status,

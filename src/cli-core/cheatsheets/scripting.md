@@ -88,6 +88,8 @@ Form scripts also get:
 doc.form.get_value("Field label")
 doc.form.set_value("Field label", "value")
 doc.form.set_error("Field label", "Message")
+doc.form.set_submit_disabled(True, "Reason shown under the button")
+doc.form.set_submit_disabled(False)
 ```
 
 Scripts are wrapped in a generated function before Brython runs them, so `return` can stop a script early.

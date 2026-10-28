@@ -2,7 +2,13 @@ import { expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { createHvyCliSession, executeHvyCliCommand } from '../src/cli-core/commands';
+import {
+  createHvyCliSession,
+  executeHvyCliCommand,
+  getHvyCliSessionVirtualFileSystem,
+  invalidateHvyCliSessionVirtualFileSystem,
+} from '../src/cli-core/commands';
+import { listDirectory } from '../src/cli-core/virtual-file-system';
 import { formPluginRegistration } from '../src/plugins/form';
 import { setHostPlugins } from '../src/plugins/registry';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
@@ -167,6 +173,87 @@ test('cli exposes id aliases for sections and components', async () => {
   expect((await executeHvyCliCommand(document, session, 'cat /id/history-tools-technologies-list/tool-tech-xref-card-0/tool-tech-xref-card.json')).output).toContain(
     '"xrefTitle": "TypeScript"'
   );
+});
+
+function createAliasCliTestDocument() {
+  return deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:container {"id":"box"}-->
+
+ <!--hvy:text {"id":"first"}-->
+  First
+`, '.hvy');
+}
+
+test('expected result: an /id alias finds the same subtree as its canonical directory', async () => {
+  const document = createAliasCliTestDocument();
+  const session = createHvyCliSession();
+
+  const canonicalFind = await executeHvyCliCommand(document, session, 'find /body/notes/box');
+  const aliasFind = await executeHvyCliCommand(document, session, 'find /id/box');
+
+  expect(aliasFind.output).toBe(canonicalFind.output.replaceAll('/body/notes/box', '/id/box'));
+  expect(aliasFind.output).toContain('/id/box/container/first/text.txt');
+});
+
+test('expected result: writing and inserting through /id aliases changes the canonical components', async () => {
+  const document = createAliasCliTestDocument();
+  const session = createHvyCliSession();
+  expect((await executeHvyCliCommand(document, session, 'cat /body/notes/box/container/first/text.txt')).output).toBe('First');
+
+  await executeHvyCliCommand(document, session, 'echo "Changed" > /id/first/text.txt');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 text /id/box added');
+
+  expect((await executeHvyCliCommand(document, session, 'cat /body/notes/box/container/first/text.txt')).output).toBe('Changed\n');
+  expect((await executeHvyCliCommand(document, session, 'ls /id/box/container')).output).toContain('dir  added');
+  expect((await executeHvyCliCommand(document, session, 'find /body/notes/box -type d')).output).toBe([
+    '/body/notes/box',
+    '/body/notes/box/container',
+    '/body/notes/box/container/added',
+    '/body/notes/box/container/first',
+  ].join('\n'));
+});
+
+test('expected result: a failed raw.hvy write through an /id alias keeps the draft under that alias', async () => {
+  const document = createAliasCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(document, session, 'echo "<!--hvy:nope" > /id/first/raw.hvy')).rejects.toThrow(
+    '/id/first/raw.hvy did not parse; component was not changed.\n/id/first/raw.wip.hvy now contains the failed draft'
+  );
+
+  expect((await executeHvyCliCommand(document, session, 'ls /id/first')).output).toContain('file raw.wip.hvy [w]');
+  expect((await executeHvyCliCommand(document, session, 'cat /id/first/raw.wip.hvy')).output).toBe('<!--hvy:nope\n');
+});
+
+test('expected result: an insert refreshes its section in place and matches a full rebuild of the file system', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession();
+  // The first mutation also normalizes sort values across the whole document, so it rebuilds everything.
+  await executeHvyCliCommand(document, session, 'hvy insert -1 text /body/summary first-change');
+  await executeHvyCliCommand(document, session, 'true');
+  const fileSystemBeforeInsert = getHvyCliSessionVirtualFileSystem(document, session);
+
+  await executeHvyCliCommand(document, session, 'hvy insert -1 skill-xref-card /id/top-skills-list added-card');
+  await executeHvyCliCommand(document, session, 'true');
+
+  const describeFileSystem = () => {
+    const fs = getHvyCliSessionVirtualFileSystem(document, session);
+    return [...fs.entries].map(([path, entry]) => entry.kind === 'file'
+      ? `${path} ${entry.read()}`
+      : `${path}/ ${listDirectory(fs, path).map((child) => child.path).join(',')}`);
+  };
+  expect(getHvyCliSessionVirtualFileSystem(document, session)).toBe(fileSystemBeforeInsert);
+  const refreshed = describeFileSystem();
+  expect(refreshed.some((line) => line.startsWith('/id/top-skills-list/added-card/'))).toBe(true);
+  invalidateHvyCliSessionVirtualFileSystem(session);
+  await executeHvyCliCommand(document, session, 'true');
+  expect(refreshed).toEqual(describeFileSystem());
 });
 
 test('about-section includes the section metadata description when present', async () => {
@@ -1288,6 +1375,38 @@ ${Array.from({ length: 500 }, (_, index) => ` Line ${index}`).join('\n')}
   await expect(executeHvyCliCommand(document, session, 'echo "nope" > /raw-preview.hvy.txt')).rejects.toThrow(
     'echo: file is read-only: /raw-preview.hvy.txt'
   );
+});
+
+test('expected result: raw-preview.hvy.txt replaces raw.hvy when only the combined document exceeds the raw limit', async () => {
+  const smallSections = Array.from({ length: 12 }, (_, index) => `<!--hvy: {"id":"part-${index}"}-->
+#! Part ${index}
+
+<!--hvy:text {"id":"part-${index}-text"}-->
+ ${'word '.repeat(70).trim()}
+`).join('\n');
+  const manySmallSections = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+${smallSections}`, '.hvy');
+  const largeHeaderOnly = deserializeDocument(`---
+hvy_version: 0.1
+description: ${'x'.repeat(4500)}
+---
+
+<!--hvy: {"id":"tiny"}-->
+#! Tiny
+`, '.hvy');
+
+  const manySmallSectionsRoot = await executeHvyCliCommand(manySmallSections, createHvyCliSession(), 'ls /');
+  const manySmallSectionsPart = await executeHvyCliCommand(manySmallSections, createHvyCliSession(), 'ls /id/part-0');
+  const largeHeaderOnlyRoot = await executeHvyCliCommand(largeHeaderOnly, createHvyCliSession(), 'ls /');
+
+  expect(manySmallSectionsRoot.output).toContain('file raw-preview.hvy.txt [ro]');
+  expect(manySmallSectionsRoot.output).not.toContain('file raw.hvy [w]');
+  expect(manySmallSectionsPart.output).toContain('file raw.hvy [w]');
+  expect(largeHeaderOnlyRoot.output).toContain('file raw-preview.hvy.txt [ro]');
+  expect(largeHeaderOnlyRoot.output).not.toContain('file raw.hvy [w]');
 });
 
 test('cli exposes raw.hvy in component directories and applies valid component edits', async () => {

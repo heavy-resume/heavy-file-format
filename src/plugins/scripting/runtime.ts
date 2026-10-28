@@ -5,7 +5,7 @@ import type { VisualDocument } from '../../types';
 import type { VisualSection } from '../../editor/types';
 import { getAttachment, removeAttachment, setAttachment } from '../../attachments';
 import { executeDocumentEditToolByName } from '../../ai-document-edit';
-import { executeHvyCliCommandSync, writeHvyVirtualFileSync } from '../../cli-core/commands';
+import { createHvyCliSession, executeHvyCliCommandSync, writeHvyVirtualFileSync, type HvyCliExecution, type HvyCliSession } from '../../cli-core/commands';
 import { resolveBaseComponentFromMeta } from '../../component-defs';
 import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
@@ -309,8 +309,33 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   let mutated = false;
   const pendingExpansions = new Map<string, { sectionKey: string; blockId: string }>();
 
+  // doc.cli calls reuse one CLI session (and its cached virtual file system)
+  // for the rest of the current synchronous turn. The document can only change
+  // during that turn through this runtime, so any mutation drops the session,
+  // and the next microtask drops it too, before awaits, callbacks, or host edits.
+  let cliSession: HvyCliSession | null = null;
+  const getCliSession = (): HvyCliSession => {
+    if (!cliSession) {
+      const session = createHvyCliSession();
+      cliSession = session;
+      queueMicrotask(() => {
+        if (cliSession === session) cliSession = null;
+      });
+    }
+    return cliSession;
+  };
   const onMutation = () => {
     mutated = true;
+    cliSession = null;
+  };
+  // A failing command may have changed the document before it threw, so its session is not reused.
+  const runCliWithSession = (run: (session: HvyCliSession) => HvyCliExecution): HvyCliExecution => {
+    try {
+      return run(getCliSession());
+    } catch (error) {
+      cliSession = null;
+      throw error;
+    }
   };
   const requestExpansion = (sectionKey: string, blockId: string) => {
     pendingExpansions.set(`${sectionKey}:${blockId}`, { sectionKey, blockId });
@@ -424,7 +449,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         block.text = String(text ?? '');
         block.schema.fillIn = hasTextFillInMarker(block.text);
         clearHideIfUnmodifiedForSectionPath(options.document.sections, sectionKey);
-        mutated = true;
+        onMutation();
       },
       is_empty: (id) => {
         const block = findComponentBySchemaId(options.document, String(id ?? ''))?.block ?? null;
@@ -435,12 +460,12 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       get: (key) => options.document.meta[key],
       set: (key, value) => {
         (options.document.meta as Record<string, unknown>)[key] = value as never;
-        mutated = true;
+        onMutation();
       },
       remove: (key) => {
         if (key in options.document.meta) {
           delete (options.document.meta as Record<string, unknown>)[key];
-          mutated = true;
+          onMutation();
         }
       },
       keys: () => Object.keys(options.document.meta),
@@ -465,12 +490,12 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
           { ...(previous?.meta ?? {}), ...(meta ?? {}) },
           normalized
         );
-        mutated = true;
+        onMutation();
       },
       remove: (id) => {
         if (getAttachment(options.document, id)) {
           removeAttachment(options.document, id);
-          mutated = true;
+          onMutation();
         }
       },
     },
@@ -486,7 +511,8 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     cli: {
       run: (command) => {
         stats.toolCalls += 1;
-        const result = executeHvyCliCommandSync(options.document, command);
+        const result = runCliWithSession((session) => executeHvyCliCommandSync(options.document, command, session));
+        // The CLI invalidates its own session file system for structural edits.
         if (result.mutated) {
           mutated = true;
         }
@@ -494,7 +520,8 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       },
       write: (path, content) => {
         stats.toolCalls += 1;
-        const result = writeHvyVirtualFileSync(options.document, String(path ?? ''), String(content ?? ''));
+        const result = runCliWithSession((session) => writeHvyVirtualFileSync(options.document, String(path ?? ''), String(content ?? ''), session));
+        // The CLI invalidates its own session file system for structural edits.
         if (result.mutated) {
           mutated = true;
         }

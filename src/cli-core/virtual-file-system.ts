@@ -22,12 +22,20 @@ import { isDocumentParagraphSpacing } from '../document-typography';
 import { measurePhase } from '../perf-trace';
 import { defaultBlockSchema, parseTableColumnProperties } from '../document-factory';
 import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
+import {
+  assignVirtualIdAliasRoots,
+  enumerateVirtualPathAncestors,
+  HvyVirtualEntryMap,
+  resolveVirtualIdAliasSourcePath,
+  type HvyVirtualIdAlias,
+} from './virtual-entry-map';
 
 export interface HvyVirtualFile {
   kind: 'file';
   path: string;
   read: () => string;
-  write?: (content: string) => void;
+  /** `addressedPath` is the path the write came through when that differs from `path`, such as an `/id` alias. */
+  write?: (content: string, addressedPath?: string) => void;
   writable?: boolean;
 }
 
@@ -39,7 +47,7 @@ export interface HvyVirtualDirectory {
 export type HvyVirtualEntry = HvyVirtualFile | HvyVirtualDirectory;
 
 export interface HvyVirtualFileSystem {
-  entries: Map<string, HvyVirtualEntry>;
+  entries: HvyVirtualEntryMap;
 }
 
 export interface HvyVirtualPathNamingState {
@@ -60,13 +68,13 @@ export function buildHvyVirtualBlockSubtreeFileSystem(
   blockPath: string,
   naming?: HvyVirtualPathNamingState
 ): HvyVirtualFileSystem {
-  const entries = new Map<string, HvyVirtualEntry>();
+  const entries = new HvyVirtualEntryMap();
   addBlock(entries, document, block, blockPath, naming);
   return { entries };
 }
 
 function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: HvyVirtualPathNamingState): HvyVirtualFileSystem {
-  const entries = new Map<string, HvyVirtualEntry>();
+  const entries = new HvyVirtualEntryMap();
   const addDir = (path: string) => entries.set(path, { kind: 'dir', path });
   const addFile = (path: string, read: () => string, write?: (content: string) => void) =>
     entries.set(path, { kind: 'file', path, read, write });
@@ -116,6 +124,37 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
   });
 
   return { entries };
+}
+
+/**
+ * Rebuilds the entries of one top-level body section after a structural change confined to it, along with the
+ * `/id` roots, producing the entries a full build would. Returns false when that section directory no longer exists.
+ */
+export function refreshHvyVirtualFileSystemSection(
+  fs: HvyVirtualFileSystem,
+  document: VisualDocument,
+  sectionPath: string,
+  naming?: HvyVirtualPathNamingState
+): boolean {
+  const section = buildVirtualDirectorySectionLookup(document, naming).get(sectionPath);
+  if (!section) {
+    return false;
+  }
+  const sectionEntries = new Map<string, HvyVirtualEntry>();
+  addSection(sectionEntries, document, section, sectionPath, naming);
+  if (!fs.entries.replaceSubtree(sectionPath, sectionEntries)) {
+    return false;
+  }
+  const nextRoots = assignVirtualIdAliasRoots(collectCanonicalIdAliases(document));
+  const currentRoots = [...fs.entries.getIdAliasRoots()];
+  const rootsChanged = nextRoots.size !== currentRoots.length
+    || [...nextRoots].some(([root, sourcePath], index) => currentRoots[index]?.[0] !== root || currentRoots[index]?.[1] !== sourcePath);
+  if (rootsChanged) {
+    // Session files stored at alias paths are re-added with the other session files on the next command.
+    fs.entries.replaceSubtree('/id', new Map([['/id', { kind: 'dir', path: '/id' }]]));
+  }
+  fs.entries.setIdAliasRoots(nextRoots);
+  return true;
 }
 
 function addTemplateFiles(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, naming?: HvyVirtualPathNamingState): void {
@@ -328,30 +367,7 @@ export function buildVirtualDirectorySectionLookup(document: VisualDocument, nam
 }
 
 export function buildVirtualDirectorySectionLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {
-  const sections = buildVirtualDirectorySectionLookup(document, naming);
-  const idEntries = new Map<string, HvyVirtualEntry>();
-  idEntries.set('/id', { kind: 'dir', path: '/id' });
-  const canonicalSections = [...sections.entries()];
-  const aliasRootsBySourcePath = new Map<string, string[]>();
-  for (const alias of collectCanonicalIdAliases(document)) {
-    const aliasRoot = `/id/${uniqueName(alias.id, idEntries, '/id')}`;
-    idEntries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
-    const roots = aliasRootsBySourcePath.get(alias.sourcePath) ?? [];
-    roots.push(aliasRoot);
-    aliasRootsBySourcePath.set(alias.sourcePath, roots);
-  }
-  for (const [sourcePath, section] of canonicalSections) {
-    for (const aliasSourcePath of enumerateVirtualPathAncestors(sourcePath)) {
-      const aliasRoots = aliasRootsBySourcePath.get(aliasSourcePath);
-      if (!aliasRoots) {
-        continue;
-      }
-      for (const aliasRoot of aliasRoots) {
-        sections.set(`${aliasRoot}${sourcePath.slice(aliasSourcePath.length)}`, section);
-      }
-    }
-  }
-  return sections;
+  return addIdAliasLookupPaths(buildVirtualDirectorySectionLookup(document, naming), collectCanonicalIdAliases(document));
 }
 
 export function buildVirtualDirectoryBlockLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
@@ -366,30 +382,24 @@ export function buildVirtualDirectoryBlockLookup(document: VisualDocument, namin
 }
 
 export function buildVirtualDirectoryBlockLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
-  const blocks = buildVirtualDirectoryBlockLookup(document, naming);
-  const idEntries = new Map<string, HvyVirtualEntry>();
-  idEntries.set('/id', { kind: 'dir', path: '/id' });
-  const canonicalBlocks = [...blocks.entries()];
-  const aliasRootsBySourcePath = new Map<string, string[]>();
-  for (const alias of collectCanonicalIdAliases(document)) {
-    const aliasRoot = `/id/${uniqueName(alias.id, idEntries, '/id')}`;
-    idEntries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
-    const roots = aliasRootsBySourcePath.get(alias.sourcePath) ?? [];
-    roots.push(aliasRoot);
-    aliasRootsBySourcePath.set(alias.sourcePath, roots);
+  return addIdAliasLookupPaths(buildVirtualDirectoryBlockLookup(document, naming), collectCanonicalIdAliases(document));
+}
+
+function addIdAliasLookupPaths<T>(lookup: Map<string, T>, aliases: HvyVirtualIdAlias[]): Map<string, T> {
+  const rootsBySourcePath = new Map<string, string[]>();
+  for (const [root, sourcePath] of assignVirtualIdAliasRoots(aliases)) {
+    const roots = rootsBySourcePath.get(sourcePath) ?? [];
+    roots.push(root);
+    rootsBySourcePath.set(sourcePath, roots);
   }
-  for (const [sourcePath, block] of canonicalBlocks) {
-    for (const aliasSourcePath of enumerateVirtualPathAncestors(sourcePath)) {
-      const aliasRoots = aliasRootsBySourcePath.get(aliasSourcePath);
-      if (!aliasRoots) {
-        continue;
-      }
-      for (const aliasRoot of aliasRoots) {
-        blocks.set(`${aliasRoot}${sourcePath.slice(aliasSourcePath.length)}`, block);
+  for (const [sourcePath, value] of [...lookup.entries()]) {
+    for (const ancestorPath of enumerateVirtualPathAncestors(sourcePath)) {
+      for (const root of rootsBySourcePath.get(ancestorPath) ?? []) {
+        lookup.set(`${root}${sourcePath.slice(ancestorPath.length)}`, value);
       }
     }
   }
-  return blocks;
+  return lookup;
 }
 
 function addSectionLookup(
@@ -445,20 +455,7 @@ export function normalizeVirtualPath(cwd: string, input = '.'): string {
 }
 
 export function listDirectory(fs: HvyVirtualFileSystem, path: string): HvyVirtualEntry[] {
-  const normalized = normalizeVirtualPath('/', path);
-  const prefix = normalized === '/' ? '/' : `${normalized}/`;
-  const names = new Set<string>();
-  for (const entryPath of fs.entries.keys()) {
-    if (!entryPath.startsWith(prefix) || entryPath === normalized) {
-      continue;
-    }
-    const tail = entryPath.slice(prefix.length);
-    const [name] = tail.split('/');
-    if (name) {
-      names.add(`${prefix}${name}`.replace(/\/$/, ''));
-    }
-  }
-  return [...names]
+  return fs.entries.listChildPaths(normalizeVirtualPath('/', path))
     .map((entryPath) => fs.entries.get(entryPath))
     .filter((entry): entry is HvyVirtualEntry => !!entry);
 }
@@ -608,13 +605,8 @@ function addGridItems(entries: Map<string, HvyVirtualEntry>, document: VisualDoc
   addOrderFile(entries, `${directoryPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(gridItems, keys, nextKeys));
 }
 
-interface VirtualIdAlias {
-  id: string;
-  sourcePath: string;
-}
-
-function collectCanonicalIdAliases(document: VisualDocument): VirtualIdAlias[] {
-  const aliases: VirtualIdAlias[] = [];
+function collectCanonicalIdAliases(document: VisualDocument): HvyVirtualIdAlias[] {
+  const aliases: HvyVirtualIdAlias[] = [];
   const aliasKeys = new Set<string>();
   const entries = new Map<string, HvyVirtualEntry>();
   entries.set('/', { kind: 'dir', path: '/' });
@@ -671,61 +663,16 @@ function collectCanonicalIdAliases(document: VisualDocument): VirtualIdAlias[] {
   return aliases;
 }
 
-function addIdAliasEntries(entries: Map<string, HvyVirtualEntry>, aliases: VirtualIdAlias[]): void {
+function addIdAliasEntries(entries: HvyVirtualEntryMap, aliases: HvyVirtualIdAlias[]): void {
   entries.set('/id', { kind: 'dir', path: '/id' });
-  const canonicalEntries = [...entries.entries()];
-  const aliasRootsBySourcePath = new Map<string, string[]>();
-  for (const alias of aliases) {
-    const aliasRoot = `/id/${uniqueName(alias.id, entries, '/id')}`;
-    entries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
-    const roots = aliasRootsBySourcePath.get(alias.sourcePath) ?? [];
-    roots.push(aliasRoot);
-    aliasRootsBySourcePath.set(alias.sourcePath, roots);
-  }
-  for (const [sourcePath, entry] of canonicalEntries) {
-    for (const aliasSourcePath of enumerateVirtualPathAncestors(sourcePath)) {
-      const aliasRoots = aliasRootsBySourcePath.get(aliasSourcePath);
-      if (!aliasRoots) {
-        continue;
-      }
-      for (const aliasRoot of aliasRoots) {
-        const aliasPath = `${aliasRoot}${sourcePath.slice(aliasSourcePath.length)}`;
-        entries.set(aliasPath, { ...entry, path: aliasPath });
-      }
-    }
-  }
-}
-
-function enumerateVirtualPathAncestors(path: string): string[] {
-  const ancestors: string[] = [];
-  let current = path;
-  while (current && current !== '/') {
-    ancestors.push(current);
-    const next = current.replace(/\/[^/]+$/, '') || '/';
-    if (next === current) {
-      break;
-    }
-    current = next;
-  }
-  return ancestors;
+  entries.setIdAliasRoots(assignVirtualIdAliasRoots(aliases));
 }
 
 function resolveIdAliasPath(document: VisualDocument, normalizedPath: string): string {
   if (normalizedPath === '/id' || !normalizedPath.startsWith('/id/')) {
     return normalizedPath;
   }
-  const entries = new Map<string, HvyVirtualEntry>();
-  entries.set('/id', { kind: 'dir', path: '/id' });
-  const aliasToSource = new Map<string, string>();
-  for (const alias of collectCanonicalIdAliases(document)) {
-    const aliasRoot = `/id/${uniqueName(alias.id, entries, '/id')}`;
-    entries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
-    aliasToSource.set(aliasRoot, alias.sourcePath);
-  }
-  const match = [...aliasToSource.keys()]
-    .filter((aliasRoot) => normalizedPath === aliasRoot || normalizedPath.startsWith(`${aliasRoot}/`))
-    .sort((left, right) => right.length - left.length)[0];
-  return match ? `${aliasToSource.get(match)}${normalizedPath.slice(match.length)}` : normalizedPath;
+  return resolveVirtualIdAliasSourcePath(assignVirtualIdAliasRoots(collectCanonicalIdAliases(document)), normalizedPath) ?? normalizedPath;
 }
 
 function addPluginDocumentationFile(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {

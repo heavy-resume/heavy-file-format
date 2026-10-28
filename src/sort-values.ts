@@ -117,20 +117,24 @@ export function findSortValueOwnerBlock(document: VisualDocument, blockId: strin
 
 export function syncSortValuesForDocument(document: VisualDocument): boolean {
   let changed = false;
+  document.sections.forEach((section) => {
+    changed = syncSortValuesForSection(document.meta, section) || changed;
+  });
+  return changed;
+}
+
+/** Each list item syncs from its own values and the document meta, so a section can be synced on its own. */
+export function syncSortValuesForSection(meta: Record<string, unknown> | null | undefined, section: VisualDocument['sections'][number]): boolean {
+  let changed = false;
   const visitBlock = (block: VisualBlock): void => {
     if (block.schema.kind === 'component-list') {
       block.schema.componentListBlocks.forEach((item) => {
-        changed = syncSortValuesForListItem(document.meta, item) || changed;
+        changed = syncSortValuesForListItem(meta, item) || changed;
       });
     }
     getNestedBlocks(block).forEach(visitBlock);
   };
-  const visitSections = (sections: typeof document.sections): void => {
-    sections.forEach((section) => {
-      section.blocks.forEach(visitBlock);
-    });
-  };
-  visitSections(document.sections);
+  section.blocks.forEach(visitBlock);
   return changed;
 }
 

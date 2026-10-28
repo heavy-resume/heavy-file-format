@@ -713,6 +713,54 @@ test('createScriptingRuntime exposes synchronous hvy cli commands', () => {
   expect(runtime.stats.toolCalls).toBe(3);
 });
 
+test('expected result: doc.cli.run sees structural edits made through other doc APIs in the same script turn', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:container {"id":"box"}-->
+
+ <!--hvy:text {"id":"first"}-->
+  First
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, renderOnMutation: false });
+  expect(runtime.doc.cli.run('ls /id/box/container')).not.toContain('added');
+
+  const [box] = runtime.doc.tool('get_components', { component: 'container' }) as Array<{
+    append_child: (component: string, config: unknown, text: string, slot: string) => unknown;
+  }>;
+  box!.append_child('text', { id: 'added' }, 'Added', 'container');
+
+  expect(runtime.doc.cli.run('ls /id/box/container')).toContain('added');
+  expect(runtime.doc.cli.run('cat /id/added/text.txt')).toBe('Added');
+});
+
+test('expected result: doc.cli.run sees host document edits after the script awaits', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, renderOnMutation: false });
+  expect(runtime.doc.cli.run('ls /body')).not.toContain('later');
+
+  document.sections.push(...deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"later"}-->
+#! Later
+`, '.hvy').sections);
+  await Promise.resolve();
+
+  expect(runtime.doc.cli.run('ls /body')).toContain('later');
+});
+
 test('createScriptingRuntime exposes safe virtual file writes', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

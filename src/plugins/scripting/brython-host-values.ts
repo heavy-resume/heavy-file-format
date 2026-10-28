@@ -16,9 +16,10 @@ function isHostPrimitive(value: unknown): boolean {
 
 /**
  * Converts values leaving Brython into values owned by the JavaScript host.
- * Brython's built-in converter handles Python containers and callables, while
- * this layer closes its remaining gaps: Python None, recursive capability
- * results, and values produced later by converted functions or coroutines.
+ * Brython's built-in converter handles None, Python containers and callables
+ * (see brython-source-patches.ts), while this layer closes its remaining
+ * gaps: recursive capability results, and values produced later by converted
+ * functions or coroutines.
  */
 export function normalizeBrythonHostValue(
   value: unknown,
@@ -26,12 +27,10 @@ export function normalizeBrythonHostValue(
 ): unknown {
   if (isHostPrimitive(value)) return value;
   const brython = getBrython() as ReturnType<typeof getBrython> & BrythonValueConverter;
-  if (value === brython.builtins.None) return null;
 
   const converted = typeof brython.pyobj2jsobj === 'function'
     ? brython.pyobj2jsobj(value)
     : value;
-  if (converted === brython.builtins.None) return null;
   if (isHostPrimitive(converted)) return converted;
   if (
     (typeof converted === 'object' || typeof converted === 'function')

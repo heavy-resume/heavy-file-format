@@ -149,6 +149,71 @@ doc.header.set("binding_result", Drawer().open(type="cabinet") + "|" + describe(
   expect(expectedResult).toEqual({ ok: true, error: undefined, bindingResult: 'cabinet opened|ok' });
 });
 
+test('JavaScript object-model attributes are blocked on every object and through every lookup route', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
+  const expectedResult = await page.evaluate(async () => {
+    const { runUserScript } = await import('/src/plugins/scripting/wrapper.ts');
+    const { deserializeDocument } = await import('/src/serialization.ts');
+    const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+    (window as Window & { fakeEscapeReached?: boolean }).fakeEscapeReached = false;
+    const result = await runUserScript({ document, source: `
+results = []
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":reached")
+    except BaseException:
+        results.append(label + ":blocked")
+
+def fake_function():
+    return 1
+
+class FakeThing:
+    prototype_count = 2
+
+def delete_attribute(target):
+    del target.constructor
+
+name = "con" + "structor"
+record("getattr", lambda: getattr(fake_function, name))
+record("dot", lambda: fake_function.constructor)
+record("format", lambda: ("{0." + name + "}").format(fake_function))
+record("fstring", lambda: f"{fake_function.constructor}")
+record("setattr", lambda: setattr(FakeThing(), name, 1))
+record("delattr", lambda: delattr(FakeThing(), name))
+record("del", lambda: delete_attribute(FakeThing()))
+record("bound_method", lambda: getattr(doc.db.query, name))
+record("prototype", lambda: getattr(fake_function, "proto" + "type"))
+record("function_escape", lambda: getattr(fake_function, name)("window.fakeEscapeReached = true")())
+doc.header.set("attribute_results", ",".join(results))
+doc.header.set("has_constructor", hasattr(fake_function, name))
+doc.header.set("ordinary_attribute", FakeThing().prototype_count)
+doc.header.set("ordinary_key", {"constructor": 1}["constructor"])
+` });
+    return {
+      ok: result.ok,
+      error: result.error,
+      outcomes: document.meta.attribute_results,
+      hasConstructor: document.meta.has_constructor,
+      ordinaryAttribute: document.meta.ordinary_attribute,
+      ordinaryKey: document.meta.ordinary_key,
+      escaped: (window as Window & { fakeEscapeReached?: boolean }).fakeEscapeReached,
+    };
+  });
+  expect(expectedResult).toEqual({
+    ok: true,
+    error: undefined,
+    outcomes: [
+      'getattr', 'dot', 'format', 'fstring', 'setattr', 'delattr', 'del', 'bound_method', 'prototype', 'function_escape',
+    ].map((label) => `${label}:blocked`).join(','),
+    hasConstructor: false,
+    ordinaryAttribute: 2,
+    ordinaryKey: 1,
+    escaped: false,
+  });
+});
+
 test('restricted builtins fail at runtime wherever the script loads them', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();

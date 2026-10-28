@@ -1,4 +1,5 @@
 import { installBrythonInteropPolicy, type BrythonInteropRuntime } from './brython-interop-policy';
+import { applyBrythonSourcePatches } from './brython-source-patches';
 
 // Lazy-loads the local Brython core bundle. Only triggered the first time a
 // scripting plugin actually needs to run user code, so a document with no
@@ -36,7 +37,7 @@ async function loadBrythonCore(): Promise<void> {
     import('brython/brython.min.js?raw'),
     import('virtual:hvy-brython-minimal-vfs'),
   ]);
-  await loadScriptSource(`${coreModule.default}\n${minimalVfsModule.default}`);
+  await loadScriptSource(`${applyBrythonSourcePatches(coreModule.default)}\n${minimalVfsModule.default}`);
 }
 
 function loadScriptSource(source: string): Promise<void> {

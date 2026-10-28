@@ -18,13 +18,15 @@ in `block.schema.pluginConfig`.
   - `datetime-shim.py`, `datetime-format-shim.py`, `timezone-shim.py`: checked `datetime`, `zoneinfo`, and `tzlocal`
   - Library files are compiled only into programs that enable that library
 - `clock-bridge.ts`: current time and Intl time zone lookups for the checked date/time libraries
-  - `host-bridge.py`: JSON marshaling, plugin callbacks, and the `doc` proxies
+  - `doc-arguments.py`: parameter-kind helpers that check, convert and reject `doc` call arguments
+  - `host-bridge.py`: plugin callbacks and the `doc` proxies, each declaring its parameter kinds
   - `program-runner.py`: tracing, compile / definition cache, user globals, `exec`
 - `python-source.ts`: source transforms (function wrapping, import stripping, step instrumentation)
 - `script-source-policy.ts`: lexical policy shared by execution, `eval`, and lint
 - `script-error-text.ts`: traceback summary and cleanup for display
 - `regex-bridge.ts`: JavaScript regex engine behind `re-shim.py`
-- `brython-interop-policy.ts`: JavaScript-object property guard installed on Brython
+- `brython-interop-policy.ts`: blocked attribute names (`constructor`, `prototype`, ...) and the guard installed on Brython
+- `brython-source-patches.ts`: load-time patches to Brython's converters (`null` / `undefined` to `None` and back), attribute lookups (blocked-name guard) and tracer hooks (frames whose tracer is `None`)
 - `runtime.ts`: restricted runtime surface exposed to user scripts as `doc`
 - `brython-loader.ts`: lazy-loads the locally bundled Brython runtime on first execution
 - `help.hvy` / `help-modal.ts`: user-facing help content and modal

@@ -5,6 +5,7 @@ import datetimeShim from './python/datetime-shim.py?raw';
 import datetimeFormatShim from './python/datetime-format-shim.py?raw';
 import timezoneShim from './python/timezone-shim.py?raw';
 import reShim from './python/re-shim.py?raw';
+import docArguments from './python/doc-arguments.py?raw';
 import hostBridge from './python/host-bridge.py?raw';
 import programRunner from './python/program-runner.py?raw';
 
@@ -27,7 +28,7 @@ const LIBRARY_FILES: Record<ScriptingLibraryName, readonly string[]> = {
 // Library files are only compiled into programs that enable that library.
 function getProgramFiles(libraries: readonly ScriptingLibraryName[]): string[] {
   const libraryFiles = new Set(libraries.flatMap((library) => LIBRARY_FILES[library]));
-  return [sandboxPrelude, ...libraryFiles, hostBridge, programRunner];
+  return [sandboxPrelude, ...libraryFiles, docArguments, hostBridge, programRunner];
 }
 
 export function getScriptingTraceLabel(componentId?: string): string {

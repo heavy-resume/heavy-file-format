@@ -53,6 +53,9 @@ theme:
   help for that API.
   - `doc.rerender()` — flush any pending re-render now (usually unnecessary; the host re-renders automatically when the
   script finishes).
+  - `doc` calls check their arguments. Lists, tuples, sets and generators are accepted wherever a list is, dates are
+  stored as text, and rows or plugin results can be passed back as they are. An argument of the wrong type raises a
+  `TypeError` that names the parameter.
   - `print(...)` — write a line to the script run log shown below the script in the editor. On failure, printed lines
   are shown above the traceback.
 <!--hvy: {"id":"tools-api","lock":false,"expanded":true,"highlight":false}-->

@@ -43,6 +43,19 @@ import {
 let runtimeCounter = 0;
 let compiledProgramCounter = 0;
 
+type HvyScriptingValueKind = 'array' | 'object' | 'bytes' | 'function' | 'other';
+
+// Lets the Python argument helpers classify JavaScript-backed values a script
+// holds (rows, plugin results, attachment bytes), which Python cannot inspect.
+function getScriptingValueKind(value: unknown): HvyScriptingValueKind {
+  if (typeof value === 'function') return 'function';
+  if (!value || typeof value !== 'object') return 'other';
+  if (Array.isArray(value)) return 'array';
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return 'bytes';
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null ? 'object' : 'other';
+}
+
 interface HvyScriptingGlobal {
   runtimes: Record<string, ScriptingRuntime>;
   sources: Record<string, string>;
@@ -52,6 +65,7 @@ interface HvyScriptingGlobal {
   callbacks: Record<string, () => void>;
   regex: HvyScriptingRegexBridge;
   sourcePolicyError(source: string): string | null;
+  valueKind(value: unknown): HvyScriptingValueKind;
   compiledDefinitionSources: Map<string, string>;
   compiledDefinitions: Map<string, unknown>;
   activeRuntimeIds: Map<string, string>;
@@ -83,6 +97,7 @@ function getScriptingGlobal(): HvyScriptingGlobal {
       callbacks: {},
       regex: createScriptingRegexBridge(),
       sourcePolicyError: (source) => checkScriptSourcePolicy(source)?.message ?? null,
+      valueKind: getScriptingValueKind,
       compiledDefinitionSources: new Map(),
       compiledDefinitions: new Map(),
       activeRuntimeIds: new Map(),
@@ -100,6 +115,9 @@ function getScriptingGlobal(): HvyScriptingGlobal {
   }
   if (!window.__HVY_SCRIPTING__.regex) {
     window.__HVY_SCRIPTING__.regex = createScriptingRegexBridge();
+  }
+  if (!window.__HVY_SCRIPTING__.valueKind) {
+    window.__HVY_SCRIPTING__.valueKind = getScriptingValueKind;
   }
   if (!window.__HVY_SCRIPTING__.compiledDefinitionSources) {
     window.__HVY_SCRIPTING__.compiledDefinitionSources = new Map();

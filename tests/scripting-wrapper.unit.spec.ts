@@ -71,7 +71,7 @@ test('buildPythonProgram exposes doc.tool attributes with keyword arguments', ()
   expect(expectedResult).toContain('def __call__(self, name, args=None, **kwargs):');
   expect(expectedResult).toContain('def __getattr__(self, name):');
   expect(expectedResult).toContain('merged.update(kwargs)');
-  expect(expectedResult).toContain('return self.__js_doc.tool_json(name, __hvy_to_json__(merged))');
+  expect(expectedResult).toContain('result = self.__js_doc.tool_json(name, __hvy_to_json__(__hvy_call_args__("doc.tool args", args, kwargs)))');
   expect(expectedResult).toContain('self.tool = __HvyToolProxy__(js_doc)');
   expect(expectedResult).toContain("'doc': __HvyDocProxy__(__hvy_runtime__.doc)");
 });
@@ -83,15 +83,14 @@ test('buildPythonProgram exposes doc sub-apis through the doc proxy', () => {
   expect(expectedResult).toContain('class __HvyPluginsProxy__:');
   expect(expectedResult).toContain('class __HvyDbProxy__:');
   expect(expectedResult).toContain('def call(self, plugin_id, method, args=None, **kwargs):');
-  expect(expectedResult).toContain('def __hvy_plugin_to_json__(value, callbacks, path=\'\'):');
-  expect(expectedResult).toContain('if callable(value):');
+  expect(expectedResult).toContain('def __hvy_json_arg__(where, value, callbacks=None, path=\'\'):');
+  expect(expectedResult).toContain("if kind == 'callable' and callbacks is not None:");
   expect(expectedResult).toContain('callbacks[path] = __hvy_wrap_plugin_callback__(value)');
-  expect(expectedResult).toContain('return self.__js_doc.plugins.call_marshaled(plugin_id, method, args_json, callbacks)');
+  expect(expectedResult).toContain('args_json = __hvy_to_json__(__hvy_call_args__("doc.plugins.call args", args, kwargs, callbacks))');
   expect(expectedResult).toContain('__hvy_runtime__.doc.callback_error(');
   expect(expectedResult).toContain('self.plugins = __HvyPluginsProxy__(js_doc)');
   expect(expectedResult).toContain('self.db = __HvyDbProxy__(js_doc)');
-  expect(expectedResult).toContain('return self.__js_doc.db.execute_json(sql, __hvy_to_json__(params))');
-  expect(expectedResult).toContain('return getattr(self.__js_doc, name)');
+  expect(expectedResult).toContain('__hvy_to_json__(__hvy_sql_params_arg__("doc.db.execute params", params))');
 });
 
 test('instrumentPythonSource skips blank lines and comments while preserving nested indentation', () => {

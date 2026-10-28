@@ -178,7 +178,8 @@ export async function prepareEmbeddingChatContext(
   document: VisualDocument,
   options: HvyChatContextOptions = {},
   embeddingProvider: HvyEmbeddingProvider | null = null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProgress?: HvyChatContextPreparationProgressCallback
 ): Promise<HvyEmbeddingCacheBuildStats> {
   if (!embeddingProvider) {
     throw new Error('Embedding chat context requires an embeddingProvider.');
@@ -186,7 +187,7 @@ export async function prepareEmbeddingChatContext(
   const index = await getEmbeddingIndex(document, {
     ...options,
     persistEmbeddingsToAttachments: options.persistEmbeddingsToAttachments === true,
-  }, embeddingProvider, signal);
+  }, embeddingProvider, signal, onProgress);
   return index.lastBuildStats;
 }
 

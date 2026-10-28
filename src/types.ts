@@ -152,6 +152,8 @@ export interface HvyChatContextOptions {
   embeddingBatchSize?: number;
   embeddingMinScore?: number;
   persistEmbeddingsToAttachments?: boolean;
+  /** Embed missing document chunks when a chat turn starts in embedding-retrieval mode. Defaults to true; false leaves building to explicit actions. */
+  autoPrepareEmbeddingIndex?: boolean;
   onEmbeddingIndexPrepared?: () => void | Promise<void>;
 }
 

@@ -129,6 +129,11 @@ can answer directly, retrieve ranked candidates, exhaustively walk visible
 content with continuation cursors, inspect a known HVY path, or query attached
 SQLite data. Only full-document mode inserts document content up front;
 retrieval modes add evidence as tool results when the agent requests it.
+In embedding-retrieval mode with an `embeddingProvider`, a Viewer chat turn
+embeds missing chunks before the first model request (the user sending a
+question is user-led preparation; the agent's search tool itself never builds).
+Hosts can set `chatContext.autoPrepareEmbeddingIndex: false` to require an
+explicit build instead.
 
 Embedded hosts can apply branding without changing the mounted document by
 passing `themeOverrides`. Values are applied after the selected built-in palette

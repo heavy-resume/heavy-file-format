@@ -389,6 +389,38 @@ test('script database writes share one undo checkpoint per runtime', async () =>
   expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).not.toBeUndefined();
 });
 
+test('a long-lived script database runtime builds on undone database state', async () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  // BEFORE
+  const seed = await createScriptingDbRuntime(state.document);
+  seed.api.execute('CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)');
+  seed.api.execute("INSERT INTO chores (title) VALUES ('Sweep')");
+  seed.dispose();
+  const otherWriter = await createScriptingDbRuntime(state.document);
+  otherWriter.api.execute("INSERT INTO chores (title) VALUES ('Undone')");
+  otherWriter.dispose();
+  const longLived = await createScriptingDbRuntime(state.document);
+  expect(longLived.api.query('SELECT title FROM chores ORDER BY id').map((row) => row.title)).toEqual(['Sweep', 'Undone']);
+
+  // ACTION
+  undoState();
+
+  // AFTER
+  expect(longLived.api.query('SELECT title FROM chores ORDER BY id').map((row) => row.title)).toEqual(['Sweep']);
+  longLived.api.execute("INSERT INTO chores (title) VALUES ('Mop')");
+  longLived.dispose();
+  const reader = await createScriptingDbRuntime(state.document);
+  expect(reader.api.query('SELECT title FROM chores ORDER BY id').map((row) => row.title)).toEqual(['Sweep', 'Mop']);
+  reader.dispose();
+});
+
 test('queued checkpoint edits undo document config and SQLite bytes as one step', async () => {
   initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
   initState(createHistoryTestState());

@@ -1,18 +1,15 @@
 import type { VisualBlock } from '../editor/types';
-import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '../state';
-import type { DocumentAttachment, VisualDocument } from '../types';
+import { state } from '../state';
+import type { VisualDocument } from '../types';
 import type { JsonObject } from '../hvy/types';
-import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
-import { materializeDocumentAttachment } from '../attachment-store';
+import { DB_ATTACHMENT_ID, getAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
 import { validateAttachedComponentHvy } from './db-table-fragment';
 import { formatQueryResultTable } from './db-table-format';
 import type { ScriptingDatabaseTableHandle, ScriptingDbApi } from './scripting/runtime';
-import { recordDatabaseTablesChanged, type DatabaseChangeSnapshot } from '../database-change-tracker';
-import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory } from '../history';
+import type { DatabaseChangeSnapshot } from '../database-change-tracker';
 import {
   clampDbTableOffset,
-  clearDbTableViewState,
   DB_TABLE_MAX_QUERY_ROWS,
   DB_TABLE_WINDOW_SIZE,
   getDbTableQueryDynamicWindow,
@@ -21,34 +18,14 @@ import {
   getPluginConfigValue,
 } from './db-table-model';
 import { formatEffectiveDbTableColumns, parseSparseDbTableColumns, readDbTableConfig } from './db-table/db-table-config';
+import {
+  openDocumentDatabase,
+  type SqliteBindParams,
+  type SqliteBindValue,
+  type SqlJsDatabase,
+} from './db-table/document-database';
 
 const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
-
-type SqliteBindValue = number | string | Uint8Array | null;
-type SqliteBindParams = SqliteBindValue[] | Record<string, SqliteBindValue> | null;
-interface SqlJsQueryResult {
-  columns: string[];
-  values: unknown[][];
-}
-interface SqlJsStatement {
-  bind(params?: SqliteBindParams): boolean;
-  getColumnNames(): string[];
-  step(): boolean;
-  getAsObject(): Record<string, unknown>;
-  free(): void;
-}
-interface SqlJsDatabase {
-  close(): void;
-  export(): Uint8Array;
-  exec(sql: string, params?: SqliteBindParams): SqlJsQueryResult[];
-  prepare(sql: string, params?: SqliteBindParams): SqlJsStatement;
-  run(sql: string, params?: SqliteBindParams): void;
-  getRowsModified(): number;
-}
-interface SqlJsStatic {
-  Database: new (bytes?: Uint8Array) => SqlJsDatabase;
-}
-type InitSqlJs = (config: { locateFile: () => string }) => Promise<SqlJsStatic>;
 
 interface DbTableSnapshot {
   objectType: 'table' | 'view';
@@ -65,44 +42,6 @@ interface DbTableSnapshot {
   sortDirection: 'asc' | 'desc' | null;
 }
 
-interface SqliteRuntime {
-  documentRef: VisualDocument | null;
-  db: SqlJsDatabase | null;
-  loading: boolean;
-  loadError: string | null;
-  loadPromise: Promise<void> | null;
-  persistPromise: Promise<void> | null;
-}
-
-function createSqliteRuntime(): SqliteRuntime {
-  return {
-    documentRef: null,
-    db: null,
-    loading: false,
-    loadError: null,
-    loadPromise: null,
-    persistPromise: null,
-  };
-}
-
-const fallbackRuntime: SqliteRuntime = createSqliteRuntime();
-const runtimeByStateRuntime = new WeakMap<StateRuntime, SqliteRuntime>();
-
-function getSqliteRuntime(): SqliteRuntime {
-  try {
-    const stateRuntime = getActiveStateRuntime();
-    let runtime = runtimeByStateRuntime.get(stateRuntime);
-    if (!runtime) {
-      runtime = createSqliteRuntime();
-      runtimeByStateRuntime.set(stateRuntime, runtime);
-    }
-    return runtime;
-  } catch {
-    return fallbackRuntime;
-  }
-}
-
-let sqlJsPromise: Promise<SqlJsStatic> | null = null;
 export {
   getDbTableQueryDynamicWindow,
   getDbTableQueryLimit,
@@ -148,8 +87,10 @@ export async function setEffectiveDbTableColumnPresentation(
 }
 
 export async function getDbTableRowComponent(tableName: string, rowId: number): Promise<string | null> {
-  const db = await getLoadedDatabase();
-  ensureRowComponentsTableExists(db);
+  const db = (await openDocumentDatabase(state.document)).current();
+  if (!hasRowComponentsTable(db)) {
+    return null;
+  }
   const statement = db.prepare(
     `SELECT hvy FROM ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} WHERE table_name = ? AND row_id = ?`
   );
@@ -167,12 +108,13 @@ export async function getDbTableRowComponent(tableName: string, rowId: number): 
 }
 
 export async function setDbTableRowComponent(tableName: string, rowId: number, hvy: string): Promise<void> {
-  const db = await getLoadedDatabase();
+  const database = await openDocumentDatabase(state.document);
+  const db = database.current();
   ensureRowComponentsTableExists(db);
   const trimmed = hvy.trim();
   if (trimmed.length === 0) {
     db.run(`DELETE FROM ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} WHERE table_name = ? AND row_id = ?`, [tableName, rowId]);
-    await persistRuntimeDatabase();
+    database.commit();
     return;
   }
 
@@ -183,166 +125,7 @@ export async function setDbTableRowComponent(tableName: string, rowId: number, h
      ON CONFLICT(table_name, row_id) DO UPDATE SET hvy = excluded.hvy`,
     [tableName, rowId, trimmed]
   );
-  await persistRuntimeDatabase();
-}
-
-function ensureSqliteRuntime(): void {
-  const runtime = getSqliteRuntime();
-  if (runtime.documentRef === state.document && (runtime.db || runtime.loading || runtime.loadError)) {
-    return;
-  }
-
-  if (runtime.documentRef !== state.document) {
-    resetRuntime();
-    runtime.documentRef = state.document;
-  }
-
-  runtime.loading = true;
-  runtime.loadError = null;
-  runtime.loadPromise = loadRuntimeDatabase(state.document)
-    .then(() => {
-      runtime.loading = false;
-      runtime.loadError = null;
-      getRenderApp()();
-    })
-    .catch((error) => {
-      runtime.loading = false;
-      runtime.loadError = error instanceof Error ? error.message : 'Failed to load the database runtime.';
-      getRenderApp()();
-    });
-}
-
-async function getLoadedDatabase(): Promise<SqlJsDatabase> {
-  ensureSqliteRuntime();
-  const runtime = getSqliteRuntime();
-  if (runtime.loadPromise) {
-    await runtime.loadPromise;
-  }
-  if (!runtime.db) {
-    throw new Error(runtime.loadError || 'Database attachment is unavailable.');
-  }
-  return runtime.db;
-}
-
-async function loadRuntimeDatabase(document: VisualDocument): Promise<void> {
-  const runtime = getSqliteRuntime();
-  const SQL = await getSqlJs();
-  const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
-  runtime.db = bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
-}
-
-async function getSqlJs(): Promise<SqlJsStatic> {
-  if (!sqlJsPromise) {
-    const [{ default: initSqlJs }, { default: sqlWasmUrl }] = await Promise.all([
-      import('sql.js') as Promise<{ default: InitSqlJs }>,
-      import('sql.js/dist/sql-wasm.wasm?url') as Promise<{ default: string }>,
-    ]);
-    sqlJsPromise = initSqlJs({
-      locateFile: () => locateSqlWasmFile(sqlWasmUrl),
-    });
-  }
-  return sqlJsPromise;
-}
-
-function locateSqlWasmFile(sqlWasmUrl: string): string {
-  if (
-    typeof process !== 'undefined'
-    && process.versions?.node
-    && sqlWasmUrl.startsWith('/node_modules/')
-  ) {
-    return `${process.cwd()}${sqlWasmUrl}`;
-  }
-  return sqlWasmUrl;
-}
-
-async function getAttachmentDatabaseBytes(attachment: DocumentAttachment | null): Promise<Uint8Array> {
-  if (!attachment || attachment.bytes.length === 0) {
-    return new Uint8Array();
-  }
-
-  const encoding = typeof attachment.meta.encoding === 'string' ? attachment.meta.encoding : '';
-  if (encoding === 'gzip') {
-    return ungzipBytes(attachment.bytes);
-  }
-
-  return Uint8Array.from(attachment.bytes);
-}
-
-async function persistRuntimeDatabase(): Promise<void> {
-  const runtime = getSqliteRuntime();
-  if (!runtime.db) {
-    return;
-  }
-
-  const databaseBytes = runtime.db.export();
-  const document = state.document;
-  recordDatabaseAttachmentHistory();
-  runtime.persistPromise = (async () => {
-    const encoded = await encodeAttachmentBytes(databaseBytes);
-    const previous = getAttachment(document, DB_ATTACHMENT_ID);
-    setAttachment(
-      document,
-      DB_ATTACHMENT_ID,
-      {
-        ...(previous?.meta ?? {}),
-        plugin: DB_TABLE_PLUGIN_ID,
-        mediaType: 'application/vnd.sqlite3',
-        ...(encoded.encoding ? { encoding: encoded.encoding } : {}),
-      },
-      encoded.bytes
-    );
-    markDatabaseAttachmentChanged();
-  })();
-
-  await runtime.persistPromise;
-}
-
-async function encodeAttachmentBytes(bytes: Uint8Array): Promise<{ bytes: Uint8Array; encoding?: string }> {
-  if (typeof CompressionStream === 'undefined') {
-    return {
-      bytes: Uint8Array.from(bytes),
-    };
-  }
-
-  const compressed = await transformBytes(bytes, new CompressionStream('gzip'));
-  return {
-    bytes: compressed,
-    encoding: 'gzip',
-  };
-}
-
-async function ungzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
-  if (typeof DecompressionStream === 'undefined') {
-    throw new Error('This browser does not support gzip decompression for attached database files.');
-  }
-  return transformBytes(bytes, new DecompressionStream('gzip'));
-}
-
-async function transformBytes(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
-  const transformed = new Blob([Uint8Array.from(bytes)]).stream().pipeThrough(stream);
-  return new Uint8Array(await new Response(transformed).arrayBuffer());
-}
-
-function resetRuntime(): void {
-  const runtime = getSqliteRuntime();
-  try {
-    runtime.db?.close();
-  } catch {
-    // Ignore runtime close failures while swapping documents.
-  }
-  runtime.db = null;
-  runtime.loading = false;
-  runtime.loadError = null;
-  runtime.loadPromise = null;
-  runtime.persistPromise = null;
-  clearDbTableViewState();
-}
-
-export function resetDbTableRuntimeForDocument(document: VisualDocument): void {
-  const runtime = getSqliteRuntime();
-  if (runtime.documentRef !== document) return;
-  resetRuntime();
-  runtime.documentRef = document;
+  database.commit();
 }
 
 function readTableSnapshot(
@@ -467,8 +250,14 @@ function ensureRowComponentsTableExists(db: SqlJsDatabase): void {
   );
 }
 
+function hasRowComponentsTable(db: SqlJsDatabase): boolean {
+  return getDbObjectType(db, SQLITE_ROW_COMPONENTS_TABLE) === 'table';
+}
+
 function getRowComponentIdSet(db: SqlJsDatabase, tableName: string): Set<number> {
-  ensureRowComponentsTableExists(db);
+  if (!hasRowComponentsTable(db)) {
+    return new Set();
+  }
   const statement = db.prepare(
     `SELECT row_id FROM ${quoteIdentifier(SQLITE_ROW_COMPONENTS_TABLE)} WHERE table_name = ?`
   );
@@ -538,22 +327,14 @@ export async function getDocumentDbTableObjectNames(document: VisualDocument): P
   if (!attachment || attachment.bytes.length === 0) {
     return [];
   }
-  const db = await openDocumentDatabase(document);
-  try {
-    const result = db.exec(
-      "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name != ? ORDER BY name",
-      [SQLITE_ROW_COMPONENTS_TABLE]
-    );
-    return (result[0]?.values ?? [])
-      .map((row) => String(row[0] ?? '').trim())
-      .filter((name) => name.length > 0);
-  } finally {
-    try {
-      db.close();
-    } catch {
-      // Ignore close failures for ephemeral AI schema inspection databases.
-    }
-  }
+  const db = (await openDocumentDatabase(document)).current();
+  const result = db.exec(
+    "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name != ? ORDER BY name",
+    [SQLITE_ROW_COMPONENTS_TABLE]
+  );
+  return (result[0]?.values ?? [])
+    .map((row) => String(row[0] ?? '').trim())
+    .filter((name) => name.length > 0);
 }
 
 export async function materializeDocumentDbTables(document: VisualDocument): Promise<string[]> {
@@ -562,25 +343,18 @@ export async function materializeDocumentDbTables(document: VisualDocument): Pro
     return [];
   }
 
-  const db = await openDocumentDatabase(document);
-  try {
-    const created: string[] = [];
-    for (const tableName of tableNames) {
-      if (ensureTableExists(db, tableName)) {
-        created.push(tableName);
-      }
-    }
-    if (created.length > 0) {
-      await persistDocumentDatabase(document, db);
-    }
-    return created;
-  } finally {
-    try {
-      db.close();
-    } catch {
-      // Ignore close failures for ephemeral materialization databases.
+  const database = await openDocumentDatabase(document);
+  const db = database.current();
+  const created: string[] = [];
+  for (const tableName of tableNames) {
+    if (ensureTableExists(db, tableName)) {
+      created.push(tableName);
     }
   }
+  if (created.length > 0) {
+    database.commit();
+  }
+  return created;
 }
 
 export { formatQueryResultTable } from './db-table-format';
@@ -594,54 +368,46 @@ export async function executeDbTableQueryTool(
     throw new Error('No SQLite tables or views are available in this document.');
   }
 
-  const db = await openDocumentDatabase(document);
-  try {
-    const requestedTable = request.tableName?.trim() ?? '';
-    if (requestedTable.length > 0 && !availableTables.includes(requestedTable)) {
-      throw new Error(`Unknown SQLite table/view "${requestedTable}". Available SQLite tables/views: ${availableTables.join(', ')}.`);
-    }
-    if (requestedTable.length > 0) {
-      requireExistingDbObject(db, requestedTable);
-    }
-
-    const normalizedQuery = (request.query ?? '').trim().replace(/;+\s*$/u, '');
-    const tableName = requestedTable || (availableTables.length === 1 ? (availableTables[0] ?? '') : '');
-    if (normalizedQuery.length === 0 && tableName.length === 0) {
-      throw new Error(`Specify table_name when querying SQLite tables/views. Available SQLite tables/views: ${availableTables.join(', ')}.`);
-    }
-
-    const limit = Math.max(1, Math.min(Math.floor(request.limit ?? 10), 25));
-    if (normalizedQuery.length === 0) {
-      requireExistingDbObject(db, tableName);
-    }
-    const query = normalizedQuery.length > 0 ? normalizedQuery : `SELECT * FROM ${quoteIdentifier(tableName)}`;
-    const statement = db.prepare(`SELECT * FROM (${query}) AS hvy_query LIMIT ${limit}`);
-    const columns = statement.getColumnNames();
-    const rows: string[][] = [];
-
-    try {
-      while (statement.step()) {
-        const row = statement.getAsObject() as Record<string, unknown>;
-        rows.push(columns.map((column) => stringifySqliteValue(row[column])));
-      }
-    } finally {
-      statement.free();
-    }
-
-    return [
-      `Available SQLite tables/views: ${availableTables.join(', ')}`,
-      `Executed query: ${query}`,
-      `Returned rows: ${rows.length}${rows.length === limit ? ` (limited to ${limit})` : ''}`,
-      '',
-      columns.length === 0 ? '(no columns returned)' : formatQueryResultTable(columns, rows),
-    ].join('\n');
-  } finally {
-    try {
-      db.close();
-    } catch {
-      // Ignore close failures for ephemeral AI query databases.
-    }
+  const db = (await openDocumentDatabase(document)).current();
+  const requestedTable = request.tableName?.trim() ?? '';
+  if (requestedTable.length > 0 && !availableTables.includes(requestedTable)) {
+    throw new Error(`Unknown SQLite table/view "${requestedTable}". Available SQLite tables/views: ${availableTables.join(', ')}.`);
   }
+  if (requestedTable.length > 0) {
+    requireExistingDbObject(db, requestedTable);
+  }
+
+  const normalizedQuery = (request.query ?? '').trim().replace(/;+\s*$/u, '');
+  const tableName = requestedTable || (availableTables.length === 1 ? (availableTables[0] ?? '') : '');
+  if (normalizedQuery.length === 0 && tableName.length === 0) {
+    throw new Error(`Specify table_name when querying SQLite tables/views. Available SQLite tables/views: ${availableTables.join(', ')}.`);
+  }
+
+  const limit = Math.max(1, Math.min(Math.floor(request.limit ?? 10), 25));
+  if (normalizedQuery.length === 0) {
+    requireExistingDbObject(db, tableName);
+  }
+  const query = normalizedQuery.length > 0 ? normalizedQuery : `SELECT * FROM ${quoteIdentifier(tableName)}`;
+  const statement = db.prepare(`SELECT * FROM (${query}) AS hvy_query LIMIT ${limit}`);
+  const columns = statement.getColumnNames();
+  const rows: string[][] = [];
+
+  try {
+    while (statement.step()) {
+      const row = statement.getAsObject() as Record<string, unknown>;
+      rows.push(columns.map((column) => stringifySqliteValue(row[column])));
+    }
+  } finally {
+    statement.free();
+  }
+
+  return [
+    `Available SQLite tables/views: ${availableTables.join(', ')}`,
+    `Executed query: ${query}`,
+    `Returned rows: ${rows.length}${rows.length === limit ? ` (limited to ${limit})` : ''}`,
+    '',
+    columns.length === 0 ? '(no columns returned)' : formatQueryResultTable(columns, rows),
+  ].join('\n');
 }
 
 export interface DbTableAiSummary {
@@ -664,48 +430,40 @@ export async function getDbTableAiSummary(
   const sampleLimit = Math.max(1, Math.min(Math.floor(options?.sampleLimit ?? 10), 25));
   const activeQuery = options?.activeQuery?.trim().replace(/;+\s*$/u, '') || null;
 
-  const db = await openDocumentDatabase(document);
+  const db = (await openDocumentDatabase(document)).current();
+  requireExistingDbObject(db, tableName);
+  const pragma = db.exec(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
+  const pragmaRows = pragma[0]?.values ?? [];
+  const schema = pragmaRows.map((row) => ({
+    name: String(row[1] ?? ''),
+    type: String(row[2] ?? ''),
+    notNull: Number(row[3] ?? 0) === 1,
+    pk: Number(row[5] ?? 0) > 0,
+  }));
+
+  const totalRows = activeQuery
+    ? Number(
+        db.exec(`SELECT COUNT(*) FROM (${activeQuery}) AS hvy_query`)[0]?.values[0]?.[0] ?? 0
+      )
+    : Number(db.exec(`SELECT COUNT(*) FROM ${quoteIdentifier(tableName)}`)[0]?.values[0]?.[0] ?? 0);
+
+  const sampleStatement = db.prepare(
+    activeQuery
+      ? `SELECT * FROM (${activeQuery}) AS hvy_query LIMIT ${sampleLimit}`
+      : `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT ${sampleLimit}`
+  );
+  const sampleColumns = sampleStatement.getColumnNames();
+  const sampleRows: string[][] = [];
   try {
-    requireExistingDbObject(db, tableName);
-    const pragma = db.exec(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
-    const pragmaRows = pragma[0]?.values ?? [];
-    const schema = pragmaRows.map((row) => ({
-      name: String(row[1] ?? ''),
-      type: String(row[2] ?? ''),
-      notNull: Number(row[3] ?? 0) === 1,
-      pk: Number(row[5] ?? 0) > 0,
-    }));
-
-    const totalRows = activeQuery
-      ? Number(
-          db.exec(`SELECT COUNT(*) FROM (${activeQuery}) AS hvy_query`)[0]?.values[0]?.[0] ?? 0
-        )
-      : Number(db.exec(`SELECT COUNT(*) FROM ${quoteIdentifier(tableName)}`)[0]?.values[0]?.[0] ?? 0);
-
-    const sampleStatement = db.prepare(
-      activeQuery
-        ? `SELECT * FROM (${activeQuery}) AS hvy_query LIMIT ${sampleLimit}`
-        : `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT ${sampleLimit}`
-    );
-    const sampleColumns = sampleStatement.getColumnNames();
-    const sampleRows: string[][] = [];
-    try {
-      while (sampleStatement.step()) {
-        const row = sampleStatement.getAsObject() as Record<string, unknown>;
-        sampleRows.push(sampleColumns.map((column) => stringifySqliteValue(row[column])));
-      }
-    } finally {
-      sampleStatement.free();
+    while (sampleStatement.step()) {
+      const row = sampleStatement.getAsObject() as Record<string, unknown>;
+      sampleRows.push(sampleColumns.map((column) => stringifySqliteValue(row[column])));
     }
-
-    return { tableName, schema, sampleRows, totalRows, activeQuery };
   } finally {
-    try {
-      db.close();
-    } catch {
-      // Ignore close failures for ephemeral summary databases.
-    }
+    sampleStatement.free();
   }
+
+  return { tableName, schema, sampleRows, totalRows, activeQuery };
 }
 
 export async function getDbTableRenderedText(document: VisualDocument, block: VisualBlock): Promise<string> {
@@ -731,61 +489,53 @@ export async function getDbTableRenderedText(document: VisualDocument, block: Vi
     ].join('\n');
   }
 
-  const db = await openDocumentDatabase(document);
+  const db = (await openDocumentDatabase(document)).current();
+  let objectType: 'table' | 'view';
   try {
-    let objectType: 'table' | 'view';
-    try {
-      objectType = requireExistingDbObject(db, tableName);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown database table render error.';
-      return [
-        'DB table plugin rendered output:',
-        `Table: ${tableName}`,
-        `Query: ${query || '(all rows)'}`,
-        `DB table error: ${message}`,
-      ].join('\n');
-    }
-
-    let snapshot: DbTableSnapshot;
-    try {
-      snapshot = readTableSnapshot(db, tableName, {
-        objectType,
-        query,
-        offset: 0,
-        dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
-        queryLimit: getDbTableQueryLimit(block.schema.pluginConfig),
-        sortColumn: null,
-        sortDirection: null,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown database table render error.';
-      const columns = getTableColumns(db, tableName);
-      return [
-        'DB table plugin rendered output:',
-        `Table: ${tableName}`,
-        `Query: ${query || '(all rows)'}`,
-        `DB table error: ${message}`,
-        `Known table columns: ${columns.join(', ') || '(none)'}`,
-      ].join('\n');
-    }
-
-    const rows = snapshot.rows.slice(0, 10);
+    objectType = requireExistingDbObject(db, tableName);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database table render error.';
     return [
       'DB table plugin rendered output:',
       `Table: ${tableName}`,
       `Query: ${query || '(all rows)'}`,
-      `Columns: ${snapshot.columns.join(', ') || '(none)'}`,
-      `Rows shown: ${rows.length} of ${snapshot.totalRows}`,
-      '',
-      snapshot.columns.length === 0 ? '(no columns rendered)' : formatQueryResultTable(snapshot.columns, rows),
+      `DB table error: ${message}`,
     ].join('\n');
-  } finally {
-    try {
-      db.close();
-    } catch {
-      // Ignore close failures for ephemeral rendered inspection databases.
-    }
   }
+
+  let snapshot: DbTableSnapshot;
+  try {
+    snapshot = readTableSnapshot(db, tableName, {
+      objectType,
+      query,
+      offset: 0,
+      dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
+      queryLimit: getDbTableQueryLimit(block.schema.pluginConfig),
+      sortColumn: null,
+      sortDirection: null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database table render error.';
+    const columns = getTableColumns(db, tableName);
+    return [
+      'DB table plugin rendered output:',
+      `Table: ${tableName}`,
+      `Query: ${query || '(all rows)'}`,
+      `DB table error: ${message}`,
+      `Known table columns: ${columns.join(', ') || '(none)'}`,
+    ].join('\n');
+  }
+
+  const rows = snapshot.rows.slice(0, 10);
+  return [
+    'DB table plugin rendered output:',
+    `Table: ${tableName}`,
+    `Query: ${query || '(all rows)'}`,
+    `Columns: ${snapshot.columns.join(', ') || '(none)'}`,
+    `Rows shown: ${rows.length} of ${snapshot.totalRows}`,
+    '',
+    snapshot.columns.length === 0 ? '(no columns rendered)' : formatQueryResultTable(snapshot.columns, rows),
+  ].join('\n');
 }
 
 export async function executeDbTableWriteSql(sql: string): Promise<string> {
@@ -798,11 +548,12 @@ export async function executeDbTableWriteSql(sql: string): Promise<string> {
     throw new Error('Use query_db_table for read-only SELECT statements. execute_sql is for write statements.');
   }
 
-  const db = await getLoadedDatabase();
+  const database = await openDocumentDatabase(state.document);
+  const db = database.current();
   db.run(trimmed);
   const changes = Number(db.exec('SELECT changes()')[0]?.values[0]?.[0] ?? 0);
   const schemaSummary = summarizeRuntimeDatabaseSchema(db);
-  await persistRuntimeDatabase();
+  database.commit();
   return [`Executed: ${trimmed}`, `Rows affected: ${changes}`, '', schemaSummary].join('\n');
 }
 
@@ -865,32 +616,6 @@ function normalizeScriptingSqlValue(value: unknown): SqliteBindValue {
   throw new Error('SQL params may only contain strings, numbers, booleans, bytes, or null.');
 }
 
-function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase, recordHistoryCheckpoint = true): void {
-  const isLiveDocument = document === state?.document;
-  if (isLiveDocument && recordHistoryCheckpoint) {
-    recordDatabaseAttachmentHistory();
-  }
-  const previous = getAttachment(document, DB_ATTACHMENT_ID);
-  setAttachment(
-    document,
-    DB_ATTACHMENT_ID,
-    {
-      ...(previous?.meta ?? {}),
-      plugin: DB_TABLE_PLUGIN_ID,
-      mediaType: 'application/vnd.sqlite3',
-    },
-    db.export()
-  );
-  if (isLiveDocument) {
-    markDatabaseAttachmentChanged();
-  }
-  const runtime = getSqliteRuntime();
-  if (runtime.documentRef === document) {
-    resetRuntime();
-    runtime.documentRef = document;
-  }
-}
-
 export async function validateDocumentDbSql(
   document: VisualDocument,
   sql: string,
@@ -907,21 +632,19 @@ export async function validateDocumentDbSql(
   if (mode === 'execute' && (leading === 'SELECT' || leading === 'WITH')) {
     throw new Error('Use doc.db.query for read-only SELECT/WITH SQL. doc.db.execute is for writes.');
   }
-  const db = await openDocumentDatabase(document);
-  try {
-    const statement = db.prepare(trimmed);
-    statement.free();
-  } finally {
-    try {
-      db.close();
-    } catch {
-      // Ignore close failures for ephemeral lint databases.
-    }
-  }
+  const db = (await openDocumentDatabase(document)).current();
+  const statement = db.prepare(trimmed);
+  statement.free();
 }
 
 export interface ScriptingDbRuntime {
   api: ScriptingDbApi;
+  /**
+   * Ends a transaction this runtime opened and left open, by committing or rolling it
+   * back. Returns whether one was open. A commit that SQLite rejects is rolled back and
+   * its error rethrown.
+   */
+  settleUnfinishedTransaction(outcome: 'commit' | 'rollback'): boolean;
   dispose(): void;
 }
 
@@ -930,16 +653,24 @@ export async function createScriptingDbRuntime(
   onMutation?: () => void,
   databaseChanges: DatabaseChangeSnapshot = { revision: 0, tables: [], complete: true }
 ): Promise<ScriptingDbRuntime> {
-  const db = await openDocumentDatabase(document);
+  const database = await openDocumentDatabase(document);
+  let disposed = false;
   let databaseHistoryCheckpointRecorded = false;
-  const getTableNames = () => readScriptingDatabaseTableNames(db);
+  let ownsOpenTransaction = false;
+  const currentDatabase = () => {
+    if (disposed) {
+      throw new Error('This doc.db runtime has been disposed.');
+    }
+    return database.current();
+  };
+  const getTableNames = () => readScriptingDatabaseTableNames(currentDatabase());
   const api: ScriptingDbApi = {
     query: (sql, params) => {
       const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
       if (trimmed.length === 0) {
         throw new Error('doc.db.query requires a non-empty SQL query.');
       }
-      const statement = db.prepare(trimmed, normalizeScriptingSqlParams(params));
+      const statement = currentDatabase().prepare(trimmed, normalizeScriptingSqlParams(params));
       const columns = statement.getColumnNames();
       const rows: Record<string, unknown>[] = [];
       try {
@@ -964,12 +695,13 @@ export async function createScriptingDbRuntime(
       if (leading === 'SELECT' || leading === 'WITH') {
         throw new Error('Use doc.db.query for read-only SELECT statements. doc.db.execute is for writes.');
       }
+      const db = currentDatabase();
+      const transactionWasOpen = database.isInTransaction();
       db.run(trimmed, normalizeScriptingSqlParams(params));
       const rowsAffected = db.getRowsModified();
-      const affected = inferScriptingDatabaseMutationTables(db, trimmed);
-      persistScriptingDatabase(document, db, !databaseHistoryCheckpointRecorded);
+      const transactionIsOpen = database.commit({ recordHistoryCheckpoint: !databaseHistoryCheckpointRecorded }) === 'deferred';
       databaseHistoryCheckpointRecorded = true;
-      recordDatabaseTablesChanged(document, affected.tables, affected.complete);
+      ownsOpenTransaction = transactionIsOpen && (ownsOpenTransaction || !transactionWasOpen);
       onMutation?.();
       return `Executed: ${trimmed}\nRows affected: ${rowsAffected}`;
     },
@@ -986,14 +718,33 @@ export async function createScriptingDbRuntime(
         .map<ScriptingDatabaseTableHandle>((name) => ({ name, removed: !currentNameSet.has(name) }));
     },
   };
+  const settleUnfinishedTransaction = (outcome: 'commit' | 'rollback') => {
+    if (disposed || !ownsOpenTransaction) return false;
+    ownsOpenTransaction = false;
+    if (!database.isInTransaction()) return false;
+    try {
+      if (outcome === 'commit') {
+        try {
+          database.current().run('COMMIT');
+        } catch (error) {
+          if (database.isInTransaction()) database.rollback();
+          throw error;
+        }
+        database.commit();
+      } else {
+        database.rollback();
+      }
+    } finally {
+      onMutation?.();
+    }
+    return true;
+  };
   return {
     api,
+    settleUnfinishedTransaction,
     dispose: () => {
-      try {
-        db.close();
-      } catch {
-        // Ignore close failures for scripting databases.
-      }
+      settleUnfinishedTransaction('rollback');
+      disposed = true;
     },
   };
 }
@@ -1003,76 +754,6 @@ function readScriptingDatabaseTableNames(db: SqlJsDatabase): string[] {
     "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
   )[0];
   return (result?.values ?? []).map((row) => String(row[0] ?? '')).filter(Boolean);
-}
-
-function normalizeSqlIdentifier(token: string): string {
-  const segment = token.trim().split('.').at(-1) ?? '';
-  if ((segment.startsWith('"') && segment.endsWith('"')) || (segment.startsWith('`') && segment.endsWith('`'))) {
-    return segment.slice(1, -1).replace(segment[0] === '"' ? /""/g : /``/g, segment[0]);
-  }
-  if (segment.startsWith('[') && segment.endsWith(']')) return segment.slice(1, -1);
-  return segment.replace(/[^A-Za-z0-9_$-].*$/u, '');
-}
-
-export function inferScriptingDatabaseMutationTables(
-  db: Pick<SqlJsDatabase, 'exec'>,
-  sql: string
-): { tables: string[]; complete: boolean } {
-  const identifier = String.raw`(?:"(?:""|[^"])+"|\[(?:[^\]])+\]|` + '`(?:``|[^`])+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$-]*)(?:\s*\.\s*(?:"(?:""|[^"])+"|\[(?:[^\]])+\]|` + '`(?:``|[^`])+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$-]*))?`;
-  const patterns = [
-    new RegExp(String.raw`\b(?:INSERT(?:\s+OR\s+\w+)?|REPLACE)\s+INTO\s+(${identifier})`, 'giu'),
-    new RegExp(String.raw`\bUPDATE(?:\s+OR\s+\w+)?\s+(${identifier})`, 'giu'),
-    new RegExp(String.raw`\bDELETE\s+FROM\s+(${identifier})`, 'giu'),
-    new RegExp(String.raw`\b(?:CREATE|DROP|ALTER)\s+(?:TABLE|VIEW)\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?(${identifier})`, 'giu'),
-    new RegExp(String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${identifier}\s+ON\s+(${identifier})`, 'giu'),
-  ];
-  const tables = new Set<string>();
-  for (const pattern of patterns) {
-    for (const match of sql.matchAll(pattern)) {
-      const name = normalizeSqlIdentifier(match[1] ?? '');
-      if (name) tables.add(name);
-    }
-  }
-  const hasTriggers = (db.exec("SELECT 1 FROM sqlite_schema WHERE type = 'trigger' LIMIT 1")[0]?.values.length ?? 0) > 0;
-  const statementCount = sql.split(';').map((statement) => statement.trim()).filter(Boolean).length;
-  return {
-    tables: [...tables],
-    complete: tables.size > 0 && statementCount === 1 && !hasTriggers,
-  };
-}
-
-async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {
-  const SQL = await getSqlJs();
-  const attachment = await materializeDocumentAttachment(
-    document,
-    DB_ATTACHMENT_ID,
-    document === state?.document ? state.attachmentHost : null,
-  );
-  const bytes = await getAttachmentDatabaseBytes(attachment);
-  return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
-}
-
-async function persistDocumentDatabase(document: VisualDocument, db: SqlJsDatabase): Promise<void> {
-  const isLiveDocument = document === state?.document;
-  if (isLiveDocument) {
-    recordDatabaseAttachmentHistory();
-  }
-  const encoded = await encodeAttachmentBytes(db.export());
-  const previous = getAttachment(document, DB_ATTACHMENT_ID);
-  setAttachment(
-    document,
-    DB_ATTACHMENT_ID,
-    {
-      ...(previous?.meta ?? {}),
-      plugin: DB_TABLE_PLUGIN_ID,
-      mediaType: 'application/vnd.sqlite3',
-      ...(encoded.encoding ? { encoding: encoded.encoding } : {}),
-    },
-    encoded.bytes
-  );
-  if (isLiveDocument) {
-    markDatabaseAttachmentChanged();
-  }
 }
 
 export function syncDbTableColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {

@@ -551,6 +551,22 @@ HVY.mountHvy({
 });
 ```
 
+Inside the reference client, everything that touches the attached database
+(the `with-file` source, `doc.db` in scripts and power scripts, the AI SQL tools,
+and row-attached components) shares one live sql.js connection per document,
+owned by `src/plugins/db-table/document-database.ts`. Each write commits the
+exported bytes back to the `db` attachment, so undo snapshots stay byte-based.
+sql.js exports by closing and reopening the connection, so a commit waits while
+a transaction is open and restores connection pragmas after exporting. Each save
+also records which tables changed, for `doc.db.get_updated_tables`. The record is
+built from SQLite's update hook plus a diff of `sqlite_schema`. If
+`total_changes()` shows rows the hook missed, the save reports all tables changed.
+Don't infer changed tables from SQL text.
+When anything else replaces those bytes (undo/redo, document load, host recall),
+the connection is rebuilt the next time something uses it. Do not open private
+copies of the database. Read paths must leave the connection as they found it,
+with no pragmas changed and no internal tables created.
+
 The adapter receives the authored query unchanged together with `pageSize` and
 `offset`. It must apply pagination at the source and return `hasNextPage`; it
 must not load an unbounded result and slice it in the browser. `queryLimit` is

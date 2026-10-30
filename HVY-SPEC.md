@@ -1649,7 +1649,18 @@ results, MUST be accepted wherever their shape is.
 
 Delayed callbacks from sandboxed scripts MUST resume inside the originating
 scripting runtime with its step and cycle guards, flush resulting document
-mutations, and surface exceptions through the originating script UI. A host
+mutations, and surface exceptions through the originating script UI. Every
+`doc.db` call, including one made from a delayed callback, MUST act on the
+document's current attached database: it MUST see rows written since the script
+started by other components, scripts, or undo and redo, and its writes MUST NOT
+replace those rows with an earlier copy of the database. A transaction a script
+opens with `doc.db.execute("BEGIN")` MUST span later `doc.db.execute` calls
+until the script commits or rolls it back, and its changes MUST NOT be persisted
+before it commits. Because sandboxed runs and callbacks are synchronous, a
+transaction a sandboxed script leaves open when its run or callback ends MUST
+be committed if the run or callback completed without error and rolled back if
+it raised one. A power script's open transaction MUST be rolled back when the
+program stops. A host
 MUST ignore a retained callback after its document is replaced or its mount is
 destroyed. A synchronously returning plugin method MAY schedule such callbacks;
 this does not make the method asynchronous. Sandboxed `hvy.scripting` calls
@@ -2389,10 +2400,11 @@ Power scripts have a deliberately different trust and lifecycle model:
   confirmations, and text prompts. These dialogs SHOULD render inside the
   mounted/emulated HVY surface and MUST NOT require support for blocking browser
   `alert`, `confirm`, or `prompt` dialogs.
-- A power script that uses the document database MAY keep its database runtime
-  open for the lifetime of the mounted program. Database mutations MUST use the
-  same attached database and persistence behavior as `doc.db` in basic
-  scripting.
+- A power script that uses the document database MAY keep `doc.db` available
+  for the lifetime of the mounted program. Every read and write MUST act on the
+  current attached database with the same persistence behavior as `doc.db` in
+  basic scripting, so event listeners, animation frames, and other callbacks
+  never operate on a copy taken when the program started.
 - Power scripts MAY request that the current document be saved after a
   meaningful mutation. Embedded hosts SHOULD be able to handle the request with
   their own persistence callback and serialize the current document, including

@@ -376,3 +376,52 @@ window.__referenceSaveStatus = await doc.save.request({ reason: \`\${pilot} upda
   await expect(page.getByRole('button', { name: 'Download updated file' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
 });
+
+test('power-script click callbacks read and write the current database between other writers', async ({ page }) => {
+  await page.goto('/');
+  // BEFORE
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="callbackDbMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
+    const addClickButton = (id: string, source: string) => `
+const button = document.createElement("button");
+button.id = "${id}";
+button.textContent = "${id}";
+doc.listen(button, "click", () => {
+  doc.db.execute("CREATE TABLE IF NOT EXISTS fake_clicks (source TEXT)");
+  doc.db.execute("INSERT INTO fake_clicks (source) VALUES (?)", ["${source}"]);
+  window.__fakeClickRows = doc.db.query("SELECT source FROM fake_clicks ORDER BY rowid").map((row) => row.source);
+});
+document.body.appendChild(button);
+`;
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"callback-db"}-->
+#! Callback DB
+
+<!--hvy:plugin {"id":"writer-a","plugin":"hvy.power-scripting"}-->
+${addClickButton('fake-writer-a', 'A')}
+
+<!--hvy:plugin {"id":"writer-b","plugin":"hvy.power-scripting"}-->
+${addClickButton('fake-writer-b', 'B')}
+`;
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#callbackDbMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+      plugins: [plugins.powerScripting],
+      powerScripts: 'enabled',
+    });
+  });
+
+  // ACTION
+  await page.locator('#fake-writer-a').click();
+  await page.locator('#fake-writer-b').click();
+  await page.locator('#fake-writer-a').click();
+
+  // AFTER
+  expect(await page.evaluate(() => (window as Window & { __fakeClickRows?: string[] }).__fakeClickRows)).toEqual(['A', 'B', 'A']);
+});

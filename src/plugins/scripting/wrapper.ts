@@ -74,6 +74,7 @@ interface HvyScriptingGlobal {
 
 interface LoadedScriptingDbRuntime {
   api: ScriptingDbApi;
+  settleUnfinishedTransaction(outcome: 'commit' | 'rollback'): boolean;
   dispose(): void;
 }
 
@@ -339,6 +340,20 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     callbackResourcesActive = false;
     scriptingDb?.dispose();
   };
+  let callbackErrorReported = false;
+  const reportCallbackError = (error: string) => {
+    callbackErrorReported = true;
+    options.onCallbackError?.({
+      ok: false,
+      error: summarizeScriptingError(error),
+      errorDetail: cleanScriptingErrorDetail(error),
+      stepsExecuted: runtime?.stats.stepsExecuted ?? 0,
+      stepBudget: runtime?.stats.stepBudget ?? (options.maxLines ?? 100_000),
+      linesExecuted: runtime?.stats.linesExecuted ?? 0,
+      toolCalls: runtime?.stats.toolCalls ?? 0,
+      logs: [...(runtime?.stats.logs ?? [])],
+    });
+  };
   runtime = createScriptingRuntime({
     document: options.document,
     previousDocument: options.previousDocument,
@@ -365,9 +380,25 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
             releaseCallbackResources();
             return undefined;
           }
-          const invokeCallback = () => normalizeBrythonHostValue(
-            callback(...normalizeBrythonHostArguments(args))
-          );
+          const invokeCallback = () => {
+            callbackErrorReported = false;
+            let returned = false;
+            try {
+              const result = normalizeBrythonHostValue(callback(...normalizeBrythonHostArguments(args)));
+              returned = true;
+              return result;
+            } finally {
+              // A sandboxed callback is synchronous, so a transaction it leaves open can never
+              // finish later: keep it when the callback succeeded, discard it when it failed.
+              if (!initialExecutionActive) {
+                try {
+                  scriptingDb?.settleUnfinishedTransaction(returned && !callbackErrorReported ? 'commit' : 'rollback');
+                } catch (error) {
+                  reportCallbackError(error instanceof Error ? error.message : String(error));
+                }
+              }
+            }
+          };
           if (initialExecutionActive || !stateRuntime) {
             const result = invokeCallback();
             runtime?.doc.rerender();
@@ -403,16 +434,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       });
     },
     beforeMutationRender: () => renderCycleExecution?.beforeMutationRender(),
-    onCallbackError: (error) => options.onCallbackError?.({
-      ok: false,
-      error: summarizeScriptingError(error),
-      errorDetail: cleanScriptingErrorDetail(error),
-      stepsExecuted: runtime?.stats.stepsExecuted ?? 0,
-      stepBudget: runtime?.stats.stepBudget ?? (options.maxLines ?? 100_000),
-      linesExecuted: runtime?.stats.linesExecuted ?? 0,
-      toolCalls: runtime?.stats.toolCalls ?? 0,
-      logs: [...(runtime?.stats.logs ?? [])],
-    }),
+    onCallbackError: reportCallbackError,
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
@@ -441,6 +463,11 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     return await new Promise((resolve) => {
       scripting.callbacks[runtimeId] = () => {
         initialExecutionActive = false;
+        try {
+          scriptingDb?.settleUnfinishedTransaction(scripting.errors[runtimeId] ? 'rollback' : 'commit');
+        } catch (error) {
+          scripting.errors[runtimeId] = error instanceof Error ? error.message : String(error);
+        }
         const error = scripting.errors[runtimeId];
         const result: ScriptingRunResult = error
           ? {

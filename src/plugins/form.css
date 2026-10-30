@@ -1,6 +1,37 @@
 .hvy-document .hvy-form-plugin {
+  position: relative;
   display: block;
   width: 100%;
+}
+
+.hvy-document .hvy-form-run-notice {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  max-width: min(100%, 22rem);
+  padding: 0.3rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-success) 40%, var(--hvy-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-success) 8%, var(--hvy-surface));
+  box-shadow: 0 8px 20px var(--hvy-shadow-md);
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+  pointer-events: none;
+  animation-name: hvy-form-run-notice-fade;
+  animation-timing-function: ease;
+  animation-fill-mode: forwards;
+}
+
+@keyframes hvy-form-run-notice-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  70% {
+    opacity: 1;
+  }
 }
 
 .hvy-document .hvy-form-editor-section {

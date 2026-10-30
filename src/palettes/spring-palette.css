@@ -19,6 +19,8 @@
   --hvy-button-hover-bg: rgba(0, 255, 200, 0.6);
   --hvy-button-text: #202020;
   --hvy-button-hover-text: rgb(233, 233, 11);
+  --hvy-button-disabled-bg: #c6d3cd;
+  --hvy-button-disabled-text: #7c8a84;
   --hvy-highlight-1: rgba(0, 255, 0, 0.18);
   --hvy-highlight-2: rgba(255, 221, 26, 0.35);
   --hvy-ai-view-hint-bg: #e8f2a8;

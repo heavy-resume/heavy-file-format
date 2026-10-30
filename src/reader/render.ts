@@ -1224,6 +1224,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       '--hvy-button-hover-bg --hvy-button-hover-text --hvy-focus --hvy-shadow-md',
       'theme-demo-button-stack'
     );
+    const buttonDisabledPreview = renderDemoWrapper(
+      '<button type="button" class="secondary" disabled>Disabled</button>',
+      'disabled',
+      '--hvy-button-disabled-bg --hvy-button-disabled-text',
+      'theme-demo-button-stack'
+    );
     const fillInPreview = renderDemoSurface(
       renderTextReader(previewSection, previewFillInBlock, helpers),
       'fill-in',
@@ -1295,14 +1301,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         {
           id: 'button',
           label: 'Button',
-          detail: 'Primary button rest and hover states',
+          detail: 'Primary button rest, hover, and disabled states',
           className: 'theme-preview-button-card',
-          variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
+          variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-button-disabled-bg', '--hvy-button-disabled-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
           states: [
             { id: 'rest', label: 'Rest', variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-border-alt'] },
             { id: 'hover', label: 'Hover', variables: ['--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-focus', '--hvy-shadow-md'] },
+            { id: 'disabled', label: 'Disabled', variables: ['--hvy-button-disabled-bg', '--hvy-button-disabled-text'] },
           ],
-          html: `${buttonRestPreview}${buttonHoverPreview}`,
+          html: `${buttonRestPreview}${buttonHoverPreview}${buttonDisabledPreview}`,
         },
         {
           id: 'text',

@@ -76,6 +76,28 @@
     font-size: 0.78rem;
     padding: 0.2rem 0.42rem;
   }
+
+  .hvy-document .hvy-button:disabled,
+.hvy-document .secondary:disabled,
+.hvy-document .ghost:disabled,
+.hvy-document .danger:disabled,
+.hvy-document .tiny:disabled {
+    color: var(--hvy-button-disabled-text);
+    background: var(--hvy-button-disabled-bg);
+    border-color: var(--hvy-button-disabled-bg);
+    box-shadow: none;
+    transform: none;
+    cursor: not-allowed;
+  }
+
+  .hvy-document .ghost:disabled {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--hvy-button-disabled-text) 35%, transparent);
+  }
+
+  .hvy-document [aria-busy="true"]:disabled {
+    cursor: progress;
+  }
 }
 
 .hvy-document .hvy-ui-icon {

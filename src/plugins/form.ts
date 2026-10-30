@@ -500,6 +500,11 @@ export function claimFormInitialization(document: VisualDocument, block: VisualB
   return true;
 }
 
+// Successful runs only surface a transient notice once they are expensive
+// enough to be worth knowing about; cheap runs stay silent.
+const RUN_NOTICE_MIN_STEPS = 1000;
+const RUN_NOTICE_DURATION_MS = 2600;
+
 function resultText(result: ScriptingRunResult): string {
   if (result.ok) {
     const steps = `${result.stepsExecuted.toLocaleString()}/${result.stepBudget.toLocaleString()} steps`;
@@ -519,6 +524,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let statusText = '';
   let statusError = false;
   let statusErrorDetail: string | null = null;
+  let runNotice: { text: string; shownAt: number } | null = null;
   let submitBusy = false;
   let runQueue = Promise.resolve();
   let forceEditorRender = false;
@@ -651,9 +657,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         });
       })
       .then((result) => {
-        statusText = resultText(result);
+        statusText = result.ok ? '' : resultText(result);
         statusError = !result.ok;
         statusErrorDetail = result.ok ? null : result.errorDetail ?? result.error ?? 'Unknown script error.';
+        runNotice = result.ok && result.stepsExecuted >= RUN_NOTICE_MIN_STEPS
+          ? { text: resultText(result), shownAt: performance.now() }
+          : null;
         renderReader();
       })
       .catch((error) => {
@@ -925,6 +934,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       submit.className = 'secondary';
       submit.textContent = submitBusy ? 'Generating...' : spec.submitLabel || 'Submit';
       submit.disabled = submitBusy || live.submit.disabled;
+      if (submitBusy) submit.setAttribute('aria-busy', 'true');
       if (spec.submitCss.trim().length > 0) {
         submit.setAttribute('style', sanitizeInlineCss(spec.submitCss));
       }
@@ -959,6 +969,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       }
       root.appendChild(status);
     }
+    renderRunNotice();
     restoreReaderFocus(focus);
 
     if (!canRunFormScripts()) {
@@ -977,6 +988,29 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         runNamedScript(spec.changeScript, 'change', databaseChanges);
       }
     }
+  }
+
+  // The notice floats over the form so it never shifts document layout. Reader
+  // rebuilds resume its fade where it left off instead of restarting it.
+  function renderRunNotice(): void {
+    const notice = runNotice;
+    if (!notice) return;
+    const elapsed = performance.now() - notice.shownAt;
+    if (elapsed >= RUN_NOTICE_DURATION_MS) {
+      runNotice = null;
+      return;
+    }
+    const popover = document.createElement('div');
+    popover.className = 'hvy-form-run-notice';
+    popover.setAttribute('role', 'status');
+    popover.textContent = notice.text;
+    popover.style.animationDuration = `${RUN_NOTICE_DURATION_MS}ms`;
+    popover.style.animationDelay = `${-Math.round(elapsed)}ms`;
+    popover.addEventListener('animationend', () => {
+      if (runNotice === notice) runNotice = null;
+      popover.remove();
+    });
+    root.appendChild(popover);
   }
 
   // Scripts (including debounced input triggers) rebuild the reader form, so

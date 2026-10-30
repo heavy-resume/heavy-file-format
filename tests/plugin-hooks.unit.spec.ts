@@ -168,3 +168,36 @@ test('document hook context includes the current document view', async () => {
 
   expect(expectedResult).toEqual(['ai', 'viewer']);
 });
+
+test('database changes recorded by another source while a hook is in flight run a later hook pass', async () => {
+  const expectedResult: string[] = [];
+  let finishInFlightScript: () => void = () => undefined;
+  setHostPlugins([
+    createHookPlugin('slow-script-plugin', {
+      documentLoad: {
+        run: async () => {
+          expectedResult.push('load started');
+          await new Promise<void>((resolve) => { finishInFlightScript = resolve; });
+          expectedResult.push('load finished');
+        },
+      },
+      documentChange: { run: () => { expectedResult.push('change'); } },
+    }),
+  ]);
+  bootstrap();
+  const loadPass = runPluginDocumentHooks('load');
+  await Promise.resolve();
+
+  // A network-backed plugin receives its response and writes rows while the hook is still awaiting.
+  recordDatabaseTablesChanged(state.document, ['fake_rows']);
+  const midRunPass = await Promise.race([
+    runPluginDocumentHooks('unknown'),
+    Promise.resolve('still pending'),
+  ]);
+  finishInFlightScript();
+  await loadPass;
+  await runPluginDocumentHooks('unknown');
+
+  expect(midRunPass).toEqual({ ran: false, documentChanged: false });
+  expect(expectedResult).toEqual(['load started', 'load finished', 'change']);
+});

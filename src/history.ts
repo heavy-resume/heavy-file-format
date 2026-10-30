@@ -33,6 +33,7 @@ import {
   prepareHistoryViewportTransition,
 } from './history-viewport-transition';
 import { EDITOR_INPUT_IDLE_MS } from './editor-input-timing';
+import { markPluginDocumentHooksCurrent } from './plugins/hooks';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -158,6 +159,33 @@ export function commitHistorySnapshot(): void {
     state.future = [];
     saveSessionState(state);
   }
+}
+
+// Document hooks and the scripts they run belong to the undo step that
+// triggered them. When the newest entry already holds the state the hooks start
+// from (a checkpoint taken between an edit and its scripts, or the loaded
+// document), the returned callback moves that entry forward to the state the
+// hooks produce, so undo never lands on a state whose scripts have not run.
+export function beginReactiveHistoryAmendment(): (() => void) | null {
+  if (state.isRestoring || state.reusableDefinitionEditModal || !Array.isArray(state.history) || state.history.length === 0) {
+    return null;
+  }
+  const entryIndex = state.history.length - 1;
+  const entry = state.history[entryIndex];
+  if (getLastHistorySnapshot() !== snapshotState()) {
+    return null;
+  }
+  return () => {
+    if (state.isRestoring || state.history.length !== entryIndex + 1 || state.history[entryIndex] !== entry) {
+      return;
+    }
+    const previous = entryIndex > 0 ? getHistorySnapshotAt(entryIndex - 1) : null;
+    state.history[entryIndex] = encodeStoredHistoryEntry(
+      encodeHistoryEntry(previous, snapshotState()),
+      getHistoryEditorContextAt(entryIndex)
+    );
+    saveSessionState(state);
+  };
 }
 
 export function ensureHistoryInitialized(): void {
@@ -463,6 +491,7 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
       restoreFromSnapshot(current);
       await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(current)).catch(() => {});
       await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(current)).catch(() => {});
+      markPluginDocumentHooksCurrent();
       state.isRestoring = false;
       throw error;
     }
@@ -507,6 +536,7 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
       restoreFromSnapshot(current);
       await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(current)).catch(() => {});
       await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(current)).catch(() => {});
+      markPluginDocumentHooksCurrent();
       state.isRestoring = false;
       throw error;
     }
@@ -524,6 +554,9 @@ function finishHistoryNavigation(
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
   state.isRestoring = false;
+  // Database and attachment versions restore after the snapshot, so the hook
+  // baseline is taken again once the whole state is back.
+  markPluginDocumentHooksCurrent();
   getRenderApp()();
   restoreModalScroll(modalScroll);
   notifyDocumentMayHaveChanged(action, inferDocumentChangeSource(action), { authoritative: true });
@@ -1006,6 +1039,7 @@ function restoreFromSnapshot(snapshot: string): void {
     state.rawEditorDiagnostics = parsed.rawEditorDiagnostics ?? [];
     state.paletteOverrideId = parsed.paletteOverrideId ?? null;
     savePaletteOverrideId(state.paletteOverrideId);
+    markPluginDocumentHooksCurrent();
     state.componentPlacement = null;
     state.pendingEditorActivation = null;
     state.pendingHistoryFocus = null;

@@ -368,6 +368,11 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       }
     }
     pendingExpansions.clear();
+    // Before rendering, so document hooks claim this edit as a script edit
+    // ahead of any catch-all hook run that the render itself starts.
+    if (documentMutated) {
+      options.onMutationFlushed?.();
+    }
     let renderGuardError: unknown = null;
     if (options.renderOnMutation !== false) {
       try {
@@ -387,9 +392,6 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
           // renderApp may not be ready yet during the very first load.
         }
       }
-    }
-    if (documentMutated) {
-      options.onMutationFlushed?.();
     }
     if (renderGuardError) {
       throw renderGuardError;

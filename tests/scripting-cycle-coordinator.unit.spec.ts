@@ -18,8 +18,13 @@ function createDocument(): VisualDocument {
   return {} as VisualDocument;
 }
 
-function mutationRender(runtime: StateRuntime, document: VisualDocument, identity: string): void {
-  const execution = beginScriptCycleExecution(runtime, document, identity);
+function mutationRender(
+  runtime: StateRuntime,
+  document: VisualDocument,
+  identity: string,
+  options: { startedByUser?: boolean } = {}
+): void {
+  const execution = beginScriptCycleExecution(runtime, document, identity, options);
   execution.beforeMutationRender();
   execution.complete();
 }
@@ -56,6 +61,42 @@ describe('sandbox script cycle coordinator', () => {
     const runtime = createRuntime();
     const document = createDocument();
     for (const identity of ['component-a', 'component-b', 'component-a', 'component-b', 'component-a']) {
+      mutationRender(runtime, document, identity);
+    }
+
+    expect(() => mutationRender(runtime, document, 'component-b')).toThrow(/component-a -> component-b/);
+  });
+
+  test('expected result: separate user-started runs and the scripts they trigger are not read as a loop', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+    mutationRender(runtime, document, 'triggered-script');
+    mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+    mutationRender(runtime, document, 'triggered-script');
+    mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+
+    expect(() => mutationRender(runtime, document, 'triggered-script')).not.toThrow();
+  });
+
+  test('expected result: the same user-started script may repeat rapidly', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    for (let index = 1; index < SCRIPT_REPEAT_LIMIT; index += 1) {
+      mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+    }
+
+    expect(() => mutationRender(runtime, document, 'user-started-script', { startedByUser: true })).not.toThrow();
+  });
+
+  test('expected result: a script loop that follows a user-started run is still detected', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    mutationRender(runtime, document, 'component-a', { startedByUser: true });
+    for (const identity of ['component-b', 'component-a', 'component-b', 'component-a']) {
       mutationRender(runtime, document, identity);
     }
 

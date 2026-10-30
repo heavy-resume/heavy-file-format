@@ -131,7 +131,13 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
   });
 }
 
-export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLElement, sectionKey: string, blockId: string): Promise<void> {
+export async function runButtonAiGenerate(
+  app: HTMLElement,
+  actionButton: HTMLElement,
+  sectionKey: string,
+  blockId: string,
+  options: { startedByUser: boolean }
+): Promise<void> {
   const runtime = getActiveStateRuntime();
   const inButtonRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);
   if (inButtonRuntime(() => isButtonAiGenerateRunning(sectionKey, blockId))) {
@@ -169,6 +175,7 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
     const sourceResult = await runUserScript({
       document: runtime.state.document,
       source: block.schema.buttonSourceScript,
+      startedByUser: options.startedByUser,
       componentId: block.schema.id || block.id,
       onCallbackError: (callbackResult) => {
         setStatus(callbackResult.error ?? 'Source script callback failed.', true);
@@ -210,6 +217,7 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
     const targetResult = await runUserScript({
       document: runtime.state.document,
       source: block.schema.buttonTargetScript,
+      startedByUser: options.startedByUser,
       componentId: block.schema.id || block.id,
       injectedGlobals: {
         response,

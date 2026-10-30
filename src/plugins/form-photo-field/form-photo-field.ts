@@ -67,7 +67,7 @@ interface CreateFormPhotoControlOptions {
   meta: FormPhotoMeta;
   value: FormPhotoValue | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
-  onChange(value: FormPhotoValue | null): void;
+  onChange(value: FormPhotoValue | null, startedByUser: boolean): void;
   onError(message: string): void;
 }
 
@@ -126,13 +126,13 @@ export function createFormPhotoControl(options: CreateFormPhotoControlOptions): 
   };
   renderPreview(options.value);
 
-  input.addEventListener('change', () => {
+  input.addEventListener('change', (event) => {
     const file = input.files?.[0];
     if (!file) return;
     void stageFormPhoto(options, file)
       .then((value) => {
         options.onError('');
-        options.onChange(value);
+        options.onChange(value, event.isTrusted);
         input.required = false;
         button.textContent = 'Replace photo';
         renderPreview(value);

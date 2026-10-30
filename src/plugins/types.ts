@@ -271,7 +271,7 @@ export interface HvyPluginScriptingCapability {
   methods: Record<string, HvyPluginScriptingMethod>;
 }
 
-export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
+export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'script-edit' | 'unknown';
 
 export interface HvyDocumentHookContext {
   document: VisualDocument;

@@ -674,7 +674,6 @@ function ensureRenderers(): void {
 
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   invalidateInlineAnswerGroupIndex();
-  void options;
   if (!currentRoot) return;
   const startedAt = nowMs();
   const root = currentRoot;
@@ -803,6 +802,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     embedded: true,
     full: true,
   });
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 
@@ -980,6 +982,9 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
     surface,
   });
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {

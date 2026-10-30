@@ -22,6 +22,7 @@ import {
 } from './version';
 import { hasDocumentDatabaseTables } from '../database-table-targets';
 import { notifyDocumentMayHaveChanged } from '../../document-change';
+import { runPluginDocumentHooks } from '../hooks';
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
 import {
   beginScriptCycleExecution,
@@ -232,6 +233,8 @@ export interface RunUserScriptOptions {
   maxLines?: number;
   changeReason?: HvyPluginHookChangeReason;
   renderOnMutation?: boolean;
+  /** True when a trusted user event started this run; see beginScriptCycleExecution. */
+  startedByUser?: boolean;
   form?: ScriptingFormApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   injectedGlobals?: Record<string, unknown>;
@@ -324,7 +327,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     cycleExecution = beginScriptCycleExecution(
       stateRuntime,
       options.document,
-      createScriptInvocationIdentity(options.componentId ?? 'hvy-script', options.source)
+      createScriptInvocationIdentity(options.componentId ?? 'hvy-script', options.source),
+      { startedByUser: options.startedByUser }
     );
   }
   let renderCycleExecution = cycleExecution;
@@ -431,6 +435,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       }
       runWithStateRuntime(stateRuntime, () => {
         notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
+        void runPluginDocumentHooks('script-edit');
       });
     },
     beforeMutationRender: () => renderCycleExecution?.beforeMutationRender(),

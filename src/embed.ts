@@ -661,7 +661,6 @@ function renderTransientNotice(): string {
 
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   invalidateInlineAnswerGroupIndex();
-  void options;
   if (!currentRoot) return;
   const startedAt = nowMs();
   let renderHtmlMs = 0;
@@ -745,6 +744,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     embedded: true,
     lightweight: true,
   });
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
@@ -839,6 +841,9 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
     surface,
   });
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 function materializeReaderVirtualSection(placeholder: HTMLElement, renderer: ReaderRenderer): HTMLElement | HTMLElement[] | null {

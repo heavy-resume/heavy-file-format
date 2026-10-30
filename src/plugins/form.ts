@@ -463,6 +463,11 @@ function normalizePhotoValue(value: unknown): FormPhotoValue | null {
   return attachmentId && imageFile && mediaType ? { attachmentId, imageFile, mediaType } : null;
 }
 
+interface FormScriptRunOptions {
+  databaseChanges?: DatabaseChangeSnapshot;
+  startedByUser?: boolean;
+}
+
 interface FormLifecycleState {
   initialized: boolean;
   live: LiveFormState;
@@ -586,8 +591,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const runFormScript = async (
     scriptName: string,
     reason: string,
-    injectedGlobals?: Record<string, unknown>,
-    databaseChanges?: DatabaseChangeSnapshot
+    options: FormScriptRunOptions & { injectedGlobals?: Record<string, unknown> } = {}
   ): Promise<ScriptingRunResult> => {
     const name = scriptName.trim();
     const { spec } = parseCurrent();
@@ -611,9 +615,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       pluginVersion: String(ctx.block.schema.pluginConfig.version ?? FORM_PLUGIN_VERSION),
       maxLines: spec.scriptStepBudget,
       form: buildFormApi(),
-      injectedGlobals,
+      injectedGlobals: options.injectedGlobals,
       libraries: spec.scriptLibraries,
-      databaseChanges,
+      databaseChanges: options.databaseChanges,
+      startedByUser: options.startedByUser,
       onCallbackError: (callbackResult) => {
         statusText = resultText(callbackResult);
         statusError = true;
@@ -623,7 +628,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     });
   };
 
-  const runNamedScript = (scriptName: string, reason: string, databaseChanges?: DatabaseChangeSnapshot): void => {
+  const runNamedScript = (scriptName: string, reason: string, options: FormScriptRunOptions = {}): void => {
     const name = scriptName.trim();
     if (name.length === 0 || !canRunFormScripts()) {
       return;
@@ -643,7 +648,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           reason,
           componentId: ctx.block.schema.id || ctx.block.id,
         });
-        return runFormScript(name, reason, undefined, databaseChanges).then((result) => {
+        return runFormScript(name, reason, options).then((result) => {
           logPerfTrace('form-script:end', {
             scriptName: name,
             reason,
@@ -675,7 +680,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   const buildDefaultAiSource = (): string => JSON.stringify(live.values, null, 2);
 
-  const runAiSubmit = (): void => {
+  const runAiSubmit = (startedByUser: boolean): void => {
     if (submitBusy) {
       return;
     }
@@ -691,7 +696,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       .then(async () => {
         let source = buildDefaultAiSource();
         if (spec.submitSourceScript.trim().length > 0) {
-          const sourceResult = await runFormScript(spec.submitSourceScript, 'submit-source');
+          const sourceResult = await runFormScript(spec.submitSourceScript, 'submit-source', { startedByUser });
           if (!sourceResult.ok) {
             throw new Error(sourceResult.error ?? 'Submit source script failed.');
           }
@@ -732,7 +737,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         statusError = false;
         renderReader();
         inFormRuntime(() => recordHistory(`form:${ctx.block.id}:ai-generate`));
-        const targetResult = await runFormScript(spec.submitScript, 'submit-target', { response, source });
+        const targetResult = await runFormScript(spec.submitScript, 'submit-target', { injectedGlobals: { response, source }, startedByUser });
         if (!targetResult.ok) {
           throw new Error(targetResult.error ?? 'Submit target script failed.');
         }
@@ -985,7 +990,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const databaseChanges = getDatabaseChangesSince(ctx.rawDocument, lifecycle.lastDatabaseRevision);
       if (databaseChanges.revision > lifecycle.lastDatabaseRevision) {
         lifecycle.lastDatabaseRevision = databaseChanges.revision;
-        runNamedScript(spec.changeScript, 'change', databaseChanges);
+        runNamedScript(spec.changeScript, 'change', { databaseChanges });
       }
     }
   }
@@ -1089,10 +1094,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         meta: field.meta,
         value: photoValue,
         imageAttachmentMaxDimensions: getActiveStateRuntime().state.imageAttachmentMaxDimensions,
-        onChange: (next) => {
+        onChange: (next, startedByUser) => {
           live.values[field.label] = next;
           delete live.errors[field.label];
-          runNamedScript(field.triggers.change ?? '', `change:${field.label}`);
+          runNamedScript(field.triggers.change ?? '', `change:${field.label}`, { startedByUser });
         },
         onError: (message) => {
           if (message) {
@@ -1175,7 +1180,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   function wireControl(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, field: FormFieldDefinition): void {
     control.dataset.formControl = 'true';
     control.dataset.formFieldLabel = field.label;
-    control.addEventListener('input', () => {
+    control.addEventListener('input', (event) => {
       updateLiveValue(control, field);
       const script = field.triggers.input ?? '';
       if (script.length > 0) {
@@ -1184,16 +1189,16 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         if (existing) {
           window.clearTimeout(existing);
         }
-        inputTimers.set(key, window.setTimeout(() => runNamedScript(script, `input:${field.label}`), 250));
+        inputTimers.set(key, window.setTimeout(() => runNamedScript(script, `input:${field.label}`, { startedByUser: event.isTrusted }), 250));
       }
     });
-    control.addEventListener('change', () => {
+    control.addEventListener('change', (event) => {
       updateLiveValue(control, field);
-      runNamedScript(field.triggers.change ?? '', `change:${field.label}`);
+      runNamedScript(field.triggers.change ?? '', `change:${field.label}`, { startedByUser: event.isTrusted });
     });
-    control.addEventListener('blur', () => {
+    control.addEventListener('blur', (event) => {
       updateLiveValue(control, field);
-      runNamedScript(field.triggers.blur ?? '', `blur:${field.label}`);
+      runNamedScript(field.triggers.blur ?? '', `blur:${field.label}`, { startedByUser: event.isTrusted });
     });
   }
 
@@ -1377,10 +1382,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
     const { spec } = parseCurrent();
     if (spec.submitAction === 'ai-generate') {
-      runAiSubmit();
+      runAiSubmit(event.isTrusted);
       return;
     }
-    runNamedScript(spec.submitScript, 'submit');
+    runNamedScript(spec.submitScript, 'submit', { startedByUser: event.isTrusted });
   };
 
   const refresh = () => {

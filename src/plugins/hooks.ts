@@ -6,6 +6,7 @@ import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { refreshMountedPlugins } from './mount';
 import { getHostPlugins } from './registry';
 import { getDatabaseChangeRevision } from '../database-change-tracker';
+import { beginReactiveHistoryAmendment } from '../history';
 import type {
   HvyDocumentHookContext,
   HvyPlugin,
@@ -128,6 +129,15 @@ export function resetPluginDocumentHookState(): void {
   hookState.hookRun = Promise.resolve();
 }
 
+// History restores (undo, redo, rollback) return the document to a state that
+// already includes the output of the hooks that ran for it, so they adopt the
+// restored document as current instead of reloading or rerunning hooks.
+export function markPluginDocumentHooksCurrent(): void {
+  const hookState = getHookState();
+  hookState.lastHookDocument = state.document;
+  hookState.lastHookSignature = getHookSignature(state.document);
+}
+
 // The view is part of the signature because hooks receive it and may behave
 // differently per view; entering another view must rerun them.
 function getHookSignature(document: VisualDocument): string {
@@ -177,13 +187,18 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       signatureMs,
     });
     const result = await runWithStateRuntimeAsync(runtime, async (): Promise<PluginDocumentHookResult> => {
+      const amendHistory = beginReactiveHistoryAmendment();
       await runHookHandlers(hookName, ctx);
       if (ctx.isCurrentDocument()) {
         const nextSignature = getHookSignature(document);
         hookState.lastHookDocument = document;
         hookState.lastHookSignature = nextSignature;
-        notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
-        return { ran: true, documentChanged: nextSignature !== signature };
+        const documentChanged = nextSignature !== signature;
+        if (documentChanged) {
+          amendHistory?.();
+          notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
+        }
+        return { ran: true, documentChanged };
       }
       return { ran: true, documentChanged: true };
     });

@@ -137,13 +137,25 @@ function assertWatchdogAllowsRender(
   watchdog.mutationRenders = prospective.slice(-MAX_RENDER_HISTORY);
 }
 
+export interface ScriptCycleExecutionOptions {
+  /** True when a trusted user event started this run, not another script. */
+  startedByUser?: boolean;
+}
+
 export function beginScriptCycleExecution(
   runtime: StateRuntime,
   document: VisualDocument,
-  identity: string
+  identity: string,
+  options: ScriptCycleExecutionOptions = {}
 ): ScriptCycleExecution {
   const coordinator = getCoordinator(runtime);
   const watchdog = getWatchdog(coordinator, document);
+  // The watchdog infers loops from timing because it cannot see causes across
+  // async hops. A user action is a known cause, so it starts a fresh history:
+  // separate actions and the scripts they trigger are not one repeating loop.
+  if (options.startedByUser) {
+    watchdog.mutationRenders = [];
+  }
   const invocation: ScriptInvocationRecord = {
     id: ++coordinator.nextInvocationId,
     identity,

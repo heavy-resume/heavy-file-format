@@ -48,75 +48,43 @@ return "valid"
   expect(result.runtimeResult.returnValue).toBe(42);
 });
 
-test('cached script definitions are reused until their source changes', async ({ page }) => {
+test('before, three script runs, after: the wrapper is translated once and user code is reused until its source changes', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/');
 
   const result = await page.evaluate(async () => {
     const { runUserScript } = await import(/* @vite-ignore */ '/src/plugins/scripting/wrapper.ts');
     const { deserializeDocument } = await import(/* @vite-ignore */ '/src/serialization.ts');
+    const { loadBrython, getBrython } = await import(/* @vite-ignore */ '/src/plugins/scripting/brython-loader.ts');
     const document = deserializeDocument(`---\nhvy_version: 0.1\n---\n`, '.hvy');
-    const first = await runUserScript({
-      document,
-      source: 'return 1',
-      componentId: 'cached-visibility-script',
-      renderOnMutation: false,
-      cacheDefinition: true,
-    });
-    const scripting = (window as Window & {
-      __HVY_SCRIPTING__?: {
-        compiledDefinitionSources: Map<string, string>;
-        compiledDefinitions: Map<string, unknown>;
-        compiledPrograms: Map<string, { execute: () => unknown }>;
-      };
-    }).__HVY_SCRIPTING__;
-    const afterFirst = {
-      sourceCount: scripting?.compiledDefinitionSources.size,
-      definitionCount: scripting?.compiledDefinitions.size,
-      definition: scripting?.compiledDefinitions.get('cached-visibility-script'),
-      program: scripting?.compiledPrograms.get('cached-visibility-script'),
+    await loadBrython();
+    const brython = getBrython();
+    const translate = brython.python_to_js!;
+    let translations = 0;
+    brython.python_to_js = (source: string, scriptId?: string) => {
+      translations += 1;
+      return translate(source, scriptId);
     };
-    const second = await runUserScript({
-      document,
-      source: 'return 1',
-      componentId: 'cached-visibility-script',
-      renderOnMutation: false,
-      cacheDefinition: true,
-    });
-    const afterSecond = {
-      sourceCount: scripting?.compiledDefinitionSources.size,
-      definitionCount: scripting?.compiledDefinitions.size,
-      definitionReused: scripting?.compiledDefinitions.get('cached-visibility-script') === afterFirst.definition,
-      programReused: scripting?.compiledPrograms.get('cached-visibility-script') === afterFirst.program,
-    };
-    const changed = await runUserScript({
-      document,
-      source: 'return 2',
-      componentId: 'cached-visibility-script',
-      renderOnMutation: false,
-      cacheDefinition: true,
-    });
-    return {
-      first: first.returnValue,
-      second: second.returnValue,
-      changed: changed.returnValue,
-      afterFirst: { sourceCount: afterFirst.sourceCount, definitionCount: afterFirst.definitionCount },
-      afterSecond,
-      afterChange: {
-        sourceCount: scripting?.compiledDefinitionSources.size,
-        definitionCount: scripting?.compiledDefinitions.size,
-        definitionReplaced: scripting?.compiledDefinitions.get('cached-visibility-script') !== afterFirst.definition,
-        programReused: scripting?.compiledPrograms.get('cached-visibility-script') === afterFirst.program,
-      },
-    };
+    const fakeCodeKeys = () => [...((window as Window & { __HVY_SCRIPTING__?: { compiledCode: Map<string, unknown> } }).__HVY_SCRIPTING__?.compiledCode.keys() ?? [])]
+      .filter((key) => key.startsWith('<fake-cached-'));
+    const runs = [];
+    try {
+      for (const [componentId, source] of [['fake-cached-a', 'return 1'], ['fake-cached-a', 'return 1'], ['fake-cached-b', 'return 2']]) {
+        const run = await runUserScript({ document, source, componentId, libraries: ['re'], renderOnMutation: false });
+        runs.push({ returnValue: run.returnValue, cachedCode: fakeCodeKeys().length });
+      }
+    } finally {
+      brython.python_to_js = translate;
+    }
+    return { runs, translations };
   });
 
   expect(result).toEqual({
-    first: 1,
-    second: 1,
-    changed: 2,
-    afterFirst: { sourceCount: 1, definitionCount: 1 },
-    afterSecond: { sourceCount: 1, definitionCount: 1, definitionReused: true, programReused: true },
-    afterChange: { sourceCount: 1, definitionCount: 1, definitionReplaced: true, programReused: true },
+    runs: [
+      { returnValue: 1, cachedCode: 1 },
+      { returnValue: 1, cachedCode: 1 },
+      { returnValue: 2, cachedCode: 2 },
+    ],
+    translations: 1,
   });
 });

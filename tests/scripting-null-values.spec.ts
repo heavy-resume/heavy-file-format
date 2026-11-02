@@ -235,3 +235,27 @@ probe.out.container = {"value": None, "items": [None]}
     containerItemIsNull: true,
   });
 });
+
+test('injected globals reach scripts as Python None, bool, int, float and str', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
+  const expectedResult = await page.evaluate(async () => {
+    const [{ runUserScript }, { deserializeDocument }] = await Promise.all([
+      import('/src/plugins/scripting/wrapper.ts'),
+      import('/src/serialization.ts'),
+    ]);
+    const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+    const result = await runUserScript({
+      document,
+      source: 'return " | ".join([repr(fake_none), repr(fake_missing), repr(fake_flag), repr(fake_count), repr(fake_ratio), repr(fake_text), repr(fake_infinite)])',
+      injectedGlobals: { fake_none: null, fake_missing: undefined, fake_flag: true, fake_count: 3, fake_ratio: 2.5, fake_text: 'Fake text', fake_infinite: Infinity },
+    });
+    return { ok: result.ok, error: result.error, returnValue: result.returnValue };
+  });
+  expect(expectedResult).toEqual({
+    ok: true,
+    error: undefined,
+    returnValue: "None | None | True | 3 | 2.5 | 'Fake text' | 'Infinity'",
+  });
+});

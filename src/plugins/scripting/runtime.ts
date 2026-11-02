@@ -11,7 +11,7 @@ import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
 import { serializeBlockFragment, serializeDocument } from '../../serialization';
 import { setSortValueAnnotationText, syncSortValuesForDocument } from '../../sort-values';
-import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
+import { state, getActiveStateRuntime, getRefreshReaderPanels, getRenderApp, runWithStateRuntime, type StateRuntime } from '../../state';
 import { expandBlockPathByBlockId } from '../../navigation';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
@@ -45,6 +45,8 @@ export interface ScriptingRuntime {
   step(): string | null;
   markMutated(): void;
   setLineBudget(maxLines: number): void;
+  /** Changes whether later mutation flushes render; see ScriptingRuntimeOptions.renderOnMutation. */
+  setRenderOnMutation(renderOnMutation: boolean): void;
 }
 
 export interface ScriptingDocApi {
@@ -163,7 +165,12 @@ export interface ScriptingRuntimeOptions {
   now?: () => Date;
   /** IANA zone scripts treat as local. Defaults to the browser zone. */
   timeZone?: string;
-  onMutationFlushed?: () => void;
+  /**
+   * Called before a mutation render. A returned promise defers that render
+   * until it settles, so edits made by the hooks it runs share one render.
+   * `rendersAfter` says whether this flush renders once the promise settles.
+   */
+  onMutationFlushed?: (flush: { rendersAfter: boolean }) => Promise<unknown> | void;
   beforeMutationRender?: () => void;
   databaseChanges?: DatabaseChangeSnapshot;
   onCallbackError?: (error: string) => void;
@@ -350,6 +357,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     stats.logs.push(values.map(formatScriptLogValue).join(' '));
   };
 
+  let renderOnMutation = options.renderOnMutation !== false;
   const flushIfMutated = () => {
     if (!mutated && pendingExpansions.size === 0) return;
     const documentMutated = mutated;
@@ -370,26 +378,21 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     pendingExpansions.clear();
     // Before rendering, so document hooks claim this edit as a script edit
     // ahead of any catch-all hook run that the render itself starts.
-    if (documentMutated) {
-      options.onMutationFlushed?.();
-    }
+    const hooksSettled = documentMutated ? options.onMutationFlushed?.({ rendersAfter: renderOnMutation }) : undefined;
     let renderGuardError: unknown = null;
-    if (options.renderOnMutation !== false) {
+    if (renderOnMutation) {
+      // The cycle guard stays synchronous so a stopped cycle raises inside the script.
       try {
         options.beforeMutationRender?.();
       } catch (error) {
         renderGuardError = error;
       }
       if (!renderGuardError) {
-        try {
-          getRefreshReaderPanels()();
-        } catch {
-          // Reader panel may not be initialized yet (during pre-first-render execution).
-        }
-        try {
-          getRenderApp()();
-        } catch {
-          // renderApp may not be ready yet during the very first load.
+        if (hooksSettled) {
+          const stateRuntime = getRenderStateRuntime();
+          void hooksSettled.then(() => renderMutation(stateRuntime), () => renderMutation(stateRuntime));
+        } else {
+          renderMutation(null);
         }
       }
     }
@@ -552,10 +555,41 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       return null;
     },
     markMutated: onMutation,
+    setRenderOnMutation: (value: boolean) => {
+      renderOnMutation = value;
+    },
     setLineBudget: (maxLines: number) => {
       stats.stepBudget = Math.max(1, Math.floor(maxLines));
     },
   };
+}
+
+function getRenderStateRuntime(): StateRuntime | null {
+  try {
+    return getActiveStateRuntime();
+  } catch {
+    return null;
+  }
+}
+
+function renderMutation(stateRuntime: StateRuntime | null): void {
+  const render = () => {
+    try {
+      getRefreshReaderPanels()();
+    } catch {
+      // Reader panel may not be initialized yet (during pre-first-render execution).
+    }
+    try {
+      getRenderApp()();
+    } catch {
+      // renderApp may not be ready yet during the very first load.
+    }
+  };
+  if (stateRuntime) {
+    runWithStateRuntime(stateRuntime, render);
+  } else {
+    render();
+  }
 }
 
 function formatScriptLogValue(value: unknown): string {

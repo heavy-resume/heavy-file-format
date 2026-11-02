@@ -1,15 +1,14 @@
 # Wrapper globals, user-global sanitizing, guarded builtins and the import hook.
-# Per-run values (__hvy_static_runtime_id__, __hvy_allowed_libraries__, ...)
-# are assigned by the header that python-program.ts emits before this file.
+# Program constants (__hvy_allowed_libraries__, ...) are assigned by the header
+# that python-program.ts emits before this file. Per-run values are read from
+# the shared JS global, keyed by the runtime id the host sets before executing.
 
 from browser import window as __hvy_window__
 
 __hvy_globals__ = __hvy_window__.__HVY_SCRIPTING__
-if __hvy_definition_key__ is None:
-    __hvy_runtime_id__ = __hvy_static_runtime_id__
-else:
-    __hvy_runtime_id__ = __hvy_globals__.activeRuntimeIds.get(__hvy_definition_key__)
+__hvy_runtime_id__ = __hvy_globals__.startingRuntimeId
 __hvy_runtime__ = __hvy_globals__.runtimes[__hvy_runtime_id__]
+__hvy_trace_filename__ = __hvy_globals__.traceFilenames[__hvy_runtime_id__]
 __hvy_source__ = __hvy_globals__.sources[__hvy_runtime_id__]
 __hvy_instrumented_source__ = __hvy_globals__.instrumentedSources[__hvy_runtime_id__]
 __hvy_trace_enabled__ = False
@@ -28,12 +27,18 @@ __hvy_forbidden_global_names__ = (
     '__hvy_user_globals__',
     '__hvy_user_main__',
 )
+__hvy_forbidden_global_name_set__ = frozenset(__hvy_forbidden_global_names__)
 
 
+# Runs on every traced line. Brython's dict.pop(missing, default) costs
+# microseconds per call, so check membership first and delete only hits.
 def __hvy_sanitize_user_globals__():
     try:
+        if __hvy_forbidden_global_name_set__.isdisjoint(__hvy_user_globals__):
+            return
         for __hvy_name__ in __hvy_forbidden_global_names__:
-            __hvy_user_globals__.pop(__hvy_name__, None)
+            if __hvy_name__ in __hvy_user_globals__:
+                del __hvy_user_globals__[__hvy_name__]
     except Exception:
         pass
 

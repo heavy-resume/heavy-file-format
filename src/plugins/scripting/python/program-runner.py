@@ -18,14 +18,11 @@ try:
         __hvy_trace_enabled__ = False
 
     __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
-    if __hvy_definition_key__ is None:
+    __hvy_code_key__ = __hvy_trace_filename__ + '\n' + __hvy_compilable_source__
+    __hvy_code__ = __hvy_globals__.getCompiledCode(__hvy_code_key__)
+    if __hvy_code__ is None:
         __hvy_code__ = compile(__hvy_compilable_source__, __hvy_trace_filename__, 'exec')
-    else:
-        __hvy_code__ = __hvy_globals__.compiledDefinitions.get(__hvy_definition_key__)
-        if __hvy_code__ is None or __hvy_globals__.compiledDefinitionSources.get(__hvy_definition_key__) != __hvy_compilable_source__:
-            __hvy_code__ = compile(__hvy_compilable_source__, __hvy_trace_filename__, 'exec')
-            __hvy_globals__.compiledDefinitionSources.set(__hvy_definition_key__, __hvy_compilable_source__)
-            __hvy_globals__.compiledDefinitions.set(__hvy_definition_key__, __hvy_code__)
+        __hvy_globals__.rememberCompiledCode(__hvy_code_key__, __hvy_code__)
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_user_step__,
         '__import__': __hvy_script_import__,
@@ -44,7 +41,8 @@ try:
         __hvy_user_globals__[__hvy_restricted_name__] = __HvyRestrictedBuiltin__(__hvy_restricted_name__)
     for __hvy_library__ in __hvy_allowed_libraries__:
         __hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)
-    __hvy_user_globals__.update(__hvy_injected_globals__)
+    for __hvy_injected_entry__ in __hvy_globals__.injectedGlobals[__hvy_runtime_id__]:
+        __hvy_user_globals__[__hvy_injected_entry__[0]] = __hvy_injected_entry__[1]
     __hvy_sanitize_user_globals__()
     exec(__hvy_code__, __hvy_user_globals__)
     __hvy_entrypoint__ = __hvy_user_globals__.get('__hvy_user_main__')

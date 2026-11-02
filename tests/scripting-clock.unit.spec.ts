@@ -39,16 +39,16 @@ test('deprecated doc.time helpers read the runtime clock zone', () => {
 });
 
 test('buildPythonProgram compiles checked library files only for enabled libraries', () => {
-  const withoutLibraries = buildPythonProgram('r1', 'no-library-script');
+  const withoutLibraries = buildPythonProgram();
   expect(withoutLibraries).not.toContain('class __HvyDatetimeModule__');
   expect(withoutLibraries).not.toContain('class __HvyRandomModule__');
   expect(withoutLibraries).not.toContain('class __HvyReModule__');
 
-  const withTzlocal = buildPythonProgram('r2', 'tzlocal-script', {}, ['tzlocal']);
+  const withTzlocal = buildPythonProgram(['tzlocal']);
   expect(withTzlocal).toContain('class __HvyTzlocalModule__');
   expect(withTzlocal.split('class __HvyDateTime__(').length - 1).toBe(1);
   expect(withTzlocal).not.toContain('class __HvyRandomModule__');
 
-  const withAllDateTimeLibraries = buildPythonProgram('r3', 'datetime-script', {}, ['datetime', 'zoneinfo', 'tzlocal']);
+  const withAllDateTimeLibraries = buildPythonProgram(['datetime', 'zoneinfo', 'tzlocal']);
   expect(withAllDateTimeLibraries.split('class __HvyZoneInfo__(').length - 1).toBe(1);
 });

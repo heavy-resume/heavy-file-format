@@ -38,7 +38,7 @@ export function cleanScriptingErrorDetail(rawError: string): string {
 
   const cleaned = lines.filter((line, index) => {
     const nextLine = lines[index + 1] ?? '';
-    if (line.includes('File "#hvy_script_')) {
+    if (/File "[^"]*#hvy_script_/.test(line)) {
       return false;
     }
     if (line.trim() === 'exec(__hvy_code__, __hvy_user_globals__)') {

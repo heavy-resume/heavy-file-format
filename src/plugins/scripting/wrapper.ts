@@ -43,6 +43,7 @@ import {
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
 let runtimeCounter = 0;
 let compiledProgramCounter = 0;
+const programSources = new Map<string, string>();
 
 type HvyScriptingValueKind = 'array' | 'object' | 'bytes' | 'function' | 'other';
 
@@ -67,10 +68,54 @@ interface HvyScriptingGlobal {
   regex: HvyScriptingRegexBridge;
   sourcePolicyError(source: string): string | null;
   valueKind(value: unknown): HvyScriptingValueKind;
-  compiledDefinitionSources: Map<string, string>;
-  compiledDefinitions: Map<string, unknown>;
-  activeRuntimeIds: Map<string, string>;
+  traceFilenames: Record<string, string>;
+  injectedGlobals: Record<string, Array<[string, ScriptingInjectedValue]>>;
+  /** Runtime id of the program about to execute; the program reads it first. */
+  startingRuntimeId: string | null;
+  compiledCode: Map<string, unknown>;
+  getCompiledCode(key: string): unknown;
+  rememberCompiledCode(key: string, code: unknown): void;
   compiledPrograms: Map<string, { source: string; scriptId: string; execute: () => unknown }>;
+}
+
+type ScriptingInjectedValue = string | number | boolean | null;
+
+// Compiled user code is keyed by trace filename + source, so editing a script
+// keeps adding entries; drop the least recently used ones past this size.
+const COMPILED_CODE_LIMIT = 256;
+
+function getCompiledCode(cache: Map<string, unknown>, key: string): unknown {
+  const code = cache.get(key);
+  if (code === undefined) {
+    return null;
+  }
+  cache.delete(key);
+  cache.set(key, code);
+  return code;
+}
+
+function rememberCompiledCode(cache: Map<string, unknown>, key: string, code: unknown): void {
+  cache.set(key, code);
+  while (cache.size > COMPILED_CODE_LIMIT) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    cache.delete(oldestKey);
+  }
+}
+
+function toScriptingInjectedValue(value: unknown): ScriptingInjectedValue {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return String(value);
 }
 
 interface LoadedScriptingDbRuntime {
@@ -100,9 +145,12 @@ function getScriptingGlobal(): HvyScriptingGlobal {
       regex: createScriptingRegexBridge(),
       sourcePolicyError: (source) => checkScriptSourcePolicy(source)?.message ?? null,
       valueKind: getScriptingValueKind,
-      compiledDefinitionSources: new Map(),
-      compiledDefinitions: new Map(),
-      activeRuntimeIds: new Map(),
+      traceFilenames: {},
+      injectedGlobals: {},
+      startingRuntimeId: null,
+      compiledCode: new Map(),
+      getCompiledCode: (key) => getCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key),
+      rememberCompiledCode: (key, code) => rememberCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key, code),
       compiledPrograms: new Map(),
     };
   }
@@ -121,14 +169,16 @@ function getScriptingGlobal(): HvyScriptingGlobal {
   if (!window.__HVY_SCRIPTING__.valueKind) {
     window.__HVY_SCRIPTING__.valueKind = getScriptingValueKind;
   }
-  if (!window.__HVY_SCRIPTING__.compiledDefinitionSources) {
-    window.__HVY_SCRIPTING__.compiledDefinitionSources = new Map();
+  if (!window.__HVY_SCRIPTING__.traceFilenames) {
+    window.__HVY_SCRIPTING__.traceFilenames = {};
   }
-  if (!window.__HVY_SCRIPTING__.compiledDefinitions) {
-    window.__HVY_SCRIPTING__.compiledDefinitions = new Map();
+  if (!window.__HVY_SCRIPTING__.injectedGlobals) {
+    window.__HVY_SCRIPTING__.injectedGlobals = {};
   }
-  if (!window.__HVY_SCRIPTING__.activeRuntimeIds) {
-    window.__HVY_SCRIPTING__.activeRuntimeIds = new Map();
+  if (!window.__HVY_SCRIPTING__.compiledCode) {
+    window.__HVY_SCRIPTING__.compiledCode = new Map();
+    window.__HVY_SCRIPTING__.getCompiledCode = (key) => getCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key);
+    window.__HVY_SCRIPTING__.rememberCompiledCode = (key, code) => rememberCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key, code);
   }
   if (!window.__HVY_SCRIPTING__.compiledPrograms) {
     window.__HVY_SCRIPTING__.compiledPrograms = new Map();
@@ -180,19 +230,29 @@ function shouldInitializeScriptingDb(document: VisualDocument, source: string): 
 }
 
 
+// Translating the wrapper program to JavaScript dominates a short run, so each
+// library set's program is translated once. Every execution binds a fresh
+// module dict, so callbacks from earlier runs keep their own wrapper globals.
 function executeCachedPythonProgram(
   scripting: HvyScriptingGlobal,
-  cacheKey: string,
+  libraries: readonly ScriptingLibraryName[],
   runtimeId: string,
-  source: string,
 ): void {
+  const cacheKey = libraries.join(',');
+  let source = programSources.get(cacheKey);
+  if (source === undefined) {
+    source = buildPythonProgram(libraries);
+    programSources.set(cacheKey, source);
+  }
+  // The shared global outlives this module (hot reloads, several bundles), so
+  // a program translated from other wrapper source is translated again.
   let cached = scripting.compiledPrograms.get(cacheKey);
   if (!cached || cached.source !== source) {
     const brython = getBrython();
     if (typeof brython.python_to_js !== 'function') {
       throw new Error('Brython Python-to-JavaScript compiler API unavailable.');
     }
-    const scriptId = `hvy_cached_${++compiledProgramCounter}`;
+    const scriptId = `hvy_script_program_${++compiledProgramCounter}`;
     const translated = brython.python_to_js(source, scriptId);
     cached = {
       source,
@@ -201,12 +261,13 @@ function executeCachedPythonProgram(
     };
     scripting.compiledPrograms.set(cacheKey, cached);
   }
-  scripting.activeRuntimeIds.set(cacheKey, runtimeId);
+  const previousStartingRuntimeId = scripting.startingRuntimeId;
+  scripting.startingRuntimeId = runtimeId;
   try {
     getBrython().imported[cached.scriptId] = {};
     cached.execute();
   } finally {
-    scripting.activeRuntimeIds.delete(cacheKey);
+    scripting.startingRuntimeId = previousStartingRuntimeId;
   }
 }
 
@@ -232,6 +293,7 @@ export interface RunUserScriptOptions {
   pluginVersion?: string;
   maxLines?: number;
   changeReason?: HvyPluginHookChangeReason;
+  /** False when the caller renders after this run; callbacks firing after the run still render. */
   renderOnMutation?: boolean;
   /** True when a trusted user event started this run; see beginScriptCycleExecution. */
   startedByUser?: boolean;
@@ -241,7 +303,6 @@ export interface RunUserScriptOptions {
   libraries?: readonly string[];
   databaseChanges?: DatabaseChangeSnapshot;
   onCallbackError?: (result: ScriptingRunResult) => void;
-  cacheDefinition?: boolean;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -429,13 +490,14 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       },
     }),
     exportRuleRecorder: options.exportRuleRecorder,
-    onMutationFlushed: () => {
+    onMutationFlushed: ({ rendersAfter }) => {
       if (!stateRuntime) {
         return;
       }
-      runWithStateRuntime(stateRuntime, () => {
+      return runWithStateRuntime(stateRuntime, () => {
         notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
-        void runPluginDocumentHooks('script-edit');
+        // The mutation render waits for these hooks, so scripts they rerun share it.
+        return runPluginDocumentHooks('script-edit', { hostRendersAfter: rendersAfter });
       });
     },
     beforeMutationRender: () => renderCycleExecution?.beforeMutationRender(),
@@ -443,26 +505,18 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
-  const libraries = (options.libraries ?? []).filter((name): name is ScriptingLibraryName => (SCRIPTING_LIBRARY_OPTIONS as readonly string[]).includes(name));
+  const requestedLibraries = options.libraries ?? [];
+  const libraries = SCRIPTING_LIBRARY_OPTIONS.filter((name) => requestedLibraries.includes(name));
   const sanitizedSource = stripPythonImports(options.source, libraries);
   scripting.runtimes[runtimeId] = runtime;
   scripting.sources[runtimeId] = wrapPythonSourceInFunction(sanitizedSource);
   scripting.instrumentedSources[runtimeId] = wrapPythonSourceInFunction(instrumentPythonSource(sanitizedSource));
+  scripting.traceFilenames[runtimeId] = `<${getScriptingTraceLabel(options.componentId)}>`;
+  scripting.injectedGlobals[runtimeId] = Object.entries(options.injectedGlobals ?? {})
+    .filter(([name]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+    .map(([name, value]) => [name, toScriptingInjectedValue(value)]);
   scripting.errors[runtimeId] = null;
   scripting.results[runtimeId] = undefined;
-
-  // Do not append this to the DOM or use type="text/python", otherwise 
-  // Brython 3.14+ will detect the DOM mutation and run the script automatically 
-  // in addition to the manual run_script call below, causing a double-execution.
-  const scriptElement = document.createElement('script');
-  scriptElement.id = `hvy-script-${runtimeId}`;
-  scriptElement.textContent = buildPythonProgram(
-    runtimeId,
-    options.componentId,
-    options.injectedGlobals ?? {},
-    libraries,
-    options.cacheDefinition ? getScriptingTraceLabel(options.componentId) : undefined,
-  );
 
   try {
     return await new Promise((resolve) => {
@@ -498,6 +552,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         delete scripting.runtimes[runtimeId];
         delete scripting.sources[runtimeId];
         delete scripting.instrumentedSources[runtimeId];
+        delete scripting.traceFilenames[runtimeId];
+        delete scripting.injectedGlobals[runtimeId];
         delete scripting.errors[runtimeId];
         delete scripting.results[runtimeId];
         delete scripting.callbacks[runtimeId];
@@ -509,36 +565,16 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         if (dbMutated) {
           runtime.doc.rerender();
         }
+        // A caller that renders after this run covers only the run itself.
+        // Callbacks that fire later (plugin results, timers) render their own edits.
+        runtime.setRenderOnMutation(true);
 
         resolve(result);
       };
 
       try {
-        const brython = getBrython() as unknown as {
-          run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
-        };
-        if (typeof brython.run_script !== 'function') {
-          throw new Error('Brython run_script API unavailable.');
-        }
-        const runScript = brython.run_script;
-
         withSuppressedBrythonConsoleNoise(() => {
-          if (options.cacheDefinition) {
-            executeCachedPythonProgram(
-              scripting,
-              getScriptingTraceLabel(options.componentId),
-              runtimeId,
-              scriptElement.textContent || '',
-            );
-          } else {
-            runScript(
-              scriptElement,
-              scriptElement.textContent || '',
-              `hvy_script_${runtimeId}`,
-              `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
-              true
-            );
-          }
+          executeCachedPythonProgram(scripting, libraries, runtimeId);
         });
       } catch (error) {
         let message = String(error);

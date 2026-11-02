@@ -277,6 +277,11 @@ export interface HvyDocumentHookContext {
   document: VisualDocument;
   view: 'editor' | 'viewer' | 'ai';
   changeReason: HvyPluginHookChangeReason;
+  /**
+   * True when the caller renders once after every hook settles, so hooks
+   * should apply document edits without requesting a render of their own.
+   */
+  hostRendersAfter: boolean;
   refreshPlugins(pluginId?: string): void;
   requestRerender(): void;
   isCurrentDocument(): boolean;

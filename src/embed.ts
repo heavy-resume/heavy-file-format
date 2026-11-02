@@ -1260,7 +1260,7 @@ async function importFromTextInternal(options: ImportFromTextOptions): Promise<I
     renderApp({ runDocumentHooks: false });
   };
   const runPreparedImportHooks = async (): Promise<void> => {
-    await runPluginDocumentHooks('ai-edit');
+    await runPluginDocumentHooks('ai-edit', { hostRendersAfter: true });
     refreshAfterImportMutation();
   };
   const result = await importTextIntoDocument(state.document, {

@@ -490,7 +490,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       pluginVersion: target.pluginVersion,
       maxLines: target.maxLines,
       changeReason: ctx.changeReason,
-      renderOnMutation: ctx.changeReason !== 'edit',
+      renderOnMutation: !ctx.hostRendersAfter,
       libraries: target.libraries,
       databaseChanges,
       onCallbackError: (callbackResult) => {

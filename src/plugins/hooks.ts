@@ -91,12 +91,17 @@ function getOrderedHandlers(hookName: DocumentHookName, plugins: HvyPlugin[]): O
     });
 }
 
-function createHookContext(document: VisualDocument, changeReason: HvyPluginHookChangeReason): HvyDocumentHookContext {
+function createHookContext(
+  document: VisualDocument,
+  changeReason: HvyPluginHookChangeReason,
+  hostRendersAfter: boolean
+): HvyDocumentHookContext {
   const runtime = getActiveStateRuntime();
   return {
     document,
     view: state.currentView,
     changeReason,
+    hostRendersAfter,
     refreshPlugins: (pluginId) => refreshMountedPlugins(pluginId),
     requestRerender: () => runWithStateRuntime(runtime, () => getRenderApp()()),
     isCurrentDocument: () => state.document === document,
@@ -144,7 +149,15 @@ function getHookSignature(document: VisualDocument): string {
   return `${state.currentView}\u0000${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
 }
 
-export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason = 'unknown'): Promise<PluginDocumentHookResult> {
+export interface PluginDocumentHookRunOptions {
+  /** The caller renders once after the hooks settle; see HvyDocumentHookContext.hostRendersAfter. */
+  hostRendersAfter?: boolean;
+}
+
+export function runPluginDocumentHooks(
+  changeReason: HvyPluginHookChangeReason = 'unknown',
+  options: PluginDocumentHookRunOptions = {}
+): Promise<PluginDocumentHookResult> {
   const runtime = getActiveStateRuntime();
   const hookState = getHookState();
   const document = state.document;
@@ -178,7 +191,7 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
     return hookState.hookRun.then(() => ({ ran: false, documentChanged: false }));
   }
 
-  const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason);
+  const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason, options.hostRendersAfter === true);
   const hookResult = hookState.hookRun.then(async (): Promise<PluginDocumentHookResult> => {
     const startedAt = nowMs();
     logPerfTrace('plugin-document-hooks:start', {

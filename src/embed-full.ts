@@ -1243,7 +1243,7 @@ async function importFromTextInternal(options: ImportFromTextOptions): Promise<I
     renderApp({ runDocumentHooks: false });
   };
   const runPreparedImportHooks = async (): Promise<void> => {
-    await runPluginDocumentHooks('ai-edit');
+    await runPluginDocumentHooks('ai-edit', { hostRendersAfter: true });
     await refreshAfterImportMutation();
   };
   const result = await importTextIntoDocument(state.document, {
@@ -1684,7 +1684,7 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
         const result = applyPreparedTargetReplacement(prepared);
         state.rawEditorText = serializeDocument(state.document);
         notifyDocumentMayHaveChanged('script:target-replace', 'script', { authoritative: true });
-        await runPluginDocumentHooks('edit');
+        await runPluginDocumentHooks('edit', { hostRendersAfter: true });
         runtime.callbacks.renderApp();
         return result;
       });

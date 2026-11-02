@@ -70,7 +70,6 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
       document: runtime.state.document,
       source,
       componentId: block.schema.id || block.id,
-      cacheDefinition: true,
       onCallbackError: () => {
         if (element.isConnected) element.dataset.visibleState = 'hidden';
       },
@@ -99,7 +98,6 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
       document: runtime.state.document,
       source,
       componentId: block.schema.id || block.id,
-      cacheDefinition: true,
       onCallbackError: (callbackResult) => {
         if (!element.isConnected) return;
         element.dataset.visibleState = 'hidden';

@@ -1,4 +1,5 @@
 import type { FormFieldDefinition, FormFieldValue, FormOption, FormSpec } from '../form';
+import { resolveFormRangeValue } from '../form-range-field/form-range-field';
 
 interface FieldDefinitionSnapshot {
   type: FormFieldDefinition['type'];
@@ -68,6 +69,9 @@ export function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
     }
     if (field.type === 'select' || (field.type === 'radio' && optionsChanged && previous)) {
       live.values[field.label] = reconcileSelectValue(live.values[field.label]!, live.options[field.label]!);
+    }
+    if (field.type === 'range') {
+      live.values[field.label] = resolveFormRangeValue(live.values[field.label], field);
     }
     if (valueChanged || optionsChanged) {
       delete live.errors[field.label];

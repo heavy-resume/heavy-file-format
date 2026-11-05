@@ -26,6 +26,16 @@ import {
   normalizeFormPhotoMeta,
   type FormPhotoValue,
 } from './form-photo-field/form-photo-field';
+import {
+  createFormRangeControl,
+  createFormRangeDragTracker,
+  DEFAULT_FORM_RANGE_BOUNDS,
+  normalizeFormRangeBound,
+  normalizeFormRangeBounds,
+  normalizeFormRangeDefault,
+  normalizeFormRangeStep,
+  renderFormRangeEditorInputs,
+} from './form-range-field/form-range-field';
 import formDocumentation from './form.about.txt?raw';
 
 import { createLiveState, reconcileLiveState, reconcileSelectValue, type LiveFormState } from './form-live-state/form-live-state';
@@ -34,10 +44,11 @@ import './form.css';
 
 export const FORM_PLUGIN_VERSION = '0.1';
 
-const FIELD_TYPES = [
+export const FORM_FIELD_TYPES = [
   'text',
   'textarea',
   'number',
+  'range',
   'select',
   'checkbox',
   'radio',
@@ -50,7 +61,7 @@ const FIELD_TYPES = [
   'photo',
 ] as const;
 
-type FormFieldType = (typeof FIELD_TYPES)[number];
+type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 type FormTriggerName = 'input' | 'change' | 'blur';
 type FormSubmitAction = 'script' | 'ai-generate';
 
@@ -70,6 +81,9 @@ export interface FormFieldDefinition {
   placeholder: string;
   required: boolean;
   rows: number;
+  min: number;
+  max: number;
+  step: number;
   options: FormOption[];
   triggers: Partial<Record<FormTriggerName, string>>;
   meta: {
@@ -141,6 +155,7 @@ const DEFAULT_FIELD: FormFieldDefinition = {
   placeholder: '',
   required: false,
   rows: 0,
+  ...DEFAULT_FORM_RANGE_BOUNDS,
   options: [],
   triggers: {},
   meta: {
@@ -151,6 +166,9 @@ const DEFAULT_FIELD: FormFieldDefinition = {
     maxHeight: 0,
   },
 };
+
+// DEFAULT_FIELD has to define every FormFieldDefinition key, so this cannot fall behind the type.
+export const FORM_FIELD_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_FIELD));
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -171,7 +189,7 @@ export function getCanonicalFormFieldType(value: unknown): FormFieldType | null 
   if (FIELD_TYPE_ALIASES[normalized]) {
     return FIELD_TYPE_ALIASES[normalized];
   }
-  return FIELD_TYPES.includes(normalized as FormFieldType) ? (normalized as FormFieldType) : null;
+  return FORM_FIELD_TYPES.includes(normalized as FormFieldType) ? (normalized as FormFieldType) : null;
 }
 
 export function findFormFieldTypeIssues(source: string): FormFieldTypeIssue[] {
@@ -252,7 +270,9 @@ function normalizeField(candidate: unknown, index: number): FormFieldDefinition 
     ? rawValue === true || rawValue === 'true'
     : type === 'photo'
       ? null
-      : typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
+      : type === 'range'
+        ? normalizeFormRangeDefault(rawValue)
+        : typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
   const options = Array.isArray(raw.options) ? raw.options.map(normalizeOption).filter((option): option is FormOption => option !== null) : [];
   const meta = isObject(raw.meta) ? raw.meta : {};
   return {
@@ -262,6 +282,7 @@ function normalizeField(candidate: unknown, index: number): FormFieldDefinition 
     placeholder: typeof raw.placeholder === 'string' ? raw.placeholder : '',
     required: raw.required === true,
     rows: type === 'textarea' ? normalizeFieldRows(raw.rows) : 0,
+    ...normalizeFormRangeBounds(raw),
     options,
     triggers: normalizeTriggers(raw.triggers),
     meta: normalizeFormPhotoMeta(meta),
@@ -399,10 +420,16 @@ export function serializeFormSpec(spec: FormSpec): string {
       label: field.label,
       type: field.type,
     };
-    if (field.type !== 'photo' && field.value !== '' && field.value !== false && field.value !== null) item.value = field.value;
+    const value = field.type === 'range' ? normalizeFormRangeDefault(field.value) : field.value;
+    if (field.type !== 'photo' && value !== '' && value !== false && value !== null) item.value = field.type === 'range' ? Number(value) : value;
     if (field.placeholder.length > 0) item.placeholder = field.placeholder;
     if (field.required) item.required = true;
     if (field.type === 'textarea' && field.rows > 0) item.rows = field.rows;
+    if (field.type === 'range') {
+      item.min = field.min;
+      item.max = field.max;
+      item.step = field.step;
+    }
     if (field.options.length > 0) item.options = field.options.map((option) => ({ label: option.label, value: option.value }));
     if (Object.keys(field.triggers).length > 0) item.triggers = field.triggers;
     const meta: Record<string, unknown> = {};
@@ -536,6 +563,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let skipNextEditorRefresh = false;
   const inputTimers = new Map<string, number>();
   let openFieldMetaLabel: string | null = null;
+  const rangeDrag = createFormRangeDragTracker();
 
   const parseCurrent = () => parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig);
   const commitSpec = (spec: FormSpec, options?: { refreshEditor?: boolean }) => {
@@ -797,13 +825,15 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         </div>
         <div class="hvy-form-editor-grid">
           ${renderTextInput('Label', 'label', field.label, index)}
-          <label><span>Type</span><select data-form-field-index="${index}" data-form-field-prop="type">${FIELD_TYPES.map((type) => `<option value="${type}"${field.type === type ? ' selected' : ''}>${type}</option>`).join('')}</select></label>
+          <label><span>Type</span><select data-form-field-index="${index}" data-form-field-prop="type">${FORM_FIELD_TYPES.map((type) => `<option value="${type}"${field.type === type ? ' selected' : ''}>${type}</option>`).join('')}</select></label>
           ${field.type === 'checkbox'
             ? `<label class="hvy-form-checkbox-label"><span>Default Checked</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="value" ${field.value === true ? 'checked' : ''}></label>`
-            : field.type === 'photo' ? '' : renderTextInput('Default Value', 'value', String(field.value ?? ''), index)}
-          ${field.type === 'photo' ? '' : renderTextInput('Placeholder', 'placeholder', field.placeholder, index)}
+            : field.type === 'range'
+              ? renderFormRangeEditorInputs(field, index)
+              : field.type === 'photo' ? '' : renderTextInput('Default Value', 'value', String(field.value ?? ''), index)}
+          ${field.type === 'photo' || field.type === 'range' ? '' : renderTextInput('Placeholder', 'placeholder', field.placeholder, index)}
           ${field.type === 'textarea' ? `<label><span>Rows</span><input type="number" min="1" step="1" value="${field.rows || 2}" data-form-field-index="${index}" data-form-field-prop="rows"></label>` : ''}
-          <label class="hvy-form-checkbox-label"><span>Required</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="required" ${field.required ? 'checked' : ''}></label>
+          ${field.type === 'range' ? '' : `<label class="hvy-form-checkbox-label"><span>Required</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="required" ${field.required ? 'checked' : ''}></label>`}
         </div>
         ${(field.type === 'select' || field.type === 'radio')
           ? `<label class="hvy-form-options-editor"><span>Options</span><textarea rows="4" data-form-field-index="${index}" data-form-field-prop="options" placeholder="Label | optional-value">${escapeHtml(formatOptionsText(field.options))}</textarea></label>`
@@ -1108,6 +1138,15 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           }
         },
       }));
+    } else if (field.type === 'range') {
+      const { control, input } = createFormRangeControl({
+        name: field.label,
+        bounds: field,
+        value: String(value ?? ''),
+      });
+      wireControl(input, field);
+      rangeDrag.watch(input);
+      wrap.appendChild(control);
     } else if (field.type === 'textarea') {
       const textarea = document.createElement('textarea');
       textarea.name = field.label;
@@ -1189,11 +1228,26 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         if (existing) {
           window.clearTimeout(existing);
         }
-        inputTimers.set(key, window.setTimeout(() => runNamedScript(script, `input:${field.label}`, { startedByUser: event.isTrusted }), 250));
+        const runWhenReleased = () => {
+          if (rangeDrag.isDragging()) {
+            inputTimers.set(key, window.setTimeout(runWhenReleased, 250));
+            return;
+          }
+          inputTimers.delete(key);
+          runNamedScript(script, `input:${field.label}`, { startedByUser: event.isTrusted });
+        };
+        inputTimers.set(key, window.setTimeout(runWhenReleased, 250));
       }
     });
     control.addEventListener('change', (event) => {
       updateLiveValue(control, field);
+      // A change script that edits the document remounts the form, which would drop a pending input script.
+      const pendingInput = inputTimers.get(field.label);
+      if (pendingInput) {
+        window.clearTimeout(pendingInput);
+        inputTimers.delete(field.label);
+        runNamedScript(field.triggers.input ?? '', `input:${field.label}`, { startedByUser: event.isTrusted });
+      }
       runNamedScript(field.triggers.change ?? '', `change:${field.label}`, { startedByUser: event.isTrusted });
     });
     control.addEventListener('blur', (event) => {
@@ -1227,12 +1281,20 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (prop === 'label') field.label = target.value;
       if (prop === 'placeholder') field.placeholder = target.value;
       if (prop === 'rows') field.rows = normalizeFieldRows(target.value);
+      if (prop === 'min') field.min = normalizeFormRangeBound(target.value, field.min);
+      if (prop === 'max') field.max = normalizeFormRangeBound(target.value, field.max);
+      if (prop === 'step') field.step = normalizeFormRangeStep(target.value, field.step);
       if (prop === 'metaCss') field.meta.css = target.value;
       if (prop === 'metaAccept') field.meta.accept = target.value.split(',').map((value) => value.trim()).filter(Boolean);
       if (prop === 'metaMaxBytes') field.meta.maxBytes = normalizePositiveInt(target.value, 0);
       if (prop === 'metaMaxWidth') field.meta.maxWidth = normalizePositiveInt(target.value, 0);
       if (prop === 'metaMaxHeight') field.meta.maxHeight = normalizePositiveInt(target.value, 0);
+      // A new type changes which inputs exist, so this redraws even with focus inside the form.
+      if (prop === 'type') forceEditorRender = true;
       commitSpec(spec, { refreshEditor: prop === 'type' || prop === 'options' });
+      if (prop === 'type') {
+        root.querySelector<HTMLElement>(`[data-form-field-index="${index}"][data-form-field-prop="type"]`)?.focus({ preventScroll: true });
+      }
       return;
     }
     if (target.dataset.formFieldIndex && target.dataset.formTrigger) {
@@ -1425,6 +1487,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       root.removeEventListener('change', onEditorInput);
       root.removeEventListener('click', onClick);
       root.removeEventListener('submit', onSubmit);
+      rangeDrag.dispose();
       for (const timer of inputTimers.values()) {
         window.clearTimeout(timer);
       }
@@ -1489,6 +1552,7 @@ export const formPlugin: HvyPlugin = {
     'Supported form YAML keys include `fields` and `scripts`.',
     'Form-level behavior and styling keys live in pluginConfig: `formCss`, `actionsCss`, `submitCss`, `submitLabel`, `showSubmit`, `submitDisabled`, `submitDisabledReason`, `initialScript`, `changeScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key. Type `photo` stores an HVY image attachment before submit and exposes an object with `attachmentId`, `imageFile`, and `mediaType` through `doc.form`.',
+    'Type `range` renders a slider with its label and current value. It uses optional numeric `min`, `max`, and `step` keys (defaults 0, 100, and 1) and optional numeric `value` (defaults to the midpoint). `doc.form` reads its value as a decimal string, so convert it before doing arithmetic, and values set by scripts are clamped and snapped to the slider.',
     'Photo field `meta` supports `accept`, `maxBytes`, `maxWidth`, and `maxHeight`; dimension limits preserve aspect ratio and fall back to document or host image limits when omitted.',
     '`formCss`, `actionsCss`, `submitCss`, and field `meta.css` are sanitized inline CSS applied to the form, action wrapper, submit button, and field wrapper respectively.',
     '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, `pluginConfig.changeScript`, and field triggers name a script key.',

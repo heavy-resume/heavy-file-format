@@ -86,7 +86,7 @@
   background: var(--hvy-surface);
 }
 
-.hvy-document .hvy-form-plugin input:not([type='checkbox']):not([type='radio']),
+.hvy-document .hvy-form-plugin input:not([type='checkbox']):not([type='radio']):not([type='range']),
 .hvy-document .hvy-form-plugin select {
   line-height: 1.4;
   min-height: calc(1.4em + 0.76rem + 2px);

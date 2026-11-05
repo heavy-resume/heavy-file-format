@@ -2266,7 +2266,62 @@ scripts:
 
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 
-  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" uses unsupported type "combobox". Valid types: text, textarea, number, select, checkbox, radio, date, email, tel, url, password, hidden. Use "select" for dropdowns.');
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" uses unsupported type "combobox". Valid types: text, textarea, number, range, select, checkbox, radio, date, email, tel, url, password, hidden, photo. Use "select" for dropdowns.');
+});
+
+test('hvy lint accepts every field key the form plugin supports', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+
+<!--hvy:plugin {"id":"fake-form","plugin":"hvy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Fake notes
+    type: textarea
+    value: Fake value
+    placeholder: Fake placeholder
+    required: true
+    rows: 4
+    triggers:
+      change: fake_script
+    meta:
+      css: "margin: 0;"
+  - label: Fake choice
+    type: select
+    options: [Fake option]
+  - label: Fake volume
+    type: range
+    min: 0
+    max: 10
+    step: 2
+`, '.hvy');
+
+  const result = await executeHvyCliCommand(document, createHvyCliSession(), 'hvy lint');
+
+  expect(result.output).not.toContain('unsupported key');
+});
+
+test('hvy lint flags a form field description because the form plugin drops it on save', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+
+<!--hvy:plugin {"id":"fake-form","plugin":"hvy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Fake notes
+    type: text
+    description: Fake description
+`, '.hvy');
+
+  const result = await executeHvyCliCommand(document, createHvyCliSession(), 'hvy lint');
+
+  expect(result.output).toContain('form field "Fake notes" has unsupported key "description".');
 });
 
 test('hvy lint points form behavior YAML keys to plugin config', async () => {

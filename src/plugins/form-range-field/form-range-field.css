@@ -1,0 +1,111 @@
+.hvy-document .hvy-form-range-control {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-range-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 1.65rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.hvy-document .hvy-form-range-input::-webkit-slider-runnable-track {
+  height: 0.44rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--hvy-button-bg) var(--hvy-form-range-fill, 0%),
+    var(--hvy-surface-alt) var(--hvy-form-range-fill, 0%)
+  );
+}
+
+.hvy-document .hvy-form-range-input::-moz-range-track {
+  height: 0.44rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--hvy-button-bg) var(--hvy-form-range-fill, 0%),
+    var(--hvy-surface-alt) var(--hvy-form-range-fill, 0%)
+  );
+}
+
+.hvy-document .hvy-form-range-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.34rem;
+  border: 2px solid var(--hvy-button-bg);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  box-shadow: 0 2px 7px var(--hvy-shadow-md);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.hvy-document .hvy-form-range-input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--hvy-button-bg);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  box-shadow: 0 2px 7px var(--hvy-shadow-md);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.hvy-document .hvy-form-range-input:hover::-webkit-slider-thumb {
+  transform: scale(1.14);
+}
+
+.hvy-document .hvy-form-range-input:hover::-moz-range-thumb {
+  transform: scale(1.14);
+}
+
+.hvy-document .hvy-form-range-input:active::-webkit-slider-thumb {
+  transform: scale(1.22);
+  box-shadow: 0 3px 10px var(--hvy-shadow-md);
+}
+
+.hvy-document .hvy-form-range-input:active::-moz-range-thumb {
+  transform: scale(1.22);
+  box-shadow: 0 3px 10px var(--hvy-shadow-md);
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-range-input:focus-visible {
+  outline: none;
+}
+
+.hvy-document .hvy-form-range-input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--hvy-focus-ring);
+  outline-offset: 2px;
+}
+
+.hvy-document .hvy-form-range-input:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--hvy-focus-ring);
+  outline-offset: 2px;
+}
+
+.hvy-document .hvy-form-range-readout {
+  flex: 0 0 auto;
+  box-sizing: content-box;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-button-bg) 10%, var(--hvy-surface));
+  color: var(--hvy-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

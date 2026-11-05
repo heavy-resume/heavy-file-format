@@ -1,7 +1,7 @@
 import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
 import type { JsonObject } from '../hvy/types';
 import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
-import { findFormFieldTypeIssues, parseFormSpec } from '../plugins/form';
+import { findFormFieldTypeIssues, FORM_FIELD_KEYS, FORM_FIELD_TYPES, parseFormSpec } from '../plugins/form';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { checkPythonSyntax } from '../plugins/scripting/python-syntax';
 import type { VisualDocument } from '../types';
@@ -257,7 +257,6 @@ registerHvyCliPluginCommands({
 });
 
 const FORM_TOP_LEVEL_KEYS = new Set(['fields', 'scripts']);
-const FORM_FIELD_KEYS = new Set(['label', 'type', 'required', 'options', 'triggers', 'value', 'placeholder', 'description', 'meta']);
 
 function lintFormSchemaShape(body: string): HvyCliPluginLintIssue[] {
   let parsed: unknown;
@@ -298,7 +297,7 @@ function lintFormSchemaShape(body: string): HvyCliPluginLintIssue[] {
       });
     } else {
       issues.push({
-        message: `form field "${issue.label}" uses unsupported type "${issue.rawType}". Valid types: text, textarea, number, select, checkbox, radio, date, email, tel, url, password, hidden. Use "select" for dropdowns.`,
+        message: `form field "${issue.label}" uses unsupported type "${issue.rawType}". Valid types: ${FORM_FIELD_TYPES.join(', ')}. Use "select" for dropdowns.`,
       });
     }
   }

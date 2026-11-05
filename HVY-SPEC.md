@@ -2045,14 +2045,14 @@ Plugin-specific rules:
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
 - Top-level YAML keys are `fields` and `scripts`.
 - `fields` is an ordered list. Each field supports `label`, `type`,
-  `value`, `placeholder`, `required`, `rows`, `options`, `triggers`, and
-  `meta`.
+  `value`, `placeholder`, `required`, `rows`, `min`, `max`, `step`, `options`,
+  `triggers`, and `meta`.
 - Field `label` is both the visible label and the script key used with
   `doc.form` helpers.
 - Field `meta` is plugin-owned field metadata. `meta.css` is an optional
   inline CSS style string applied to that rendered field wrapper and MUST be
   sanitized like other document-supplied CSS.
-- Supported `type` values are `text`, `textarea`, `number`, `select`,
+- Supported `type` values are `text`, `textarea`, `number`, `range`, `select`,
   `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, `hidden`, and
   `photo`. General-purpose file inputs are not part of the standard form plugin
   contract.
@@ -2072,6 +2072,19 @@ Plugin-specific rules:
   has been stored successfully.
 - `rows` applies to `textarea` fields. When present, it MUST be a positive
   integer and controls the initial rendered textarea height in text rows.
+- A `range` field selects one number with a slider and SHOULD display its current
+  value beside the control. `min`, `max`, and `step` apply to `range` fields and
+  default to `0`, `100`, and `1`. `min` and `max` MUST be finite numbers, and `step`
+  MUST be a finite number greater than zero; clients MUST use the default in place
+  of an invalid value.
+- A `range` field's `value` is its optional numeric default. Clients MUST resolve
+  its effective value, including values assigned with `doc.form.set_value`, as
+  follows: when `max` is not greater than `min`, the result is `min`. Otherwise a
+  missing or non-numeric value becomes the midpoint of `min` and `max`, the value is
+  clamped to that interval, and it is rounded to the nearest `min + n * step`, with
+  ties rounding up. A result above `max` moves down one step. `doc.form` exposes the
+  result as a decimal string. `placeholder` and `required` have no effect on `range`
+  fields because they always hold a value.
 - `options` applies to `select` and `radio`. Each option MAY be a string or an
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.

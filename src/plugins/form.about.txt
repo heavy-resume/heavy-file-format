@@ -4,6 +4,7 @@ Fields live in plugin.txt as YAML under the fields key.
 Form-level settings live in plugin.json pluginConfig, including submitLabel, showSubmit, submitDisabled, submitDisabledReason, initialScript, changeScript, submitAction, submitSourceScript, submitScript, submitPrompt, submit limits, scriptLibraries, and scriptStepBudget.
 Fields use label as both visible text and the scripting key.
 Textarea fields can set rows to control their initial height.
+Range fields render a slider with the label and current value. They use numeric min, max, and step keys (defaults 0, 100, and 1) and a numeric value that defaults to the midpoint. doc.form reads the value as a decimal string, so convert it before arithmetic; values set by scripts are clamped and snapped to the slider.
 Named scripts live in plugin.txt under scripts and are also exposed as sibling .py files in the CLI.
 Form scripts run as sandboxed Brython/Python with doc and doc.form available.
 

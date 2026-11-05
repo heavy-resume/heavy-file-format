@@ -20,6 +20,7 @@ Common field types:
 text
 textarea
 select
+range
 datetime
 ```
 
@@ -31,6 +32,20 @@ fields:
     type: textarea
     rows: 4
 ```
+
+Range fields render a slider with the label and current value. `min`, `max`, and `step` default to 0, 100, and 1, and `value` defaults to the midpoint:
+
+```yaml
+fields:
+  - label: Fake volume
+    type: range
+    value: 20
+    min: 0
+    max: 40
+    step: 5
+```
+
+`doc.form.get_value` returns a range value as a string, so use `int(...)` or `float(...)` before arithmetic.
 
 Create a form with submit logic:
 

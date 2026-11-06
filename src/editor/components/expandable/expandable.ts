@@ -272,8 +272,8 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
     block.id
   )}" aria-expanded="${expanded ? 'true' : 'false'}"`;
   const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub">
-    <div class="expand-stub-toggle" style="${stubPaneStyle}" ${toggleAttrs}>
-      <div class="expand-stub">${stubHtml}</div>
+    <div class="expand-stub-toggle" ${toggleAttrs}>
+      <div class="expand-stub" style="${stubPaneStyle}">${stubHtml}</div>
     </div>
   </div>`;
   const contentToggleAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="true"`;

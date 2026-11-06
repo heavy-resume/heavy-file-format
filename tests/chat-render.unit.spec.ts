@@ -212,6 +212,49 @@ hvy_version: 0.1
   expect(html).toContain('class="expandable-reader-cue" aria-hidden="true"');
 });
 
+function renderChatExpandableWithPaneCss(stubCss: string, contentCss: string): string {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: `<!--hvy:expandable {"id":"fake-details","expandableExpanded":false}-->
+ <!--hvy:expandable:stub ${JSON.stringify({ css: stubCss })}-->
+  <!--hvy:text {"id":"fake-summary"}-->
+   Fake summary
+ <!--hvy:expandable:content ${JSON.stringify({ css: contentCss })}-->
+  <!--hvy:text {"id":"fake-body"}-->
+   Fake body`,
+    },
+  ];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Fake section
+`, '.hvy');
+  return renderChatPanel(chat, document, deps, 'qa');
+}
+
+test('expected result: chat stub css lands on the element holding the stub blocks, not the toggle', () => {
+  const html = renderChatExpandableWithPaneCss('display: flex;', '');
+
+  expect(html).toContain('<div class="expand-stub" style="display: flex;">');
+  expect(html).not.toMatch(/class="expand-stub-toggle"[^>]*style=/);
+});
+
+test('expected result: chat drops network-triggering declarations from expandable pane css', () => {
+  const html = renderChatExpandableWithPaneCss(
+    'background: url(https://fake.example/stub.png); padding: 1px;',
+    'background: url(https://fake.example/content.png); padding: 2px;',
+  );
+
+  expect(html).not.toContain('fake.example');
+  expect(html).toContain('padding: 1px;');
+  expect(html).toContain('padding: 2px;');
+});
+
 test('renderChatPanel hides the change request input while document edits are running', () => {
   const chat = createDefaultChatState();
   chat.panelOpen = true;

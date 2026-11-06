@@ -183,3 +183,14 @@ test.each([[false, false], [true, false], [false, true], [true, true]])(
     expect(html.includes('Content 2')).toBe(contentOpen);
   }
 );
+
+test('expected result: stub css lands on the element holding the stub blocks, not the toggle', () => {
+  const block = makeExpandableBlock(false);
+  block.schema.expandableStubBlocks.children = [makeTextBlock('stub-test', 'Stub content')];
+  block.schema.expandableStubCss = 'display: flex;';
+
+  const html = renderExpandableReader(makeSection([block]), block, helpers);
+
+  expect(html).toContain('<div class="expand-stub" style="display: flex;"><p>Stub content</p></div>');
+  expect(html).not.toMatch(/class="expand-stub-toggle"[^>]*style=/);
+});

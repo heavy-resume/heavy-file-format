@@ -42,6 +42,7 @@ export interface ScriptingRuntime {
   /** Internal clock for the checked datetime libraries; not exposed on `doc`. */
   clock: ScriptingClock;
   stats: ScriptingRuntimeStats;
+  runContext: { invoke_reason: HvyPluginHookChangeReason | null };
   step(): string | null;
   markMutated(): void;
   setLineBudget(maxLines: number): void;
@@ -546,6 +547,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     doc,
     clock,
     stats,
+    runContext: { invoke_reason: options.changeReason ?? null },
     step: () => {
       stats.stepsExecuted += 1;
       stats.linesExecuted = stats.stepsExecuted;

@@ -102,6 +102,10 @@ interface PendingInputHistory {
 
 const pendingInputHistories = new WeakMap<StateRuntime, PendingInputHistory>();
 
+// Entries are deltas, so rebuilding the latest snapshot replays the whole stack. Edits
+// compare against it every time, which would otherwise slow down as history grows.
+const lastHistorySnapshots = new WeakMap<string[], { length: number; entry: string; snapshot: string }>();
+
 type ActiveEditorRestoreState = Pick<AppState,
   | 'activeEditorBlock'
   | 'activeTextEditorMode'
@@ -180,10 +184,12 @@ export function beginReactiveHistoryAmendment(): (() => void) | null {
       return;
     }
     const previous = entryIndex > 0 ? getHistorySnapshotAt(entryIndex - 1) : null;
+    const amended = snapshotState();
     state.history[entryIndex] = encodeStoredHistoryEntry(
-      encodeHistoryEntry(previous, snapshotState()),
+      encodeHistoryEntry(previous, amended),
       getHistoryEditorContextAt(entryIndex)
     );
+    rememberLastHistorySnapshot(amended);
     saveSessionState(state);
   };
 }
@@ -572,6 +578,7 @@ function pushHistorySnapshot(
     options.editorContext === undefined ? captureHistoryEditorContext() : options.editorContext
   ));
   compactHistoryLimit();
+  rememberLastHistorySnapshot(snapshot);
   if (options.clearFuture ?? true) {
     state.future = [];
   }
@@ -588,7 +595,22 @@ function compactHistoryLimit(): void {
 }
 
 function getLastHistorySnapshot(): string | null {
-  return state.history.length > 0 ? getHistorySnapshotAt(state.history.length - 1) : null;
+  const length = state.history.length;
+  if (length === 0) {
+    return null;
+  }
+  const remembered = lastHistorySnapshots.get(state.history);
+  if (remembered && remembered.length === length && remembered.entry === state.history[length - 1]) {
+    return remembered.snapshot;
+  }
+  const snapshot = getHistorySnapshotAt(length - 1);
+  rememberLastHistorySnapshot(snapshot);
+  return snapshot;
+}
+
+function rememberLastHistorySnapshot(snapshot: string): void {
+  const length = state.history.length;
+  lastHistorySnapshots.set(state.history, { length, entry: state.history[length - 1] ?? '', snapshot });
 }
 
 function getHistorySnapshotAt(index: number): string {
@@ -629,10 +651,12 @@ function updateLastHistoryEditorContext(editorContext: HistoryEditorContext | nu
   if (state.history.length === 0) {
     return;
   }
+  const snapshot = getLastHistorySnapshot();
   const index = state.history.length - 1;
   const entry = state.history[index] ?? '';
   const stored = parseStoredHistoryEntry(entry);
   state.history[index] = encodeStoredHistoryEntry(stored?.content ?? entry, editorContext);
+  rememberLastHistorySnapshot(snapshot ?? '');
 }
 
 function encodeHistoryEntry(previous: string | null, snapshot: string): string {

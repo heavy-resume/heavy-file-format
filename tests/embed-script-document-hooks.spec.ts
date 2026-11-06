@@ -143,6 +143,56 @@ for (const promoteToFullRuntime of [false, true]) {
   });
 }
 
+const invokeReasonDocument = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-reason-section"}-->
+#! Fake reason
+
+<!--hvy:plugin {"id":"fake-reason-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","showSubmit":false}}-->
+fields:
+  - label: Fake toggle
+    type: checkbox
+    triggers:
+      change: toggle
+scripts:
+  toggle: |
+    doc.header.set("fake_toggle", doc.form.get_value("Fake toggle"))
+    doc.header.set("fake_form_reason", repr(run_context.invoke_reason))
+
+<!--hvy:plugin {"id":"fake-reason-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+doc.header.set("fake_reasons", (doc.header.get("fake_reasons") or "") + run_context.invoke_reason + ",")
+if run_context.invoke_reason == "script-edit":
+    return
+doc.header.set("fake_full_runs", (doc.header.get("fake_full_runs") or 0) + 1)
+`;
+
+test('a document script reads run_context.invoke_reason and returns early after a form tick', async ({ page }) => {
+  test.setTimeout(5_000);
+  await mountFakeDocument(page, invokeReasonDocument, {});
+  await expect.poll(() => readMeta(page, ['fake_reasons', 'fake_full_runs'])).toEqual({ fake_reasons: 'load,', fake_full_runs: 1 });
+
+  await page.locator('#fakeRoot').getByLabel('Fake toggle').check();
+
+  await expect.poll(() => readMeta(page, ['fake_toggle', 'fake_form_reason', 'fake_reasons', 'fake_full_runs'])).toEqual({
+    fake_toggle: true,
+    fake_form_reason: 'None',
+    fake_reasons: 'load,script-edit,',
+    fake_full_runs: 1,
+  });
+});
+
+test('a document script first run after entering the viewer sees invoke_reason "unknown", not "load"', async ({ page }) => {
+  test.setTimeout(5_000);
+  await mountFakeDocument(page, invokeReasonDocument, { mode: 'editor' });
+  expect(await readMeta(page, ['fake_reasons'])).toEqual({ fake_reasons: null });
+
+  await page.evaluate(() => (window as unknown as HookTestWindow).fakeMount.setMode('viewer'));
+
+  await expect.poll(() => readMeta(page, ['fake_reasons', 'fake_full_runs'])).toEqual({ fake_reasons: 'unknown,', fake_full_runs: 1 });
+});
+
 test('switching an embedded viewer into the editor runs editor-only document scripts', async ({ page }) => {
   test.setTimeout(5_000);
   await mountFakeDocument(page, editorScriptDocument, {});

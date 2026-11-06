@@ -28,6 +28,7 @@ try:
         '__import__': __hvy_script_import__,
         '__builtins__': __hvy_safe_builtins__,
         'doc': __HvyDocProxy__(__hvy_runtime__.doc),
+        'run_context': __HvyRunContext__(__hvy_runtime__.runContext),
         'eval': __hvy_safe_eval__,
         'getattr': __hvy_getattr__,
         'globals': __hvy_safe_globals__,

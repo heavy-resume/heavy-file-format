@@ -2377,6 +2377,22 @@ In whichever views run a script, clients SHOULD run it when the document loads,
 when the view is entered, and after document changes. Clients SHOULD coalesce
 repeated runs for an unchanged document, view, and database revision.
 
+Every sandboxed script run receives a `run_context` global describing that run.
+`run_context.invoke_reason` is a string naming what prompted a scripting block
+to run, so the script can return early when the run does not affect it:
+
+- `load`: the document was just loaded.
+- `edit`: a user edited the document.
+- `ai-edit`: an AI edit changed the document.
+- `script-edit`: a script changed the document.
+- `unknown`: the client did not attribute the run, including when a view is
+  entered.
+
+Clients MAY report additional values. Because the first run in a view is not
+guaranteed to report `load`, a script SHOULD return early only for specific
+reasons it can skip, not for every reason other than `load`. In form and button
+scripts, `run_context.invoke_reason` is `None`.
+
 ### 7.15 Power scripting plugin contract
 
 The built-in power scripting plugin is `hvy.power-scripting`. It contains

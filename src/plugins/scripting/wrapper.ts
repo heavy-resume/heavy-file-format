@@ -84,6 +84,10 @@ type ScriptingInjectedValue = string | number | boolean | null;
 // keeps adding entries; drop the least recently used ones past this size.
 const COMPILED_CODE_LIMIT = 256;
 
+// The step budget stops runaway execution, not long-lived callbacks: one that has
+// been quiet this long starts its next call with a full budget.
+const CALLBACK_BUDGET_RESET_GAP_MS = 3_000;
+
 function getCompiledCode(cache: Map<string, unknown>, key: string): unknown {
   const code = cache.get(key);
   if (code === undefined) {
@@ -405,6 +409,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     callbackResourcesActive = false;
     scriptingDb?.dispose();
   };
+  let lastExecutionEndedAt = 0;
+  let runningCallbacks = 0;
   let callbackErrorReported = false;
   const reportCallbackError = (error: string) => {
     callbackErrorReported = true;
@@ -448,11 +454,23 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
           const invokeCallback = () => {
             callbackErrorReported = false;
             let returned = false;
+            if (
+              runtime
+              && !initialExecutionActive
+              && runningCallbacks === 0
+              && performance.now() - lastExecutionEndedAt >= CALLBACK_BUDGET_RESET_GAP_MS
+            ) {
+              runtime.stats.stepsExecuted = 0;
+              runtime.stats.linesExecuted = 0;
+            }
+            runningCallbacks += 1;
             try {
               const result = normalizeBrythonHostValue(callback(...normalizeBrythonHostArguments(args)));
               returned = true;
               return result;
             } finally {
+              runningCallbacks -= 1;
+              lastExecutionEndedAt = performance.now();
               // A sandboxed callback is synchronous, so a transaction it leaves open can never
               // finish later: keep it when the callback succeeded, discard it when it failed.
               if (!initialExecutionActive) {
@@ -522,6 +540,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     return await new Promise((resolve) => {
       scripting.callbacks[runtimeId] = () => {
         initialExecutionActive = false;
+        lastExecutionEndedAt = performance.now();
         try {
           scriptingDb?.settleUnfinishedTransaction(scripting.errors[runtimeId] ? 'rollback' : 'commit');
         } catch (error) {

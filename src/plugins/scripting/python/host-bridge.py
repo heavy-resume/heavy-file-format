@@ -347,6 +347,11 @@ class __HvyCliProxy__:
         )
 
 
+class __HvyRunContext__:
+    def __init__(self, js_run_context):
+        self.invoke_reason = js_run_context.invoke_reason
+
+
 class __HvyDocProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc

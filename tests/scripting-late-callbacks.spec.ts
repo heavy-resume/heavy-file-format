@@ -94,3 +94,101 @@ test('before, a user edit reruns the loader, after: its late on_result is drawn'
   await expect(page.locator('#app')).toContainText('Done Beta');
   await expect(page.locator('#app')).not.toContainText('Getting Beta');
 });
+
+// Registers on_records with a small step budget and exposes it as fakeCallHandler.
+async function registerFakeHandler(page: Page, handlerBody: string): Promise<void> {
+  await page.clock.install();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
+  const registration = await page.evaluate(async (body) => {
+    const [{ runUserScript }, { deserializeDocument }, registry, { state }] = await Promise.all([
+      import('/src/plugins/scripting/wrapper.ts'),
+      import('/src/serialization.ts'),
+      import('/src/plugins/registry.ts'),
+      import('/src/state.ts'),
+    ]);
+    registry.registerHostPlugin({
+      id: 'com.example.fake-feed',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
+      displayName: 'Fake Feed',
+      scripting: {
+        methods: {
+          subscribe: (args: Record<string, unknown>) => {
+            (window as Window & { fakeCallHandler?: unknown }).fakeCallHandler = args.on_records;
+            return null;
+          },
+        },
+      },
+    });
+    state.document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: com.example.fake-feed
+    versionRange: ^1.0.0
+    permissions: [scripting]
+---
+`, '.hvy');
+    const result = await runUserScript({
+      document: state.document,
+      maxLines: 300,
+      source: `def on_records(value):
+${body}
+doc.plugins.call("com.example.fake-feed", "subscribe", {"on_records": on_records})`,
+    });
+    return { ok: result.ok, error: result.error };
+  }, handlerBody);
+  expect(registration).toEqual({ ok: true, error: undefined });
+}
+
+function callFakeHandler(page: Page, times: number): Promise<unknown[]> {
+  return page.evaluate((count) => {
+    const handler = (window as Window & { fakeCallHandler?: (value: unknown) => unknown }).fakeCallHandler!;
+    return Array.from({ length: count }, (_, index) => handler({ index }) ?? null);
+  }, times);
+}
+
+test('before, a handler used up its step budget, a quiet gap, after: it runs again', async ({ page }) => {
+  test.setTimeout(5_000);
+  await registerFakeHandler(page, `    total = 0
+    for i in range(20):
+        total += i
+    return total`);
+  const callsWithoutGap = await callFakeHandler(page, 10);
+  expect(callsWithoutGap[0]).toBe(190);
+  expect(callsWithoutGap.at(-1)).toBeNull();
+
+  await page.clock.fastForward(3_100);
+
+  expect(await callFakeHandler(page, 1)).toEqual([190]);
+});
+
+test('before, a gap shorter than the quiet period, after: the used up handler stays stopped', async ({ page }) => {
+  test.setTimeout(5_000);
+  await registerFakeHandler(page, `    total = 0
+    for i in range(20):
+        total += i
+    return total`);
+  const callsWithoutGap = await callFakeHandler(page, 10);
+  expect(callsWithoutGap[0]).toBe(190);
+  expect(callsWithoutGap.at(-1)).toBeNull();
+
+  await page.clock.fastForward(2_000);
+
+  expect(await callFakeHandler(page, 1)).toEqual([null]);
+});
+
+test('before, a quiet gap, after: a handler that never finishes is still stopped by its budget', async ({ page }) => {
+  test.setTimeout(5_000);
+  await registerFakeHandler(page, `    if value["index"] == 0:
+        return "reached"
+    while True:
+        pass`);
+  expect(await callFakeHandler(page, 1)).toEqual(['reached']);
+  await page.clock.fastForward(3_100);
+
+  expect(await page.evaluate(() => {
+    const handler = (window as Window & { fakeCallHandler?: (value: unknown) => unknown }).fakeCallHandler!;
+    return handler({ index: 1 }) ?? null;
+  })).toBeNull();
+});

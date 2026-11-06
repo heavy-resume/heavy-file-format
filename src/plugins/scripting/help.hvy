@@ -28,7 +28,13 @@ theme:
   # The `doc` API
 
  <!--hvy:text {}-->
-  Your script runs with one global injected: `doc`. Everything you can do flows through it.
+  Your script runs with `doc`, which everything you can do flows through, and `run_context`, which describes this run.
+
+  `run_context.invoke_reason` names what prompted a scripting block to run: `load`, `edit`, `ai-edit`, `script-edit`, or
+  `unknown`, which includes entering a view. It is `None` in form and button scripts. Return early only for specific
+  reasons the script can skip, such as `if run_context.invoke_reason == "script-edit": return`. Testing for anything
+  other than `load` can skip the first run in a view. Changes seen by a run that returned early are not reported again
+  by `get_updated_components` or `doc.db.get_updated_tables`.
   
   - `doc.tool.TOOL_NAME(**args)` — call a supported synchronous document tool. Returns the tool's text result. Mutating
   tools update the document immediately. See [tools API](#tools-api) below
@@ -119,6 +125,8 @@ theme:
   Callback functions may be nested inside `args`. A synchronous plugin method
   may retain and invoke them later; callback errors and step limits are reported
   by this script block, and callbacks stop when the document or mount is gone.
+  A callback shares its script's step budget until none of that script's code has
+  run for 3 seconds, then its next call starts with a full budget.
 <!--hvy: {"id":"execution-model","lock":false,"expanded":false,"highlight":false}-->
 #! Execution model
 

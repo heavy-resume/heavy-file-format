@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { getActiveStateRuntime, initCallbacks, initState, state } from '../src/state';
 import { createDefaultChatState } from '../src/chat/chat';
@@ -800,3 +800,89 @@ function runAttachmentHistoryCommand<T>(
     execute,
   });
 }
+
+function setUpFakeEditHistory(): void {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+}
+
+function recordFakeEdit(value: number): void {
+  state.document.meta.fake_value = value;
+  recordHistory();
+}
+
+test('recording an edit does not get more expensive as history grows', () => {
+  setUpFakeEditHistory();
+  const countParsesForOneEdit = (value: number): number => {
+    const parse = vi.spyOn(JSON, 'parse');
+    recordFakeEdit(value);
+    const parses = parse.mock.calls.length;
+    parse.mockRestore();
+    return parses;
+  };
+  for (let value = 0; value < 5; value += 1) recordFakeEdit(value);
+  const parsesWithShortHistory = countParsesForOneEdit(5);
+
+  for (let value = 6; value < 150; value += 1) recordFakeEdit(value);
+
+  expect(countParsesForOneEdit(150)).toBe(parsesWithShortHistory);
+});
+
+test('undo, a new edit, then undo and redo restore the right snapshots', () => {
+  setUpFakeEditHistory();
+  for (let value = 1; value <= 4; value += 1) recordFakeEdit(value);
+
+  undoState();
+  undoState();
+  expect(state.document.meta.fake_value).toBe(2);
+
+  recordFakeEdit(20);
+  recordFakeEdit(21);
+  undoState();
+  expect(state.document.meta.fake_value).toBe(20);
+  undoState();
+  expect(state.document.meta.fake_value).toBe(2);
+
+  redoState();
+  redoState();
+  expect(state.document.meta.fake_value).toBe(21);
+});
+
+test('history past its 200 entry limit still undoes to the right snapshots', () => {
+  setUpFakeEditHistory();
+  for (let value = 1; value <= 230; value += 1) recordFakeEdit(value);
+  expect(state.history.length).toBe(200);
+
+  undoState();
+  expect(state.document.meta.fake_value).toBe(229);
+  recordFakeEdit(500);
+  undoState();
+  expect(state.document.meta.fake_value).toBe(229);
+
+  for (let expectedValue = 228; expectedValue >= 225; expectedValue -= 1) {
+    undoState();
+    expect(state.document.meta.fake_value).toBe(expectedValue);
+  }
+});
+
+test('a restored history stack is not compared against the replaced stack', () => {
+  setUpFakeEditHistory();
+  recordFakeEdit(1);
+  recordFakeEdit(2);
+  const capturedStack = captureHistoryStackState();
+  recordFakeEdit(3);
+  recordFakeEdit(4);
+
+  restoreHistoryStackState(capturedStack);
+  expect(state.document.meta.fake_value).toBe(2);
+  recordFakeEdit(30);
+  undoState();
+
+  expect(state.document.meta.fake_value).toBe(2);
+});

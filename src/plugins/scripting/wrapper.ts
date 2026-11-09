@@ -491,7 +491,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
           const callbackCycle = beginScriptCycleExecution(
             stateRuntime,
             options.document,
-            callbackIdentity
+            callbackIdentity,
+            { startedByPlugin: true }
           );
           const previousRenderCycle = renderCycleExecution;
           renderCycleExecution = callbackCycle;

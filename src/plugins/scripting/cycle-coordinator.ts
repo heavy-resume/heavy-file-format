@@ -140,6 +140,8 @@ function assertWatchdogAllowsRender(
 export interface ScriptCycleExecutionOptions {
   /** True when a trusted user event started this run, not another script. */
   startedByUser?: boolean;
+  /** True when a plugin delivered this run, such as a queued result reaching its handler. */
+  startedByPlugin?: boolean;
 }
 
 export function beginScriptCycleExecution(
@@ -168,34 +170,36 @@ export function beginScriptCycleExecution(
     watchdog.invocations.splice(0, watchdog.invocations.length - MAX_INVOCATION_HISTORY);
   }
 
-  let chain = coordinator.activeChain?.document === document ? coordinator.activeChain : null;
-  if (chain?.settleTimer) {
-    clearTimeout(chain.settleTimer);
-    chain.settleTimer = null;
-  }
-  if (chain) chain.pendingExecutions += 1;
+  // Overlapping an unfinished run says nothing about cause, so a run from outside
+  // the scripts starts its own chain rather than inheriting that run's count. A plugin
+  // can still be part of a loop, but its delivery hides that cause; the watchdog above
+  // covers that case by timing.
+  const startsOwnChain = options.startedByUser === true || options.startedByPlugin === true;
+  const joinActiveChain = (): ScriptCycleChain | null => {
+    const active = coordinator.activeChain?.document === document ? coordinator.activeChain : null;
+    if (active?.settleTimer) {
+      clearTimeout(active.settleTimer);
+      active.settleTimer = null;
+    }
+    if (active) active.pendingExecutions += 1;
+    return active;
+  };
+  const startChain = (): ScriptCycleChain => {
+    const started: ScriptCycleChain = {
+      document,
+      mutationRenderCount: 0,
+      pendingExecutions: 1,
+      settleTimer: null,
+    };
+    coordinator.activeChain = started;
+    return started;
+  };
 
+  let chain = startsOwnChain ? null : joinActiveChain();
   let completed = false;
   return {
     beforeMutationRender: () => {
-      if (!chain) {
-        chain = coordinator.activeChain?.document === document ? coordinator.activeChain : null;
-        if (chain?.settleTimer) {
-          clearTimeout(chain.settleTimer);
-          chain.settleTimer = null;
-        }
-        if (chain) {
-          chain.pendingExecutions += 1;
-        } else {
-          chain = {
-            document,
-            mutationRenderCount: 0,
-            pendingExecutions: 1,
-            settleTimer: null,
-          };
-          coordinator.activeChain = chain;
-        }
-      }
+      chain ??= (startsOwnChain ? null : joinActiveChain()) ?? startChain();
       if (chain.mutationRenderCount >= SCRIPT_CYCLE_RENDER_BUDGET) {
         throw new Error(formatCycleError(
           identity,

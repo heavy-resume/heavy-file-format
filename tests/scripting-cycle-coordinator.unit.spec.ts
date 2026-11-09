@@ -22,7 +22,7 @@ function mutationRender(
   runtime: StateRuntime,
   document: VisualDocument,
   identity: string,
-  options: { startedByUser?: boolean } = {}
+  options: { startedByUser?: boolean; startedByPlugin?: boolean } = {}
 ): void {
   const execution = beginScriptCycleExecution(runtime, document, identity, options);
   execution.beforeMutationRender();
@@ -112,6 +112,47 @@ describe('sandbox script cycle coordinator', () => {
     }
 
     expect(() => mutationRender(runtime, document, 'offending-component')).toThrow(/causal chain reached/);
+  });
+
+  test.each([
+    ['plugin-delivered', { startedByPlugin: true }],
+    ['user-started', { startedByUser: true }],
+  ])('expected result: %s runs overlapping an unfinished run do not accumulate into one chain', (_name, options) => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    const unfinished = beginScriptCycleExecution(runtime, document, 'unfinished-script');
+    unfinished.beforeMutationRender();
+
+    for (let index = 0; index < SCRIPT_CYCLE_RENDER_BUDGET * 2; index += 1) {
+      vi.setSystemTime(Date.now() + SCRIPT_WATCHDOG_WINDOW_MS / (SCRIPT_REPEAT_LIMIT - 1) + 1);
+      expect(() => mutationRender(runtime, document, 'delivered-handler', options)).not.toThrow();
+    }
+  });
+
+  test('expected result: scripts triggered by a plugin delivery still count against its chain', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    mutationRender(runtime, document, 'delivered-handler', { startedByPlugin: true });
+    for (let index = 1; index < SCRIPT_CYCLE_RENDER_BUDGET; index += 1) {
+      mutationRender(runtime, document, `triggered-${index}`);
+    }
+
+    expect(() => mutationRender(runtime, document, 'offending-component')).toThrow(/causal chain reached/);
+  });
+
+  test('expected result: a rapid loop through a plugin delivery is still stopped', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    for (let index = 1; index < SCRIPT_REPEAT_LIMIT; index += 1) {
+      mutationRender(runtime, document, 'looping-handler', { startedByPlugin: true });
+    }
+
+    expect(() => mutationRender(runtime, document, 'looping-handler', { startedByPlugin: true })).toThrow(
+      new RegExp(`same script requested ${SCRIPT_REPEAT_LIMIT} mutation renders`)
+    );
   });
 
   test('expected result: rolling repetition suspicion expires after a quiet interval', () => {

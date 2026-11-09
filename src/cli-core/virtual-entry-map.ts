@@ -56,6 +56,15 @@ export class HvyVirtualEntryMap extends Map<string, HvyVirtualEntry> {
   private resolvedIdAliasEntries = new Map<string, { source: HvyVirtualEntry; entry: HvyVirtualEntry }>();
   // Direct children per directory in first-seen order, including directories only implied by deeper paths.
   private storedChildPathsByParent: Map<string, Set<string>> | null = null;
+  private deferredEntries: { matches: (path: string) => boolean; add: () => void } | null = null;
+
+  /**
+   * Holds back entries that are expensive to produce until something needs them: a lookup of a path
+   * `matches` accepts, or any listing. Lookups of other paths never pay for them.
+   */
+  deferEntries(matches: (path: string) => boolean, add: () => void): void {
+    this.deferredEntries = { matches, add };
+  }
 
   setIdAliasRoots(sourcePathsByRoot: Map<string, string>): void {
     this.idAliasSourcePathsByRoot = sourcePathsByRoot;
@@ -71,6 +80,7 @@ export class HvyVirtualEntryMap extends Map<string, HvyVirtualEntry> {
 
   /** Paths of the direct children of a directory, without producing alias copies for the rest of the tree. */
   listChildPaths(directoryPath: string): string[] {
+    this.addDeferredEntries();
     const childPaths = new Set<string>();
     const sourcePath = this.resolveIdAliasSourcePath(directoryPath);
     if (sourcePath !== null && sourcePath !== directoryPath) {
@@ -117,10 +127,12 @@ export class HvyVirtualEntryMap extends Map<string, HvyVirtualEntry> {
   }
 
   override get(path: string): HvyVirtualEntry | undefined {
+    this.addDeferredEntriesFor(path);
     return super.get(path) ?? this.getIdAliasEntry(path);
   }
 
   override has(path: string): boolean {
+    this.addDeferredEntriesFor(path);
     return super.has(path) || this.getIdAliasEntry(path) !== undefined;
   }
 
@@ -174,6 +186,20 @@ export class HvyVirtualEntryMap extends Map<string, HvyVirtualEntry> {
   override forEach(callback: (entry: HvyVirtualEntry, path: string, map: Map<string, HvyVirtualEntry>) => void, thisArg?: unknown): void {
     for (const [path, entry] of this.entries()) {
       callback.call(thisArg, entry, path, this);
+    }
+  }
+
+  private addDeferredEntriesFor(path: string): void {
+    if (this.deferredEntries?.matches(path)) {
+      this.addDeferredEntries();
+    }
+  }
+
+  private addDeferredEntries(): void {
+    const deferred = this.deferredEntries;
+    if (deferred) {
+      this.deferredEntries = null;
+      deferred.add();
     }
   }
 

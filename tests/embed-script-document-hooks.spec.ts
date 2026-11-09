@@ -253,3 +253,57 @@ test('undo after a committed edit returns to the state before it, with script ou
   expect(await readMeta(page, ['fake_label', 'fake_label_runs'])).toEqual({ fake_label: 'Fake start', fake_label_runs: 1 });
   expect(await readHookRuns(page)).toEqual(hookRunsBefore);
 });
+
+const updatedComponentsDocument = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-updated-section"}-->
+#! Fake updated
+
+<!--hvy:plugin {"id":"fake-updates-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","showSubmit":false}}-->
+fields:
+  - label: Fake edit
+    type: checkbox
+    triggers:
+      change: edit
+  - label: Fake remove
+    type: checkbox
+    triggers:
+      change: remove
+scripts:
+  edit: |
+    doc.component.set_text("fake-updated-text", "changed " + str(doc.form.get_value("Fake edit")))
+  remove: |
+    doc.tool.remove_component(component_ref="fake-removed-text")
+
+<!--hvy:text {"id":"fake-updated-text"}-->
+Fake start
+
+<!--hvy:text {"id":"fake-removed-text"}-->
+Fake removed
+
+<!--hvy:plugin {"id":"fake-updates-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
+if run_context.invoke_reason == "script-edit":
+    updates = [("removed:" if handle.removed else "") + handle.id for handle in doc.tool.get_updated_components(component="text")]
+    doc.header.set("fake_updates", ",".join(updates))
+else:
+    doc.header.set("fake_loaded", True)
+`;
+
+test('get_updated_components reports each script edit and removal through the document hook', async ({ page }) => {
+  test.setTimeout(5_000);
+  await mountFakeDocument(page, updatedComponentsDocument, {});
+  await expect.poll(() => readMeta(page, ['fake_loaded'])).toEqual({ fake_loaded: true });
+  const root = page.locator('#fakeRoot');
+
+  await root.getByLabel('Fake edit').check();
+  await expect.poll(() => readMeta(page, ['fake_updates'])).toEqual({ fake_updates: 'fake-updated-text' });
+
+  await root.getByLabel('Fake edit').uncheck();
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as HookTestWindow).fakeMount.getDocument().sections[0] as unknown as { blocks: Array<{ text: string }> })).blocks[1]?.text).toBe('changed False');
+  await expect.poll(() => readMeta(page, ['fake_updates'])).toEqual({ fake_updates: 'fake-updated-text' });
+
+  await root.getByLabel('Fake remove').check();
+  await expect.poll(() => readMeta(page, ['fake_updates'])).toEqual({ fake_updates: 'removed:fake-removed-text' });
+});

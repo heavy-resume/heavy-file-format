@@ -8,7 +8,7 @@ import type {
 import { createBuiltInPluginMetadata, SCRIPTING_PLUGIN_ID } from '../registry';
 import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
-import { deserializeDocument, serializeDocument } from '../../serialization';
+import { deserializeDocument } from '../../serialization';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import python from 'highlight.js/lib/languages/python';
@@ -18,6 +18,7 @@ import { runUserScript } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { getDatabaseChangesSince, getDatabaseChangeRevision } from '../../database-change-tracker';
 import scriptingDocumentation from './about-scripting.txt?raw';
+import { captureScriptingComponentFingerprints, type PreviousScriptingComponents, type ScriptingComponentFingerprints } from './updated-components';
 
 import './scripting.css';
 
@@ -398,6 +399,7 @@ interface ScriptingTarget {
 interface ScriptedDocumentState {
   signature: string;
   snapshot: string;
+  componentFingerprints: ScriptingComponentFingerprints | null;
   databaseRevision: number;
 }
 
@@ -446,6 +448,18 @@ export function getRunnableScriptingTargetsForView(
   return targets.filter((target) => !target.editorOnly);
 }
 
+function createPreviousComponents(
+  snapshot: string,
+  fingerprints: ScriptingComponentFingerprints | null,
+  extension: HvyDocumentHookContext['document']['extension']
+): PreviousScriptingComponents {
+  let loaded: HvyDocumentHookContext['document'] | null = null;
+  return {
+    fingerprints,
+    loadDocument: () => (loaded ??= deserializeDocument(snapshot, extension)),
+  };
+}
+
 async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Promise<void> {
   const isLoad = ctx.changeReason === 'load';
   const previousState = isLoad ? null : scriptedDocumentStates.get(ctx.document) ?? null;
@@ -465,16 +479,17 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   const scriptSignature = targets
     .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.editorOnly ? 'editor' : 'document'}\u0000${target.pluginVersion}\u0000${target.libraries.join(',')}\u0000${target.source}`)
     .join('\u0001');
-  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${serializeDocument(ctx.document)}\u0002database:${getDatabaseChangeRevision(ctx.document)}`;
+  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${ctx.serializedDocument}\u0002database:${getDatabaseChangeRevision(ctx.document)}`;
   if (previousState?.signature === signature) {
     return;
   }
-  const previousDocument = previousState?.snapshot
-    ? deserializeDocument(previousState.snapshot, ctx.document.extension)
+  const previousComponents = previousState?.snapshot
+    ? createPreviousComponents(previousState.snapshot, previousState.componentFingerprints, ctx.document.extension)
     : null;
   const scriptedState: ScriptedDocumentState = {
     signature,
     snapshot: '',
+    componentFingerprints: null,
     databaseRevision: previousState?.databaseRevision ?? previousDatabaseRevision,
   };
   scriptedDocumentStates.set(ctx.document, scriptedState);
@@ -484,7 +499,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
     }
     const result = await runUserScript({
       document: ctx.document,
-      previousDocument,
+      previousComponents,
       source: target.source,
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
@@ -523,7 +538,12 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
     storeScriptingResult(ctx.document, target.sectionKey, target.blockId, result, target.source);
   }
   if (ctx.isCurrentDocument()) {
-    scriptedState.snapshot = serializeDocument(ctx.document);
+    ctx.onSettled((serializedDocument) => {
+      scriptedState.snapshot = serializedDocument;
+    });
+    scriptedState.componentFingerprints = runnableTargets.some((target) => target.source.includes('get_updated_components'))
+      ? captureScriptingComponentFingerprints(ctx.document)
+      : null;
     scriptedState.databaseRevision = databaseChanges.revision;
   }
   ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);

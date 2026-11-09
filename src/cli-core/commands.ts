@@ -1026,9 +1026,22 @@ function addSessionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, docum
   measurePhase('cli.sessionFiles.add', { entriesBefore: fs.entries.size }, () => {
     addSessionScratchpadFile(fs, session);
     addSessionReadOnlyFiles(fs, session);
-    addSessionRawHvyFiles(fs, document, session);
+    if (virtualFileSystemsWithRawSessionFiles.has(fs)) {
+      addSessionRawHvyFiles(fs, document, session);
+    } else {
+      // Every raw file's existence depends on its serialized size, so this serializes the whole tree.
+      // Commands addressing other files should not pay for that.
+      fs.entries.deferEntries(isRawSessionFilePath, () => {
+        addSessionRawHvyFiles(fs, document, session);
+        addSessionModifiedFiles(fs, session);
+      });
+    }
     addSessionModifiedFiles(fs, session);
   });
+}
+
+function isRawSessionFilePath(path: string): boolean {
+  return path.slice(path.lastIndexOf('/') + 1).startsWith('raw');
 }
 
 function addSessionReadOnlyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {

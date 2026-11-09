@@ -855,7 +855,7 @@ hvy_version: 0.1
 
  <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"tool-python"}-->
 `, '.hvy');
-  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+  const runtime = createScriptingRuntime({ document, previousComponents: { fingerprints: null, loadDocument: () => previousDocument }, changeReason: 'edit' });
 
   const updated = runtime.doc.tool('get_updated_components', { component: 'xref' }) as Array<{
     id: string;
@@ -910,7 +910,7 @@ component_defs:
   const previousDocument = deserializeDocument(source, '.hvy');
   const document = deserializeDocument(source.replace('application-one\",\"sortKeys', 'application-one\",\"tags\":\"edited\",\"sortKeys'), '.hvy');
   syncSortValuesForDocument(document);
-  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+  const runtime = createScriptingRuntime({ document, previousComponents: { fingerprints: null, loadDocument: () => previousDocument }, changeReason: 'edit' });
 
   const updated = runtime.doc.tool('get_updated_components', { component: 'application-entry' }) as Array<{ id: string }>;
 
@@ -995,6 +995,6 @@ hvy_version: 0.1
   expect(getReaderSectionExpandedOverride(document.sections[0]!)).toBe(true);
   expect(block.schema.expandableExpanded).toBe(false);
   expect(serializeDocument(document)).toBe(serializedBefore);
-  expect(refreshReaderPanels).toHaveBeenCalledOnce();
+  expect(refreshReaderPanels).not.toHaveBeenCalled();
   expect(renderApp).toHaveBeenCalledOnce();
 });

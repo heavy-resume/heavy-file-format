@@ -11,7 +11,7 @@ import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
 import { serializeBlockFragment, serializeDocument } from '../../serialization';
 import { setSortValueAnnotationText, syncSortValuesForDocument } from '../../sort-values';
-import { state, getActiveStateRuntime, getRefreshReaderPanels, getRenderApp, runWithStateRuntime, type StateRuntime } from '../../state';
+import { state, getActiveStateRuntime, getRefreshAfterScriptEdit, getRenderApp, runWithStateRuntime, type StateRuntime } from '../../state';
 import { expandBlockPathByBlockId } from '../../navigation';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
@@ -20,6 +20,7 @@ import type { ScriptingPluginsApi } from './plugin-apis';
 import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
 import { getTimeZoneOffsetMs } from '../../time-zone-lookup';
 import { createScriptingClock, type ScriptingClock } from './clock-bridge';
+import { getUpdatedScriptingComponentHandles, markScriptingSortValuesSynced, type PreviousScriptingComponents } from './updated-components';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -45,6 +46,7 @@ export interface ScriptingRuntime {
   runContext: { invoke_reason: HvyPluginHookChangeReason | null };
   step(): string | null;
   markMutated(): void;
+  markDatabaseMutated(): void;
   setLineBudget(maxLines: number): void;
   /** Changes whether later mutation flushes render; see ScriptingRuntimeOptions.renderOnMutation. */
   setRenderOnMutation(renderOnMutation: boolean): void;
@@ -156,7 +158,7 @@ export interface ScriptingExportApi {
 export interface ScriptingRuntimeOptions {
   maxLines?: number;
   document: VisualDocument;
-  previousDocument?: VisualDocument | null;
+  previousComponents?: PreviousScriptingComponents | null;
   changeReason?: HvyPluginHookChangeReason;
   renderOnMutation?: boolean;
   form?: ScriptingFormApi;
@@ -171,7 +173,7 @@ export interface ScriptingRuntimeOptions {
    * until it settles, so edits made by the hooks it runs share one render.
    * `rendersAfter` says whether this flush renders once the promise settles.
    */
-  onMutationFlushed?: (flush: { rendersAfter: boolean }) => Promise<unknown> | void;
+  onMutationFlushed?: (flush: { rendersAfter: boolean; serializedDocument?: string }) => Promise<unknown> | void;
   beforeMutationRender?: () => void;
   databaseChanges?: DatabaseChangeSnapshot;
   onCallbackError?: (error: string) => void;
@@ -315,6 +317,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   const stats: ScriptingRuntimeStats = { toolCalls: 0, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, logs: [] };
   const clock = createScriptingClock({ now: options.now, timeZone: options.timeZone });
   let mutated = false;
+  let attachmentsChanged = false;
   const pendingExpansions = new Map<string, { sectionKey: string; blockId: string }>();
 
   // doc.cli calls reuse one CLI session (and its cached virtual file system)
@@ -362,12 +365,19 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   const flushIfMutated = () => {
     if (!mutated && pendingExpansions.size === 0) return;
     const documentMutated = mutated;
+    // Expansion is reader state and attachments can back any block, so neither is a contained edit.
+    const allowPartialRedraw = documentMutated && pendingExpansions.size === 0 && !attachmentsChanged;
+    attachmentsChanged = false;
     mutated = false;
     if (documentMutated) {
       syncSortValuesForDocument(options.document);
+      markScriptingSortValuesSynced(options.document);
     }
-    if (documentMutated && state?.document === options.document) {
-      state.rawEditorText = serializeDocument(options.document);
+    let serializedDocument: string | undefined;
+    // Only the raw editor shows this text, and entering it generates the text afresh.
+    if (documentMutated && state?.document === options.document && state.editorMode === 'raw') {
+      serializedDocument = serializeDocument(options.document);
+      state.rawEditorText = serializedDocument;
       state.rawEditorError = null;
       state.rawEditorDiagnostics = [];
     }
@@ -379,7 +389,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     pendingExpansions.clear();
     // Before rendering, so document hooks claim this edit as a script edit
     // ahead of any catch-all hook run that the render itself starts.
-    const hooksSettled = documentMutated ? options.onMutationFlushed?.({ rendersAfter: renderOnMutation }) : undefined;
+    const hooksSettled = documentMutated ? options.onMutationFlushed?.({ rendersAfter: renderOnMutation, serializedDocument }) : undefined;
     let renderGuardError: unknown = null;
     if (renderOnMutation) {
       // The cycle guard stays synchronous so a stopped cycle raises inside the script.
@@ -391,9 +401,9 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       if (!renderGuardError) {
         if (hooksSettled) {
           const stateRuntime = getRenderStateRuntime();
-          void hooksSettled.then(() => renderMutation(stateRuntime), () => renderMutation(stateRuntime));
+          void hooksSettled.then(() => renderMutation(stateRuntime, allowPartialRedraw), () => renderMutation(stateRuntime, allowPartialRedraw));
         } else {
-          renderMutation(null);
+          renderMutation(null, allowPartialRedraw);
         }
       }
     }
@@ -417,7 +427,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         }
         return getUpdatedScriptingComponentHandles(
           options.document,
-          options.previousDocument ?? null,
+          options.previousComponents ?? null,
           String(readScriptValue(args, 'component') ?? ''),
           onMutation,
           requestExpansion
@@ -496,11 +506,13 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
           { ...(previous?.meta ?? {}), ...(meta ?? {}) },
           normalized
         );
+        attachmentsChanged = true;
         onMutation();
       },
       remove: (id) => {
         if (getAttachment(options.document, id)) {
           removeAttachment(options.document, id);
+          attachmentsChanged = true;
           onMutation();
         }
       },
@@ -557,6 +569,10 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       return null;
     },
     markMutated: onMutation,
+    // The CLI's file system has no database content, so its session survives database writes.
+    markDatabaseMutated: () => {
+      mutated = true;
+    },
     setRenderOnMutation: (value: boolean) => {
       renderOnMutation = value;
     },
@@ -574,14 +590,12 @@ function getRenderStateRuntime(): StateRuntime | null {
   }
 }
 
-function renderMutation(stateRuntime: StateRuntime | null): void {
+function renderMutation(stateRuntime: StateRuntime | null, allowPartial: boolean): void {
   const render = () => {
     try {
-      getRefreshReaderPanels()();
-    } catch {
-      // Reader panel may not be initialized yet (during pre-first-render execution).
-    }
-    try {
+      if (allowPartial && getRefreshAfterScriptEdit()()) {
+        return;
+      }
       getRenderApp()();
     } catch {
       // renderApp may not be ready yet during the very first load.
@@ -670,7 +684,7 @@ interface ScriptingBlockLocation {
   ancestors: VisualBlock[];
 }
 
-class ScriptingComponentHandle {
+export class ScriptingComponentHandle {
   id: string;
   component: string;
   base_component: string;
@@ -835,19 +849,23 @@ class ScriptingSectionHandle {
   }
 }
 
-function getScriptingComponentHandles(
+export function matchesScriptingComponentQuery(component: string, query: string, meta: VisualDocument['meta']): boolean {
+  const trimmed = query.trim();
+  const base = resolveBaseComponentFromMeta(component, meta);
+  return !trimmed || component === trimmed || base === trimmed || (trimmed === 'xref' && base === 'xref-card');
+}
+
+export function getScriptingComponentHandles(
   document: VisualDocument,
   component: string,
   markMutated: () => void,
   removed = false,
   requestExpansion: (sectionKey: string, blockId: string) => void = () => {}
 ): ScriptingComponentHandle[] {
-  const query = component.trim();
   const matches: ScriptingComponentHandle[] = [];
   const visit = (blocks: VisualBlock[], section: VisualSection, ancestors: VisualBlock[]): void => {
     for (const block of blocks) {
-      const base = resolveBaseComponentFromMeta(block.schema.component, document.meta);
-      if (!query || block.schema.component === query || base === query || (query === 'xref' && base === 'xref-card')) {
+      if (matchesScriptingComponentQuery(block.schema.component, component, document.meta)) {
         matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated, removed, requestExpansion));
       }
       const nextAncestors = [...ancestors, block];
@@ -863,35 +881,6 @@ function getScriptingComponentHandles(
   };
   document.sections.forEach(visitSection);
   return matches;
-}
-
-function getUpdatedScriptingComponentHandles(
-  document: VisualDocument,
-  previousDocument: VisualDocument | null,
-  component: string,
-  markMutated: () => void,
-  requestExpansion: (sectionKey: string, blockId: string) => void
-): ScriptingComponentHandle[] {
-  const current = getScriptingComponentHandles(document, component, markMutated, false, requestExpansion);
-  if (!previousDocument) {
-    return current;
-  }
-  // Derived sort values are synchronized across the document during edits. Normalize
-  // the prior snapshot too so that this maintenance pass is not reported as a user
-  // update to every component in a list.
-  syncSortValuesForDocument(previousDocument);
-  const previous = getScriptingComponentHandles(previousDocument, component, () => {}, true);
-  const previousById = new Map(previous.map((handle) => [handle.id, handle]));
-  const currentIds = new Set(current.map((handle) => handle.id).filter(Boolean));
-  const updated = current.filter((handle) => {
-    if (!handle.id) {
-      return true;
-    }
-    const previousHandle = previousById.get(handle.id);
-    return !previousHandle || previousHandle.fingerprint() !== handle.fingerprint();
-  });
-  const removed = previous.filter((handle) => handle.id && !currentIds.has(handle.id));
-  return [...updated, ...removed];
 }
 
 function getChildSlot(block: VisualBlock, slot: string): VisualBlock[] {

@@ -141,9 +141,7 @@ export function snapshotState(options: HistorySnapshotOptions = {}): string {
       rawEditorError: state.rawEditorError,
       rawEditorDiagnostics: state.rawEditorDiagnostics,
       paletteOverrideId: state.paletteOverrideId,
-    },
-    null,
-    2
+    }
   );
 }
 

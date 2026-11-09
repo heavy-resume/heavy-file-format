@@ -374,10 +374,25 @@ function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRen
     .join('');
 }
 
+// Every redraw renders every text block, and almost none of them changed. The result depends only on
+// this text, which already has placeholder and answer values substituted as tokens.
+const SANITIZED_MARKDOWN_CACHE_LIMIT = 4096;
+const sanitizedMarkdownCache = new Map<string, string>();
+
 function renderSanitizedMarkdownHtml(markdown: string): string {
-  return normalizeRenderedMarkdownSoftBreaks(
-    sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(separateBareUrlHardBreaks(markdown)))) as string)
-  );
+  let html = sanitizedMarkdownCache.get(markdown);
+  if (html === undefined) {
+    html = normalizeRenderedMarkdownSoftBreaks(
+      sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(separateBareUrlHardBreaks(markdown)))) as string)
+    );
+  } else {
+    sanitizedMarkdownCache.delete(markdown);
+  }
+  sanitizedMarkdownCache.set(markdown, html);
+  if (sanitizedMarkdownCache.size > SANITIZED_MARKDOWN_CACHE_LIMIT) {
+    sanitizedMarkdownCache.delete(sanitizedMarkdownCache.keys().next().value as string);
+  }
+  return html;
 }
 
 function separateBareUrlHardBreaks(markdown: string): string {

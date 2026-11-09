@@ -49,7 +49,8 @@ import {
 } from './document-factory';
 import { resolveBaseComponent } from './component-defs';
 import { bindReaderUi } from './bind-reader-ui';
-import { capturePluginFocus, reconcilePluginMounts, unmountAllPlugins } from './plugins/mount';
+import { capturePluginFocus, reconcilePluginMounts, refreshConnectedPlugins, unmountAllPlugins } from './plugins/mount';
+import { rememberRenderedDocument, runScopedReaderRedraw } from './reader/scoped-redraw';
 import { setHostPlugins } from './plugins/registry';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import {
@@ -734,6 +735,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
   getTargetRenderHookController(root, () => state.currentView).reconcile();
+  if (state.currentView === 'viewer') {
+    rememberRenderedDocument(state.document);
+  }
   postMs = elapsedMs(postStartedAt);
   logPerfTrace('renderApp', {
     elapsedMs: elapsedMs(startedAt),
@@ -888,6 +892,43 @@ function recordReaderVirtualSectionHeight(
   }
 }
 
+function refreshAfterScriptEdit(): boolean {
+  const root = currentRoot;
+  if (
+    !root
+    || state.currentView !== 'viewer'
+    || isPdfDocument(state.document)
+    || state.pendingPaneScrollRestore
+    || root.querySelector('#modalRoot')
+  ) {
+    return false;
+  }
+  const runtime = getActiveStateRuntime();
+  // A plugin or block that is briefly empty while layout is read shortens the page, which lowers the scroll.
+  const capturedScroll = captureRenderScroll(root, state.paneScroll);
+  state.paneScroll = capturedScroll.paneScroll;
+  invalidateInlineAnswerGroupIndex();
+  const refreshed = runScopedReaderRedraw({
+    document: state.document,
+    refreshBlock: (sectionKey, blockId) => refreshReaderBlock(root, sectionKey, blockId, { runVisibilityScripts: false }),
+    refreshPlugins: refreshConnectedPlugins,
+    afterRefresh: () => {
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
+      getTargetRenderHookController(root, () => state.currentView).reconcile();
+    },
+    onEditedDuringRefresh: () => {
+      void runPluginDocumentHooks('unknown');
+    },
+  });
+  if (refreshed) {
+    restoreRenderScroll(root, capturedScroll);
+  } else {
+    // The caller does a full redraw next, which must not capture a scroll a partial attempt already lowered.
+    state.pendingPaneScrollRestore = capturedScroll.paneScroll;
+  }
+  return refreshed;
+}
+
 function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
@@ -902,7 +943,7 @@ function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: strin
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
       bindLazyImageHydration(element);
-      bindCarouselInteractions(element);
+      initializeCarouselReaders(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(element));
       }
@@ -935,7 +976,7 @@ function refreshReaderSection(root: ParentNode, sectionKey: string, options: { r
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);
       bindLazyImageHydration(element);
-      bindCarouselInteractions(element);
+      initializeCarouselReaders(element);
       if (options.runVisibilityScripts !== false) {
         void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(element));
       }
@@ -995,6 +1036,11 @@ function ensureEmbedRuntime(
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshReaderSection(target, sectionKey, options);
+    }),
+    refreshAfterScriptEdit: () => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshAfterScriptEdit();
     }),
     refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;

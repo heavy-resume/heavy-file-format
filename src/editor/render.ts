@@ -1058,7 +1058,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       ? renderTemplateValueTokens(passiveContent)
       : passiveContent;
     return `
-      <div class="editor-block-passive hvy-link-observer-surface" data-hvy-virtual-item="editor-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" data-block-id="${deps.escapeAttr(
+      <div class="editor-block-passive hvy-link-observer-surface" data-hvy-virtual-item="editor-block" ${visibleState === 'pending' ? 'data-hvy-dynamic-visibility="true" ' : ''}data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" data-block-id="${deps.escapeAttr(
       block.id
     )}">
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>

@@ -380,6 +380,32 @@ export function serializeFormConfig(spec: FormSpec): JsonObject {
   };
 }
 
+// Forms parse on every refresh and their source rarely changes. Only the YAML result is
+// reused: parseFormSpec builds a new spec from it each call, because callers edit specs.
+const FORM_YAML_CACHE_LIMIT = 2048;
+const formYamlCache = new Map<string, { parsed: unknown } | { error: unknown }>();
+
+function parseFormYaml(source: string): unknown {
+  let entry = formYamlCache.get(source);
+  if (entry) {
+    formYamlCache.delete(source);
+  } else {
+    try {
+      entry = { parsed: parseYaml(source) };
+    } catch (error) {
+      entry = { error };
+    }
+  }
+  formYamlCache.set(source, entry);
+  if (formYamlCache.size > FORM_YAML_CACHE_LIMIT) {
+    formYamlCache.delete(formYamlCache.keys().next().value as string);
+  }
+  if ('error' in entry) {
+    throw entry.error;
+  }
+  return entry.parsed;
+}
+
 export function parseFormSpec(source: string, config?: JsonObject): ParsedFormSpec {
   const behavior = parseFormConfig(config);
   if (source.trim().length === 0) {
@@ -390,7 +416,7 @@ export function parseFormSpec(source: string, config?: JsonObject): ParsedFormSp
   }
 
   try {
-    const parsed = parseYaml(source);
+    const parsed = parseFormYaml(source);
     if (!isObject(parsed)) {
       return {
         spec: { ...defaultFormSpec(), ...behavior },
@@ -503,7 +529,7 @@ interface FormLifecycleState {
 
 const formLifecycleByDocument = new WeakMap<VisualDocument, WeakMap<VisualBlock, FormLifecycleState>>();
 
-function getFormLifecycle(document: VisualDocument, block: VisualBlock, spec: FormSpec): FormLifecycleState {
+function getFormLifecycle(document: VisualDocument, block: VisualBlock, getSpec: () => FormSpec): FormLifecycleState {
   let forms = formLifecycleByDocument.get(document);
   if (!forms) {
     forms = new WeakMap<VisualBlock, FormLifecycleState>();
@@ -513,7 +539,7 @@ function getFormLifecycle(document: VisualDocument, block: VisualBlock, spec: Fo
   if (!lifecycle) {
     lifecycle = {
       initialized: false,
-      live: createLiveState(spec),
+      live: createLiveState(getSpec()),
       lastDatabaseRevision: getDatabaseChangeRevision(document),
     };
     forms.set(block, lifecycle);
@@ -525,7 +551,7 @@ export function claimFormInitialization(document: VisualDocument, block: VisualB
   const lifecycle = getFormLifecycle(
     document,
     block,
-    parseFormSpec(block.text, block.schema.pluginConfig).spec
+    () => parseFormSpec(block.text, block.schema.pluginConfig).spec
   );
   if (lifecycle.initialized) return false;
   lifecycle.initialized = true;
@@ -551,7 +577,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-form-plugin hvy-form-plugin-${ctx.mode}`;
   const initialSpec = parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig).spec;
-  const lifecycle = getFormLifecycle(ctx.rawDocument, ctx.block, initialSpec);
+  const lifecycle = getFormLifecycle(ctx.rawDocument, ctx.block, () => initialSpec);
   let live = lifecycle.live;
   let statusText = '';
   let statusError = false;
@@ -563,6 +589,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let skipNextEditorRefresh = false;
   const inputTimers = new Map<string, number>();
   let openFieldMetaLabel: string | null = null;
+  let renderedReaderText: string | null = null;
+  let renderedReaderState: string | null = null;
   const rangeDrag = createFormRangeDragTracker();
 
   const parseCurrent = () => parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig);
@@ -939,8 +967,17 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   }
 
   function renderReader(): void {
-    const { spec, error } = parseCurrent();
+    const block = ctx.block;
+    const getReaderState = () => JSON.stringify([block.id, block.schema.pluginConfig, ctx.view, live, statusText, statusError, statusErrorDetail, submitBusy]);
+    // Most refreshes change nothing this form shows, so this returns before parsing its spec.
+    if (block.text === renderedReaderText && getReaderState() === renderedReaderState && !runNotice) {
+      runReaderLifecycle(() => parseFormSpec(block.text, block.schema.pluginConfig).spec);
+      return;
+    }
+    const { spec, error } = parseFormSpec(block.text, block.schema.pluginConfig);
     reconcileLiveState(live, spec);
+    renderedReaderText = error ? null : block.text;
+    renderedReaderState = getReaderState();
     const focus = captureReaderFocus();
     root.innerHTML = '';
     if (error) {
@@ -977,7 +1014,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (live.submit.disabled && live.submit.reason.trim().length > 0) {
         const reason = document.createElement('div');
         reason.className = 'hvy-form-submit-reason';
-        reason.id = `hvy-form-submit-reason-${ctx.block.id}`;
+        reason.id = `hvy-form-submit-reason-${block.id}`;
         reason.textContent = live.submit.reason;
         submit.setAttribute('aria-describedby', reason.id);
         actions.appendChild(reason);
@@ -1006,21 +1043,25 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
     renderRunNotice();
     restoreReaderFocus(focus);
+    runReaderLifecycle(() => spec);
+  }
 
+  function runReaderLifecycle(getSpec: () => FormSpec): void {
     if (!canRunFormScripts()) {
       return;
     }
     const initializing = claimFormInitialization(ctx.rawDocument, ctx.block);
     if (initializing) {
       lifecycle.lastDatabaseRevision = getDatabaseChangeRevision(ctx.rawDocument);
-      if (spec.initialScript.trim().length > 0) {
-        runNamedScript(spec.initialScript, 'initial');
+      const { initialScript } = getSpec();
+      if (initialScript.trim().length > 0) {
+        runNamedScript(initialScript, 'initial');
       }
     } else if (lifecycle.initialized) {
       const databaseChanges = getDatabaseChangesSince(ctx.rawDocument, lifecycle.lastDatabaseRevision);
       if (databaseChanges.revision > lifecycle.lastDatabaseRevision) {
         lifecycle.lastDatabaseRevision = databaseChanges.revision;
-        runNamedScript(spec.changeScript, 'change', { databaseChanges });
+        runNamedScript(getSpec().changeScript, 'change', { databaseChanges });
       }
     }
   }
@@ -1451,9 +1492,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 
   const refresh = () => {
-    const { spec } = parseCurrent();
-    reconcileLiveState(live, spec);
     if (ctx.mode === 'editor') {
+      const { spec } = parseCurrent();
+      reconcileLiveState(live, spec);
       if (skipNextEditorRefresh && !forceEditorRender) {
         skipNextEditorRefresh = false;
         return;

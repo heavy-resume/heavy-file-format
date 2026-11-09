@@ -626,7 +626,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       options.trimVerticalStartMargin ? ' data-reader-trim-vertical-start-margin="true"' : '',
       options.trimVerticalEndMargin ? ' data-reader-trim-vertical-end-margin="true"' : '',
     ].join('');
-    const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
+    const blockDataAttrs = `data-hvy-virtual-item="reader-block" ${visibleState === 'pending' ? 'data-hvy-dynamic-visibility="true" ' : ''}data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
     const helpers = { ...deps.getComponentRenderHelpers(), getTextPlaceholders: () => activeTextPlaceholders };
     type BlockShellPresentation = {
       beforeHtml?: string;

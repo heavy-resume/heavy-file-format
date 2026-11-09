@@ -156,6 +156,39 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string, seen = n
   return null;
 }
 
+/** Every block under `blocks` by id, resolving to the block findBlockInList would find. */
+export function indexBlocksById(blocks: VisualBlock[], index = new Map<string, VisualBlock>(), seen = new Set<VisualBlock>()): Map<string, VisualBlock> {
+  for (const block of blocks) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
+    if (!index.has(block.id)) {
+      index.set(block.id, block);
+    }
+    indexBlocksById(block.schema.containerBlocks ?? [], index, seen);
+    indexBlocksById(block.schema.componentListBlocks ?? [], index, seen);
+    indexBlocksById(block.schema.expandableStubBlocks?.children ?? [], index, seen);
+    indexBlocksById(block.schema.expandableContentBlocks?.children ?? [], index, seen);
+    if (block.schema.encryptedBlock) {
+      indexBlocksById([block.schema.encryptedBlock], index, seen);
+    }
+    for (const item of block.schema.gridItems ?? []) {
+      indexBlocksById([item.block], index, seen);
+    }
+  }
+  return index;
+}
+
+/** An id index of a document section, or null when findBlockByIds resolves that key some other way. */
+export function indexSectionBlocksByKey(sectionKey: string): Map<string, VisualBlock> | null {
+  if (state.dbTableRowComponentModal?.sectionKey === sectionKey || getReusableNameFromSectionKey(sectionKey)) {
+    return null;
+  }
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  return section ? indexBlocksById(section.blocks) : null;
+}
+
 function findBlockPathInList(blocks: VisualBlock[], blockId: string): string[] | null {
   for (const block of blocks) {
     if (block.id === blockId) {

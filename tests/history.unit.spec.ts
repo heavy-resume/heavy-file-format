@@ -273,7 +273,7 @@ test('undo and redo keep image attachment bytes outside history snapshots', () =
   ];
 
   recordHistory('before-image-edit');
-  expect(state.history[0]).toContain('"attachments": []');
+  expect(state.history[0]).toContain('"attachments":[]');
   expect(state.history[0]).not.toContain('image:photo.png');
   expect(state.history[0]).not.toContain('10');
   state.rawEditorText = '#! Changed';
@@ -343,7 +343,7 @@ test('undo and redo restore database attachment checkpoints without snapshotting
 
   recordDatabaseAttachmentHistory();
   expect(state.history.join('\n')).toContain('databaseAttachment');
-  expect(state.history.join('\n')).toContain('\\"bytes\\": [\\n      1,\\n      2\\n    ]');
+  expect(state.history.join('\n')).toContain('\\"bytes\\":[1,2]');
   expect(state.history.join('\n')).not.toContain('image:photo.png');
   setAttachment(
     state.document,

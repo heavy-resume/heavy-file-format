@@ -54,6 +54,8 @@ type RuntimeCallbacks = {
   renderApp: () => void;
   refreshChatSurface: () => boolean;
   refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean;
+  /** Updates the page after a script edit without a full redraw; false means one is needed. */
+  refreshAfterScriptEdit: () => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
@@ -79,6 +81,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
     renderApp: () => { throw new Error('renderApp not initialized'); },
     refreshChatSurface: () => false,
     refreshSearchSurface: () => false,
+    refreshAfterScriptEdit: () => false,
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
     refreshReaderSection: () => false,
     refreshReaderBlock: () => false,
@@ -93,6 +96,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 }
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
+let _refreshAfterScriptEdit: () => boolean = () => false;
 let _refreshChatSurface: () => boolean = () => false;
 let _refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean = () => false;
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
@@ -107,6 +111,7 @@ let _observeLinks: (root: ParentNode) => void = () => {};
 let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
+export function getRefreshAfterScriptEdit(): () => boolean { return _refreshAfterScriptEdit; }
 export function getRefreshChatSurface(): () => boolean { return _refreshChatSurface; }
 export function getRefreshSearchSurface(): (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean { return _refreshSearchSurface; }
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
@@ -139,6 +144,7 @@ export function initCallbacks(callbacks: {
   refreshSearchSurface?: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  refreshAfterScriptEdit?: () => boolean;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshEditorBlock?: (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean;
   refreshEditorSection?: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
@@ -162,6 +168,7 @@ export function initCallbacks(callbacks: {
     refreshChatSurface: callbacks.refreshChatSurface ?? (() => false),
     refreshSearchSurface: callbacks.refreshSearchSurface ?? (() => false),
     refreshReaderSection: callbacks.refreshReaderSection ?? (() => false),
+    refreshAfterScriptEdit: callbacks.refreshAfterScriptEdit ?? (() => false),
     refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
     refreshEditorBlock: callbacks.refreshEditorBlock ?? (() => false),
     refreshEditorSection: callbacks.refreshEditorSection ?? (() => false),
@@ -212,6 +219,7 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   _refreshSearchSurface = runtime.callbacks.refreshSearchSurface;
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
   _refreshReaderSection = runtime.callbacks.refreshReaderSection;
+  _refreshAfterScriptEdit = runtime.callbacks.refreshAfterScriptEdit;
   _refreshReaderBlock = runtime.callbacks.refreshReaderBlock;
   _refreshEditorBlock = runtime.callbacks.refreshEditorBlock;
   _refreshEditorSection = runtime.callbacks.refreshEditorSection;

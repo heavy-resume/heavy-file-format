@@ -47,7 +47,7 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
   const runtime = getActiveStateRuntime();
   const inVisibilityRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);
   const dynamicBlocks = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-dynamic-visibility="true"]'));
-  const buttons = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-button="true"]'));
+  const buttons = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-button-visibility="true"]'));
   logPerfTrace('button-visibility-scripts:start', {
     dynamicBlockCount: dynamicBlocks.length,
     buttonCount: buttons.length,

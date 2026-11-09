@@ -30,6 +30,7 @@ import {
   type ScriptCycleExecution,
 } from './cycle-coordinator';
 import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
+import type { PreviousScriptingComponents } from './updated-components';
 import {
   isScriptingCallbackRuntimeDisposed,
   registerScriptingCallbackCleanup,
@@ -291,7 +292,7 @@ export interface ScriptingRunResult {
 
 export interface RunUserScriptOptions {
   document: VisualDocument;
-  previousDocument?: VisualDocument | null;
+  previousComponents?: PreviousScriptingComponents | null;
   source: string;
   componentId?: string;
   pluginVersion?: string;
@@ -373,7 +374,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       const { createScriptingDbRuntime } = await import('../db-table');
       scriptingDb = await createScriptingDbRuntime(options.document, () => {
         dbMutated = true;
-        runtime?.markMutated();
+        runtime?.markDatabaseMutated();
       }, options.databaseChanges);
     } catch (error) {
       return {
@@ -427,7 +428,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   };
   runtime = createScriptingRuntime({
     document: options.document,
-    previousDocument: options.previousDocument,
+    previousComponents: options.previousComponents,
     maxLines: options.maxLines,
     changeReason: options.changeReason,
     renderOnMutation: options.renderOnMutation,
@@ -508,14 +509,14 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       },
     }),
     exportRuleRecorder: options.exportRuleRecorder,
-    onMutationFlushed: ({ rendersAfter }) => {
+    onMutationFlushed: ({ rendersAfter, serializedDocument }) => {
       if (!stateRuntime) {
         return;
       }
       return runWithStateRuntime(stateRuntime, () => {
         notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
         // The mutation render waits for these hooks, so scripts they rerun share it.
-        return runPluginDocumentHooks('script-edit', { hostRendersAfter: rendersAfter });
+        return runPluginDocumentHooks('script-edit', { hostRendersAfter: rendersAfter, serializedDocument });
       });
     },
     beforeMutationRender: () => renderCycleExecution?.beforeMutationRender(),

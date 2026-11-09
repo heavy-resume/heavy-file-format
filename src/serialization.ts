@@ -1020,12 +1020,27 @@ export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
   return combined;
 }
 
+// Header YAML dominates serialization for documents with large reusable definitions and
+// rarely changes, so it is reused until its inputs do. The body is cheap and not cached.
+const headerYamlCache = new WeakMap<VisualDocument, { inputs: string; yaml: string }>();
+
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   const serializedMeta: JsonObject = { ...document.meta };
   const builtInPluginDeclarations = collectBuiltInPluginDeclarations(document);
   if (builtInPluginDeclarations.length > 0) {
     serializedMeta.plugins = builtInPluginDeclarations;
   }
+  const inputs = JSON.stringify(serializedMeta);
+  const cached = headerYamlCache.get(document);
+  if (cached?.inputs === inputs) {
+    return cached.yaml;
+  }
+  const yaml = buildDocumentHeaderYaml(document, serializedMeta);
+  headerYamlCache.set(document, { inputs, yaml });
+  return yaml;
+}
+
+function buildDocumentHeaderYaml(document: VisualDocument, serializedMeta: JsonObject): string {
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
@@ -1614,10 +1629,7 @@ function indentMultiline(text: string, indent: number): string {
     return '';
   }
   const prefix = ' '.repeat(indent);
-  return text
-    .split('\n')
-    .map((line) => `${prefix}${line}`)
-    .join('\n');
+  return `${prefix}${text.replaceAll('\n', `\n${prefix}`)}`;
 }
 
 function serializeBlockText(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
@@ -1723,7 +1735,15 @@ function trimBoundaryNewlines(text: string): string {
   if (text.trim().length === 0) {
     return '';
   }
-  return text.replace(/^\n+|\n+$/g, '');
+  let start = 0;
+  let end = text.length;
+  while (text[start] === '\n') {
+    start += 1;
+  }
+  while (text[end - 1] === '\n') {
+    end -= 1;
+  }
+  return text.slice(start, end);
 }
 
 function serializeSlotDirective(name: string, schema: JsonObject, indent: number): string {

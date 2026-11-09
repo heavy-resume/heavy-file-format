@@ -123,3 +123,5 @@ Don't make README.md changes unless explicilty instructed. If you want to update
 Don't update HVY-SPEC.md with features of clients. Its defining the file format not the client.
 
 Please make sure that inputs aren't doing a re-render on each character, where applicable
+
+When running tests while building stick to tests that are likely relevant to the feature. Don't "TSA Test" by running every test. This slows development. If tests are poorly structured to accomplish this goal, then suggest refactoring them.

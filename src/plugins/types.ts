@@ -282,6 +282,10 @@ export interface HvyDocumentHookContext {
    * should apply document edits without requesting a render of their own.
    */
   hostRendersAfter: boolean;
+  /** The document's text when this hook run was scheduled, for detecting changes without serializing again. */
+  serializedDocument: string;
+  /** Called with the document's text once every hook in this run has finished, if it is still the current document. */
+  onSettled(listener: (serializedDocument: string) => void): void;
   refreshPlugins(pluginId?: string): void;
   requestRerender(): void;
   isCurrentDocument(): boolean;

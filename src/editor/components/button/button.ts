@@ -13,6 +13,7 @@ function renderButton(sectionKey: string, block: VisualBlock, helpers: Component
   return `<div
 	    class="hvy-button-component"
 	    data-hvy-button="true"
+	    ${visibleState === 'pending' ? 'data-hvy-button-visibility="true"' : ''}
 	    data-busy-state="${isRunning ? 'busy' : 'idle'}"
 	    data-visible-state="${helpers.escapeAttr(visibleState)}"
     data-section-key="${helpers.escapeAttr(sectionKey)}"

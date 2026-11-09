@@ -155,21 +155,7 @@ def __hvy_bytes_arg__(where, value):
 
 # Encodes values produced by the helpers above (plain Python values only).
 def __hvy_json_escape__(value):
-    out = '"'
-    for ch in str(value):
-        if ch == '\\':
-            out += '\\\\'
-        elif ch == '"':
-            out += '\\"'
-        elif ch == '\n':
-            out += '\\n'
-        elif ch == '\r':
-            out += '\\r'
-        elif ch == '\t':
-            out += '\\t'
-        else:
-            out += ch
-    return out + '"'
+    return __hvy_window__.JSON.stringify(str(value))
 
 
 def __hvy_to_json__(value):

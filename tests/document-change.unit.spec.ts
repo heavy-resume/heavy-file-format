@@ -136,10 +136,10 @@ function createSection(key: string, title: string): VisualSection {
   };
 }
 
-test('document change notifications use revisions without serializing document bytes', async () => {
+test('document change notifications use revisions without serializing the document', async () => {
   const { initDocumentChangeTracking, isDocumentDirty, markDocumentSaved, notifyDocumentMayHaveChanged } = await import('../src/document-change');
   const serialization = await import('../src/serialization');
-  const serializeDocumentBytesSpy = vi.spyOn(serialization, 'serializeDocumentBytes');
+  const serializeDocumentSpy = vi.spyOn(serialization, 'serializeDocument');
   initCallbacks({
     renderApp: () => {},
     refreshReaderPanels: () => {},
@@ -151,13 +151,13 @@ test('document change notifications use revisions without serializing document b
   const expectedEvents: Array<{ dirty: boolean; reason?: string }> = [];
 
   initDocumentChangeTracking(getActiveStateRuntime(), (event) => expectedEvents.push(event));
-  serializeDocumentBytesSpy.mockClear();
+  serializeDocumentSpy.mockClear();
 
   notifyDocumentMayHaveChanged('before-title-input', 'editor');
   state.document.meta.title = 'Edited';
   await Promise.resolve();
 
-  expect(serializeDocumentBytesSpy).not.toHaveBeenCalled();
+  expect(serializeDocumentSpy).not.toHaveBeenCalled();
   expect(expectedEvents.at(-1)).toEqual({
     dirty: true,
     reason: 'before-title-input',
@@ -166,11 +166,11 @@ test('document change notifications use revisions without serializing document b
   });
 
   expect(isDocumentDirty(getActiveStateRuntime())).toBe(true);
-  expect(serializeDocumentBytesSpy).toHaveBeenCalledTimes(1);
+  expect(serializeDocumentSpy).toHaveBeenCalledTimes(1);
 
-  serializeDocumentBytesSpy.mockClear();
+  serializeDocumentSpy.mockClear();
   markDocumentSaved(getActiveStateRuntime());
-  expect(serializeDocumentBytesSpy).toHaveBeenCalledTimes(1);
+  expect(serializeDocumentSpy).toHaveBeenCalledTimes(1);
   expect(expectedEvents.at(-1)).toEqual({ dirty: false, reason: 'mark-saved', changedSectionTitles: [] });
 });
 
@@ -204,4 +204,81 @@ test('document change notifications accumulate changed section titles since save
   notifyDocumentMayHaveChanged('untitled-section-add', 'editor');
   await Promise.resolve();
   expect(expectedEvents.at(-1)?.changedSectionTitles).toEqual(['Core Skills', '']);
+});
+
+test('edits while a hold is active produce one notification, after the hold ends', async () => {
+  initState(createDocumentChangeTestState());
+  const runtime = getActiveStateRuntime();
+  const { holdDocumentChangeFlush, initDocumentChangeTracking, notifyDocumentMayHaveChanged } = await import('../src/document-change');
+  const expectedEvents: boolean[] = [];
+  initDocumentChangeTracking(runtime, (event) => expectedEvents.push(event.dirty));
+  const release = holdDocumentChangeFlush(runtime);
+
+  state.document.meta.title = 'First';
+  notifyDocumentMayHaveChanged('fake-first', 'script', { authoritative: true });
+  await Promise.resolve();
+  state.document.meta.title = 'Second';
+  notifyDocumentMayHaveChanged('fake-second', 'script', { authoritative: true });
+  await Promise.resolve();
+  expect(expectedEvents).toEqual([]);
+
+  release();
+
+  expect(expectedEvents).toEqual([true]);
+});
+
+test('a change undone during a hold is reported as not dirty', async () => {
+  initState(createDocumentChangeTestState());
+  const runtime = getActiveStateRuntime();
+  const { holdDocumentChangeFlush, initDocumentChangeTracking, isDocumentDirty, notifyDocumentMayHaveChanged } = await import('../src/document-change');
+  initDocumentChangeTracking(runtime);
+  const release = holdDocumentChangeFlush(runtime);
+
+  state.document.meta.title = 'Changed';
+  notifyDocumentMayHaveChanged('fake-change', 'script', { authoritative: true });
+  await Promise.resolve();
+  state.document.meta.title = 'Initial';
+  notifyDocumentMayHaveChanged('fake-undo', 'script', { authoritative: true });
+  release();
+
+  expect(isDocumentDirty(runtime)).toBe(false);
+});
+
+test('releasing a hold with the settled text compares it without serializing again', async () => {
+  const serialization = await import('../src/serialization');
+  const serializeDocumentSpy = vi.spyOn(serialization, 'serializeDocument');
+  initState(createDocumentChangeTestState());
+  const runtime = getActiveStateRuntime();
+  const { holdDocumentChangeFlush, initDocumentChangeTracking, notifyDocumentMayHaveChanged } = await import('../src/document-change');
+  const expectedEvents: boolean[] = [];
+  initDocumentChangeTracking(runtime, (event) => expectedEvents.push(event.dirty));
+  const release = holdDocumentChangeFlush(runtime);
+  state.document.meta.title = 'Changed';
+  notifyDocumentMayHaveChanged('fake-change', 'script', { authoritative: true });
+  await Promise.resolve();
+  const settledText = serialization.serializeDocument(state.document);
+  serializeDocumentSpy.mockClear();
+
+  release(settledText);
+
+  expect(serializeDocumentSpy).not.toHaveBeenCalled();
+  expect(expectedEvents).toEqual([true]);
+});
+
+test('changed section titles are worked out when first read, then stay the same', async () => {
+  const { initDocumentChangeTracking, notifyDocumentMayHaveChanged } = await import('../src/document-change');
+  initState(createDocumentChangeTestState());
+  state.document.sections = [createSection('summary-id', 'Summary'), createSection('skills-id', 'Skills')];
+  const expectedEvents: Array<{ changedSectionTitles: string[] }> = [];
+  initDocumentChangeTracking(getActiveStateRuntime(), (event) => expectedEvents.push(event));
+  state.document.sections[0].description = 'Changed summary';
+  notifyDocumentMayHaveChanged('summary-edit', 'editor');
+  await Promise.resolve();
+
+  state.document.sections[1].description = 'Changed before the first read';
+  const firstRead = expectedEvents.at(-1)?.changedSectionTitles;
+  state.document.sections[0].title = 'Renamed after the first read';
+
+  expect(firstRead).toEqual(['Summary', 'Skills']);
+  expect(expectedEvents.at(-1)?.changedSectionTitles).toBe(firstRead);
 });

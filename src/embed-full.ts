@@ -70,7 +70,8 @@ import {
 import { bindReaderUi } from './bind-reader-ui';
 import { bindClickActions } from './bind/handlers/click-actions';
 import { bindInputBlock } from './bind/handlers/input-block';
-import { capturePluginFocus, reconcilePluginMounts, unmountAllPlugins } from './plugins/mount';
+import { capturePluginFocus, reconcilePluginMounts, refreshConnectedPlugins, unmountAllPlugins } from './plugins/mount';
+import { rememberRenderedDocument, runScopedReaderRedraw } from './reader/scoped-redraw';
 import { setHostPlugins } from './plugins/registry';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import {
@@ -796,6 +797,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
   getTargetRenderHookController(root, () => state.currentView).reconcile();
+  if (state.currentView === 'viewer') {
+    rememberRenderedDocument(state.document);
+  }
   logPerfTrace('renderApp', {
     elapsedMs: elapsedMs(startedAt),
     currentView: state.currentView,
@@ -985,6 +989,43 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   if (options.runDocumentHooks !== false) {
     void runPluginDocumentHooks('unknown');
   }
+}
+
+function refreshAfterScriptEdit(): boolean {
+  const root = currentRoot;
+  if (
+    !root
+    || state.currentView !== 'viewer'
+    || isPdfDocument(state.document)
+    || state.pendingPaneScrollRestore
+    || root.querySelector('#modalRoot')
+  ) {
+    return false;
+  }
+  const runtime = getActiveStateRuntime();
+  // A plugin or block that is briefly empty while layout is read shortens the page, which lowers the scroll.
+  const capturedScroll = captureRenderScroll(root, state.paneScroll);
+  state.paneScroll = capturedScroll.paneScroll;
+  invalidateInlineAnswerGroupIndex();
+  const refreshed = runScopedReaderRedraw({
+    document: state.document,
+    refreshBlock: (sectionKey, blockId) => refreshReaderBlock(root, sectionKey, blockId, { runVisibilityScripts: false }),
+    refreshPlugins: refreshConnectedPlugins,
+    afterRefresh: () => {
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
+      getTargetRenderHookController(root, () => state.currentView).reconcile();
+    },
+    onEditedDuringRefresh: () => {
+      void runPluginDocumentHooks('unknown');
+    },
+  });
+  if (refreshed) {
+    restoreRenderScroll(root, capturedScroll);
+  } else {
+    // The caller does a full redraw next, which must not capture a scroll a partial attempt already lowered.
+    state.pendingPaneScrollRestore = capturedScroll.paneScroll;
+  }
+  return refreshed;
 }
 
 function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
@@ -1336,6 +1377,11 @@ function ensureEmbedRuntime(
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshReaderSection(target, sectionKey, options);
+    }),
+    refreshAfterScriptEdit: () => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshAfterScriptEdit();
     }),
     refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;

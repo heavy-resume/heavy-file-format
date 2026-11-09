@@ -78,6 +78,23 @@ export function compileSurfaceResponsiveCss(
   return { inlineCss, responsiveRules };
 }
 
+export function filterCssDeclarations(
+  input: string | null | undefined,
+  documentMeta: JsonObject | null | undefined,
+  keepProperty: (property: string) => boolean
+): string {
+  const breakpoints = getSurfaceBreakpoints(documentMeta);
+  return (input ?? '')
+    .split(';')
+    .map((declaration) => declaration.trim())
+    .filter((declaration) => {
+      const property = parseResponsiveDeclaration(declaration, breakpoints)?.property ?? declaration.split(':')[0] ?? '';
+      return declaration.length > 0 && keepProperty(property.trim().toLowerCase());
+    })
+    .map((declaration) => `${declaration};`)
+    .join(' ');
+}
+
 function parseResponsiveDeclaration(
   declaration: string,
   breakpoints: Record<string, string>

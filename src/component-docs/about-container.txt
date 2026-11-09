@@ -4,6 +4,7 @@ Use children-order.json to reorder container children.
 containerBlocks holds the child block array.
 containerTitle is an optional reader label.
 Reader collapse/expand controls are shown when the container has a border.
+Layout declarations in css, such as display: flex or gap, arrange the child blocks; box declarations such as border and margin apply to the container as a whole.
 The reference editor's Border toggle writes sane default border CSS to css.
 containerExpanded stores the default expanded state for bordered containers.
 containerCollapsedPreviewRem controls the collapsed preview height in rem units and defaults to 3.

@@ -7,6 +7,7 @@ import { renderComponentListEditor } from './components/component-list/component
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
 import { renderExpandableEditor } from './components/expandable/expandable';
+import { renderContainerBodyElement } from './components/container/container-css';
 import { renderGridEditor, renderGridHeaderControls } from './components/grid/grid';
 import { renderImageEditor } from './components/image/image';
 import { renderCarouselEditor } from './components/carousel/carousel';
@@ -1197,7 +1198,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const body = renderPassiveContainerBlocks(sectionKey, block);
       const imageDropAttrs = `data-image-drop-block-container="container" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`;
       return body
-        ? `<div class="reader-container-body" ${imageDropAttrs}>${body}</div>`
+        ? renderContainerBodyElement({
+          sectionKey,
+          blockId: block.id,
+          css: block.schema.css,
+          documentMeta: state.documentMeta,
+          attrs: ` ${imageDropAttrs}`,
+          body,
+          escapeAttr: deps.escapeAttr,
+        })
         : `<div class="container-inner-blocks is-empty is-passive-empty" ${imageDropAttrs}><div class="container-empty-placeholder">Empty container</div></div>`;
     }
 

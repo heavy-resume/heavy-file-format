@@ -1,7 +1,8 @@
 import './container.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { VisualBlock, VisualSection } from '../../types';
-import { hasContainerBorderCss } from './container-css';
+import { state } from '../../../state';
+import { hasContainerBorderCss, renderContainerBodyElement } from './container-css';
 
 export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureContainerBlocks(block);
@@ -95,6 +96,7 @@ export const renderContainerReader: ComponentReaderRenderer = (section, block, h
     expanded: helpers.getReaderContainerExpanded(`${section.key}:${block.id}`, block.schema.containerExpanded),
     collapsedPreviewRem: block.schema.containerCollapsedPreviewRem,
     bordered: hasContainerBorderCss(block.schema.css),
+    css: block.schema.css,
     virtualKey: '',
     useListOrdering: false,
     helpers,
@@ -124,6 +126,7 @@ export function renderVirtualContainerReader(
     expanded: helpers.getReaderContainerExpanded(virtualKey, options.expanded ?? false),
     collapsedPreviewRem: options.collapsedPreviewRem,
     bordered: true,
+    css: '',
     virtualKey,
     useListOrdering: options.useListOrdering ?? false,
     helpers,
@@ -138,6 +141,7 @@ function renderContainerReaderBody(options: {
   expanded: boolean;
   collapsedPreviewRem: number;
   bordered: boolean;
+  css: string;
   virtualKey: string;
   useListOrdering: boolean;
   helpers: Parameters<ComponentReaderRenderer>[2];
@@ -186,8 +190,17 @@ function renderContainerReaderBody(options: {
     : ` data-image-drop-block-container="container" data-section-key="${options.helpers.escapeAttr(options.section.key)}" data-block-id="${options.helpers.escapeAttr(options.blockId)}"`;
   const bodyAttrs = `${canCollapse && !expanded ? ` ${collapsibleAttrs}` : ''}${imageDropAttrs}`;
   const rootAttrs = canCollapse && options.virtualKey && !expanded ? ` ${collapsibleAttrs}` : '';
+  const bodyElement = renderContainerBodyElement({
+    sectionKey: options.section.key,
+    blockId: options.blockId,
+    css: options.css,
+    documentMeta: state.document.meta,
+    attrs: bodyAttrs,
+    body,
+    escapeAttr: options.helpers.escapeAttr,
+  });
   return `<div class="${options.helpers.escapeAttr(className)}" style="--hvy-container-preview-rem: ${previewRem}rem;"${rootAttrs}>
     ${header}
-    <div class="reader-container-body"${bodyAttrs}>${body}</div>
+    ${bodyElement}
   </div>`;
 }

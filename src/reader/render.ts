@@ -5,7 +5,7 @@ import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
 import { getComponentListAddLabel, hasComponentListItems } from '../editor/components/component-list/component-list-labels';
 import { renderContainerReader } from '../editor/components/container/container';
-import { hasContainerBorderCss } from '../editor/components/container/container-css';
+import { getContainerShellCss, hasContainerBorderCss } from '../editor/components/container/container-css';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
 import { buildGridReaderLayout } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
@@ -592,7 +592,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
     const responsiveClass = getSurfaceResponsiveClass(section.key, block.id);
-    const responsiveCss = compileSurfaceResponsiveCss(block.schema.css, `.${responsiveClass}`, state.documentMeta);
+    const shellCss = base === 'container' ? getContainerShellCss(block.schema.css, state.documentMeta) : block.schema.css;
+    const responsiveCss = compileSurfaceResponsiveCss(shellCss, `.${responsiveClass}`, state.documentMeta);
     const blockClass = [
       'reader-block',
       responsiveClass,

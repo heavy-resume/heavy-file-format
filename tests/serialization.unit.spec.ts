@@ -393,6 +393,34 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"containerCollapsedPreviewRem":2.5');
 });
 
+test('serializes a noSave container as an empty container', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"feed"}-->
+#! Feed
+
+ <!--hvy:container {"id":"fake-feed","noSave":true}-->
+
+  <!--hvy:text {}-->
+   Fake runtime row
+
+ <!--hvy:text {}-->
+  After the feed
+`, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.schema.noSave).toBe(true);
+  expect(document.sections[0]?.blocks[0]?.schema.containerBlocks.map((block) => block.text)).toEqual(['Fake runtime row']);
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('<!--hvy:container {"id":"fake-feed","noSave":true}-->');
+  expect(expectedResult).not.toContain('Fake runtime row');
+  expect(expectedResult).toContain('After the feed');
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.blocks.map((block) => block.schema.component)).toEqual(['container', 'text']);
+});
+
 test('round-trips reusable xref-card target tag filters', () => {
   const input = `---
 hvy_version: 0.1

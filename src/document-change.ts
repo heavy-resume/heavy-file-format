@@ -238,12 +238,17 @@ function snapshotSections(sections: VisualSection[]): Map<string, SectionChangeS
       const sectionContent = section;
       snapshots.set(section.key, {
         title: formatChangedSectionTitle(section.title),
-        fingerprint: JSON.stringify({ parentKey, index, ...sectionContent }),
+        fingerprint: JSON.stringify({ parentKey, index, ...sectionContent }, omitNoSaveContainerBlocks),
       });
     });
   };
   visit(sections, null);
   return snapshots;
+}
+
+// noSave container children are runtime content and never count as a section change.
+function omitNoSaveContainerBlocks(this: unknown, key: string, value: unknown): unknown {
+  return key === 'containerBlocks' && (this as { noSave?: unknown } | undefined)?.noSave === true ? [] : value;
 }
 
 function getChangedSectionTitles(

@@ -8,5 +8,6 @@ Layout declarations in css, such as display: flex or gap, arrange the child bloc
 The reference editor's Border toggle writes sane default border CSS to css.
 containerExpanded stores the default expanded state for bordered containers.
 containerCollapsedPreviewRem controls the collapsed preview height in rem units and defaults to 3.
+noSave marks the children as runtime content (for example written by a script); the container is saved empty and changes inside it do not mark the document unsaved.
 Child blocks are written directly under the container directive.
 Plain Markdown before the first child directive is treated as the first implicit child block.

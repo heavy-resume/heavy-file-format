@@ -57,6 +57,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         containerTitle: '',
         containerExpanded: true,
         containerCollapsedPreviewRem: 3,
+        noSave: false,
       } as unknown as BlockSchema;
     case 'component-list':
       return {
@@ -407,6 +408,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.containerTitle = typeof candidate.containerTitle === 'string' ? candidate.containerTitle : schema.containerTitle;
     schema.containerExpanded = candidate.containerExpanded !== false;
     schema.containerCollapsedPreviewRem = parsePositiveNumber(candidate.containerCollapsedPreviewRem, schema.containerCollapsedPreviewRem);
+    schema.noSave = candidate.noSave === true;
   }
   if (schema.kind === 'component-list') {
     schema.componentListComponent =

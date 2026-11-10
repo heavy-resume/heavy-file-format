@@ -1486,7 +1486,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'containerTitle', schema.containerTitle, defaults.containerTitle);
     addIfChanged(payload, 'containerExpanded', schema.containerExpanded, defaults.containerExpanded);
     addIfChanged(payload, 'containerCollapsedPreviewRem', schema.containerCollapsedPreviewRem, defaults.containerCollapsedPreviewRem);
-    if (!options.omitContainerBlocks) {
+    addIfChanged(payload, 'noSave', schema.noSave, defaults.noSave);
+    // noSave children are runtime content (e.g. script output) and never written.
+    if (!options.omitContainerBlocks && !schema.noSave) {
       addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks, documentMeta);
     }
   }
@@ -1822,6 +1824,9 @@ function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta:
       .join('\n\n');
   }
   if (component === 'container') {
+    if (block.schema.noSave) {
+      return '';
+    }
     return block.schema.containerBlocks.map((innerBlock) => serializeBlock(innerBlock, indent, documentMeta)).join('\n\n');
   }
   return '';

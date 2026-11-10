@@ -698,7 +698,7 @@ All block schemas MAY include common document fields:
 Component-owned fields are:
 - `text`: `showCopy`
 - `code`: `codeLanguage`
-- `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
+- `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `noSave`, `containerBlocks`
 - `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupsExpanded`, `componentListGroupCollapsedPreviewRem`
 - `grid`: `gridColumns`, `gridStackWidth`, `gridItems`
 - `plugin`: `plugin`, `pluginConfig`
@@ -715,6 +715,8 @@ Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore f
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
 
 Container blocks MAY be collapsible in readers. `containerExpanded` stores the default expanded state and defaults to `true`. `containerCollapsedPreviewRem` stores the collapsed preview height in `rem` units and defaults to `3`. `containerTitle` is an optional label shown by readers as the collapse/expand control. Collapsed containers SHOULD render a non-editing preview of their first visible content up to the configured height.
+
+`noSave` is an optional boolean on container blocks and defaults to `false`. When `true`, the container's children are runtime content, typically written by a script or plugin from an external source, and are not part of the saved document. Writers MUST serialize a `noSave` container as an empty container: the directive and its own fields are emitted, but no child blocks or `containerBlocks`. Readers MUST still parse and render any children present in the source. Hosts that compare a document against its saved state (for example to show an unsaved indicator or compute a diff) MUST NOT treat changes inside a `noSave` container as document changes.
 
 ```json
 {

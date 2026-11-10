@@ -282,3 +282,44 @@ test('changed section titles are worked out when first read, then stay the same'
   expect(firstRead).toEqual(['Summary', 'Skills']);
   expect(expectedEvents.at(-1)?.changedSectionTitles).toBe(firstRead);
 });
+
+test('changes inside a noSave container do not mark the document dirty', async () => {
+  const { deserializeDocument } = await import('../src/serialization');
+  const { createEmptyBlock } = await import('../src/document-factory');
+  const { initDocumentChangeTracking, isDocumentDirty, notifyDocumentMayHaveChanged } = await import('../src/document-change');
+  initState(createDocumentChangeTestState());
+  state.document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"feed"}-->
+#! Feed
+
+ <!--hvy:container {"id":"fake-feed","noSave":true}-->
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+ <!--hvy:text {"id":"fake-note"}-->
+  Fake note
+`, '.hvy');
+  const expectedEvents: Array<{ dirty: boolean; changedSectionTitles: string[] }> = [];
+  initDocumentChangeTracking(getActiveStateRuntime(), (event) => expectedEvents.push(event));
+  const [feedContainer] = state.document.sections[0]!.blocks;
+  const [note] = state.document.sections[1]!.blocks;
+
+  const fakeRuntimeRow = createEmptyBlock('text');
+  fakeRuntimeRow.text = 'Fake runtime row';
+  feedContainer!.schema.containerBlocks.push(fakeRuntimeRow);
+  notifyDocumentMayHaveChanged('fake-script-write', 'script', { authoritative: true });
+  await Promise.resolve();
+
+  expect(isDocumentDirty(getActiveStateRuntime())).toBe(false);
+
+  note!.text = 'Fake note edited';
+  notifyDocumentMayHaveChanged('fake-note-edit', 'editor');
+  await Promise.resolve();
+
+  expect(expectedEvents.at(-1)?.dirty).toBe(true);
+  expect(expectedEvents.at(-1)?.changedSectionTitles).toEqual(['Notes']);
+});

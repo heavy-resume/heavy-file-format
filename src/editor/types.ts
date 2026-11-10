@@ -86,6 +86,7 @@ export interface ContainerBlockSchema extends BaseBlockSchema {
   containerTitle: string;
   containerExpanded: boolean;
   containerCollapsedPreviewRem: number;
+  noSave: boolean;
 }
 
 export interface ComponentListBlockSchema extends BaseBlockSchema {
@@ -231,6 +232,7 @@ interface RuntimeSchemaFieldAccess {
   containerTitle: string;
   containerExpanded: boolean;
   containerCollapsedPreviewRem: number;
+  noSave: boolean;
   componentListComponent: string;
   componentListItemLabel: string;
   componentListBlocks: VisualBlock[];

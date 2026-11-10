@@ -469,6 +469,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-container-no-save' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.noSave = target.checked;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      refreshReaderPanelsOutsideActiveEditor(target);
+      return;
+    }
+
     if (field === 'block-description' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       const context = resolveBlockContext(target);
       if (!context) {

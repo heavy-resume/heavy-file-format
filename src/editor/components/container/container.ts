@@ -45,6 +45,16 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
             />
             <span>Expanded by default</span>
           </label>
+          <label class="checkbox-label container-no-save-toggle" title="Contents are runtime-only (e.g. written by a script) and saved as an empty container.">
+            <input
+              type="checkbox"
+              data-section-key="${helpers.escapeAttr(sectionKey)}"
+              data-block-id="${helpers.escapeAttr(block.id)}"
+              data-field="block-container-no-save"
+              ${block.schema.noSave ? 'checked' : ''}
+            />
+            <span>Don't save contents</span>
+          </label>
         </div>
       </div>
     </div>

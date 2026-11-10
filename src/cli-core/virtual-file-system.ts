@@ -1115,6 +1115,7 @@ function applyBlockSchemaJson(
   }
   if (typeof value.containerTitle === 'string') schema.containerTitle = value.containerTitle;
   if (typeof value.containerExpanded === 'boolean') schema.containerExpanded = value.containerExpanded;
+  if (typeof value.noSave === 'boolean') schema.noSave = value.noSave;
   if (typeof value.containerCollapsedPreviewRem === 'number' && Number.isFinite(value.containerCollapsedPreviewRem) && value.containerCollapsedPreviewRem > 0) {
     schema.containerCollapsedPreviewRem = value.containerCollapsedPreviewRem;
   }

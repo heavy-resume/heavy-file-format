@@ -7,6 +7,7 @@ import { getComponentListAddLabel, hasComponentListItems } from '../editor/compo
 import { renderContainerReader } from '../editor/components/container/container';
 import { getContainerShellCss, hasContainerBorderCss } from '../editor/components/container/container-css';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
+import { renderExpandableModal } from '../editor/components/expandable/expandable-modal';
 import { buildGridReaderLayout } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
 import { renderCarouselReader } from '../editor/components/carousel/carousel';
@@ -23,6 +24,7 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
+import type { ReaderExpandableModalEntry } from '../types';
 import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableDefinitionEditModalState, ReusableSaveModalState, SectionTemplateFlavorModalState, DbTableRowComponentModalState, VisualDocument } from '../types';
 import type { CaptionTextModalState } from '../caption';
 import { createDefaultTextCaption, normalizeTextCaption, renderTextCaptionHtml } from '../caption';
@@ -103,6 +105,7 @@ interface ReaderRenderState {
   showAdvancedEditor: boolean;
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
+  readerExpandableModals: ReaderExpandableModalEntry[];
   readerContainerState: Record<string, boolean>;
   searchRevealedAncestors: Record<string, boolean>;
   readerDeferredSectionBodies?: Record<string, boolean>;
@@ -138,6 +141,7 @@ interface ReaderRenderDeps {
 export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
   renderReaderSections: (sections: VisualSection[], windowOptions?: ReaderRenderTreeWindowOptions) => string;
+  renderExpandableModals: () => string;
   renderSidebarSections: (sections: VisualSection[]) => string;
   renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection, windowOptions?: ReaderRenderTreeWindowOptions) => string;
@@ -585,9 +589,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
     const forceSearchExpanded = searchContext.filtering && searchContext.filterMode === 'hide' && !searchDimmed;
     const searchRevealed = state.searchRevealedAncestors[`${section.key}:${block.id}`] === true;
+    const documentExpanded = block.schema.expandableExpanded && block.schema.expandablePresentation !== 'modal';
     const readerExpanded = base === 'expandable' && !options.ignoreReaderSessionState
-      ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
-      : searchRevealed || block.schema.expandableExpanded;
+      ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : documentExpanded)
+      : searchRevealed || documentExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
@@ -1080,6 +1085,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function getBlockDomId(block: VisualBlock): string {
     return block.schema.id.trim();
+  }
+
+  function renderExpandableModals(): string {
+    const helpers = deps.getComponentRenderHelpers();
+    return state.readerExpandableModals.map(({ sectionKey, blockId }) => {
+      const section = deps.findSectionByKey(state.documentSections, sectionKey);
+      const block = deps.findBlockByIds(sectionKey, blockId);
+      if (!section || !block) {
+        return '';
+      }
+      deps.ensureExpandableBlocks(block);
+      return renderExpandableModal(section, block, helpers);
+    }).join('');
   }
 
   function getReaderExpandableExpanded(sectionKey: string, block: VisualBlock, fallback = block.schema.expandableExpanded): boolean {
@@ -2665,6 +2683,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   return {
     renderNavigation,
     renderReaderSections,
+    renderExpandableModals,
     renderSidebarSections,
     renderSidebarHelpBalloon,
     renderReaderSection,

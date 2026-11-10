@@ -16,6 +16,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
+import { EXPANDABLE_MODAL_HOST_ID, handleExpandableModalCloseClick, keepFocusInExpandableModal, openExpandableModal } from './editor/components/expandable/expandable-modal';
 import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, getRefreshReaderSection, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
@@ -142,6 +143,9 @@ export function bindReaderUi(app: HTMLElement): void {
               ? 'ai-sidebar'
               : null,
     });
+    if (handleExpandableModalCloseClick(app, event, nearestReaderAction)) {
+      return;
+    }
     if (target.closest('[data-action]')) {
       logClickTrace(event, 'reader-area:skip', {
         skipReason: 'data-action-target',
@@ -305,6 +309,9 @@ export function bindReaderUi(app: HTMLElement): void {
         });
         return;
       }
+      if (openExpandableModal(sectionKey, block)) {
+        return;
+      }
       const expandableStateKey = `${sectionKey}:${blockId}`;
       const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
       const actionStartedAt = nowMs();
@@ -428,6 +435,11 @@ export function bindReaderUi(app: HTMLElement): void {
     readerDocument.addEventListener('click', handleReaderAreaClick);
     readerDocument.addEventListener('change', handlePersistedAnswerChange);
   });
+  const expandableModalHost = app.querySelector<HTMLElement>(`#${EXPANDABLE_MODAL_HOST_ID}`);
+  expandableModalHost?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  expandableModalHost?.addEventListener('click', handleReaderAreaClick);
+  expandableModalHost?.addEventListener('change', handlePersistedAnswerChange);
+  expandableModalHost?.addEventListener('keydown', keepFocusInExpandableModal);
   readerSidebarSections.forEach((sidebarSections) => {
     sidebarSections.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
     sidebarSections.addEventListener('click', handleReaderAreaClick);

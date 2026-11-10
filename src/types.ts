@@ -10,6 +10,11 @@ import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';
 import type { HvyPdfStylePreset } from './pdf-style-presets';
 
+export interface ReaderExpandableModalEntry {
+  sectionKey: string;
+  blockId: string;
+}
+
 export interface ReusableTemplateVariableConfig {
   type?: 'text' | 'block' | 'url';
   label?: string;
@@ -677,6 +682,7 @@ export interface AppState {
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
+  readerExpandableModals: ReaderExpandableModalEntry[];
   readerContainerState: Record<string, boolean>;
   /**
    * Ancestors force-opened to reveal a search result. Unlike the reader*State maps this is

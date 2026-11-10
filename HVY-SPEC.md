@@ -486,6 +486,16 @@ The placeholder name MUST begin with an ASCII letter and contain only ASCII lett
 
 An expandable provides the `expandable-chevron` placeholder to text components in its stub, including text nested through layout components. It renders as a right-pointing chevron while the expandable is closed and a down-pointing chevron while it is open. The expanded-content pane does not inherit this placeholder from that expandable. A nested expandable establishes its own stub/content placeholder context.
 
+An expandable provides the `expandable-close` placeholder to text components in its content pane, including text nested through layout components. It renders as a close control that closes that expandable. The stub pane does not inherit this placeholder.
+
+`expandablePresentation` selects how an expandable reveals its content. The value MUST be `"inline"` (the default) or `"modal"`; readers MUST treat any other value as `"inline"`. With `"inline"`, content expands in the document layout. With `"modal"`, the stub stays in the layout and activating it opens the content pane in an overlay above the document:
+
+- The overlay MUST be dismissible by activating outside its content and MUST provide a close control within it.
+- `expandableExpanded` MUST NOT open the overlay when a document loads.
+- Navigating to a target inside the content pane, such as following a link or moving to a search result, SHOULD open the overlay, and navigating to a target outside it SHOULD close the overlay.
+- Reader operations that reveal many expandables at once, such as filtering a document, MAY expand the content inline instead.
+- Surfaces that cannot present an overlay, such as print output or authoring surfaces, SHOULD render the expandable as `"inline"`.
+
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
 ```markdown
@@ -693,7 +703,7 @@ Component-owned fields are:
 - `grid`: `gridColumns`, `gridStackWidth`, `gridItems`
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
-- `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
+- `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandablePresentation`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
 - `table`: `tableColumns`, `tableColumnProperties`, `tableShowHeader`, `tableRows`
 - `image`: `imageFile`, `imageAlt`, `caption`, `allowDocumentImageReuse`
 - `carousel`: `carouselImages`, `allowDocumentImageReuse`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`

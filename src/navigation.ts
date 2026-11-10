@@ -1,3 +1,5 @@
+import { EXPANDABLE_MODAL_HOST_ID } from './editor/components/expandable/expandable-modal';
+import type { ReaderExpandableModalEntry } from './types';
 import type { VisualBlock, VisualSection } from './editor/types';
 import { state, getActiveStateRuntime, runWithStateRuntime } from './state';
 import { getSectionId } from './section-ops';
@@ -134,6 +136,9 @@ export function navigateToReaderTarget(
     : sectionByKeyRes.found ? sectionByKeyRes.location
     : null;
   const expandChanged = sectionByIdRes.changed || blockBySchemaRes.changed || sectionByKeyRes.changed || blockByBlockIdRes.changed;
+  const expandableModalsChanged = loc !== null && setNavigationExpandableModals(
+    blockBySchemaRes.found ? blockBySchemaRes.expandableModals : blockByBlockIdRes.expandableModals
+  );
 
   if (loc === 'sidebar' && !state.viewerSidebarOpen) {
     if (requiresFullRender) {
@@ -156,6 +161,9 @@ export function navigateToReaderTarget(
   } else if (expandChanged) {
     const surface: ReaderPanelRefreshSurface = loc === 'sidebar' ? 'sidebar' : loc === 'main' ? 'reader' : 'all';
     getRefreshReaderPanels()({ runVisibilityScripts: false, surface });
+  }
+  if (!requiresFullRender && expandableModalsChanged) {
+    getRefreshReaderPanels()({ surface: 'expandable-modals' });
   }
 
   requestTargetHighlight(app, target, {
@@ -375,6 +383,7 @@ function findReaderTargetElement(app: HTMLElement, target: { targetId?: string; 
 
 function getReaderSurfaces(app: HTMLElement): HTMLElement[] {
   return [
+    app.querySelector<HTMLElement>(`#${EXPANDABLE_MODAL_HOST_ID}`),
     app.querySelector<HTMLElement>('#readerDocument'),
     app.querySelector<HTMLElement>('#readerSidebarSections'),
     app.querySelector<HTMLElement>('#aiReaderDocument'),
@@ -395,11 +404,18 @@ function findSearchMarkerInTarget(element: HTMLElement, matchText?: string, matc
   return matchingMarkers[matchOrdinal] ?? matchingMarkers[0] ?? markers[0] ?? null;
 }
 
+interface BlockExpandResult {
+  found: boolean;
+  changed: boolean;
+  expandableModals: ReaderExpandableModalEntry[];
+}
+
 interface ExpandResult {
   found: boolean;
   changed: boolean;
   location: VisualSection['location'] | null;
   sectionKey: string | null;
+  expandableModals: ReaderExpandableModalEntry[];
 }
 
 export function expandSectionPathById(sections: VisualSection[], sectionId: string): ExpandResult {
@@ -407,7 +423,7 @@ export function expandSectionPathById(sections: VisualSection[], sectionId: stri
     if (getSectionId(section) === sectionId) {
       const changed = !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: section.location, sectionKey: section.key };
+      return { found: true, changed, location: section.location, sectionKey: section.key, expandableModals: [] };
     }
   }
   return emptyExpandResult();
@@ -418,7 +434,7 @@ export function expandSectionPathByKey(sections: VisualSection[], sectionKey: st
     if (section.key === sectionKey) {
       const changed = !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: section.location, sectionKey: section.key };
+      return { found: true, changed, location: section.location, sectionKey: section.key, expandableModals: [] };
     }
   }
   return emptyExpandResult();
@@ -430,7 +446,7 @@ export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: s
     if (blockRes.found) {
       const changed = blockRes.changed || !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: section.location, sectionKey: section.key };
+      return { found: true, changed, location: section.location, sectionKey: section.key, expandableModals: blockRes.expandableModals };
     }
   }
   return emptyExpandResult();
@@ -445,27 +461,32 @@ export function expandBlockPathByBlockId(sections: VisualSection[], blockId: str
     if (blockRes.found) {
       const changed = blockRes.changed || !getReaderSectionExpanded(section);
       setReaderSectionExpanded(section, true);
-      return { found: true, changed, location: section.location, sectionKey: section.key };
+      return { found: true, changed, location: section.location, sectionKey: section.key, expandableModals: blockRes.expandableModals };
     }
   }
   return emptyExpandResult();
 }
 
-function expandBlockPathInList(blocks: VisualBlock[], id: string, sectionKey: string, mode: 'schema-id' | 'block-id' = 'schema-id'): { found: boolean, changed: boolean } {
+function expandBlockPathInList(blocks: VisualBlock[], id: string, sectionKey: string, mode: 'schema-id' | 'block-id' = 'schema-id'): BlockExpandResult {
   for (const block of blocks) {
     const isTarget = mode === 'schema-id' ? block.schema.id === id : block.id === id;
+    const isExpandable = resolveBaseComponent(block.schema.component) === 'expandable';
+    const isModalExpandable = isExpandable && block.schema.expandablePresentation === 'modal';
 
-    if (isTarget && resolveBaseComponent(block.schema.component) === 'expandable') {
+    if (isTarget && isModalExpandable) {
+      return { found: true, changed: false, expandableModals: [{ sectionKey, blockId: block.id }] };
+    }
+    if (isTarget && isExpandable) {
       const key = `${sectionKey}:${block.id}`;
       const changed = state.readerExpandableState[key] !== true;
       state.readerExpandableState[key] = true;
-      return { found: true, changed };
+      return { found: true, changed, expandableModals: [] };
     }
     if (isTarget && resolveBaseComponent(block.schema.component) === 'container') {
       const key = `${sectionKey}:${block.id}`;
       const changed = state.readerContainerState[key] !== true;
       state.readerContainerState[key] = true;
-      return { found: true, changed };
+      return { found: true, changed, expandableModals: [] };
     }
 
     let nestedRes = expandBlockPathInList(block.schema.containerBlocks ?? [], id, sectionKey, mode);
@@ -474,10 +495,17 @@ function expandBlockPathInList(blocks: VisualBlock[], id: string, sectionKey: st
       nestedRes = expandBlockPathInList(block.schema.gridItems.map((item) => item.block), id, sectionKey, mode);
     }
     if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableStubBlocks?.children ?? [], id, sectionKey, mode);
+    const foundOutsideContent = nestedRes.found;
     if (!nestedRes.found) nestedRes = expandBlockPathInList(block.schema.expandableContentBlocks?.children ?? [], id, sectionKey, mode);
     if (nestedRes.found) {
       let changed = nestedRes.changed;
-      if (resolveBaseComponent(block.schema.component) === 'expandable') {
+      let expandableModals = nestedRes.expandableModals;
+      if (isModalExpandable) {
+        // A modal's stub stays in the layout, so only its content needs the modal open.
+        if (!foundOutsideContent) {
+          expandableModals = [{ sectionKey, blockId: block.id }, ...expandableModals];
+        }
+      } else if (isExpandable) {
         const key = `${sectionKey}:${block.id}`;
         if (state.readerExpandableState[key] !== true) {
           state.readerExpandableState[key] = true;
@@ -491,14 +519,22 @@ function expandBlockPathInList(blocks: VisualBlock[], id: string, sectionKey: st
           changed = true;
         }
       }
-      return { found: true, changed };
+      return { found: true, changed, expandableModals };
     }
 
     if (isTarget) {
-      return { found: true, changed: false };
+      return { found: true, changed: false, expandableModals: [] };
     }
   }
-  return { found: false, changed: false };
+  return { found: false, changed: false, expandableModals: [] };
+}
+
+function setNavigationExpandableModals(expandableModals: ReaderExpandableModalEntry[]): boolean {
+  // The hide filter already reveals every match inline.
+  const next = state.search.filterEnabled && state.search.filterMode === 'hide' ? [] : expandableModals;
+  const changed = JSON.stringify(next) !== JSON.stringify(state.readerExpandableModals);
+  state.readerExpandableModals = next;
+  return changed;
 }
 
 function sectionContainsBlock(section: VisualSection, blockId: string): boolean {
@@ -506,7 +542,7 @@ function sectionContainsBlock(section: VisualSection, blockId: string): boolean 
 }
 
 function emptyExpandResult(): ExpandResult {
-  return { found: false, changed: false, location: null, sectionKey: null };
+  return { found: false, changed: false, location: null, sectionKey: null, expandableModals: [] };
 }
 
 export function closeModal(): void {
@@ -620,6 +656,7 @@ export function resetTransientUiState(): void {
   state.templateValues = {};
   state.gridAddComponentByBlock = {};
   state.readerExpandableState = {};
+  state.readerExpandableModals = [];
   state.readerContainerState = {};
   state.searchRevealedAncestors = {};
   state.readerDeferredSectionBodies = {};

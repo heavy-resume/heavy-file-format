@@ -1179,6 +1179,7 @@ function applyBlockSchemaJson(
   if (baseComponent === 'expandable') {
     if (typeof value.expandableAlwaysShowStub === 'boolean') schema.expandableAlwaysShowStub = value.expandableAlwaysShowStub;
     if (typeof value.expandableExpanded === 'boolean') schema.expandableExpanded = value.expandableExpanded;
+    if (value.expandablePresentation === 'inline' || value.expandablePresentation === 'modal') schema.expandablePresentation = value.expandablePresentation;
     if (typeof value.expandableStubCss === 'string') schema.expandableStubCss = value.expandableStubCss;
     if (typeof value.expandableContentCss === 'string') schema.expandableContentCss = value.expandableContentCss;
     if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;

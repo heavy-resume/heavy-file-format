@@ -56,6 +56,7 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { renderExpandableModalHost, syncExpandableModals } from './editor/components/expandable/expandable-modal';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import { createEditorBlockElement, createEditorSectionElement, insertEditorTopLevelSectionDom, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
@@ -218,6 +219,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    readerExpandableModals: [],
     searchRevealedAncestors: {},
     readerContainerState: {},
     readerDeferredSectionBodies: {},
@@ -648,6 +650,9 @@ readerRenderer = createReaderRenderer(
     get readerExpandableState() {
       return state.readerExpandableState;
     },
+    get readerExpandableModals() {
+      return state.readerExpandableModals;
+    },
     get searchRevealedAncestors() {
       return state.searchRevealedAncestors;
     },
@@ -843,6 +848,7 @@ function renderApp(): void {
                      scrollTop: capturedScroll.paneScroll.readerTop,
                      viewportHeight: readerViewportHeight,
                    } : undefined)}</div>
+                   ${renderExpandableModalHost(readerRenderer.renderExpandableModals())}
                    ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}
                    ${isAiView
@@ -1208,6 +1214,24 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   invalidateInlineAnswerGroupIndex();
   if (isPdfDocument(state.document) && state.currentView === 'viewer') {
     syncActivePdfPreview(app, state.document, true);
+    return;
+  }
+  if (options.surface !== 'sidebar') {
+    syncExpandableModals({
+      root: app,
+      renderModals: readerRenderer.renderExpandableModals,
+      capturePluginFocus,
+      afterRender: (host) => {
+        reconcilePluginMounts(host);
+        if (options.runVisibilityScripts !== false) {
+          void runButtonVisibilityScripts(host);
+        }
+        initializeCarouselReaders(host);
+        bindLazyImageHydration(host);
+      },
+    });
+  }
+  if (options.surface === 'expandable-modals') {
     return;
   }
   const refreshId = incrementRefreshReaderCount();

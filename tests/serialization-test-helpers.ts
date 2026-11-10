@@ -99,6 +99,7 @@ export function createTestState(document: VisualDocument): AppState {
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    readerExpandableModals: [],
     readerContainerState: {},
     readerDeferredSectionBodies: {},
     readerView: {},

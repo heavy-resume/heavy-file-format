@@ -85,6 +85,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         expandableStubBlocks: { lock: false, children: [] },
         expandableAlwaysShowStub: true,
         expandableExpanded: false,
+        expandablePresentation: 'inline',
         expandableContentCss: '',
         expandableContentDescription: '',
         expandableContentBlocks: { lock: false, children: [] },
@@ -452,6 +453,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.expandableStubBlocks = parseExpandablePart(candidate.expandableStubBlocks, seen, documentMeta);
     schema.expandableAlwaysShowStub = candidate.expandableAlwaysShowStub !== false;
     schema.expandableExpanded = candidate.expandableExpanded === true;
+    schema.expandablePresentation = candidate.expandablePresentation === 'modal' ? 'modal' : 'inline';
     schema.expandableContentCss =
       typeof candidate.expandableContentCss === 'string'
         ? candidate.expandableContentCss

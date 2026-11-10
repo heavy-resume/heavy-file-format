@@ -131,6 +131,7 @@ import { resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { renderExpandableModalHost, syncExpandableModals } from './editor/components/expandable/expandable-modal';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import { createEditorBlockElement, createEditorSectionElement, insertEditorTopLevelSectionDom, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
@@ -411,6 +412,7 @@ function createEmbedState(
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    readerExpandableModals: [],
     searchRevealedAncestors: {},
     readerContainerState: {},
     readerDeferredSectionBodies: {},
@@ -641,6 +643,7 @@ function ensureRenderers(): void {
       get showAdvancedEditor() { return state.showAdvancedEditor; },
       get responsivePreview() { return state.responsivePreview; },
       get readerExpandableState() { return state.readerExpandableState; },
+      get readerExpandableModals() { return state.readerExpandableModals; },
       get searchRevealedAncestors() { return state.searchRevealedAncestors; },
       get readerContainerState() { return state.readerContainerState; },
       get readerDeferredSectionBodies() { return state.readerDeferredSectionBodies; },
@@ -740,6 +743,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                     scrollTop: capturedScroll.paneScroll.readerTop,
                     viewportHeight: readerViewportHeight,
                   } : undefined)}</div>
+                  ${renderExpandableModalHost(readerRenderer.renderExpandableModals())}
                   ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
                 </div>`
           }
@@ -929,6 +933,24 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     return;
   }
   const runtime = getActiveStateRuntime();
+  if (options.surface !== 'sidebar') {
+    syncExpandableModals({
+      root: currentRoot,
+      renderModals: readerRenderer.renderExpandableModals,
+      capturePluginFocus,
+      afterRender: (host) => {
+        reconcilePluginMounts(host);
+        if (options.runVisibilityScripts !== false) {
+          void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(host));
+        }
+        initializeCarouselReaders(host);
+        bindLazyImageHydration(host);
+      },
+    });
+  }
+  if (options.surface === 'expandable-modals') {
+    return;
+  }
   const startedAt = nowMs();
   let lazyMs = 0;
   let afterRefreshMs = 0;

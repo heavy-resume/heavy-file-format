@@ -6,7 +6,7 @@ export interface EditorBlockRefreshOptions {
   replacementBlocks?: VisualBlock[];
 }
 
-export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
+export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar' | 'expandable-modals';
 export interface ReaderPanelRefreshOptions {
   runVisibilityScripts?: boolean;
   runDocumentHooks?: boolean;

@@ -617,6 +617,17 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     return true;
   }
 
+  if (field === 'block-expandable-modal' && target instanceof HTMLInputElement) {
+    if (state.editorMode === 'mobile-adjustment') {
+      target.checked = block.schema.expandablePresentation === 'modal';
+      return true;
+    }
+    block.schema.expandablePresentation = target.checked ? 'modal' : 'inline';
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    refreshReaderPanelsOutsideActiveEditor(target);
+    return true;
+  }
+
   if (field === 'table-show-header' && target instanceof HTMLInputElement) {
     block.schema.tableShowHeader = target.checked;
     refreshReaderPanelsOutsideActiveEditor(target);

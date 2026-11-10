@@ -1,3 +1,4 @@
+import { EXPANDABLE_MODAL_HOST_ID, handleExpandableModalCloseClick, keepFocusInExpandableModal, openExpandableModal } from './editor/components/expandable/expandable-modal';
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
@@ -755,6 +756,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerExpandableModals = [];
     state.readerDeferredSectionBodies = {};
     state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
     saveSessionState(state);
@@ -780,6 +782,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerExpandableModals = [];
     state.readerDeferredSectionBodies = {};
     saveSessionState(state);
     getRenderApp()();
@@ -902,6 +905,9 @@ export function bindUi(app: HTMLElement): void {
               ? 'reader-sidebar'
               : null,
     });
+    if (handleExpandableModalCloseClick(app, event, nearestReaderAction)) {
+      return;
+    }
     blurActiveFillInWhenClickingOutside(target);
     refreshCompletedFillInsOnReaderClick(target);
     if (target.closest('[data-action]')) {
@@ -1144,6 +1150,9 @@ export function bindUi(app: HTMLElement): void {
         });
       }
       runReaderAction(event, () => {
+        if (openExpandableModal(sectionKey, block)) {
+          return;
+        }
         const expandableStateKey = `${sectionKey}:${blockId}`;
         const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
         const actionStartedAt = nowMs();
@@ -1288,6 +1297,11 @@ export function bindUi(app: HTMLElement): void {
   aiReaderDocument?.addEventListener('change', handlePersistedAnswerChange);
   aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
   aiSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
+  const expandableModalHost = app.querySelector<HTMLElement>(`#${EXPANDABLE_MODAL_HOST_ID}`);
+  expandableModalHost?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  expandableModalHost?.addEventListener('click', handleReaderAreaClick);
+  expandableModalHost?.addEventListener('change', handlePersistedAnswerChange);
+  expandableModalHost?.addEventListener('keydown', keepFocusInExpandableModal);
   aiReaderDocument?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
   aiSidebarSections?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
 

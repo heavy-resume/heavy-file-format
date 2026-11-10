@@ -23,6 +23,8 @@ export interface GridItem {
   block: VisualBlock;
 }
 
+export type ExpandablePresentation = 'inline' | 'modal';
+
 export interface ExpandablePart {
   lock: boolean;
   children: VisualBlock[];
@@ -115,6 +117,7 @@ export interface ExpandableBlockSchema extends BaseBlockSchema {
   expandableStubBlocks: ExpandablePart;
   expandableAlwaysShowStub: boolean;
   expandableExpanded: boolean;
+  expandablePresentation: ExpandablePresentation;
   expandableContentCss: string;
   expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;
@@ -253,6 +256,7 @@ interface RuntimeSchemaFieldAccess {
   expandableStubBlocks: ExpandablePart;
   expandableAlwaysShowStub: boolean;
   expandableExpanded: boolean;
+  expandablePresentation: ExpandablePresentation;
   expandableContentCss: string;
   expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;

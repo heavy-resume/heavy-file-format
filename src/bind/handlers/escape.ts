@@ -5,6 +5,7 @@ import { closeAiEditPopover } from '../../ai-edit-popover';
 import { closeModal } from '../../navigation';
 import { getRenderApp, state } from '../../state';
 import { dismissTextToolbarForEscape } from '../../editor/components/text/text-toolbar-layout';
+import { closeTopExpandableModal } from '../../editor/components/expandable/expandable-modal';
 
 function dismissDetailsPopoverForEscape(target: EventTarget | null): boolean {
   const element = target instanceof Element ? target : null;
@@ -40,6 +41,11 @@ export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean
     event.stopPropagation();
     closeModal();
     getRenderApp()();
+    return true;
+  }
+  if (closeTopExpandableModal(app)) {
+    event.preventDefault();
+    event.stopPropagation();
     return true;
   }
   if (state.search.open) {

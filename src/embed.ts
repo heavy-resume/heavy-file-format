@@ -50,6 +50,7 @@ import {
 import { resolveBaseComponent } from './component-defs';
 import { bindReaderUi } from './bind-reader-ui';
 import { capturePluginFocus, reconcilePluginMounts, refreshConnectedPlugins, unmountAllPlugins } from './plugins/mount';
+import { renderExpandableModalHost, syncExpandableModals } from './editor/components/expandable/expandable-modal';
 import { rememberRenderedDocument, runScopedReaderRedraw } from './reader/scoped-redraw';
 import { setHostPlugins } from './plugins/registry';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
@@ -437,6 +438,7 @@ function createEmbedState(
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    readerExpandableModals: [],
     searchRevealedAncestors: {},
     readerContainerState: {},
     readerDeferredSectionBodies: {},
@@ -612,6 +614,7 @@ function ensureReaderRenderer(): ReaderRenderer {
       get showAdvancedEditor() { return false; },
       get responsivePreview() { return state.responsivePreview; },
       get readerExpandableState() { return state.readerExpandableState; },
+      get readerExpandableModals() { return state.readerExpandableModals; },
       get searchRevealedAncestors() { return state.searchRevealedAncestors; },
       get readerContainerState() { return state.readerContainerState; },
       get readerDeferredSectionBodies() { return state.readerDeferredSectionBodies; },
@@ -701,6 +704,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
               scrollTop: capturedScroll.paneScroll.readerTop,
               viewportHeight: readerViewportHeight,
             })}</div>
+            ${renderExpandableModalHost(renderer.renderExpandableModals())}
           </div>
         </div>
       </section>
@@ -761,6 +765,24 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   }
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
+  if (options.surface !== 'sidebar') {
+    syncExpandableModals({
+      root: currentRoot,
+      renderModals: renderer.renderExpandableModals,
+      capturePluginFocus,
+      afterRender: (host) => {
+        reconcilePluginMounts(host);
+        if (options.runVisibilityScripts !== false) {
+          void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(host));
+        }
+        initializeCarouselReaders(host);
+        bindLazyImageHydration(host);
+      },
+    });
+  }
+  if (options.surface === 'expandable-modals') {
+    return;
+  }
   const startedAt = nowMs();
   const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument');
   const sidebarSections = currentRoot.querySelector<HTMLDivElement>('#readerSidebarSections');

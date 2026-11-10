@@ -190,6 +190,53 @@ hvy_version: 0.1
   expect(fragment).not.toContain('hvy_version:');
 });
 
+test('round-trips a modal expandable presentation', () => {
+  const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+ <!--hvy:expandable {"id":"fake-modal","expandablePresentation":"modal"}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Fake stub
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Fake detail
+`;
+
+  const document = deserializeDocument(source, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.schema.expandablePresentation).toBe('modal');
+  expect(serializeWithState(document)).toContain('"expandablePresentation":"modal"');
+});
+
+test('omits the default inline expandable presentation and treats unknown values as inline', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+ <!--hvy:expandable {"id":"fake-unknown","expandablePresentation":"fake-unknown-value"}-->
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Fake detail
+`, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.schema.expandablePresentation).toBe('inline');
+  expect(serializeWithState(document)).not.toContain('expandablePresentation');
+});
+
 test('round-trips reusable section metadata and template keys', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

@@ -10,6 +10,7 @@ import {
   storeSessionAttachmentTail,
 } from './session-attachment-tail-storage';
 import { EDITOR_INPUT_IDLE_MS } from './editor-input-timing';
+import { base64ToBytes, bytesToBase64 } from './bytes-base64';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const pendingSessionStateSaves = new WeakMap<AppState, ReturnType<typeof setTimeout>>();
@@ -624,23 +625,7 @@ function describeJsonFieldSizes(value: string): Array<{ field: string; valueChar
   }
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
-  }
-  return btoa(binary);
-}
 
-function base64ToBytes(value: string): Uint8Array {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
-}
 
 function isCurrentView(value: unknown): value is AppState['currentView'] {
   return value === 'editor' || value === 'viewer' || value === 'ai';

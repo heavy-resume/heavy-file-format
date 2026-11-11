@@ -3,7 +3,8 @@ import { state } from '../../state';
 import type { DocumentAttachment, VisualDocument } from '../../types';
 import { DB_ATTACHMENT_ID, setAttachment } from '../../attachments';
 import { ensureDocumentAttachmentStore, materializeDocumentAttachment, type AttachmentStore } from '../../attachment-store';
-import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory } from '../../history';
+import { markDatabaseAttachmentChanged } from '../../history';
+import { noteScriptHistoryDatabaseWrite } from '../../script-history-step';
 import { recordDatabaseTablesChanged } from '../../database-change-tracker';
 import { DB_TABLE_PLUGIN_ID } from '../registry';
 
@@ -49,7 +50,7 @@ export interface DocumentDatabase {
    * Writes the live database back to the attachment. While a transaction is open the
    * write waits for the commit that ends it, because exporting would roll it back.
    */
-  commit(options?: { recordHistoryCheckpoint?: boolean }): 'saved' | 'deferred';
+  commit(): 'saved' | 'deferred';
   /** Rolls back the open transaction, leaving the live database equal to the saved attachment. */
   rollback(): void;
 }
@@ -57,7 +58,6 @@ export interface DocumentDatabase {
 interface LiveDatabaseEntry {
   db: SqlJsDatabase | null;
   syncedBytes: Uint8Array | null;
-  pendingHistoryCheckpoint: boolean;
   /** Tables SQLite reported row changes for since the last save, including trigger and cascade effects. */
   changedTables: Set<string>;
   reportedRowChanges: number;
@@ -97,7 +97,7 @@ export async function openDocumentDatabase(document: VisualDocument): Promise<Do
   return {
     current: () => getCurrentDatabase(document),
     isInTransaction: () => isTransactionOpen(getCurrentDatabase(document)),
-    commit: (options) => commitDocumentDatabase(document, options?.recordHistoryCheckpoint ?? true),
+    commit: () => commitDocumentDatabase(document),
     rollback: () => rollbackDocumentDatabase(document),
   };
 }
@@ -120,19 +120,18 @@ function getCurrentDatabase(document: VisualDocument): SqlJsDatabase {
   return db;
 }
 
-function commitDocumentDatabase(document: VisualDocument, recordHistoryCheckpoint: boolean): 'saved' | 'deferred' {
+function commitDocumentDatabase(document: VisualDocument): 'saved' | 'deferred' {
   const store = ensureDocumentAttachmentStore(document);
   const db = getCurrentDatabase(document);
   const entry = getLiveDatabaseEntry(store);
-  entry.pendingHistoryCheckpoint ||= recordHistoryCheckpoint;
   if (isTransactionOpen(db)) {
     return 'deferred';
   }
   const live = isLiveDocument(document);
-  if (live && entry.pendingHistoryCheckpoint) {
-    recordDatabaseAttachmentHistory();
+  if (live) {
+    // Before the attachment changes, so the undo step can checkpoint the saved database.
+    noteScriptHistoryDatabaseWrite(document);
   }
-  entry.pendingHistoryCheckpoint = false;
   const changes = readChangesSinceLastSave(entry, db);
   const bytes = gzipSync(exportPreservingConnectionSettings(db));
   entry.savedSchema = changes.schema;
@@ -237,7 +236,6 @@ function getLiveDatabaseEntry(store: AttachmentStore): LiveDatabaseEntry {
     entry = {
       db: null,
       syncedBytes: null,
-      pendingHistoryCheckpoint: false,
       changedTables: new Set(),
       reportedRowChanges: 0,
       totalChangesAtLastSave: 0,

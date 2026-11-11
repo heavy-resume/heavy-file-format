@@ -38,7 +38,6 @@ import {
 } from '../../database-history-controller';
 import {
   captureHistoryStackState,
-  clearDatabaseAttachmentChangedForQueuedHistory,
   recordHistory,
   restoreHistoryStackState,
 } from '../../history';
@@ -858,7 +857,6 @@ function runDbTableMutation<T>(
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute,
     createLogicalTransition,
   }).then((result) => {

@@ -6,7 +6,7 @@ import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { refreshMountedPlugins } from './mount';
 import { getHostPlugins } from './registry';
 import { getDatabaseChangeRevision } from '../database-change-tracker';
-import { beginReactiveHistoryAmendment } from '../history';
+import { beginReactiveScriptHistory, noteScriptHistoryChange } from '../script-history-step';
 import type {
   HvyDocumentHookContext,
   HvyPlugin,
@@ -219,7 +219,8 @@ export function runPluginDocumentHooks(
       signatureMs,
     });
     const result = await runWithStateRuntimeAsync(runtime, async (): Promise<PluginDocumentHookResult> => {
-      const amendHistory = beginReactiveHistoryAmendment();
+      // Hook output joins the undo step of the change that triggered the hooks.
+      beginReactiveScriptHistory();
       await runHookHandlers(hookName, ctx);
       if (ctx.isCurrentDocument()) {
         const settledText = serializeDocument(document);
@@ -230,7 +231,7 @@ export function runPluginDocumentHooks(
         hookState.lastHookSignature = nextSignature;
         const documentChanged = nextSignature !== signature;
         if (documentChanged) {
-          amendHistory?.();
+          noteScriptHistoryChange();
           notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
         }
         return { ran: true, documentChanged };

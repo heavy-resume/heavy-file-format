@@ -1,3 +1,5 @@
+import { base64ToBytes, bytesToBase64 } from './bytes-base64';
+
 const DATABASE_NAME = 'hvy-reference-session-v1';
 const DATABASE_VERSION = 2;
 const TAIL_STORE_NAME = 'attachment-tails';
@@ -201,20 +203,7 @@ async function deleteExpiredRecoverySessions(now = Date.now()): Promise<void> {
   }
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-  return btoa(binary);
-}
 
-function base64ToBytes(value: string): Uint8Array {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;

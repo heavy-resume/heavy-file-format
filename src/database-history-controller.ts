@@ -30,7 +30,6 @@ export interface QueuedDatabaseHistoryCommand<T> {
   recordBefore(): void;
   captureHistoryState(): unknown;
   rollbackHistory(historyState: unknown): void;
-  clearDatabaseChangedFlag(): void;
   execute(): T | Promise<T>;
   createLogicalTransition?(result: T): DatabaseHistoryLogicalTransition;
 }
@@ -59,6 +58,8 @@ interface DatabaseHistoryRuntimeState {
   runningLabel: string;
   error: string;
   commandActive: boolean;
+  /** True from a script undo step's first database write until that step closes. */
+  spanOpen: boolean;
   listeners: Set<(status: DatabaseHistoryQueueStatus) => void>;
 }
 
@@ -82,9 +83,36 @@ export function isQueuedDatabaseHistoryCommandActive(): boolean {
   return getState().commandActive;
 }
 
+// A database change that no command or span tracks has no transition, so it gets a version
+// of its own: history entries from before it can no longer restore the database.
 export function invalidateDatabaseHistoryVersion(): void {
   const history = getState();
-  if (!history.commandActive) history.currentVersion = null;
+  if (!history.commandActive && !history.spanOpen) history.currentVersion = `database-untracked:${crypto.randomUUID()}`;
+}
+
+/**
+ * Starts tracking the database writes of one script undo step. Call it before the step's
+ * first write: the database as it is now becomes the step's undo checkpoint, and every
+ * write until closeDatabaseHistorySpan belongs to one transition. Later calls while the
+ * span is open do nothing.
+ */
+export function openDatabaseHistorySpan(document: VisualDocument): void {
+  const history = getState();
+  if (history.spanOpen || history.commandActive) return;
+  const beforeVersion = history.currentVersion ?? `database-base:${crypto.randomUUID()}`;
+  const afterVersion = `database-state:${crypto.randomUUID()}`;
+  // Read synchronously: the write this span guards replaces the attachment bytes next.
+  const before = storeCapturedDatabaseState(history, captureDatabaseState(document), 'Script database checkpoint');
+  const released = detachForwardBranches(history, beforeVersion);
+  history.transitions.push(createCheckpointTransition(history, document, beforeVersion, afterVersion, before));
+  released.push(...detachExpiredTransitions(history));
+  released.forEach((transition) => void transition.release().catch(() => {}));
+  history.currentVersion = afterVersion;
+  history.spanOpen = true;
+}
+
+export function closeDatabaseHistorySpan(): void {
+  getState().spanOpen = false;
 }
 
 export function adoptDatabaseHistoryVersion(version: string | null): void {
@@ -118,9 +146,9 @@ export function runQueuedDatabaseHistoryCommand<T>(command: QueuedDatabaseHistor
       throw new Error('Logical database history commands must provide undo and redo operations.');
     }
     const beforeHistoryState = command.captureHistoryState();
-    await releaseForwardBranches(history, beforeVersion);
+    await Promise.all(detachForwardBranches(history, beforeVersion).map((branch) => branch.release().catch(() => {})));
     const beforeState = command.mode === 'checkpoint'
-      ? await storeDatabaseState(history, command.document, command.reason)
+      ? await storeCapturedDatabaseState(history, captureDatabaseState(command.document), command.reason)
       : null;
     command.recordBefore();
     history.commandActive = true;
@@ -131,9 +159,8 @@ export function runQueuedDatabaseHistoryCommand<T>(command: QueuedDatabaseHistor
         ? createCheckpointTransition(history, command.document, beforeVersion, afterVersion, beforeState!)
         : createLogicalHistoryTransition(beforeVersion, afterVersion, command.createLogicalTransition?.(result));
       history.transitions.push(transition);
-      await compactTransitions(history);
+      await Promise.all(detachExpiredTransitions(history).map((expired) => expired.release().catch(() => {})));
       history.currentVersion = afterVersion;
-      command.clearDatabaseChangedFlag();
       return result;
     } catch (error) {
       let rollbackError: unknown = null;
@@ -146,7 +173,6 @@ export function runQueuedDatabaseHistoryCommand<T>(command: QueuedDatabaseHistor
         await history.store.remove(beforeState.artifact.id).catch(() => {});
       }
       command.rollbackHistory(beforeHistoryState);
-      command.clearDatabaseChangedFlag();
       throw rollbackError ?? error;
     } finally {
       history.commandActive = false;
@@ -154,20 +180,17 @@ export function runQueuedDatabaseHistoryCommand<T>(command: QueuedDatabaseHistor
   });
 }
 
-async function releaseForwardBranches(history: DatabaseHistoryRuntimeState, version: string): Promise<void> {
+// Removes the redo branches leaving a version, returning them for their stored states to be released.
+function detachForwardBranches(history: DatabaseHistoryRuntimeState, version: string): DatabaseHistoryTransition[] {
   const branches = history.transitions.filter((transition) => transition.beforeVersion === version);
-  for (const branch of branches) {
+  return branches.flatMap((branch) => {
     history.transitions.splice(history.transitions.indexOf(branch), 1);
-    await releaseForwardBranches(history, branch.afterVersion);
-    await branch.release().catch(() => {});
-  }
+    return [...detachForwardBranches(history, branch.afterVersion), branch];
+  });
 }
 
-async function compactTransitions(history: DatabaseHistoryRuntimeState): Promise<void> {
-  while (history.transitions.length > 200) {
-    const expired = history.transitions.shift();
-    if (expired) await expired.release().catch(() => {});
-  }
+function detachExpiredTransitions(history: DatabaseHistoryRuntimeState): DatabaseHistoryTransition[] {
+  return history.transitions.length > 200 ? history.transitions.splice(0, history.transitions.length - 200) : [];
 }
 
 export async function restoreDatabaseHistoryVersion(targetVersion: string | null): Promise<void> {
@@ -212,44 +235,60 @@ function createLogicalHistoryTransition(
   };
 }
 
+// The redo state is stored on the first undo, from the database as the transition left it.
 function createCheckpointTransition(
   history: DatabaseHistoryRuntimeState,
   document: VisualDocument,
   beforeVersion: string,
   afterVersion: string,
-  before: StoredDatabaseState
+  before: StoredDatabaseState | Promise<StoredDatabaseState>
 ): DatabaseHistoryTransition {
-  let after: StoredDatabaseState | null = null;
+  const beforeStored = Promise.resolve(before);
+  // A failed store surfaces when Undo needs it, not as an unhandled rejection.
+  beforeStored.catch(() => {});
+  let after: Promise<StoredDatabaseState> | null = null;
   return {
     beforeVersion,
     afterVersion,
     undo: async () => {
-      after ??= await storeDatabaseState(history, document, 'Redo database checkpoint');
-      await restoreStoredDatabaseState(history, document, before);
+      after ??= storeCapturedDatabaseState(history, captureDatabaseState(document), 'Redo database checkpoint');
+      await after;
+      await restoreStoredDatabaseState(history, document, await beforeStored);
     },
     redo: async () => {
       if (!after) throw new Error('The redo database checkpoint is unavailable.');
-      await restoreStoredDatabaseState(history, document, after);
+      await restoreStoredDatabaseState(history, document, await after);
     },
     release: async () => {
-      await history.store.remove(before.artifact.id);
-      if (after) await history.store.remove(after.artifact.id);
+      await history.store.remove((await beforeStored).artifact.id);
+      if (after) await history.store.remove((await after).artifact.id);
     },
   };
 }
 
-async function storeDatabaseState(
+interface CapturedDatabaseState {
+  exists: boolean;
+  meta: JsonObject;
+  bytes: Uint8Array;
+}
+
+// Attachment bytes are replaced, never changed in place, so a captured state stays valid.
+function captureDatabaseState(document: VisualDocument): CapturedDatabaseState {
+  const attachment = getAttachment(document, DB_ATTACHMENT_ID);
+  return { exists: attachment !== null, meta: attachment?.meta ?? {}, bytes: attachment?.bytes ?? new Uint8Array() };
+}
+
+async function storeCapturedDatabaseState(
   history: DatabaseHistoryRuntimeState,
-  document: VisualDocument,
+  captured: CapturedDatabaseState,
   reason: string
 ): Promise<StoredDatabaseState> {
-  const attachment = getAttachment(document, DB_ATTACHMENT_ID);
   return {
-    exists: attachment !== null,
-    meta: attachment?.meta ?? {},
+    exists: captured.exists,
+    meta: captured.meta,
     artifact: await storeHvyHistoryArtifact(history.store, {
       kind: 'sqlite-checkpoint',
-      bytes: attachment?.bytes ?? new Uint8Array(),
+      bytes: captured.bytes,
       reason,
       namespace: history.namespace,
     }),
@@ -307,13 +346,16 @@ function getState(runtime = getActiveStateRuntime()): DatabaseHistoryRuntimeStat
     history = {
       store: new InMemoryHvyHistoryArtifactStore(),
       namespace: `hvy-history:${crypto.randomUUID()}`,
-      currentVersion: null,
+      // Every history entry records a version, so the entries before any database write
+      // name the state a later transition restores.
+      currentVersion: `database-base:${crypto.randomUUID()}`,
       transitions: [],
       tail: Promise.resolve(),
       pending: 0,
       runningLabel: '',
       error: '',
       commandActive: false,
+      spanOpen: false,
       listeners: new Set(),
     };
     states.set(runtime, history);

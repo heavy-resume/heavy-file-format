@@ -655,7 +655,6 @@ export async function createScriptingDbRuntime(
 ): Promise<ScriptingDbRuntime> {
   const database = await openDocumentDatabase(document);
   let disposed = false;
-  let databaseHistoryCheckpointRecorded = false;
   let ownsOpenTransaction = false;
   const currentDatabase = () => {
     if (disposed) {
@@ -699,8 +698,7 @@ export async function createScriptingDbRuntime(
       const transactionWasOpen = database.isInTransaction();
       db.run(trimmed, normalizeScriptingSqlParams(params));
       const rowsAffected = db.getRowsModified();
-      const transactionIsOpen = database.commit({ recordHistoryCheckpoint: !databaseHistoryCheckpointRecorded }) === 'deferred';
-      databaseHistoryCheckpointRecorded = true;
+      const transactionIsOpen = database.commit() === 'deferred';
       ownsOpenTransaction = transactionIsOpen && (ownsOpenTransaction || !transactionWasOpen);
       onMutation?.();
       return `Executed: ${trimmed}\nRows affected: ${rowsAffected}`;

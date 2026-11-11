@@ -24,6 +24,7 @@ import { hasDocumentDatabaseTables } from '../database-table-targets';
 import { notifyDocumentMayHaveChanged } from '../../document-change';
 import { runPluginDocumentHooks } from '../hooks';
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
+import { beginScriptHistoryRun, noteScriptHistoryChange } from '../../script-history-step';
 import {
   beginScriptCycleExecution,
   createScriptInvocationIdentity,
@@ -396,6 +397,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       createScriptInvocationIdentity(options.componentId ?? 'hvy-script', options.source),
       { startedByUser: options.startedByUser }
     );
+    runWithStateRuntime(stateRuntime, () => beginScriptHistoryRun({ startedByUser: options.startedByUser }));
   }
   let renderCycleExecution = cycleExecution;
   let initialExecutionActive = true;
@@ -498,6 +500,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
           renderCycleExecution = callbackCycle;
           try {
             return runWithStateRuntime(stateRuntime, () => {
+              beginScriptHistoryRun();
               const result = invokeCallback();
               runtime?.doc.rerender();
               return result;
@@ -515,6 +518,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         return;
       }
       return runWithStateRuntime(stateRuntime, () => {
+        noteScriptHistoryChange();
         notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
         // The mutation render waits for these hooks, so scripts they rerun share it.
         return runPluginDocumentHooks('script-edit', { hostRendersAfter: rendersAfter, serializedDocument });

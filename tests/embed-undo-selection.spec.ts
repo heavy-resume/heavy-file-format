@@ -69,3 +69,41 @@ hvy_version: 0.1
     });
   }
 }
+
+for (const entry of ['embed', 'embed-full']) {
+  test(`${entry}: undo after typing into a newly added component removes only the typed text`, async ({ page }) => {
+    test.setTimeout(5_000);
+    await page.goto('/');
+    await page.evaluate(async (entry) => {
+      const { mountHvy } = await import(`/src/${entry}.ts`);
+      const serializationPath = '/src/serialization.ts';
+      const { deserializeDocument } = await import(/* @vite-ignore */ serializationPath);
+      document.body.innerHTML = '<div id="undoSelectionRoot"></div>';
+      window.undoSelectionMount = mountHvy({
+        root: document.querySelector('#undoSelectionRoot')!,
+        mode: 'editor',
+        document: deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"sample-added"}-->
+#! Sample Added
+
+ <!--hvy:text {"id":"sample-intro"}-->
+  Sample intro
+`, '.hvy'),
+      });
+    }, entry);
+    const addComponent = page.locator('#undoSelectionRoot .compact-add-component-ghost').first();
+    await addComponent.getByRole('button', { name: 'Section component type' }).click();
+    await addComponent.locator('.component-picker-row-direct[data-component="text"]').click();
+    const addedEditor = page.locator('#undoSelectionRoot [data-active-editor-block="true"] [data-field="block-rich"]');
+    await addedEditor.click();
+    await page.keyboard.type('Sample typed');
+    await expect(addedEditor).toHaveText('Sample typed');
+
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+    await expect(addedEditor).toHaveText('');
+  });
+}

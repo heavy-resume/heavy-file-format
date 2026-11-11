@@ -10,6 +10,7 @@ const PID_FILE = resolve(SCRATCH_DIR, 'browser-harness.pid');
 const LOG_FILE = resolve(SCRATCH_DIR, 'browser-harness.log');
 const SMOKE_FILE = resolve(SCRATCH_DIR, 'browser-smoke.mjs');
 const CHAT_PERF_FILE = resolve(ROOT, 'scripts/chat-performance-harness.mjs');
+const HISTORY_PERF_FILE = resolve(ROOT, 'scripts/history-performance-harness.mjs');
 const HOST = '127.0.0.1';
 const PORT = 5174;
 const BASE_URL = `http://${HOST}:${PORT}/`;
@@ -27,6 +28,8 @@ if (command === 'start') {
   await runSmoke();
 } else if (command === 'chat-perf') {
   await runScript(CHAT_PERF_FILE, 'scripts/chat-performance-harness.mjs');
+} else if (command === 'history-perf') {
+  await runScript(HISTORY_PERF_FILE, 'scripts/history-performance-harness.mjs');
 } else {
   console.error(`Unknown browser harness command: ${command}`);
   process.exitCode = 1;

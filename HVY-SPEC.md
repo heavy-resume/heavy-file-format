@@ -2057,8 +2057,14 @@ Plugin-specific rules:
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
 - Top-level YAML keys are `fields` and `scripts`.
 - `fields` is an ordered list. Each field supports `label`, `type`,
-  `value`, `placeholder`, `required`, `rows`, `min`, `max`, `step`, `options`,
-  `triggers`, and `meta`.
+  `value`, `placeholder`, `required`, `disabled`, `rows`, `min`, `max`, `step`,
+  `options`, `triggers`, and `meta`.
+- Field `disabled` defaults to `false`. When `true`, clients MUST render the
+  field so the user can see that its value cannot be changed, and MUST NOT
+  accept user edits to it. A disabled field's value remains part of the form:
+  it is returned by `doc.form` helpers and included in the submit action.
+  `required` has no effect while a field is disabled. `disabled` has no effect
+  on `hidden` fields.
 - Field `label` is both the visible label and the script key used with
   `doc.form` helpers.
 - Field `meta` is plugin-owned field metadata. `meta.css` is an optional
@@ -2140,7 +2146,11 @@ Plugin-specific rules:
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,
   `set_error(label, message)`, `clear_error(label)`,
+  `set_field_disabled(label, disabled)`, `get_field_disabled(label)`,
   `set_submit_disabled(disabled, reason)`, and `get_submit_disabled()`.
+  `set_field_disabled` overrides that field's `disabled` value for the current
+  form lifecycle. The override is not serialized and is discarded when the
+  document's `disabled` value for that field changes.
   `set_submit_disabled` overrides `submitDisabled` and `submitDisabledReason`
   for the current form lifecycle; `reason` is optional and is cleared when
   `disabled` is false. The override is not serialized and is discarded when the

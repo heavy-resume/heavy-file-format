@@ -64,6 +64,7 @@ interface CreateFormPhotoControlOptions {
   ctx: HvyPluginContext;
   label: string;
   required: boolean;
+  disabled: boolean;
   meta: FormPhotoMeta;
   value: FormPhotoValue | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
@@ -81,12 +82,14 @@ export function createFormPhotoControl(options: CreateFormPhotoControlOptions): 
   input.name = options.label;
   input.accept = (options.meta.accept.length > 0 ? options.meta.accept : DEFAULT_ACCEPT).join(',');
   input.required = options.required && !options.value;
+  input.disabled = options.disabled;
   input.className = 'hvy-form-photo-input';
   const button = document.createElement('span');
   button.className = 'hvy-form-photo-button';
   button.textContent = options.value ? 'Replace photo' : 'Choose photo';
   const picker = document.createElement('label');
   picker.className = 'hvy-form-photo-picker';
+  if (options.disabled) picker.dataset.formPhotoDisabled = 'true';
   picker.append(input, button);
   control.append(preview, picker);
 

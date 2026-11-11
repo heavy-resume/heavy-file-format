@@ -1,7 +1,7 @@
 import { buildDocumentEditToolHelp } from '../ai-document-edit-instructions';
 import type { JsonObject } from '../hvy/types';
 import { validateDbTableObjectName } from '../plugins/db-table-identifiers';
-import { findFormFieldTypeIssues, FORM_FIELD_KEYS, FORM_FIELD_TYPES, parseFormSpec } from '../plugins/form';
+import { findFormFieldTypeIssues, FORM_FIELD_KEYS, FORM_FIELD_TYPES, parseFormSpec } from '../plugins/form-spec/form-spec';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { checkPythonSyntax } from '../plugins/scripting/python-syntax';
 import type { VisualDocument } from '../types';
@@ -182,7 +182,7 @@ registerHvyCliPluginCommands({
     'Use plugin.json pluginConfig for form-level behavior: submitLabel, showSubmit, initialScript, submitAction, submitSourceScript, submitScript, submitPrompt, and submit limits.',
     'Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function, and run through the sandboxed scripting runtime. For submitAction "ai-generate", submitSourceScript prepares model input and submitScript applies injected response/source values; use doc.json to parse structured JSON responses.',
     'When editing plugin.txt directly, write form scripts as literal YAML blocks with `|`, not folded blocks with `>`, so Python newlines and indentation are preserved.',
-    'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error, and doc.form.set_submit_disabled(disabled, reason) to toggle the submit button.',
+    'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error/set_field_disabled, and doc.form.set_submit_disabled(disabled, reason) to toggle the submit button.',
     'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts.',
     'doc.tool.TOOL_NAME(**args) can call the synchronous document-edit tool subset; args are Python keyword arguments matching the AI tool schema.',
     'When changing submit behavior, look for named scripts, AI submit settings, and on-submit script settings before editing fields.',

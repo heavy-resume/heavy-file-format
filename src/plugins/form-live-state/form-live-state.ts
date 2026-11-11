@@ -1,10 +1,11 @@
-import type { FormFieldDefinition, FormFieldValue, FormOption, FormSpec } from '../form';
+import type { FormFieldDefinition, FormFieldValue, FormOption, FormSpec } from '../form-spec/form-spec';
 import { resolveFormRangeValue } from '../form-range-field/form-range-field';
 
 interface FieldDefinitionSnapshot {
   type: FormFieldDefinition['type'];
   value: string;
   options: string;
+  disabled: boolean;
 }
 
 export interface LiveSubmitState {
@@ -16,6 +17,7 @@ export interface LiveFormState {
   values: Record<string, FormFieldValue>;
   options: Record<string, FormOption[]>;
   errors: Record<string, string>;
+  disabled: Record<string, boolean>;
   definitions: Map<string, FieldDefinitionSnapshot>;
   submit: LiveSubmitState;
   submitDefinition: string;
@@ -33,6 +35,7 @@ export function createLiveState(spec: FormSpec): LiveFormState {
     values: {},
     options: {},
     errors: {},
+    disabled: {},
     definitions: new Map(),
     submit: { disabled: false, reason: '' },
     submitDefinition: '',
@@ -52,7 +55,7 @@ export function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
   const fieldLabels = new Set(spec.fields.map((field) => field.label));
   for (const field of spec.fields) {
     const previous = live.definitions.get(field.label);
-    const next = { type: field.type, value: JSON.stringify(field.value), options: JSON.stringify(field.options) };
+    const next = { type: field.type, value: JSON.stringify(field.value), options: JSON.stringify(field.options), disabled: field.disabled };
     const typeChanged = !previous || previous.type !== next.type;
     const valueChanged = typeChanged || previous.value !== next.value;
     const optionsChanged = typeChanged || previous.options !== next.options;
@@ -76,6 +79,10 @@ export function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
     if (valueChanged || optionsChanged) {
       delete live.errors[field.label];
     }
+    // Scripts may override disabled until the document's own value for the field changes.
+    if (!previous || previous.disabled !== next.disabled) {
+      live.disabled[field.label] = field.disabled;
+    }
     live.definitions.set(field.label, next);
   }
   for (const label of Object.keys(live.values)) {
@@ -83,6 +90,7 @@ export function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
       delete live.values[label];
       delete live.options[label];
       delete live.errors[label];
+      delete live.disabled[label];
       live.definitions.delete(label);
     }
   }

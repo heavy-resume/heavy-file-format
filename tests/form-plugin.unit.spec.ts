@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
-import { claimFormInitialization, parseFormSpec, serializeFormConfig, serializeFormSpec } from '../src/plugins/form';
+import { claimFormInitialization } from '../src/plugins/form-live-state/form-lifecycle';
+import { parseFormSpec, serializeFormConfig, serializeFormSpec } from '../src/plugins/form-spec/form-spec';
 import { getFormPhotoResizeBounds, normalizeFormPhotoMeta } from '../src/plugins/form-photo-field/form-photo-field';
 import type { VisualBlock } from '../src/editor/types';
 import type { VisualDocument } from '../src/types';
@@ -268,4 +269,19 @@ scripts:
     expect(expectedResult).toContain('    total = int(doc.form.get("a") or 0) + int(doc.form.get("b") or 0) + int(doc.form.get("c"))');
     expect(parseFormSpec(expectedResult).spec.scripts.grade).toBe(parsed.spec.scripts.grade);
   });
+});
+
+test('field disabled round-trips through form YAML and is omitted when false', () => {
+  const before = `fields:
+  - label: Fake locked
+    type: text
+    value: Fake fixed value
+    disabled: true
+  - label: Fake open
+    type: text`;
+
+  const parsed = parseFormSpec(before);
+
+  expect(parsed.spec.fields.map((field) => field.disabled)).toEqual([true, false]);
+  expect(serializeFormSpec(parsed.spec)).toBe(before);
 });

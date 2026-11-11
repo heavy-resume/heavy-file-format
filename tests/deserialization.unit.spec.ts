@@ -3,7 +3,7 @@ import { expect, test } from 'vitest';
 import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { createEmptyBlock } from '../src/document-factory';
 import { resolveBaseComponentFromMeta } from '../src/component-defs';
-import { parseFormSpec } from '../src/plugins/form';
+import { parseFormSpec } from '../src/plugins/form-spec/form-spec';
 import { visitBlocks } from '../src/section-ops';
 import { state } from '../src/state';
 import { registerSerializationTestState } from './serialization-test-helpers';

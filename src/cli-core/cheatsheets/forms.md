@@ -58,6 +58,8 @@ Store fields and named scripts in `plugin.txt`. Use `pluginConfig.submitScript` 
 
 Disable the submit button with `"submitDisabled":true` and explain why with `"submitDisabledReason":"..."`; the reason renders under the disabled button. Scripts can toggle it with `doc.form.set_submit_disabled(True, "reason")` and `doc.form.set_submit_disabled(False)`.
 
+Disable a field with `disabled: true` in its YAML to show that its value cannot be changed; the value is still included in `doc.form.get_values()` and submit. Scripts can toggle it with `doc.form.set_field_disabled("Field label", True)` and `doc.form.set_field_disabled("Field label", False)`.
+
 Populate a select from the current SQL backend when the form renders:
 
 ```shell

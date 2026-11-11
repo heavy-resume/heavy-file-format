@@ -9,7 +9,7 @@ import type { VisualDocument } from '../types';
 import { getSectionId } from '../section-ops';
 import { makeId } from '../utils';
 import { FORM_PLUGIN_ID, getHostPlugin, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
-import { parseFormSpec, serializeFormSpec } from '../plugins/form';
+import { parseFormSpec, serializeFormSpec } from '../plugins/form-spec/form-spec';
 import { getTableColumnProperties, getTableColumns, setTableColumns } from '../table-ops';
 import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-help';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';

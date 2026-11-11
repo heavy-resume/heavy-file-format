@@ -164,6 +164,25 @@
   flex-basis: 100%;
 }
 
+.hvy-document .hvy-form-plugin .hvy-form-field input:disabled:not([type='range']),
+.hvy-document .hvy-form-plugin .hvy-form-field select:disabled,
+.hvy-document .hvy-form-plugin .hvy-form-field textarea:disabled {
+  border-style: dashed;
+  color: var(--hvy-text-muted);
+  background: var(--hvy-surface-alt);
+  cursor: not-allowed;
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-field[data-form-field-disabled='true'] .hvy-form-field-label,
+.hvy-document .hvy-form-plugin .hvy-form-field[data-form-field-disabled='true'] .hvy-form-radio-option {
+  color: var(--hvy-text-muted);
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-field[data-form-field-disabled='true'] .hvy-form-radio-option,
+.hvy-document .hvy-form-plugin label.hvy-form-field[data-form-field-disabled='true'] {
+  cursor: not-allowed;
+}
+
 .hvy-document .hvy-form-field-hidden {
   display: none;
 }

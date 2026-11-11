@@ -3,6 +3,7 @@ Renders editable form fields and optional scripted behavior.
 Fields live in plugin.txt as YAML under the fields key.
 Form-level settings live in plugin.json pluginConfig, including submitLabel, showSubmit, submitDisabled, submitDisabledReason, initialScript, changeScript, submitAction, submitSourceScript, submitScript, submitPrompt, submit limits, scriptLibraries, and scriptStepBudget.
 Fields use label as both visible text and the scripting key.
+Set a field's disabled to true to show that its value cannot be changed; the value is still included in doc.form values and submit. Required has no effect on a disabled field.
 Textarea fields can set rows to control their initial height.
 Range fields render a slider with the label and current value. They use numeric min, max, and step keys (defaults 0, 100, and 1) and a numeric value that defaults to the midpoint. doc.form reads the value as a decimal string, so convert it before arithmetic; values set by scripts are clamped and snapped to the slider.
 Named scripts live in plugin.txt under scripts and are also exposed as sibling .py files in the CLI.
@@ -18,6 +19,7 @@ scriptStepBudget controls the maximum runtime steps for each form script run.
 Set submitAction to ai-generate to have the host call the configured chat model. submitSourceScript prepares the model input, and submitScript receives injected response and source values to apply generated output back to the document. Use doc.json.parse_array(response) or doc.json.parse_object(response) for structured JSON responses.
 Set submitDisabled to true to render the submit button disabled; submitDisabledReason is shown beneath it while disabled.
 Use doc.form.get_value, doc.form.get_values, doc.form.set_value, doc.form.set_options, doc.form.set_error, and doc.form.clear_error for form state.
+Use doc.form.set_field_disabled(label, True) and doc.form.set_field_disabled(label, False) to toggle a field from scripts; doc.form.get_field_disabled(label) reads the current state.
 Use doc.form.set_submit_disabled(True, "Reason") and doc.form.set_submit_disabled(False) to toggle the submit button from scripts; doc.form.get_submit_disabled() reads the current state.
 Photo fields store a normal HVY image attachment before submitScript runs. Their value contains attachmentId, imageFile, and mediaType; use imageFile when creating an image component. Configure accepted MIME types, source byte limits, and aspect-preserving stored dimensions with field meta.accept, meta.maxBytes, meta.maxWidth, and meta.maxHeight.
 changeScript runs after database-backed document changes. Use doc.db.get_updated_tables(table_name="name") to skip unrelated queries and doc.db.get_tables() to inspect the current attached database tables.

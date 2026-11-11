@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import { executeHvyCliCommand, createHvyCliSession } from '../src/cli-core/commands';
 import { deserializeDocument } from '../src/serialization';
-import { parseFormSpec, serializeFormSpec } from '../src/plugins/form';
+import { parseFormSpec, serializeFormSpec } from '../src/plugins/form-spec/form-spec';
 import { createLiveState, reconcileLiveState } from '../src/plugins/form-live-state/form-live-state';
 import { resolveFormRangeValue } from '../src/plugins/form-range-field/form-range-field';
 

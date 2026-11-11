@@ -266,6 +266,15 @@ class __HvyFormProxy__:
     def clear_error(self, label):
         self.__js_form.clear_error(__hvy_text_arg__("doc.form.clear_error label", label))
 
+    def set_field_disabled(self, label, disabled):
+        self.__js_form.set_field_disabled(
+            __hvy_text_arg__("doc.form.set_field_disabled label", label),
+            __hvy_bool_arg__("doc.form.set_field_disabled disabled", disabled),
+        )
+
+    def get_field_disabled(self, label):
+        return self.__js_form.get_field_disabled(__hvy_text_arg__("doc.form.get_field_disabled label", label))
+
     def set_submit_disabled(self, disabled, reason=""):
         self.__js_form.set_submit_disabled(
             __hvy_bool_arg__("doc.form.set_submit_disabled disabled", disabled),

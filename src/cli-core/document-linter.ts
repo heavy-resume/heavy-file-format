@@ -1,7 +1,7 @@
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
-import { findFormFieldTypeIssues, parseFormSpec, serializeFormSpec } from '../plugins/form';
+import { findFormFieldTypeIssues, parseFormSpec, serializeFormSpec } from '../plugins/form-spec/form-spec';
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { visitBlocks } from '../section-ops';
 import type { VisualDocument } from '../types';

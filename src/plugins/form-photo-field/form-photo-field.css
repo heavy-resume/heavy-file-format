@@ -59,3 +59,14 @@
   outline: 2px solid var(--hvy-focus-ring);
   outline-offset: 2px;
 }
+
+.hvy-document .hvy-form-photo-picker[data-form-photo-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.hvy-document .hvy-form-photo-picker[data-form-photo-disabled='true'] .hvy-form-photo-button {
+  border-color: var(--hvy-border-input);
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-muted);
+  transform: none;
+}

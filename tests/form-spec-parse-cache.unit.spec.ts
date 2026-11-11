@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 
-import { parseFormSpec } from '../src/plugins/form';
+import { parseFormSpec } from '../src/plugins/form-spec/form-spec';
 
 vi.mock('yaml', async (importOriginal) => {
   const original = await importOriginal<typeof import('yaml')>();

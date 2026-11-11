@@ -503,15 +503,23 @@
   cursor: pointer;
 }
 
+/*
+ * Answer rows stay in normal inline flow: a flex row would turn each formatting run into
+ * its own flex item, dropping the spaces between them and breaking caret hit-testing. The
+ * hanging indent keeps wrapped text aligned after the leading control.
+ */
 .hvy-document .rich-editor .hvy-inline-checkbox-line {
-  display: flex;
-  align-items: center;
+  --hvy-inline-answer-indent: calc(0.22rem + 1.05rem + 0.18rem + 0.25em);
+  display: block;
   min-height: 1lh;
   margin: 0;
+  padding-left: var(--hvy-inline-answer-indent);
+  text-indent: calc(-1 * var(--hvy-inline-answer-indent));
 }
 
 .hvy-document .rich-editor .hvy-inline-checkbox-line input.hvy-inline-checkbox {
-  margin: 0 0.42rem 0 0.22rem;
+  margin: 0 0.18rem 0 0.22rem;
+  vertical-align: middle;
 }
 
 .hvy-document .rich-editor input[type='checkbox']::before {

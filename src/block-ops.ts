@@ -2812,7 +2812,8 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
     updateInlineAnswerModeSwitch(editable.closest<HTMLElement>('.text-editor-shell'), answerInput);
     return false;
   }
-  const answerRow = findInlineAnswerRowAtPointer(editable, event);
+  // A click that ends a drag past the row's text must keep the dragged selection.
+  const answerRow = window.getSelection()?.isCollapsed === false ? null : findInlineAnswerRowAtPointer(editable, event);
   if (answerRow && editable.contains(answerRow)) {
     if (event.clientX > getInlineAnswerRowContentRight(answerRow)) {
       placeCaretAtInlineAnswerRowEnd(answerRow);
@@ -2850,12 +2851,9 @@ export function handleRichEditorPointerDown(event: MouseEvent, editable: HTMLEle
     updateRichToolbarState(editable);
     return true;
   }
-  if (event.clientX <= getInlineAnswerRowContentRight(answerRow)) return false;
-  event.preventDefault();
-  editable.focus({ preventScroll: true });
-  placeCaretAtInlineAnswerRowEnd(answerRow);
-  updateRichToolbarState(editable);
-  return true;
+  // Presses right of the row's text stay native so a drag can start there; a plain
+  // click is settled at the row end by handleRichEditorClick.
+  return false;
 }
 
 function findInlineAnswerRowAtPointer(editable: HTMLElement, event: MouseEvent): HTMLElement | null {
@@ -3936,7 +3934,8 @@ export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElemen
   }
   clipboard.setData(HVY_RICH_CLIPBOARD_TYPE, html);
   clipboard.setData('text/html', html);
-  clipboard.setData('text/plain', container.textContent ?? '');
+  // The rendered selection text keeps line breaks between blocks, which textContent drops.
+  clipboard.setData('text/plain', removeEditorCaretAnchorsFromText(selection.toString()));
   event.preventDefault();
   return true;
 }
@@ -4103,7 +4102,115 @@ function insertHtmlAtEditableSelection(editable: HTMLElement, html: string): voi
     return;
   }
   range.deleteContents();
+  if (insertBlockFragmentAtEditableSelection(editable, range, fragment)) {
+    return;
+  }
   placeCaretAfterInsertedFragment(range, fragment);
+}
+
+const PASTE_SPLITTABLE_BLOCK_TAGS = /^(P|DIV|H[1-6])$/;
+const PASTE_BLOCK_TAGS = /^(P|DIV|H[1-6]|BLOCKQUOTE|PRE|UL|OL|TABLE|HR)$/;
+
+/**
+ * Pasted blocks (copied rows, external paragraphs) cannot nest inside the paragraph holding
+ * the caret. Split that paragraph at the caret the way native editors do: the first pasted
+ * paragraph joins the text before the caret, the last one takes the text after it, and the
+ * blocks between land as siblings. An empty first paragraph, as copied from the end of a
+ * line, therefore pastes as a line break.
+ */
+function insertBlockFragmentAtEditableSelection(editable: HTMLElement, range: Range, fragment: DocumentFragment): boolean {
+  const pastedNodes = Array.from(fragment.childNodes);
+  if (!pastedNodes.some((node) => node instanceof HTMLElement && PASTE_BLOCK_TAGS.test(node.tagName))) {
+    return false;
+  }
+  const host = getBlockElementContaining(editable, range.startContainer);
+  if (!host || host === editable || !PASTE_SPLITTABLE_BLOCK_TAGS.test(host.tagName)) {
+    return false;
+  }
+
+  const tailRange = document.createRange();
+  tailRange.selectNodeContents(host);
+  tailRange.setStart(range.startContainer, range.startOffset);
+  const tail = tailRange.extractContents();
+
+  // Group loose inline nodes so each entry is one line to place.
+  const lines: Node[][] = [];
+  pastedNodes.forEach((node) => {
+    if (node instanceof HTMLElement && PASTE_BLOCK_TAGS.test(node.tagName)) {
+      lines.push([node]);
+    } else if (lines.length > 0 && !isPastedBlockLine(lines[lines.length - 1]!)) {
+      lines[lines.length - 1]!.push(node);
+    } else {
+      lines.push([node]);
+    }
+  });
+
+  const [firstLine, ...restLines] = lines;
+  let previous = placeFirstPastedLine(host, firstLine!);
+  restLines.forEach((line) => {
+    const block = isPastedBlockLine(line) ? line[0] as HTMLElement : document.createElement(host.tagName.toLowerCase());
+    if (!isPastedBlockLine(line)) block.append(...line);
+    previous.after(block);
+    previous = block;
+  });
+
+  // The caret ends where the pasted content ends, ahead of the original tail.
+  const caretRange = document.createRange();
+  if (PASTE_SPLITTABLE_BLOCK_TAGS.test(previous.tagName)) {
+    caretRange.selectNodeContents(previous);
+    caretRange.collapse(false);
+    if (!hasNoPasteContent(tail)) previous.append(tail);
+    ensureEditableParagraphContent(previous);
+  } else {
+    const tailBlock = document.createElement(host.tagName.toLowerCase());
+    tailBlock.append(tail);
+    ensureEditableParagraphContent(tailBlock);
+    previous.after(tailBlock);
+    caretRange.setStart(tailBlock, 0);
+  }
+  if (host.isConnected) ensureEditableParagraphContent(host);
+  caretRange.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(caretRange);
+  return true;
+}
+
+function isPastedBlockLine(line: Node[]): boolean {
+  const [first] = line;
+  return line.length === 1 && first instanceof HTMLElement && PASTE_BLOCK_TAGS.test(first.tagName);
+}
+
+/**
+ * The first pasted line continues the paragraph the caret was in, so copying from the end
+ * of a line (an empty first paragraph) leaves that paragraph as is. Returns the last block
+ * placed so far.
+ */
+function placeFirstPastedLine(host: HTMLElement, line: Node[]): HTMLElement {
+  const [first] = line;
+  const hostIsEmpty = hasNoPasteContent(host);
+  if (!isPastedBlockLine(line)) {
+    if (hostIsEmpty) host.replaceChildren();
+    host.append(...line);
+    return host;
+  }
+  const block = first as HTMLElement;
+  if (hostIsEmpty) {
+    host.replaceWith(block);
+    return block;
+  }
+  if (PASTE_SPLITTABLE_BLOCK_TAGS.test(block.tagName)) {
+    host.append(...Array.from(block.childNodes));
+    return host;
+  }
+  host.after(block);
+  return block;
+}
+
+/** No visible text and no inline controls or images, so nothing a paste would displace. */
+function hasNoPasteContent(root: ParentNode): boolean {
+  return (root.textContent ?? '').replace(/\u200b/g, '').trim().length === 0
+    && !root.querySelector('input, img');
 }
 
 function insertListItemFragmentAtEditableListSelection(editable: HTMLElement, range: Range, fragment: DocumentFragment): boolean {
@@ -5827,7 +5934,13 @@ function insertInlineCheckboxAtSelection(editable: HTMLElement): void {
   checkbox.type = 'checkbox';
   checkbox.classList.add('hvy-inline-checkbox');
   checkbox.setAttribute('contenteditable', 'false');
-  const spacer = document.createTextNode(INLINE_CHECKBOX_CARET_ANCHOR);
+  // Rendered `[ ] text` keeps its separating space in the row; match it unless the text
+  // after the caret already supplies one. The anchor keeps that space from collapsing.
+  const followingText = normalizedRange.startContainer instanceof Text
+    ? normalizedRange.startContainer.data.slice(normalizedRange.startOffset)
+    : '';
+  const separator = /^\s/.test(followingText) ? '' : ' ';
+  const spacer = document.createTextNode(`${separator}${INLINE_CHECKBOX_CARET_ANCHOR}`);
   const fragment = document.createDocumentFragment();
   fragment.appendChild(checkbox);
   fragment.appendChild(spacer);

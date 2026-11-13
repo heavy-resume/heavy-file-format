@@ -1714,6 +1714,32 @@ and MUST NOT affect serialized HVY output. Reloading the document therefore
 restores its authored default expansion state. Expansion alone MUST NOT scroll
 the reader, move focus, or highlight the component.
 
+Sandboxed scripting runtimes SHOULD expose a `session` global holding ephemeral
+state for the open document. A session begins when a document is opened and
+ends when a different document is loaded in its place. Every script run in the
+document during that time, including delayed callbacks, sees the same session.
+`session` provides:
+
+- `session.state`: a mapping that persists across script runs for the session.
+  It MUST accept only JSON values (`None`, booleans, finite numbers, strings,
+  lists, and string-keyed mappings, at any depth) and MUST reject any other
+  value with an error naming the key, storing nothing. A value read from it is
+  a copy; changing that copy does not change the stored value until it is
+  assigned back.
+- `session.id`: a read-only string identifying the session, random per session.
+- `session.start_time`: a read-only aware `datetime` in the viewer's local zone
+  for when the session began. It requires the checked `datetime` library.
+- `session.timezone`: the viewer's IANA time zone name.
+- `session.locale`: the viewer's BCP 47 language tag.
+
+Hosts that expose a plugin API SHOULD give plugins access to the same session
+state, with the same JSON-only and copy-on-read rules.
+
+Session state is not document content. Changing it MUST NOT mark the document
+dirty, emit a document-content change, create or amend an undo history entry,
+or affect serialized HVY output, and undo and redo MUST NOT restore or clear
+it.
+
 A visual-description capability receives the current plugin block and document
 and returns optional plain text describing rendered output that is not otherwise
 represented by ordinary HVY block text. Hosts MAY index this text and expose it

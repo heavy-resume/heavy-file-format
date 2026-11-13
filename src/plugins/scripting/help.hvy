@@ -35,6 +35,18 @@ theme:
   reasons the script can skip, such as `if run_context.invoke_reason == "script-edit": return`. Testing for anything
   other than `load` can skip the first run in a view. Changes seen by a run that returned early are not reported again
   by `get_updated_components` or `doc.db.get_updated_tables`.
+
+  `session` holds ephemeral state for the open document. It is never saved, never marks the document as changed, and
+  undo and redo leave it alone. It starts fresh when a different document is loaded.
+
+  - `session.state` — a dict-like store shared by every script and plugin in the document and kept between runs, for
+  example `session.state["example_count"] = session.state.get("example_count", 0) + 1`. It holds JSON values only:
+  `None`, bools, numbers, strings, lists and dicts. A value read from it is a copy, so after changing a list or dict,
+  assign it back: `items = session.state["example_items"]; items.append(x); session.state["example_items"] = items`.
+  - `session.id` — a random id for this session.
+  - `session.start_time` — when the document was opened, as an aware `datetime` in the viewer's zone. Requires the
+  `datetime` library.
+  - `session.timezone` / `session.locale` — the viewer's IANA time zone name and language tag, such as `en-US`.
   
   - `doc.tool.TOOL_NAME(**args)` — call a supported synchronous document tool. Returns the tool's text result. Mutating
   tools update the document immediately. See [tools API](#tools-api) below

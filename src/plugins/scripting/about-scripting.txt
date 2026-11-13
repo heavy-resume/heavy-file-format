@@ -3,6 +3,7 @@ Executes sandboxed Brython/Python source from script.py.
 The component body is top-level script source and is exposed as script.py in the CLI.
 Scripts run wrapped in a generated function with a doc global, so return can stop a script early.
 Scripts also receive a run_context global describing the run. run_context.invoke_reason names what prompted a scripting block to run: load, edit, ai-edit, script-edit, or unknown, which includes entering a view; it is None in form and button scripts. Return early only for specific reasons the script can skip, because the first run in a view may not report load.
+Scripts also receive a session global with ephemeral state for the open document: session.state is a dict-like store shared by every script and plugin in the document and kept between runs, never saved, never marked as a document change, and untouched by undo and redo; it starts fresh when a different document is loaded. It holds JSON values only, and a value read from it is a copy: after changing a list or dict, assign it back. session also exposes id, start_time (an aware datetime; requires the datetime library), timezone, and locale.
 Use doc helpers for document data, header metadata, attachments, database access, rerendering, and supported document tools.
 Use the checked datetime library for the current client time, for example datetime.now().astimezone() or datetime.now(timezone.utc). The older doc.time helpers are deprecated aliases.
 Use print(...) to write debugging notes to the script run log.

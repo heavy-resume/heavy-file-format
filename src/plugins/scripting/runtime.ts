@@ -20,6 +20,7 @@ import type { ScriptingPluginsApi } from './plugin-apis';
 import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
 import { getTimeZoneOffsetMs } from '../../time-zone-lookup';
 import { createScriptingClock, type ScriptingClock } from './clock-bridge';
+import { getDocumentScriptingSession, type ScriptingSessionValue } from './scripting-session';
 import { getUpdatedScriptingComponentHandles, markScriptingSortValuesSynced, type PreviousScriptingComponents } from './updated-components';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
@@ -42,6 +43,7 @@ export interface ScriptingRuntime {
   doc: ScriptingDocApi;
   /** Internal clock for the checked datetime libraries; not exposed on `doc`. */
   clock: ScriptingClock;
+  session: ScriptingSessionApi;
   stats: ScriptingRuntimeStats;
   runContext: { invoke_reason: HvyPluginHookChangeReason | null };
   step(): string | null;
@@ -50,6 +52,19 @@ export interface ScriptingRuntime {
   setLineBudget(maxLines: number): void;
   /** Changes whether later mutation flushes render; see ScriptingRuntimeOptions.renderOnMutation. */
   setRenderOnMutation(renderOnMutation: boolean): void;
+}
+
+/** Python side of the document's session; see scripting-session.ts. */
+export interface ScriptingSessionApi {
+  id: string;
+  start_time_ms: number;
+  locale(): string;
+  get(key: string): ScriptingSessionValue | undefined;
+  set_json(key: string, valueJson: string): void;
+  has(key: string): boolean;
+  remove(key: string): void;
+  keys(): string[];
+  clear(): void;
 }
 
 export interface ScriptingDocApi {
@@ -562,6 +577,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   return {
     doc,
     clock,
+    session: createSessionApi(options.document),
     stats,
     runContext: { invoke_reason: options.changeReason ?? null },
     step: () => {
@@ -583,6 +599,21 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     setLineBudget: (maxLines: number) => {
       stats.stepBudget = Math.max(1, Math.floor(maxLines));
     },
+  };
+}
+
+function createSessionApi(document: VisualDocument): ScriptingSessionApi {
+  const session = getDocumentScriptingSession(document);
+  return {
+    id: session.id,
+    start_time_ms: session.startTimeMs,
+    locale: () => navigator.language,
+    get: (key) => session.state.get(key),
+    set_json: (key, valueJson) => session.state.set(key, JSON.parse(String(valueJson))),
+    has: (key) => session.state.has(key),
+    remove: (key) => session.state.remove(key),
+    keys: () => session.state.keys(),
+    clear: () => session.state.clear(),
   };
 }
 

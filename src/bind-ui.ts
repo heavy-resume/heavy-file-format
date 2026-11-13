@@ -69,6 +69,7 @@ import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types'
 import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 import { setSaveRequestHandler } from './plugins/power-scripting/power-save-request';
 import { setPowerScriptAcceptanceCallbacks } from './plugins/power-scripting/power-scripting-policy';
+import { endScriptingSession } from './plugins/scripting/scripting-session';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -137,6 +138,7 @@ function replaceLoadedDocument(
     : normalizeFilename(filename);
   state.history = [];
   state.future = [];
+  endScriptingSession(state);
   clearChatConversation(state.chat);
   resetTransientUiState();
   if (options.searchSnapshot) {
@@ -802,6 +804,7 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
+    endScriptingSession(state);
     clearChatConversation(state.chat);
     closeModal();
     resetTransientUiState();

@@ -26,6 +26,7 @@ import {
   loadConditionallyAllowedPlugin,
 } from './authorization/conditional-plugin';
 import { createPluginMount } from './viewport-plugin-mount';
+import { getDocumentScriptingSession } from './scripting/scripting-session';
 
 interface SavedFocus {
   element: HTMLElement;
@@ -249,6 +250,7 @@ function buildContext(
         (state.document.meta as Record<string, unknown>)[key] = value;
       }),
     },
+    session: runWithStateRuntime(runtime, () => getDocumentScriptingSession(state.document)),
     setConfig,
     setText,
     setCss,

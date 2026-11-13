@@ -14,6 +14,7 @@ import { restoreVirtualizedBlock, restoreVirtualizedSection } from './section-vi
 import type { VisualDocument } from './types';
 import { resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 import { setCurrentSearchMatch } from './search/current-match';
+import { endScriptingSession } from './plugins/scripting/scripting-session';
 
 const READER_SECTION_EXPANDED_STATE_PREFIX = 'reader-section-expanded:';
 
@@ -702,6 +703,7 @@ export function resetToBlankDocument(extension: VisualDocument['extension'] = '.
   state.selectedExample = 'blank';
   state.history = [];
   state.future = [];
+  endScriptingSession(state);
   clearChatConversation(state.chat);
   resetTransientUiState();
   saveSessionState(state);

@@ -28,6 +28,7 @@ in `block.schema.pluginConfig`.
 - `brython-interop-policy.ts`: blocked attribute names (`constructor`, `prototype`, ...) and the guard installed on Brython
 - `brython-source-patches.ts`: load-time patches to Brython's converters (`null` / `undefined` to `None` and back), attribute lookups (blocked-name guard) and tracer hooks (frames whose tracer is `None`)
 - `runtime.ts`: restricted runtime surface exposed to user scripts as `doc`
+- `scripting-session.ts`: the host-owned JSON store behind the `session` global and plugin `context.session`, owned by the app state (or the document when there is none) and ended when a different document is loaded
 - `brython-loader.ts`: lazy-loads the locally bundled Brython runtime on first execution
 - `help.hvy` / `help-modal.ts`: user-facing help content and modal
 - `version.ts`: supported scripting plugin version constant and helpers

@@ -361,6 +361,114 @@ class __HvyRunContext__:
         self.invoke_reason = js_run_context.invoke_reason
 
 
+# Ephemeral state for the open document; see scripting-session.ts.
+class __HvySession__:
+    def __init__(self, js_session, js_clock):
+        self.__js_session = js_session
+        self.__js_clock = js_clock
+        self.__state = __HvySessionState__(js_session)
+
+    @property
+    def state(self):
+        return self.__state
+
+    @property
+    def id(self):
+        return str(self.__js_session.id)
+
+    @property
+    def start_time(self):
+        try:
+            from_epoch_us = __hvy_datetime_from_epoch_us__
+        except NameError:
+            raise RuntimeError("session.start_time requires the 'datetime' library.")
+        return from_epoch_us(int(self.__js_session.start_time_ms) * 1000, __hvy_local_zoneinfo__())
+
+    @property
+    def timezone(self):
+        return str(self.__js_clock.local_zone())
+
+    @property
+    def locale(self):
+        return str(self.__js_session.locale())
+
+
+# A mapping over the host-owned session store. Values cross as JSON, so a value
+# read from it is a copy: change it, then assign it back to keep the change.
+class __HvySessionState__:
+    def __init__(self, js_session):
+        self.__js_session = js_session
+
+    def __getitem__(self, key):
+        key = __hvy_text_arg__("session.state key", key)
+        if not self.__js_session.has(key):
+            raise KeyError(key)
+        return self.__js_session.get(key)
+
+    def __setitem__(self, key, value):
+        key = __hvy_text_arg__("session.state key", key)
+        self.__js_session.set_json(key, __hvy_to_json__(__hvy_json_arg__('session.state["' + key + '"]', value)))
+
+    def __delitem__(self, key):
+        key = __hvy_text_arg__("session.state key", key)
+        if not self.__js_session.has(key):
+            raise KeyError(key)
+        self.__js_session.remove(key)
+
+    def __contains__(self, key):
+        return isinstance(key, str) and bool(self.__js_session.has(key))
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def __len__(self):
+        return len(self.keys())
+
+    def get(self, key, default=None):
+        key = __hvy_text_arg__("session.state.get key", key)
+        if not self.__js_session.has(key):
+            return default
+        return self.__js_session.get(key)
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self[key] = default
+        return self[key]
+
+    def pop(self, key, *default):
+        if len(default) > 1:
+            raise TypeError("pop expected at most 2 arguments")
+        if key not in self:
+            if default:
+                return default[0]
+            raise KeyError(key)
+        value = self[key]
+        del self[key]
+        return value
+
+    def update(self, values=None, **kwargs):
+        if values is not None:
+            for key, value in __hvy_mapping_items__("session.state.update values", values):
+                self[key] = value
+        for key, value in kwargs.items():
+            self[key] = value
+
+    def keys(self):
+        return [str(key) for key in self.__js_session.keys()]
+
+    def values(self):
+        return [self[key] for key in self.keys()]
+
+    def items(self):
+        return [(key, self[key]) for key in self.keys()]
+
+    def clear(self):
+        self.__js_session.clear()
+
+    def __repr__(self):
+        return "session.state(" + repr(self.keys()) + ")"
+
+
 class __HvyDocProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc

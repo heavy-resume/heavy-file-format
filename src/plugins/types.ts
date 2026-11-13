@@ -5,6 +5,7 @@ import type { TextComponentPayload } from '../text-component';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
 import type { ReusableTemplateVariable } from '../reusable-template-values';
+import type { ScriptingSession } from './scripting/scripting-session';
 
 // A plugin owns the DOM element it returns. The host treats it as opaque.
 // Plugins style themselves using the standard CSS theme variables; nothing is
@@ -122,6 +123,8 @@ export interface HvyPluginContext {
   document: HvyPluginDocumentApi;
   attachments: HvyPluginAttachmentsApi;
   header: HvyPluginHeaderApi;
+  // Ephemeral state for the open document, shared with scripts' `session`.
+  session: ScriptingSession;
   // Raw document — exposed so plugins like db-table that already integrate
   // deeply with the visual document tree can do so. Most plugins should not
   // reach for this and use the typed APIs above instead.
@@ -254,6 +257,8 @@ export interface HvyPluginVisualDescriptionCapability {
 export interface HvyPluginScriptingContext {
   pluginId: string;
   rawDocument: VisualDocument;
+  // Ephemeral state for the open document, shared with scripts' `session`.
+  session: ScriptingSession;
   // Call after directly mutating rawDocument so the scripting runtime performs
   // its normal sort/group value synchronization and render refresh.
   markMutated(): void;

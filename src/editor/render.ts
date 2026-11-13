@@ -41,6 +41,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { applyWorkspaceLinkRendering } from '../workspace-links';
 import {
   createChildRenderTreeWindowOptions,
+  renderRenderTreeRangePlaceholderAttrs,
   createRenderTreeHeightLedger,
   type RenderTreeWindowEntry,
 } from '../render-tree-window';
@@ -607,9 +608,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         if (!candidate || candidate.node.kind !== 'block' || candidate.shouldRender) break;
         chunk.push(candidate);
       }
-      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
-      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
-      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" data-parent-locked="${section.lock ? 'true' : 'false'}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-parent-locked="${section.lock ? 'true' : 'false'}" ${renderRenderTreeRangePlaceholderAttrs(chunk, deps.escapeAttr)} aria-hidden="true"></div>`);
       index += Math.max(1, chunk.length);
     }
     return output.join('');
@@ -665,9 +664,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         index += 1;
         continue;
       }
-      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
-      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
-      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor-block-range" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-ids="${deps.escapeAttr(blockIds)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="editor-block-range" data-section-key="${deps.escapeAttr(sectionKey)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" ${renderRenderTreeRangePlaceholderAttrs(chunk, deps.escapeAttr)} aria-hidden="true"></div>`);
       index += chunk.length;
     }
     if (placement && !parentLocked && entries.length === 0) {
@@ -937,7 +934,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     return `
       ${insertAboveGhost}
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-hvy-virtual-item="editor-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-parent-locked="${parentLocked ? 'true' : 'false'}"${activationStyle}${activationAttrs}${passiveHeightAttr}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-hvy-virtual-item="editor-block" data-hvy-virtual-shape="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-parent-locked="${parentLocked ? 'true' : 'false'}"${activationStyle}${activationAttrs}${passiveHeightAttr}>
         ${componentMetaActions}
         ${frameRemoveButton}
         <div class="editor-block-head">
@@ -1059,7 +1056,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       ? renderTemplateValueTokens(passiveContent)
       : passiveContent;
     return `
-      <div class="editor-block-passive hvy-link-observer-surface" data-hvy-virtual-item="editor-block" ${visibleState === 'pending' ? 'data-hvy-dynamic-visibility="true" ' : ''}data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" data-block-id="${deps.escapeAttr(
+      <div class="editor-block-passive hvy-link-observer-surface" data-hvy-virtual-item="editor-block" data-hvy-virtual-shape="${deps.escapeAttr(block.schema.component)}" ${visibleState === 'pending' ? 'data-hvy-dynamic-visibility="true" ' : ''}data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" data-block-id="${deps.escapeAttr(
       block.id
     )}">
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>

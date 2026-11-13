@@ -32,6 +32,7 @@ export function createReaderBlockRenderTreeNode(block: VisualBlock): RenderTreeN
     kind: 'block',
     item: block,
     estimatedHeight: estimateReaderBlockHeight(block),
+    shapeKey: block.schema.component,
     minimumHeight: 48,
   };
 }
@@ -68,10 +69,16 @@ function estimateReaderBlockHeight(block: VisualBlock): number {
     case 'expandable':
       return 44
         + block.schema.expandableStubBlocks.children.reduce((total, child) => total + estimateReaderBlockHeight(child), 0)
-        + block.schema.expandableContentBlocks.children.reduce((total, child) => total + estimateReaderBlockHeight(child), 0);
+        + (isExpandableExpandedInline(block)
+          ? block.schema.expandableContentBlocks.children.reduce((total, child) => total + estimateReaderBlockHeight(child), 0)
+          : 0);
     case 'plugin':
       return 180;
     default:
       return 28 + textLines * 20;
   }
+}
+
+export function isExpandableExpandedInline(block: VisualBlock): boolean {
+  return block.schema.expandableExpanded && block.schema.expandablePresentation !== 'modal';
 }

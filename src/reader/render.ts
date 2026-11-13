@@ -62,12 +62,14 @@ import {
 } from './view-filter';
 import {
   createChildRenderTreeWindowOptions,
+  renderRenderTreeRangePlaceholderAttrs,
   createRenderTreeHeightLedger,
   type RenderTreeWindowEntry,
 } from '../render-tree-window';
 import {
   createReaderBlockRenderTreeNode,
   createReaderSectionRenderTreeNode,
+  isExpandableExpandedInline,
   READER_BLOCK_TREE_LAYOUT,
   READER_SECTION_TREE_LAYOUT,
   type ReaderRenderTreeItem,
@@ -528,9 +530,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         if (!candidate || candidate.node.kind !== 'block' || candidate.shouldRender) break;
         chunk.push(candidate);
       }
-      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
-      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
-      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" ${renderRenderTreeRangePlaceholderAttrs(chunk, deps.escapeAttr)} aria-hidden="true"></div>`);
       index += Math.max(1, chunk.length);
     }
     return output.join('');
@@ -589,7 +589,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
     const forceSearchExpanded = searchContext.filtering && searchContext.filterMode === 'hide' && !searchDimmed;
     const searchRevealed = state.searchRevealedAncestors[`${section.key}:${block.id}`] === true;
-    const documentExpanded = block.schema.expandableExpanded && block.schema.expandablePresentation !== 'modal';
+    const documentExpanded = isExpandableExpandedInline(block);
     const readerExpanded = base === 'expandable' && !options.ignoreReaderSessionState
       ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : documentExpanded)
       : searchRevealed || documentExpanded;
@@ -632,7 +632,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       options.trimVerticalStartMargin ? ' data-reader-trim-vertical-start-margin="true"' : '',
       options.trimVerticalEndMargin ? ' data-reader-trim-vertical-end-margin="true"' : '',
     ].join('');
-    const blockDataAttrs = `data-hvy-virtual-item="reader-block" ${visibleState === 'pending' ? 'data-hvy-dynamic-visibility="true" ' : ''}data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
+    const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-virtual-shape="${deps.escapeAttr(block.schema.component)}" ${visibleState === 'pending' ? 'data-hvy-dynamic-visibility="true" ' : ''}data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
     const helpers = { ...deps.getComponentRenderHelpers(), getTextPlaceholders: () => activeTextPlaceholders };
     type BlockShellPresentation = {
       beforeHtml?: string;
@@ -895,9 +895,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         index += 1;
         continue;
       }
-      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
-      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
-      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" ${renderRenderTreeRangePlaceholderAttrs(chunk, deps.escapeAttr)} aria-hidden="true"></div>`);
       index += chunk.length;
     }
     return output.join('');

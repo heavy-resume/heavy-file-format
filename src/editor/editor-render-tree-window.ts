@@ -32,6 +32,7 @@ export function createEditorBlockRenderTreeNode(block: VisualBlock): RenderTreeN
     kind: 'block',
     item: block,
     estimatedHeight: estimateEditorBlockHeight(block),
+    shapeKey: block.schema.component,
     minimumHeight: 56,
   };
 }

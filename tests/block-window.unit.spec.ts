@@ -57,3 +57,34 @@ test('reader block ledger gives cells in the same grid row a shared document off
   expect(expectedResult[2]?.offsetTop).toBe(200);
   expect(expectedResult[3]?.offsetTop).toBeGreaterThan(200);
 });
+
+test('reader block estimate counts expandable content only when it is expanded inline', () => {
+  const createExpandable = (expanded: boolean, presentation: 'inline' | 'modal') => {
+    const block = createEmptyBlock('expandable');
+    const content = createEmptyBlock('text');
+    content.text = 'Long hidden report text. '.repeat(160);
+    block.schema.expandableExpanded = expanded;
+    block.schema.expandablePresentation = presentation;
+    block.schema.expandableContentBlocks.children = [content];
+    return block;
+  };
+
+  expect(createReaderBlockRenderTreeNode(createExpandable(false, 'inline')).estimatedHeight).toBe(44);
+  expect(createReaderBlockRenderTreeNode(createExpandable(true, 'modal')).estimatedHeight).toBe(44);
+  expect(createReaderBlockRenderTreeNode(createExpandable(true, 'inline')).estimatedHeight).toBe(44 + 28 + 40 * 20);
+});
+
+test('reader block ledger sizes unmeasured blocks with the median of measured blocks of the same component', () => {
+  const blocks = createBlocks(100);
+  const ledger = createRenderTreeHeightLedger();
+  ledger.record(createReaderBlockRenderTreeNode(blocks[0]!), 300);
+  ledger.record(createReaderBlockRenderTreeNode(blocks[1]!), 320);
+  ledger.record(createReaderBlockRenderTreeNode(blocks[2]!), 40);
+  const expectedResult = ledger.plan(blocks.map(createReaderBlockRenderTreeNode), {
+    scrollTop: 0,
+    viewportHeight: 800,
+  }, READER_BLOCK_TREE_LAYOUT);
+
+  expect(expectedResult[0]).toMatchObject({ estimatedHeight: 300, measured: true });
+  expect(expectedResult[99]).toMatchObject({ estimatedHeight: 300, measured: false });
+});

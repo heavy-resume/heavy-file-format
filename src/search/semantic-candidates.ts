@@ -1,7 +1,7 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getTextCaptionMarkdown } from '../caption';
 import {
-  buildHvyVirtualFileSystem,
+  createHvyVirtualFileSystem,
   buildVirtualDirectoryBlockLookup,
   buildVirtualDirectorySectionLookup,
 } from '../cli-core/virtual-file-system';
@@ -326,7 +326,7 @@ function getSemanticBlockTargetRef(
 }
 
 function buildSemanticTargetRefs(document: VisualDocument): { componentRefsByPath: Map<string, string> } {
-  const fs = buildHvyVirtualFileSystem(document);
+  const fs = createHvyVirtualFileSystem(document);
   return {
     componentRefsByPath: new Map(
       collectHvyComponentStructureReferences(document, fs).map((entry) => [entry.directory, entry.id])

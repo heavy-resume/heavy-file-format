@@ -8,7 +8,7 @@ import type { VisualDocument } from '../types';
 import { runHvyDocumentBlockLinter } from './document-block-linter';
 import type { HvyCliLintIssue } from './lint-types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
-import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
+import { createHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
 import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
 import { validateDocumentMetadata } from '../document-metadata';
@@ -43,7 +43,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
 ]);
 const DATABASE_SCHEMA_HEADER_KEYS = new Set(['tables', 'database', 'schema', 'columns']);
 
-export async function runHvyCliLinter(document: VisualDocument, fs: HvyVirtualFileSystem = buildHvyVirtualFileSystem(document)): Promise<HvyCliLintIssue[]> {
+export async function runHvyCliLinter(document: VisualDocument, fs: HvyVirtualFileSystem = createHvyVirtualFileSystem(document)): Promise<HvyCliLintIssue[]> {
   const componentJsonFiles = [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => isLintableComponentJsonPath(fs, entry))
     .filter((entry) => !isFlattenedComponentListAlias(fs, entry.path));

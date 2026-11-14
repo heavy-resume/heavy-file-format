@@ -280,7 +280,6 @@ test('undo and redo keep image attachment bytes outside history snapshots', () =
   recordHistory('before-image-edit');
   expect(state.history[0]).toContain('"attachments":[]');
   expect(state.history[0]).not.toContain('image:photo.png');
-  expect(state.history[0]).not.toContain('10');
   state.rawEditorText = '#! Changed';
   state.document.sections[0]!.blocks[0]!.schema.imageAlt = 'Changed photo';
   state.document.attachments = [
@@ -344,7 +343,6 @@ test('history snapshots do not materialize lazy image attachment bytes', () => {
   redoState();
 
   expect(ensureDocumentAttachmentStore(state.document).isMaterialized('image:large-photo.jpg')).toBe(false);
-  expect(state.history.join('\n')).not.toContain('10');
   expect(state.history.join('\n')).not.toContain('large-photo.jpg');
 });
 

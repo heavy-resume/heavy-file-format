@@ -126,15 +126,24 @@ export function syncSortValuesForDocument(document: VisualDocument): boolean {
 /** Each list item syncs from its own values and the document meta, so a section can be synced on its own. */
 export function syncSortValuesForSection(meta: Record<string, unknown> | null | undefined, section: VisualDocument['sections'][number]): boolean {
   let changed = false;
-  const visitBlock = (block: VisualBlock): void => {
-    if (block.schema.kind === 'component-list') {
-      block.schema.componentListBlocks.forEach((item) => {
+  section.blocks.forEach((block) => {
+    changed = syncSortValuesInsideBlock(meta, block) || changed;
+  });
+  return changed;
+}
+
+/** Syncs every component-list item inside `block`, including items of nested lists. `block` itself is not synced as an item. */
+export function syncSortValuesInsideBlock(meta: Record<string, unknown> | null | undefined, block: VisualBlock): boolean {
+  let changed = false;
+  const visitBlock = (current: VisualBlock): void => {
+    if (current.schema.kind === 'component-list') {
+      current.schema.componentListBlocks.forEach((item) => {
         changed = syncSortValuesForListItem(meta, item) || changed;
       });
     }
-    getNestedBlocks(block).forEach(visitBlock);
+    getNestedBlocks(current).forEach(visitBlock);
   };
-  section.blocks.forEach(visitBlock);
+  visitBlock(block);
   return changed;
 }
 

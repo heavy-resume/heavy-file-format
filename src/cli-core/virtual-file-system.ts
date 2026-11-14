@@ -1,6 +1,6 @@
-import { findSortValueOwnerBlock, syncSortValuesForListItem, syncSortValuesForDocument } from '../sort-values';
+import { syncSortValuesForDocument, syncSortValuesForListItem, syncSortValuesInsideBlock } from '../sort-values';
 import { cliBlockMetadata } from './block-metadata-fields';
-import { addTemplateMetadataFiles, getTemplateDirectories, findTemplateDirectory, templatePathSegment, type TemplateDirectory } from './template-directories';
+import { addTemplateMetadataFiles, getTemplateDirectories, templatePathSegment } from './template-directories';
 import { parse as parseYaml } from 'yaml';
 import { stringifyYamlUnfolded } from '../hvy/yaml-stringify';
 import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
@@ -22,13 +22,9 @@ import { isDocumentParagraphSpacing } from '../document-typography';
 import { measurePhase } from '../perf-trace';
 import { defaultBlockSchema, parseTableColumnProperties } from '../document-factory';
 import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
-import {
-  assignVirtualIdAliasRoots,
-  enumerateVirtualPathAncestors,
-  HvyVirtualEntryMap,
-  resolveVirtualIdAliasSourcePath,
-  type HvyVirtualIdAlias,
-} from './virtual-entry-map';
+import { findCanonicalIdAliasSourcePath, iterateCanonicalIdAliases, iterateVirtualIdAliasRoots } from './virtual-id-aliases';
+import { sanitizePathSegment, sectionDirectoryName, stableBlockDirectoryName, uniqueName } from './virtual-path-names';
+import { HvyVirtualTreeEntries } from './virtual-tree-entries';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -42,52 +38,114 @@ export interface HvyVirtualFile {
 export interface HvyVirtualDirectory {
   kind: 'dir';
   path: string;
+  /** The section this directory shows, when it shows one. */
+  section?: VisualSection;
+  /** The component this directory shows, when it shows one. */
+  block?: VisualBlock;
+  /** Where components created in this directory go, when it holds an ordered list of components. */
+  insert?: HvyVirtualBlockInsertionTarget;
+  /** The component-list item whose sort and group values depend on this directory's contents, when there is one. */
+  listItem?: VisualBlock;
 }
 
 export type HvyVirtualEntry = HvyVirtualFile | HvyVirtualDirectory;
 
 export interface HvyVirtualFileSystem {
-  entries: HvyVirtualEntryMap;
+  entries: HvyVirtualTreeEntries;
 }
 
 export interface HvyVirtualPathNamingState {
   anonymousBlockNamesById?: Record<string, string>;
 }
 
+/** Where a directory listing puts its entries. */
+export interface HvyVirtualEntrySink {
+  get(path: string): HvyVirtualEntry | undefined;
+  has(path: string): boolean;
+  set(path: string, entry: HvyVirtualEntry): unknown;
+  /** Adds an entry whose existence is only decided when its own path is looked up or its directory is listed. */
+  defer(path: string, resolve: () => HvyVirtualEntry | undefined): unknown;
+}
+
+/** A document node whose directory is being listed, for files the caller attaches to nodes. */
+export type HvyVirtualNodeFilesTarget =
+  | { kind: 'document' }
+  | { kind: 'section'; section: VisualSection; path: string }
+  | { kind: 'block'; block: VisualBlock; path: string; listItem?: VisualBlock };
+
+/** Adds the entries of one directory. Each subdirectory's own entries are added through `HvyVirtualListingContext.descend`. */
+export type HvyVirtualDirectoryLister = (entries: HvyVirtualEntrySink) => void;
+
+export interface HvyVirtualListingContext {
+  document: VisualDocument;
+  naming?: HvyVirtualPathNamingState;
+  /**
+   * Lists a subdirectory whose own directory entry the caller has already added.
+   * A full build lists it immediately; the live tree lists it only when a path goes through it.
+   */
+  descend: (path: string, list: HvyVirtualDirectoryLister) => void;
+  /**
+   * Adds files the caller attaches to body nodes, such as the CLI session's raw HVY files.
+   * Called after the node's own entries. Template content has none.
+   */
+  addNodeFiles?: (entries: HvyVirtualEntrySink, node: HvyVirtualNodeFilesTarget) => void;
+  /** The innermost component-list item being listed. Its sort and group values depend on everything listed inside it. */
+  listItem?: VisualBlock;
+  /** Set for template content, whose list items are not document content and are not synced. */
+  ignoresSortValues?: boolean;
+}
+
+/**
+ * Recalculates the sort and group values a change at this point can affect: the list item that owns this point,
+ * and the list items inside `changed` (a block that was just added or replaced).
+ */
+function syncSortValuesAfterChange(ctx: HvyVirtualListingContext, changed?: VisualBlock): void {
+  if (ctx.ignoresSortValues) {
+    return;
+  }
+  if (ctx.listItem) {
+    syncSortValuesForListItem(ctx.document.meta, ctx.listItem);
+  }
+  if (changed) {
+    syncSortValuesInsideBlock(ctx.document.meta, changed);
+  }
+}
+
 export type HvyVirtualBlockInsertionTarget =
   | { kind: 'blocks'; insert: (block: VisualBlock, index?: number) => void }
   | { kind: 'grid'; insert: (block: VisualBlock, index?: number) => void };
 
-export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: HvyVirtualPathNamingState): HvyVirtualFileSystem {
-  return measurePhase('cli.fs.build', { sections: document.sections.length }, () => buildHvyVirtualFileSystemUnmeasured(document, naming));
-}
-
-export function buildHvyVirtualBlockSubtreeFileSystem(
+/** A view of the live document: every lookup reads the document as it is now, so nothing needs rebuilding after an edit. */
+export function createHvyVirtualFileSystem(
   document: VisualDocument,
-  block: VisualBlock,
-  blockPath: string,
-  naming?: HvyVirtualPathNamingState
+  naming?: HvyVirtualPathNamingState,
+  addNodeFiles?: HvyVirtualListingContext['addNodeFiles']
 ): HvyVirtualFileSystem {
-  const entries = new HvyVirtualEntryMap();
-  addBlock(entries, document, block, blockPath, naming);
-  return { entries };
+  return {
+    entries: new HvyVirtualTreeEntries({
+      context: { document, naming, addNodeFiles },
+      listRoot: listVirtualRoot,
+      idAliases: () => iterateCanonicalIdAliases(document),
+      findIdAliasSourcePath: (name) => findCanonicalIdAliasSourcePath(document, name),
+    }),
+  };
 }
 
-function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: HvyVirtualPathNamingState): HvyVirtualFileSystem {
-  const entries = new HvyVirtualEntryMap();
+/** Lists `/`. The `/id` alias roots are not listed here: they are found by searching the document. */
+export function listVirtualRoot(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext): void {
+  const { document } = ctx;
   const addDir = (path: string) => entries.set(path, { kind: 'dir', path });
-  const addFile = (path: string, read: () => string, write?: (content: string) => void) =>
-    entries.set(path, { kind: 'file', path, read, write });
 
   addDir('/');
   addDir('/body');
   addDir('/attachments');
   addDir('/docs');
 
-  addFile(
-    '/header.yaml',
-    () => stringifyYamlUnfolded(omitTemplateDefinitions(document.meta)).trimEnd(),
-    (content) => {
+  entries.set('/header.yaml', {
+    kind: 'file',
+    path: '/header.yaml',
+    read: () => stringifyYamlUnfolded(omitTemplateDefinitions(document.meta)).trimEnd(),
+    write: (content) => {
       const parsed = parseYaml(content);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('/header.yaml must contain a YAML object.');
@@ -101,63 +159,31 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
         ...(componentDefs ? { component_defs: componentDefs } : {}),
         ...(sectionDefs ? { section_defs: sectionDefs } : {}),
       };
-    }
-  );
-
-  measurePhase('cli.fs.build.sections', {}, () => {
-    addSectionList(entries, document, document.sections, '/body', naming);
-  });
-  addTemplateFiles(entries, document, naming);
-  measurePhase('cli.fs.build.docs', {}, () => {
-    addDocsDirectory(entries, document.meta);
-  });
-  const aliases = measurePhase('cli.fs.build.aliasCollect', {}, () => collectCanonicalIdAliases(document));
-  measurePhase('cli.fs.build.aliasEntries', { aliases: aliases.length, entriesBefore: entries.size }, () => {
-    addIdAliasEntries(entries, aliases);
+    },
   });
 
+  ctx.descend('/body', (sink) => addSectionList(sink, ctx, document.sections, '/body'));
+  addDir('/templates');
+  ctx.descend('/templates', (sink) => addTemplateFiles(sink, ctx));
+  ctx.descend('/docs', (sink) => addDocsDirectory(sink, document.meta));
+  addDir('/id');
+  ctx.descend('/attachments', (sink) => addAttachmentFiles(sink, document));
+  ctx.addNodeFiles?.(entries, { kind: 'document' });
+}
+
+function addAttachmentFiles(entries: HvyVirtualEntrySink, document: VisualDocument): void {
   document.attachments.forEach((attachment, index) => {
     const filename = uniqueName(`${sanitizePathSegment(attachment.id) || `attachment-${index}`}.json`, entries, '/attachments');
-    addFile(`/attachments/${filename}`, () =>
-      `${JSON.stringify({ id: attachment.id, ...attachment.meta, length: attachment.bytes.length }, null, 2)}\n`
-    );
+    entries.set(`/attachments/${filename}`, {
+      kind: 'file',
+      path: `/attachments/${filename}`,
+      read: () => `${JSON.stringify({ id: attachment.id, ...attachment.meta, length: attachment.bytes.length }, null, 2)}\n`,
+    });
   });
-
-  return { entries };
 }
 
-/**
- * Rebuilds the entries of one top-level body section after a structural change confined to it, along with the
- * `/id` roots, producing the entries a full build would. Returns false when that section directory no longer exists.
- */
-export function refreshHvyVirtualFileSystemSection(
-  fs: HvyVirtualFileSystem,
-  document: VisualDocument,
-  sectionPath: string,
-  naming?: HvyVirtualPathNamingState
-): boolean {
-  const section = buildVirtualDirectorySectionLookup(document, naming).get(sectionPath);
-  if (!section) {
-    return false;
-  }
-  const sectionEntries = new Map<string, HvyVirtualEntry>();
-  addSection(sectionEntries, document, section, sectionPath, naming);
-  if (!fs.entries.replaceSubtree(sectionPath, sectionEntries)) {
-    return false;
-  }
-  const nextRoots = assignVirtualIdAliasRoots(collectCanonicalIdAliases(document));
-  const currentRoots = [...fs.entries.getIdAliasRoots()];
-  const rootsChanged = nextRoots.size !== currentRoots.length
-    || [...nextRoots].some(([root, sourcePath], index) => currentRoots[index]?.[0] !== root || currentRoots[index]?.[1] !== sourcePath);
-  if (rootsChanged) {
-    // Session files stored at alias paths are re-added with the other session files on the next command.
-    fs.entries.replaceSubtree('/id', new Map([['/id', { kind: 'dir', path: '/id' }]]));
-  }
-  fs.entries.setIdAliasRoots(nextRoots);
-  return true;
-}
-
-function addTemplateFiles(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, naming?: HvyVirtualPathNamingState): void {
+function addTemplateFiles(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext): void {
+  const { document } = ctx;
   const roots = getTemplateDirectories(document);
   addTemplateMetadataFiles(entries, roots);
   for (const root of roots) {
@@ -168,20 +194,43 @@ function addTemplateFiles(entries: Map<string, HvyVirtualEntry>, document: Visua
     }
   }
   for (const root of roots) {
-    const subtree = new Map<string, HvyVirtualEntry>();
-    if (root.block) addBlock(subtree, document, root.block, root.contentPath, naming);
-    if (root.section) addSection(subtree, document, root.section, root.contentPath, naming);
-    for (const [path, entry] of subtree) {
-      if (entry.kind === 'file' && entry.write) {
-        const write = entry.write;
-        entry.write = (content) => { write(content); root.commit(); };
-      }
-      entries.set(path, entry);
-    }
+    const commitWrites = (sink: HvyVirtualEntrySink) => sinkRunningAfterWrites(sink, root.commit);
+    const templateCtx: HvyVirtualListingContext = {
+      ...ctx,
+      descend: (path, list) => ctx.descend(path, (sink) => list(commitWrites(sink))),
+      addNodeFiles: undefined,
+      ignoresSortValues: true,
+    };
+    if (root.block) addBlock(commitWrites(entries), templateCtx, root.block, root.contentPath);
+    if (root.section) addSection(commitWrites(entries), templateCtx, root.section, root.contentPath);
   }
 }
 
-function addDocsDirectory(entries: Map<string, HvyVirtualEntry>, meta: JsonObject): void {
+/** A sink whose file writes run `afterWrite` once they succeed. */
+function sinkRunningAfterWrites(sink: HvyVirtualEntrySink, afterWrite: () => void): HvyVirtualEntrySink {
+  const runAfterWrites = (entry: HvyVirtualEntry): HvyVirtualEntry => {
+    if (entry.kind === 'file' && entry.write) {
+      const write = entry.write;
+      entry.write = (content, addressedPath) => { write(content, addressedPath); afterWrite(); };
+    }
+    if (entry.kind === 'dir' && entry.insert) {
+      const target = entry.insert;
+      entry.insert = { kind: target.kind, insert: (block, index) => { target.insert(block, index); afterWrite(); } };
+    }
+    return entry;
+  };
+  return {
+    get: (path) => sink.get(path),
+    has: (path) => sink.has(path),
+    set: (path, entry) => sink.set(path, runAfterWrites(entry)),
+    defer: (path, resolve) => sink.defer(path, () => {
+      const entry = resolve();
+      return entry && runAfterWrites(entry);
+    }),
+  };
+}
+
+function addDocsDirectory(entries: HvyVirtualEntrySink, meta: JsonObject): void {
   for (const doc of getHvyReferenceDocs()) {
     const filename = uniqueName(doc.filename, entries, '/docs');
     entries.set(`/docs/${filename}`, {
@@ -260,82 +309,120 @@ function validateHeaderCssValues(meta: JsonObject): void {
   }
 }
 
+export function findVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualDirectory | null {
+  const entry = createHvyVirtualFileSystem(document, naming).entries.get(normalizeVirtualPath('/', path));
+  return entry?.kind === 'dir' ? entry : null;
+}
+
 export function findBlockForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualBlock | null {
-  const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
-  if (normalized.startsWith('/templates/')) {
-    const root = findTemplateDirectory(document, normalized);
-    return root ? buildTemplateDirectoryBlockLookup(document, root, naming).get(normalized) ?? null : null;
-  }
-  const entries = new Map<string, HvyVirtualEntry>();
-  const blocks = new Map<string, VisualBlock>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionBlockLookup(document.meta, entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
-  return blocks.get(normalized) ?? null;
+  return findVirtualDirectory(document, path, naming)?.block ?? null;
 }
 
 export function findSectionForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualSection | null {
-  const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
-  if (normalized.startsWith('/templates/')) {
-    const root = findTemplateDirectory(document, normalized);
-    const sections = new Map<string, VisualSection>();
-    if (root?.section) addSectionLookup(new Map(), sections, root.section, root.contentPath, naming);
-    return sections.get(normalized) ?? null;
-  }
-  const entries = new Map<string, HvyVirtualEntry>();
-  const sections = new Map<string, VisualSection>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionLookup(entries, sections, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
-  return sections.get(normalized) ?? null;
+  return findVirtualDirectory(document, path, naming)?.section ?? null;
+}
+
+export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
+  return measurePhase('cli.fs.findBlockInsertionTargetForVirtualDirectory', { path }, () =>
+    findVirtualDirectory(document, path, naming)?.insert ?? null
+  );
 }
 
 export function findVirtualDirectoryForSection(document: VisualDocument, targetSection: VisualSection): string | null {
-  const entries = new Map<string, HvyVirtualEntry>();
-  const sections = new Map<string, VisualSection>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionLookup(entries, sections, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
-  for (const [path, section] of sections) {
-    if (section === targetSection) {
-      return path;
+  for (const directory of createHvyVirtualFileSystem(document).entries.childDirectories('/body')) {
+    if (directory.section === targetSection) {
+      return directory.path;
     }
   }
   return null;
 }
 
 export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlock: VisualBlock): string | null {
-  const blocks = buildVirtualDirectoryBlockLookup(document);
-  for (const [path, block] of blocks) {
-    if (block === targetBlock) {
-      return path;
-    }
-  }
-  return null;
+  let found: HvyBodyBlockAncestry | null = null;
+  visitBodyBlocks(document, (block, ancestry) => {
+    found = block === targetBlock ? ancestry() : null;
+    return found !== null;
+  });
+  return found ? findVirtualDirectoryForAncestry(createHvyVirtualFileSystem(document), found) : null;
+}
+
+/** A body block with the section and blocks around it, outermost first, ending with the block itself. */
+export interface HvyBodyBlockAncestry {
+  section: VisualSection;
+  blocks: VisualBlock[];
 }
 
 /**
- * Every directory that resolves to the block, in body or template content:
- * canonical paths first, then `/id` aliases when requested (they cost an extra pass).
+ * Visits every body block in document order, following the same child lists the directories show, until `visit`
+ * returns true. A plain walk over the blocks: nothing is listed. `ancestry` copies the current chain when called.
+ */
+export function visitBodyBlocks(document: VisualDocument, visit: (block: VisualBlock, ancestry: () => HvyBodyBlockAncestry) => boolean | void): void {
+  const chain: VisualBlock[] = [];
+  const visitList = (section: VisualSection, blocks: VisualBlock[]): boolean => {
+    for (const block of blocks) {
+      chain.push(block);
+      const stop = visit(block, () => ({ section, blocks: [...chain] })) === true || visitList(section, childBlocksShownForBlock(document, block));
+      chain.pop();
+      if (stop) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const section of document.sections) {
+    if (!section.isGhost && visitList(section, section.blocks)) {
+      return;
+    }
+  }
+}
+
+/** The path of a body block from its ancestry, listing only the directories along the way. */
+export function findVirtualDirectoryForAncestry(fs: HvyVirtualFileSystem, ancestry: HvyBodyBlockAncestry): string | null {
+  return fs.entries.descendThrough('/body', [ancestry.section, ...ancestry.blocks]);
+}
+
+/** The child blocks a component's directory shows, in the order its listing shows them. */
+function childBlocksShownForBlock(document: VisualDocument, block: VisualBlock): VisualBlock[] {
+  const schema = block.schema;
+  const lists: VisualBlock[][] = [];
+  if (schema.containerBlocks?.length) lists.push(schema.containerBlocks);
+  if (schema.componentListBlocks?.length && getBlockBaseComponent(document.meta, block) === 'component-list') lists.push(schema.componentListBlocks);
+  if (schema.expandableStubBlocks?.children.length) lists.push(schema.expandableStubBlocks.children);
+  if (schema.expandableContentBlocks?.children.length) lists.push(schema.expandableContentBlocks.children);
+  if (schema.gridItems?.length) lists.push(schema.gridItems.map((item) => item.block));
+  return lists.length === 1 ? lists[0]! : lists.flat();
+}
+
+/**
+ * Every directory that shows the block, in body or template content:
+ * canonical paths first, then `/id` alias paths when requested.
  */
 export function findVirtualDirectoriesForBlock(
   document: VisualDocument,
   targetBlock: VisualBlock,
   options: { naming?: HvyVirtualPathNamingState; includeIdAliases?: boolean } = {}
 ): string[] {
-  const { naming, includeIdAliases = false } = options;
-  const lookups = [
-    () => includeIdAliases ? buildVirtualDirectoryBlockLookupWithAliases(document, naming) : buildVirtualDirectoryBlockLookup(document, naming),
-    ...getTemplateDirectories(document).map((root) => () => buildTemplateDirectoryBlockLookup(document, root, naming)),
-  ];
-  for (const buildLookup of lookups) {
-    const paths = [...buildLookup()].filter(([, block]) => block === targetBlock).map(([path]) => path);
+  const fs = createHvyVirtualFileSystem(document, options.naming);
+  const pathsUnder = (root: string) => [...fs.entries.directoriesUnder(root)]
+    .filter((directory) => directory.block === targetBlock)
+    .map((directory) => directory.path);
+  const bodyPaths = pathsUnder('/body');
+  if (bodyPaths.length > 0) {
+    if (!options.includeIdAliases) {
+      return bodyPaths;
+    }
+    const aliasPaths: string[] = [];
+    for (const [root, sourcePath] of iterateVirtualIdAliasRoots(iterateCanonicalIdAliases(document))) {
+      for (const path of bodyPaths) {
+        if (path === sourcePath || path.startsWith(`${sourcePath}/`)) {
+          aliasPaths.push(`${root}${path.slice(sourcePath.length)}`);
+        }
+      }
+    }
+    return [...bodyPaths, ...aliasPaths];
+  }
+  for (const root of getTemplateDirectories(document)) {
+    const paths = pathsUnder(root.contentPath);
     if (paths.length > 0) {
       return paths;
     }
@@ -343,98 +430,24 @@ export function findVirtualDirectoriesForBlock(
   return [];
 }
 
-function buildTemplateDirectoryBlockLookup(
-  document: VisualDocument,
-  root: TemplateDirectory,
-  naming?: HvyVirtualPathNamingState
-): Map<string, VisualBlock> {
-  const blocks = new Map<string, VisualBlock>();
-  const entries = new Map<string, HvyVirtualEntry>();
-  if (root.block) addBlockLookup(document.meta, entries, blocks, root.block, root.contentPath, naming);
-  if (root.section) addSectionBlockLookup(document.meta, entries, blocks, root.section, root.contentPath, naming);
-  return blocks;
-}
-
 export function buildVirtualDirectorySectionLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {
-  const entries = new Map<string, HvyVirtualEntry>();
   const sections = new Map<string, VisualSection>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionLookup(entries, sections, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+  for (const directory of createHvyVirtualFileSystem(document, naming).entries.childDirectories('/body')) {
+    if (directory.section) {
+      sections.set(directory.path, directory.section);
+    }
+  }
   return sections;
 }
 
-export function buildVirtualDirectorySectionLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {
-  return addIdAliasLookupPaths(buildVirtualDirectorySectionLookup(document, naming), collectCanonicalIdAliases(document));
-}
-
 export function buildVirtualDirectoryBlockLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
-  const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionBlockLookup(document.meta, entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+  for (const directory of createHvyVirtualFileSystem(document, naming).entries.directoriesUnder('/body')) {
+    if (directory.block) {
+      blocks.set(directory.path, directory.block);
+    }
+  }
   return blocks;
-}
-
-export function buildVirtualDirectoryBlockLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
-  return addIdAliasLookupPaths(buildVirtualDirectoryBlockLookup(document, naming), collectCanonicalIdAliases(document));
-}
-
-function addIdAliasLookupPaths<T>(lookup: Map<string, T>, aliases: HvyVirtualIdAlias[]): Map<string, T> {
-  const rootsBySourcePath = new Map<string, string[]>();
-  for (const [root, sourcePath] of assignVirtualIdAliasRoots(aliases)) {
-    const roots = rootsBySourcePath.get(sourcePath) ?? [];
-    roots.push(root);
-    rootsBySourcePath.set(sourcePath, roots);
-  }
-  for (const [sourcePath, value] of [...lookup.entries()]) {
-    for (const ancestorPath of enumerateVirtualPathAncestors(sourcePath)) {
-      for (const root of rootsBySourcePath.get(ancestorPath) ?? []) {
-        lookup.set(`${root}${sourcePath.slice(ancestorPath.length)}`, value);
-      }
-    }
-  }
-  return lookup;
-}
-
-function addSectionLookup(
-  entries: Map<string, HvyVirtualEntry>,
-  lookup: Map<string, VisualSection>,
-  section: VisualSection,
-  sectionPath: string,
-  _naming?: HvyVirtualPathNamingState
-): void {
-  entries.set(sectionPath, { kind: 'dir', path: sectionPath });
-  lookup.set(sectionPath, section);
-}
-
-export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
-  return measurePhase('cli.fs.findBlockInsertionTargetForVirtualDirectory', { path }, () => {
-    const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
-    if (normalized.startsWith('/templates/')) {
-      const root = findTemplateDirectory(document, normalized);
-      const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
-      const entries = new Map<string, HvyVirtualEntry>();
-      if (root?.block) addBlockInsertionTargets(document.meta, entries, targets, root.block, root.contentPath, naming);
-      if (root?.section) addSectionInsertionTargets(document.meta, entries, targets, root.section, root.contentPath, naming);
-      const target = targets.get(normalized);
-      return target && root ? { kind: target.kind, insert: (block, index) => { target.insert(block, index); root.commit(); } } : null;
-    }
-    const entries = new Map<string, HvyVirtualEntry>();
-    const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
-    entries.set('/', { kind: 'dir', path: '/' });
-    entries.set('/body', { kind: 'dir', path: '/body' });
-    targets.set('/body', { kind: 'blocks', insert: () => {} });
-    document.sections
-      .filter((section) => !section.isGhost)
-      .forEach((section, index) => addSectionInsertionTargets(document.meta, entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
-    return targets.get(normalized) ?? null;
-  });
 }
 
 export function normalizeVirtualPath(cwd: string, input = '.'): string {
@@ -479,8 +492,23 @@ export function resolveVirtualPath(fs: HvyVirtualFileSystem, cwd: string, input 
   return normalized;
 }
 
-function addSection(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, section: VisualSection, sectionPath: string, naming?: HvyVirtualPathNamingState): void {
-  entries.set(sectionPath, { kind: 'dir', path: sectionPath });
+function addSection(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext, section: VisualSection, sectionPath: string): void {
+  entries.set(sectionPath, {
+    kind: 'dir',
+    path: sectionPath,
+    section,
+    insert: {
+      kind: 'blocks',
+      insert: (block, index = -1) => {
+        insertBlock(section.blocks, block, index);
+        syncSortValuesAfterChange(ctx, block);
+      },
+    },
+  });
+  ctx.descend(sectionPath, (sink) => listSection(sink, ctx, section, sectionPath));
+}
+
+function listSection(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext, section: VisualSection, sectionPath: string): void {
   entries.set(`${sectionPath}/section.json`, {
     kind: 'file',
     path: `${sectionPath}/section.json`,
@@ -497,36 +525,57 @@ function addSection(entries: Map<string, HvyVirtualEntry>, document: VisualDocum
     path: `${sectionPath}/about-section.txt`,
     read: () => formatSectionAbout(section),
   });
-  addBlockList(entries, document, section.blocks, sectionPath, naming);
+  addBlockList(entries, ctx, section.blocks, sectionPath);
+  ctx.addNodeFiles?.(entries, { kind: 'section', section, path: sectionPath });
 }
 
-function addSectionList(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, sections: VisualSection[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
+function addSectionList(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext, sections: VisualSection[], parentPath: string): void {
   const visibleSections = sections.filter((section) => !section.isGhost);
   const keys: string[] = [];
   visibleSections.forEach((section, index) => {
     const key = uniqueName(sectionDirectoryName(section, index), entries, parentPath);
     keys.push(key);
-    addSection(entries, document, section, `${parentPath}/${key}`, naming);
+    addSection(entries, ctx, section, `${parentPath}/${key}`);
   });
   addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) =>
     reorderVisibleByKeys(sections, visibleSections, keys, nextKeys)
   );
 }
 
-function addBlockList(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, blocks: VisualBlock[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
+/** `areListItems` marks the blocks as component-list items, each owning the sort and group values of its contents. */
+function addBlockList(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext, blocks: VisualBlock[], parentPath: string, areListItems = false): void {
   const keys: string[] = [];
   blocks.forEach((block, index) => {
-    const key = stableBlockDirectoryName(block, index, entries, parentPath, naming);
+    const key = stableBlockDirectoryName(block, index, entries, parentPath, ctx.naming);
     keys.push(key);
-    addBlock(entries, document, block, `${parentPath}/${key}`, naming);
+    addBlock(entries, areListItems ? { ...ctx, listItem: block } : ctx, block, `${parentPath}/${key}`);
   });
-  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(blocks, keys, nextKeys));
+  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) => {
+    reorderByKeys(blocks, keys, nextKeys);
+    syncSortValuesAfterChange(ctx);
+  });
 }
 
-function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, block: VisualBlock, blockPath: string, naming?: HvyVirtualPathNamingState): void {
+function addBlock(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext, block: VisualBlock, blockPath: string): void {
+  const isComponentList = getBlockBaseComponent(ctx.document.meta, block) === 'component-list';
+  const insertListItem = (item: VisualBlock, index = -1) => {
+    insertBlock(block.schema.componentListBlocks, item, index);
+    syncSortValuesAfterChange({ ...ctx, listItem: item }, item);
+  };
+  entries.set(blockPath, {
+    kind: 'dir',
+    path: blockPath,
+    block,
+    ...(ctx.listItem ? { listItem: ctx.listItem } : {}),
+    ...(isComponentList ? { insert: { kind: 'blocks', insert: insertListItem } } : {}),
+  });
+  ctx.descend(blockPath, (sink) => listBlock(sink, ctx, block, blockPath));
+}
+
+function listBlock(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext, block: VisualBlock, blockPath: string): void {
+  const { document } = ctx;
   const meta = document.meta;
   const blockEntries = new Map<string, HvyVirtualEntry>();
-  blockEntries.set(blockPath, { kind: 'dir', path: blockPath });
   const baseComponent = getBlockBaseComponent(meta, block);
   const componentFile = `${blockPath}/${sanitizePathSegment(block.schema.component) || 'component'}.json`;
   blockEntries.set(componentFile, {
@@ -575,105 +624,53 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, document: VisualDocumen
       const write = entry.write;
       entry.write = (content) => {
         write(content);
-        const owner = findSortValueOwnerBlock(document, block.id);
-        if (owner) syncSortValuesForListItem(document.meta, owner);
+        syncSortValuesAfterChange(ctx);
       };
     }
     entries.set(path, entry);
   }
 
-  addNamedBlockChildren(entries, document, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
+  addNamedBlockChildren(entries, ctx, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container');
   if (baseComponent === 'component-list') {
-    addBlockList(entries, document, block.schema.componentListBlocks ?? [], blockPath, naming);
+    addBlockList(entries, ctx, block.schema.componentListBlocks ?? [], blockPath, true);
   }
-  addNamedBlockChildren(entries, document, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, baseComponent === 'expandable', naming);
-  addNamedBlockChildren(entries, document, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, baseComponent === 'expandable', naming);
-  addGridItems(entries, document, block.schema.gridItems ?? [], `${blockPath}/grid`, baseComponent === 'grid', naming);
+  addNamedBlockChildren(entries, ctx, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, baseComponent === 'expandable');
+  addNamedBlockChildren(entries, ctx, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, baseComponent === 'expandable');
+  addGridItems(entries, ctx, block.schema.gridItems ?? [], `${blockPath}/grid`, baseComponent === 'grid');
+  ctx.addNodeFiles?.(entries, { kind: 'block', block, path: blockPath, ...(ctx.listItem ? { listItem: ctx.listItem } : {}) });
 }
 
-function addGridItems(entries: Map<string, HvyVirtualEntry>, document: VisualDocument, gridItems: GridItem[], directoryPath: string, keepEmptyDirectory = false, naming?: HvyVirtualPathNamingState): void {
+function addGridItems(entries: HvyVirtualEntrySink, ctx: HvyVirtualListingContext, gridItems: GridItem[], directoryPath: string, keepEmptyDirectory: boolean): void {
   if (gridItems.length === 0 && !keepEmptyDirectory) {
     return;
   }
-  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  const keys: string[] = [];
-  gridItems.forEach((item, index) => {
-    const key = stableBlockDirectoryName(item.block, index, entries, directoryPath, naming);
-    keys.push(key);
-    addBlock(entries, document, item.block, `${directoryPath}/${key}`, naming);
+  entries.set(directoryPath, {
+    kind: 'dir',
+    path: directoryPath,
+    insert: {
+      kind: 'grid',
+      insert: (block, index = -1) => {
+        insertGridItem(gridItems, block, index);
+        syncSortValuesAfterChange(ctx, block);
+      },
+    },
   });
-  addOrderFile(entries, `${directoryPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(gridItems, keys, nextKeys));
-}
-
-function collectCanonicalIdAliases(document: VisualDocument): HvyVirtualIdAlias[] {
-  const aliases: HvyVirtualIdAlias[] = [];
-  const aliasKeys = new Set<string>();
-  const entries = new Map<string, HvyVirtualEntry>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-
-  const addAlias = (id: string, sourcePath: string): void => {
-    const normalized = sanitizePathSegment(id);
-    if (!normalized) {
-      return;
-    }
-    const aliasKey = `${normalized}\0${sourcePath}`;
-    if (aliasKeys.has(aliasKey)) {
-      return;
-    }
-    aliasKeys.add(aliasKey);
-    aliases.push({ id: normalized, sourcePath });
-  };
-  const visitBlockAtPath = (block: VisualBlock, blockPath: string): void => {
-    entries.set(blockPath, { kind: 'dir', path: blockPath });
-    addAlias(block.schema.id, blockPath);
-    visitBlocks(block.schema.containerBlocks ?? [], `${blockPath}/container`);
-    if (getBlockBaseComponent(document.meta, block) === 'component-list') {
-      visitBlocks(block.schema.componentListBlocks ?? [], blockPath);
-    }
-    visitBlocks(block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`);
-    visitBlocks(block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`);
-    const gridDirectory = `${blockPath}/grid`;
-    if ((block.schema.gridItems ?? []).length > 0) {
-      entries.set(gridDirectory, { kind: 'dir', path: gridDirectory });
-      block.schema.gridItems.forEach((item, gridIndex) => {
-        const itemPath = `${gridDirectory}/${uniqueName(blockDirectoryName(item.block, gridIndex), entries, gridDirectory)}`;
-        addAlias(item.id, itemPath);
-        visitBlockAtPath(item.block, itemPath);
-      });
-    }
-  };
-  const visitBlocks = (blocks: VisualBlock[], parentPath: string): void => {
-    blocks.forEach((block, index) => {
-      const blockPath = `${parentPath}/${uniqueName(blockDirectoryName(block, index), entries, parentPath)}`;
-      visitBlockAtPath(block, blockPath);
+  ctx.descend(directoryPath, (sink) => {
+    const keys: string[] = [];
+    gridItems.forEach((item, index) => {
+      const key = stableBlockDirectoryName(item.block, index, sink, directoryPath, ctx.naming);
+      keys.push(key);
+      addBlock(sink, ctx, item.block, `${directoryPath}/${key}`);
     });
-  };
-  const visitSections = (sections: VisualSection[], parentPath: string): void => {
-    sections
-      .filter((section) => !section.isGhost)
-      .forEach((section, index) => {
-        const sectionPath = `${parentPath}/${uniqueName(sectionDirectoryName(section, index), entries, parentPath)}`;
-        entries.set(sectionPath, { kind: 'dir', path: sectionPath });
-        addAlias(getSectionId(section), sectionPath);
-        visitBlocks(section.blocks, sectionPath);
-      });
-  };
-  visitSections(document.sections, '/body');
-  return aliases;
+    addOrderFile(sink, `${directoryPath}/children-order.json`, keys, (nextKeys) => {
+      reorderByKeys(gridItems, keys, nextKeys);
+      syncSortValuesAfterChange(ctx);
+    });
+  });
 }
 
-function addIdAliasEntries(entries: HvyVirtualEntryMap, aliases: HvyVirtualIdAlias[]): void {
-  entries.set('/id', { kind: 'dir', path: '/id' });
-  entries.setIdAliasRoots(assignVirtualIdAliasRoots(aliases));
-}
 
-function resolveIdAliasPath(document: VisualDocument, normalizedPath: string): string {
-  if (normalizedPath === '/id' || !normalizedPath.startsWith('/id/')) {
-    return normalizedPath;
-  }
-  return resolveVirtualIdAliasSourcePath(assignVirtualIdAliasRoots(collectCanonicalIdAliases(document)), normalizedPath) ?? normalizedPath;
-}
+
 
 function addPluginDocumentationFile(entries: Map<string, HvyVirtualEntry>, block: VisualBlock, blockPath: string): void {
   if (block.schema.component !== 'plugin' || !block.schema.plugin) {
@@ -709,21 +706,30 @@ function addPluginVisualDescriptionFile(
 }
 
 function addNamedBlockChildren(
-  entries: Map<string, HvyVirtualEntry>,
-  document: VisualDocument,
+  entries: HvyVirtualEntrySink,
+  ctx: HvyVirtualListingContext,
   blocks: VisualBlock[],
   directoryPath: string,
-  keepEmptyDirectory = false,
-  naming?: HvyVirtualPathNamingState
+  keepEmptyDirectory: boolean
 ): void {
   if (blocks.length === 0 && !keepEmptyDirectory) {
     return;
   }
-  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  addBlockList(entries, document, blocks, directoryPath, naming);
+  entries.set(directoryPath, {
+    kind: 'dir',
+    path: directoryPath,
+    insert: {
+      kind: 'blocks',
+      insert: (block, index = -1) => {
+        insertBlock(blocks, block, index);
+        syncSortValuesAfterChange(ctx, block);
+      },
+    },
+  });
+  ctx.descend(directoryPath, (sink) => addBlockList(sink, ctx, blocks, directoryPath));
 }
 
-function addOrderFile(entries: Map<string, HvyVirtualEntry>, path: string, keys: string[], reorder: (nextKeys: string[]) => void): void {
+function addOrderFile(entries: HvyVirtualEntrySink, path: string, keys: string[], reorder: (nextKeys: string[]) => void): void {
   entries.set(path, {
     kind: 'file',
     path,
@@ -772,145 +778,6 @@ function reorderVisibleByKeys<T>(items: T[], visibleItems: T[], currentKeys: str
       visibleIndex += 1;
     }
   }
-}
-
-function addSectionBlockLookup(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  lookup: Map<string, VisualBlock>,
-  section: VisualSection,
-  sectionPath: string,
-  naming?: HvyVirtualPathNamingState
-): void {
-  entries.set(sectionPath, { kind: 'dir', path: sectionPath });
-  addBlockListLookup(meta, entries, lookup, section.blocks, sectionPath, naming);
-}
-
-function addBlockListLookup(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  lookup: Map<string, VisualBlock>,
-  blocks: VisualBlock[],
-  parentPath: string,
-  naming?: HvyVirtualPathNamingState
-): void {
-  blocks.forEach((block, index) => {
-    addBlockLookup(meta, entries, lookup, block, `${parentPath}/${stableBlockDirectoryName(block, index, entries, parentPath, naming)}`, naming);
-  });
-}
-
-function addBlockLookup(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  lookup: Map<string, VisualBlock>,
-  block: VisualBlock,
-  blockPath: string,
-  naming?: HvyVirtualPathNamingState
-): void {
-  entries.set(blockPath, { kind: 'dir', path: blockPath });
-  lookup.set(blockPath, block);
-  addNamedBlockChildrenLookup(meta, entries, lookup, block.schema.containerBlocks ?? [], `${blockPath}/container`, naming);
-  if (getBlockBaseComponent(meta, block) === 'component-list') {
-    addBlockListLookup(meta, entries, lookup, block.schema.componentListBlocks ?? [], blockPath, naming);
-  }
-  addNamedBlockChildrenLookup(meta, entries, lookup, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, naming);
-  addNamedBlockChildrenLookup(meta, entries, lookup, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, naming);
-  addNamedBlockChildrenLookup(meta, entries, lookup, (block.schema.gridItems ?? []).map((item) => item.block), `${blockPath}/grid`, naming);
-}
-
-function addNamedBlockChildrenLookup(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  lookup: Map<string, VisualBlock>,
-  blocks: VisualBlock[],
-  directoryPath: string,
-  naming?: HvyVirtualPathNamingState
-): void {
-  if (blocks.length === 0) {
-    return;
-  }
-  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  addBlockListLookup(meta, entries, lookup, blocks, directoryPath, naming);
-}
-
-function addSectionInsertionTargets(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  targets: Map<string, HvyVirtualBlockInsertionTarget>,
-  section: VisualSection,
-  sectionPath: string,
-  naming?: HvyVirtualPathNamingState
-): void {
-  entries.set(sectionPath, { kind: 'dir', path: sectionPath });
-  targets.set(sectionPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(section.blocks, block, index) });
-  addBlockListInsertionTargets(meta, entries, targets, section.blocks, sectionPath, naming);
-}
-
-function addBlockListInsertionTargets(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  targets: Map<string, HvyVirtualBlockInsertionTarget>,
-  blocks: VisualBlock[],
-  parentPath: string,
-  naming?: HvyVirtualPathNamingState
-): void {
-  blocks.forEach((block, index) => {
-    addBlockInsertionTargets(meta, entries, targets, block, `${parentPath}/${stableBlockDirectoryName(block, index, entries, parentPath, naming)}`, naming);
-  });
-}
-
-function addBlockInsertionTargets(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  targets: Map<string, HvyVirtualBlockInsertionTarget>,
-  block: VisualBlock,
-  blockPath: string,
-  naming?: HvyVirtualPathNamingState
-): void {
-  entries.set(blockPath, { kind: 'dir', path: blockPath });
-  const baseComponent = getBlockBaseComponent(meta, block);
-  addNamedBlockChildrenInsertionTarget(meta, entries, targets, block.schema.containerBlocks ?? [], `${blockPath}/container`, baseComponent === 'container', naming);
-  if (baseComponent === 'component-list') {
-    targets.set(blockPath, { kind: 'blocks', insert: (newBlock, index = -1) => insertBlock(block.schema.componentListBlocks, newBlock, index) });
-    addBlockListInsertionTargets(meta, entries, targets, block.schema.componentListBlocks ?? [], blockPath, naming);
-  }
-  addNamedBlockChildrenInsertionTarget(meta, entries, targets, block.schema.expandableStubBlocks?.children ?? [], `${blockPath}/expandable-stub`, baseComponent === 'expandable', naming);
-  addNamedBlockChildrenInsertionTarget(meta, entries, targets, block.schema.expandableContentBlocks?.children ?? [], `${blockPath}/expandable-content`, baseComponent === 'expandable', naming);
-  addGridInsertionTarget(meta, entries, targets, block.schema.gridItems ?? [], `${blockPath}/grid`, baseComponent === 'grid', naming);
-}
-
-function addNamedBlockChildrenInsertionTarget(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  targets: Map<string, HvyVirtualBlockInsertionTarget>,
-  blocks: VisualBlock[],
-  directoryPath: string,
-  keepEmptyDirectory = false,
-  naming?: HvyVirtualPathNamingState
-): void {
-  if (blocks.length === 0 && !keepEmptyDirectory) {
-    return;
-  }
-  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  targets.set(directoryPath, { kind: 'blocks', insert: (block, index = -1) => insertBlock(blocks, block, index) });
-  addBlockListInsertionTargets(meta, entries, targets, blocks, directoryPath, naming);
-}
-
-function addGridInsertionTarget(
-  meta: JsonObject,
-  entries: Map<string, HvyVirtualEntry>,
-  targets: Map<string, HvyVirtualBlockInsertionTarget>,
-  gridItems: GridItem[],
-  directoryPath: string,
-  keepEmptyDirectory = false,
-  naming?: HvyVirtualPathNamingState
-): void {
-  if (gridItems.length === 0 && !keepEmptyDirectory) {
-    return;
-  }
-  entries.set(directoryPath, { kind: 'dir', path: directoryPath });
-  targets.set(directoryPath, { kind: 'grid', insert: (block, index = -1) => insertGridItem(gridItems, block, index) });
-  addBlockListInsertionTargets(meta, entries, targets, gridItems.map((item) => item.block), directoryPath, naming);
 }
 
 function insertBlock(blocks: VisualBlock[], block: VisualBlock, index: number): void {
@@ -1405,35 +1272,8 @@ function omitTemplateDefinitions(meta: JsonObject): JsonObject {
   return rest;
 }
 
-function sectionDirectoryName(section: VisualSection, index: number): string {
-  return sanitizePathSegment(getSectionId(section)) || `section-${index}`;
-}
 
-function blockDirectoryName(block: VisualBlock, index: number): string {
-  return sanitizePathSegment(block.schema.id) || `${sanitizePathSegment(block.schema.component) || 'component'}-${index}`;
-}
 
-function stableBlockDirectoryName(
-  block: VisualBlock,
-  index: number,
-  entries: Map<string, HvyVirtualEntry>,
-  parentPath: string,
-  naming?: HvyVirtualPathNamingState
-): string {
-  if (sanitizePathSegment(block.schema.id)) {
-    return uniqueName(blockDirectoryName(block, index), entries, parentPath);
-  }
-  const names = naming?.anonymousBlockNamesById;
-  const existing = names?.[block.id];
-  if (existing && !entries.has(`${parentPath}/${existing}`)) {
-    return existing;
-  }
-  const key = uniqueName(blockDirectoryName(block, index), entries, parentPath);
-  if (names) {
-    names[block.id] = key;
-  }
-  return key;
-}
 
 function componentNameFromPath(path: string): string {
   const name = path.split('/').pop() ?? 'text.json';
@@ -1447,20 +1287,4 @@ function validateTags(value: string, fieldName: string): string {
   return value;
 }
 
-function uniqueName(name: string, entries: Map<string, HvyVirtualEntry>, parentPath: string): string {
-  let candidate = name;
-  let suffix = 2;
-  while (entries.has(`${parentPath}/${candidate}`)) {
-    candidate = `${name}-${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
-}
 
-function sanitizePathSegment(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}

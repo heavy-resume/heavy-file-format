@@ -6,7 +6,6 @@ import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 import { markKeywordChatContextDocumentChanged } from './chat/chat-context';
-import { invalidateHvyCliSessionVirtualFileSystem } from './cli-core/commands';
 import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
 import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachment-store';
@@ -217,7 +216,6 @@ export function recordHistory(group?: string, options: { notify?: boolean } = {}
     return;
   }
   markKeywordChatContextDocumentChanged(state.document);
-  invalidateHvyCliSessionVirtualFileSystem(state.cliSession);
   const changeSource = inferDocumentChangeSource(group);
   const contextBeforeInput = consumeHistoryEditorContextBeforeInput();
   const contextAfterInput = captureHistoryEditorContext();
@@ -289,7 +287,6 @@ export function recordInputHistory(group: string, options: { notify?: boolean } 
   }
   closeScriptHistoryStep();
   markKeywordChatContextDocumentChanged(state.document);
-  invalidateHvyCliSessionVirtualFileSystem(state.cliSession);
   const changeSource = inferDocumentChangeSource(group);
   const contextBeforeInput = consumeHistoryEditorContextBeforeInput();
   const contextAfterInput = captureHistoryEditorContext();

@@ -129,7 +129,7 @@ export function extractVirtualPathsFromOutput(output: string): string[] {
 
 function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtualFileSystem, root: string): ComponentStructureEntry[] {
   const directBodyFilesByDirectory = collectDirectBodyFilesByDirectory(fs, root);
-  return [...fs.entries.values()]
+  return entriesUnderRoot(fs, root)
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
       entry.kind === 'file'
       && entry.path.startsWith(root)
@@ -175,9 +175,14 @@ function componentEntryFromJsonFile(
   };
 }
 
+/** Entries below a root such as `/body/`, without walking the rest of the tree. */
+function entriesUnderRoot(fs: HvyVirtualFileSystem, root: string): HvyVirtualEntry[] {
+  return [...fs.entries.entriesUnder(root.replace(/\/$/, '') || '/')].map(([, entry]) => entry);
+}
+
 function collectDirectBodyFilesByDirectory(fs: HvyVirtualFileSystem, root: string): Map<string, string[]> {
   const bodyFilesByDirectory = new Map<string, string[]>();
-  for (const entry of fs.entries.values()) {
+  for (const entry of entriesUnderRoot(fs, root)) {
     if (entry.kind !== 'file' || !entry.path.startsWith(root)) {
       continue;
     }

@@ -1,5 +1,5 @@
 import { searchHvyDocumentByEmbedding } from '../chat/embedding-context';
-import { buildHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
+import { createHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
 import { searchHvyIntent } from '../cli-core/intent-search';
 import { buildSemanticFilterCandidates } from './semantic-candidates';
 import type {
@@ -112,7 +112,7 @@ function lexicalFallback(
   );
   const candidates = searchHvyIntent(
     document,
-    buildHvyVirtualFileSystem(document),
+    createHvyVirtualFileSystem(document),
     query,
     Math.min(20, offset + limit + 1)
   );

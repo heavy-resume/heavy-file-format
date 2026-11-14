@@ -1,7 +1,7 @@
 import { resolveBaseComponentFromMeta } from './component-defs';
 import { createEmptySection } from './document-factory';
 import type { VisualBlock, VisualSection } from './editor/types';
-import { buildHvyVirtualFileSystem, findVirtualDirectoryForBlock, resolveVirtualPath } from './cli-core/virtual-file-system';
+import { createHvyVirtualFileSystem, findVirtualDirectoryForBlock, resolveVirtualPath, type HvyVirtualFileSystem } from './cli-core/virtual-file-system';
 import { serializeSectionFragment } from './serialization';
 import { formatSectionTitle, getSectionId } from './section-ops';
 import type { VisualDocument } from './types';
@@ -60,7 +60,7 @@ export function buildImportXrefBatches(document: VisualDocument, sectionKeys: st
 }
 
 export function buildImportXrefTargetInventory(document: VisualDocument, tagFilter = ''): ImportXrefTargetOption[] {
-  const fs = buildHvyVirtualFileSystem(document);
+  const fs = createHvyVirtualFileSystem(document);
   return getXrefTargetOptionsForDocument(document, tagFilter).map((option) => ({
     ...option,
     path: resolveTargetCliPath(fs, option.value),
@@ -192,14 +192,14 @@ function getXrefListTargetTagFilter(document: VisualDocument, block: VisualBlock
   return getXrefTargetTagFilterForComponent(document, block.schema.componentListComponent);
 }
 
-function resolveTargetCliPath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, targetId: string): string {
+function resolveTargetCliPath(fs: HvyVirtualFileSystem, targetId: string): string {
   const aliasPath = `/id/${sanitizePathSegmentLocal(targetId)}`;
   return fs.entries.has(aliasPath) ? aliasPath : resolveVirtualPath(fs, '/', aliasPath);
 }
 
 function resolveSectionCliPath(document: VisualDocument, section: VisualSection): string {
   const id = getSectionId(section);
-  const fs = buildHvyVirtualFileSystem(document);
+  const fs = createHvyVirtualFileSystem(document);
   const aliasPath = `/id/${sanitizePathSegmentLocal(id)}`;
   return fs.entries.has(aliasPath) ? aliasPath : resolveVirtualPath(fs, '/', aliasPath);
 }

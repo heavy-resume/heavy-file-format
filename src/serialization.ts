@@ -135,6 +135,19 @@ export function deserializeDocumentBytesWithDiagnostics(
   return result;
 }
 
+/**
+ * A section fragment as a document with the given front matter, so it parses with that document's component and
+ * section definitions. Unlike `wrapHvyFragmentAsDocument`, it adds no section: the fragment brings its own.
+ */
+export function wrapHvySectionFragmentAsDocument(source: string, meta: JsonObject): string {
+  return `---
+${stringifyYamlUnfolded(meta).trimEnd()}
+---
+
+${source.trim()}
+`;
+}
+
 export function wrapHvyFragmentAsDocument(
   source: string,
   options?: { sectionId?: string; title?: string; meta?: JsonObject }

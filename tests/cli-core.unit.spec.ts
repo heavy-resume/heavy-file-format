@@ -5,10 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   createHvyCliSession,
   executeHvyCliCommand,
-  getHvyCliSessionVirtualFileSystem,
-  invalidateHvyCliSessionVirtualFileSystem,
 } from '../src/cli-core/commands';
-import { listDirectory } from '../src/cli-core/virtual-file-system';
 import { formPluginRegistration } from '../src/plugins/form';
 import { setHostPlugins } from '../src/plugins/registry';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
@@ -229,31 +226,6 @@ test('expected result: a failed raw.hvy write through an /id alias keeps the dra
 
   expect((await executeHvyCliCommand(document, session, 'ls /id/first')).output).toContain('file raw.wip.hvy [w]');
   expect((await executeHvyCliCommand(document, session, 'cat /id/first/raw.wip.hvy')).output).toBe('<!--hvy:nope\n');
-});
-
-test('expected result: an insert refreshes its section in place and matches a full rebuild of the file system', async () => {
-  const document = createResumeCliTestDocument();
-  const session = createHvyCliSession();
-  // The first mutation also normalizes sort values across the whole document, so it rebuilds everything.
-  await executeHvyCliCommand(document, session, 'hvy insert -1 text /body/summary first-change');
-  await executeHvyCliCommand(document, session, 'true');
-  const fileSystemBeforeInsert = getHvyCliSessionVirtualFileSystem(document, session);
-
-  await executeHvyCliCommand(document, session, 'hvy insert -1 skill-xref-card /id/top-skills-list added-card');
-  await executeHvyCliCommand(document, session, 'true');
-
-  const describeFileSystem = () => {
-    const fs = getHvyCliSessionVirtualFileSystem(document, session);
-    return [...fs.entries].map(([path, entry]) => entry.kind === 'file'
-      ? `${path} ${entry.read()}`
-      : `${path}/ ${listDirectory(fs, path).map((child) => child.path).join(',')}`);
-  };
-  expect(getHvyCliSessionVirtualFileSystem(document, session)).toBe(fileSystemBeforeInsert);
-  const refreshed = describeFileSystem();
-  expect(refreshed.some((line) => line.startsWith('/id/top-skills-list/added-card/'))).toBe(true);
-  invalidateHvyCliSessionVirtualFileSystem(session);
-  await executeHvyCliCommand(document, session, 'true');
-  expect(refreshed).toEqual(describeFileSystem());
 });
 
 test('about-section includes the section metadata description when present', async () => {
@@ -1409,6 +1381,35 @@ description: ${'x'.repeat(4500)}
   expect(largeHeaderOnlyRoot.output).not.toContain('file raw.hvy [w]');
 });
 
+test('writing a section raw.hvy back unchanged keeps custom components and their children', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-record
+    baseType: container
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+ <!--hvy:component-list {"id":"fake-list","componentListComponent":"fake-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:fake-record {"id":"fake-item"}-->
+
+    <!--hvy:text {"id":"fake-text"}-->
+     Fake text
+`, '.hvy');
+  const session = createHvyCliSession();
+  const documentBefore = serializeDocument(document);
+  const sectionRaw = (await executeHvyCliCommand(document, session, 'cat /body/fake-section/raw.hvy')).output;
+
+  await executeHvyCliCommand(document, session, `cat > /body/fake-section/raw.hvy <<'FAKE_EOF'\n${sectionRaw}\nFAKE_EOF`);
+
+  expect(serializeDocument(document)).toBe(documentBefore);
+  expect((await executeHvyCliCommand(document, session, 'ls /body/fake-section/fake-list')).output).toContain('dir  fake-item');
+});
+
 test('cli exposes raw.hvy in component directories and applies valid component edits', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -1999,6 +2000,84 @@ test('cli cp -r copies component directories with the destination id', async () 
     'LLM Prompt Engineering'
   );
   expect((await executeHvyCliCommand(document, session, 'man cp')).output).toContain('cp [-r] SOURCE DEST');
+});
+
+test('components cannot be moved, copied, or inserted directly into /body', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+  const documentBefore = serializeDocument(document);
+
+  await expect(executeHvyCliCommand(document, session, 'mv /body/summary/intro /body/moved-intro')).rejects.toThrow('mv: no writable component container: /body');
+  await expect(executeHvyCliCommand(document, session, 'cp -r /body/summary/intro /body/copied-intro')).rejects.toThrow('cp: no writable component container: /body');
+  await expect(executeHvyCliCommand(document, session, 'hvy insert -1 text /body inserted-text')).rejects.toThrow('hvy insert -1 text: no component insertion target: /body');
+
+  expect(serializeDocument(document)).toBe(documentBefore);
+});
+
+test('mv, rm, and hvy remove accept /id paths for the component they move or remove', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+<!--hvy:container {"id":"fake-box"}-->
+
+<!--hvy:text {"id":"fake-moved-text"}-->
+ Fake moved
+
+<!--hvy:text {"id":"fake-removed-text"}-->
+ Fake removed
+
+<!--hvy:text {"id":"fake-hvy-removed-text"}-->
+ Fake hvy removed
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'mv /id/fake-moved-text /id/fake-box/container');
+  await executeHvyCliCommand(document, session, 'rm -r /id/fake-removed-text');
+  await executeHvyCliCommand(document, session, 'hvy remove /id/fake-hvy-removed-text');
+
+  const expectedResult = ['fake-box'];
+  expect(document.sections[0]!.blocks.map((block) => block.schema.id)).toEqual(expectedResult);
+  expect(document.sections[0]!.blocks[0]!.schema.containerBlocks.map((block) => block.schema.id)).toEqual(['fake-moved-text']);
+});
+
+test('removal lists the nested xref cards that point at the removed component, and pruning removes exactly those', async () => {
+  const createDocument = () => deserializeDocument(`---
+hvy_version: 0.1
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+<!--hvy:text {"id":"fake-target"}-->
+ Fake target
+
+<!--hvy:container {"id":"fake-box"}-->
+
+ <!--hvy:xref-card {"id":"fake-nested-card","xrefTitle":"Fake","xrefTarget":"fake-target"}-->
+
+ <!--hvy:xref-card {"id":"fake-other-card","xrefTitle":"Fake other","xrefTarget":"fake-other-target"}-->
+`, '.hvy');
+
+  const hintDocument = createDocument();
+  const hint = await executeHvyCliCommand(hintDocument, createHvyCliSession(), 'hvy remove /body/fake-section/fake-target');
+  const expectedHint = [
+    '/body/fake-section/fake-target: removed',
+    'Hint: 1 xref-card still point to fake-target. Run: hvy prune-xref fake-target',
+    '  /body/fake-section/fake-box/container/fake-nested-card',
+  ].join('\n');
+  expect(hint.output).toBe(expectedHint);
+
+  const pruneDocument = createDocument();
+  const pruned = await executeHvyCliCommand(pruneDocument, createHvyCliSession(), 'rm -r --prune-xref /body/fake-section/fake-target');
+  const expectedPrune = [
+    '/body/fake-section/fake-target: removed',
+    'Pruned 1 xref-card pointing to fake-target:',
+    '  /body/fake-section/fake-box/container/fake-nested-card',
+  ].join('\n');
+  expect(pruned.output).toBe(expectedPrune);
+  expect(pruneDocument.sections[0]!.blocks[0]!.schema.containerBlocks.map((block) => block.schema.id)).toEqual(['fake-other-card']);
 });
 
 test('cli mv moves component directories between ordered children', async () => {

@@ -1,4 +1,5 @@
 // `hvy insert`: argument parsing, node creation, and the created-path report.
+import { syncSortValuesForSection } from '../sort-values';
 import { insertTemplateDefinition, commitTemplateDirectory } from './template-directories';
 import { cloneReusableSection, defaultBlockSchema, getDefaultSectionContained, schemaFromUnknown } from '../document-factory';
 import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
@@ -19,8 +20,7 @@ import {
 } from '../reusable-template-values';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
 import {
-  buildHvyVirtualBlockSubtreeFileSystem,
-  buildHvyVirtualFileSystem,
+  createHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
   findVirtualDirectoriesForBlock,
   findVirtualDirectoryForSection,
@@ -74,16 +74,22 @@ export function executeHvyInsertCommand(ctx: HvyDocumentCommandContext, indexArg
 
 /** Prefer a path under the parent the caller named, so `/id/...` parents keep reporting `/id/...` children. */
 function requireCreatedBlockDirectory(ctx: HvyDocumentCommandContext, block: VisualBlock, resolvedParentPath: string): string {
-  const parentPrefix = `${resolvedParentPath.replace(/\/$/, '')}/`;
-  const paths = findVirtualDirectoriesForBlock(ctx.document, block, {
-    naming: ctx.pathNaming,
-    includeIdAliases: parentPrefix.startsWith('/id/'),
-  });
-  const path = paths.find((candidate) => candidate.startsWith(parentPrefix)) ?? paths[0];
+  // The new component normally sits directly under the parent (or in one of its slot directories such as `container/`),
+  // so only that directory is listed. Searching the document is for a parent the component did not land under.
+  const parentPath = resolvedParentPath.replace(/\/$/, '') || '/';
+  const path = ctx.fs.entries.childDirectoryShowing(parentPath, block)?.path ?? findCreatedBlockDirectoryElsewhere(ctx, block, parentPath);
   if (!path) {
     throw new Error(`hvy insert: created component "${block.schema.id}" has no virtual directory.`);
   }
   return path;
+}
+
+function findCreatedBlockDirectoryElsewhere(ctx: HvyDocumentCommandContext, block: VisualBlock, parentPath: string): string | undefined {
+  const paths = findVirtualDirectoriesForBlock(ctx.document, block, {
+    naming: ctx.pathNaming,
+    includeIdAliases: parentPath.startsWith('/id/'),
+  });
+  return paths.find((candidate) => candidate.startsWith(`${parentPath}/`)) ?? paths[0];
 }
 
 function requireCreatedSectionDirectory(ctx: HvyDocumentCommandContext, section: VisualSection): string {
@@ -112,6 +118,7 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyIn
   requireSectionRoot(ctx, parentPath);
   const section = createSection(id, decodeCliText(title), ctx.document.meta);
   insertChild(ctx.document.sections, section, index);
+  syncSortValuesForSection(ctx.document.meta, section);
   const path = requireCreatedSectionDirectory(ctx, section);
   return { output: path, mutated: true, cwd: path };
 }
@@ -164,6 +171,7 @@ function addSectionFromTemplate(ctx: HvyDocumentCommandContext, args: string[], 
   }
   section.templateKey = key;
   insertChild(ctx.document.sections, section, index);
+  syncSortValuesForSection(ctx.document.meta, section);
   const path = requireCreatedSectionDirectory(ctx, section);
   return { output: path, mutated: true, cwd: path };
 }
@@ -371,9 +379,7 @@ function formatCreatedComponentDirectory(
   const normalizedComponentPath = componentPath.startsWith('/')
     ? componentPath
     : `/body/${componentPath}`;
-  const fs = createdBlock && !options.returnStructureOnCreation
-    ? buildHvyVirtualBlockSubtreeFileSystem(document, createdBlock, normalizedComponentPath, pathNaming)
-    : buildHvyVirtualFileSystem(document, pathNaming);
+  const fs = createHvyVirtualFileSystem(document, pathNaming);
   const entry = fs.entries.get(normalizedComponentPath);
   if (!entry || entry.kind !== 'dir') {
     return componentPath;

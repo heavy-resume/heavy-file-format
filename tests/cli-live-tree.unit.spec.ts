@@ -3,7 +3,7 @@ import { expect, test } from 'vitest';
 
 import { createHvyCliSession, executeHvyCliCommand, executeHvyCliCommandSync, writeHvyVirtualFileSync } from '../src/cli-core/commands';
 import { defaultBlockSchema } from '../src/document-factory';
-import { buildVirtualDirectoryBlockLookup, findVirtualDirectoryForBlock } from '../src/cli-core/virtual-file-system';
+import { buildVirtualDirectoryBlockLookup, createHvyVirtualFileSystem, findVirtualDirectoryForBlock } from '../src/cli-core/virtual-file-system';
 import { deserializeDocument, deserializeDocumentBytes } from '../src/serialization';
 
 function createFakeFormDocument() {
@@ -72,5 +72,47 @@ for (const file of exampleFiles) {
     const pathsFromAncestors = new Map([...expectedResult.values()].map((block) => [findVirtualDirectoryForBlock(document, block), block]));
 
     expect(pathsFromAncestors).toEqual(expectedResult);
+  });
+}
+
+test('an /id path still finds its component after a component without an id before it is removed', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+<!--hvy:container {}-->
+
+ <!--hvy:text {}-->
+  Fake first
+
+<!--hvy:container {}-->
+
+ <!--hvy:text {"id":"fake-target"}-->
+  Fake target
+`, '.hvy');
+  const session = createHvyCliSession();
+  expect(executeHvyCliCommandSync(document, 'ls /body/fake-section', session).output).toContain('dir  container-1');
+
+  executeHvyCliCommandSync(document, 'rm -r /body/fake-section/container-0', session);
+
+  expect(executeHvyCliCommandSync(document, 'cat /id/fake-target/text.txt', session).output).toBe('Fake target');
+  expect(executeHvyCliCommandSync(document, 'ls /id', session).output).toContain('dir  fake-target');
+  executeHvyCliCommandSync(document, 'rm -r /id/fake-target', session);
+  expect(document.sections[0]!.blocks[0]!.schema.containerBlocks).toEqual([]);
+});
+
+for (const file of exampleFiles) {
+  test(`every /id root resolves to the section or component it names in ${file}`, () => {
+    const document = deserializeDocumentBytes(readFileSync(`examples/${file}`), file.slice(file.lastIndexOf('.')) as '.hvy');
+    const fs = createHvyVirtualFileSystem(document);
+
+    const unresolvedRoots = fs.entries.listChildPaths('/id').filter((root) => {
+      const entry = fs.entries.get(root);
+      return entry?.kind !== 'dir' || (!entry.block && !entry.section);
+    });
+
+    expect(unresolvedRoots).toEqual([]);
   });
 }

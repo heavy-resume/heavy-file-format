@@ -11,6 +11,7 @@ import {
   visitBodyBlocks,
   type HvyBodyBlockAncestry,
   listDirectory,
+  resolveVirtualEntry,
   resolveVirtualPath,
   type HvyVirtualEntry,
   type HvyVirtualEntrySink,
@@ -1026,30 +1027,30 @@ function once<T>(compute: () => T): () => T {
 function addRawDocumentFiles(entries: HvyVirtualEntrySink, document: VisualDocument, session: HvyCliSession): void {
   const isUnderRawLimit = once(() => isSerializedDocumentUnderRawLimit(document));
   entries.defer('/raw.hvy', () => !isUnderRawLimit() ? undefined : {
-      kind: 'file',
-      path: '/raw.hvy',
-      read: () => serializeDocument(document),
-      write: (content) => {
-        const result = deserializeDocumentWithDiagnostics(content, document.extension === '.md' ? '.hvy' : document.extension);
-        const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-        if (errors.length > 0) {
-          session.rawWipContent = content;
-          throw new Error([
-            '/raw.hvy did not parse; document was not changed.',
-            '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.',
-            '',
-            ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
-          ].join('\n'));
-        }
-        const tagIssue = validateDocumentTagsForRaw(result.document);
-        if (tagIssue) {
-          session.rawWipContent = content;
-          throw new Error(['/raw.hvy did not parse; document was not changed.', '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.', '', tagIssue].join('\n'));
-        }
-        replaceDocumentContents(document, result.document);
-        syncSortValuesForDocument(document);
-        session.rawWipContent = undefined;
-      },
+    kind: 'file',
+    path: '/raw.hvy',
+    read: () => serializeDocument(document),
+    write: (content) => {
+      const result = deserializeDocumentWithDiagnostics(content, document.extension === '.md' ? '.hvy' : document.extension);
+      const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+      if (errors.length > 0) {
+        session.rawWipContent = content;
+        throw new Error([
+          '/raw.hvy did not parse; document was not changed.',
+          '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.',
+          '',
+          ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
+        ].join('\n'));
+      }
+      const tagIssue = validateDocumentTagsForRaw(result.document);
+      if (tagIssue) {
+        session.rawWipContent = content;
+        throw new Error(['/raw.hvy did not parse; document was not changed.', '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.', '', tagIssue].join('\n'));
+      }
+      replaceDocumentContents(document, result.document);
+      syncSortValuesForDocument(document);
+      session.rawWipContent = undefined;
+    },
   });
   entries.defer('/raw-preview.hvy.txt', () => isUnderRawLimit() ? undefined : {
     kind: 'file',
@@ -1067,46 +1068,46 @@ function addRawSectionFiles(
 ): void {
   const fragment = once(() => serializeSectionFragment(section, document.meta));
   entries.defer(`${sectionPath}/raw.hvy`, () => fragment().length >= RAW_HVY_MAX_CHARS ? undefined : {
-      kind: 'file',
-      path: `${sectionPath}/raw.hvy`,
-      read: () => serializeSectionFragment(section, document.meta),
-      write: (content, addressedPath = `${sectionPath}/raw.hvy`) => {
-        // Report and keep the draft under the path the write came through, such as an /id alias.
-        const rawDirectoryPath = addressedPath.replace(/\/raw\.hvy$/, '');
-        const directiveIssue = validateRawSectionFragmentShape(content);
-        if (directiveIssue) {
-          failRawSectionWrite(session, rawDirectoryPath, content, [directiveIssue]);
-        }
-        const result = deserializeDocumentWithDiagnostics(
-          wrapHvySectionFragmentAsDocument(content, document.meta),
-          document.extension === '.md' ? '.hvy' : document.extension
+    kind: 'file',
+    path: `${sectionPath}/raw.hvy`,
+    read: () => serializeSectionFragment(section, document.meta),
+    write: (content, addressedPath = `${sectionPath}/raw.hvy`) => {
+      // Report and keep the draft under the path the write came through, such as an /id alias.
+      const rawDirectoryPath = addressedPath.replace(/\/raw\.hvy$/, '');
+      const directiveIssue = validateRawSectionFragmentShape(content);
+      if (directiveIssue) {
+        failRawSectionWrite(session, rawDirectoryPath, content, [directiveIssue]);
+      }
+      const result = deserializeDocumentWithDiagnostics(
+        wrapHvySectionFragmentAsDocument(content, document.meta),
+        document.extension === '.md' ? '.hvy' : document.extension
+      );
+      const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+      if (errors.length > 0 || result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1) {
+        failRawSectionWrite(
+          session,
+          sectionPath,
+          content,
+          [
+            ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
+            ...(result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1
+              ? ['error: raw section fragments must parse into exactly one section.']
+              : []),
+          ]
         );
-        const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-        if (errors.length > 0 || result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1) {
-          failRawSectionWrite(
-            session,
-            sectionPath,
-            content,
-            [
-              ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
-              ...(result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1
-                ? ['error: raw section fragments must parse into exactly one section.']
-                : []),
-            ]
-          );
-        }
-        const [nextSection] = result.document.sections.filter((candidate) => !candidate.isGhost);
-        if (!nextSection) {
-          failRawSectionWrite(session, rawDirectoryPath, content, ['error: raw section fragments must parse into exactly one section.']);
-        }
-        const tagIssue = validateSectionTagsForRaw(nextSection);
-        if (tagIssue) {
-          failRawSectionWrite(session, rawDirectoryPath, content, [tagIssue]);
-        }
-        replaceSectionContents(section, nextSection);
-        syncSortValuesForSection(document.meta, section);
-        delete session.rawSectionWipContentByPath?.[`${rawDirectoryPath}/raw.wip.hvy`];
-      },
+      }
+      const [nextSection] = result.document.sections.filter((candidate) => !candidate.isGhost);
+      if (!nextSection) {
+        failRawSectionWrite(session, rawDirectoryPath, content, ['error: raw section fragments must parse into exactly one section.']);
+      }
+      const tagIssue = validateSectionTagsForRaw(nextSection);
+      if (tagIssue) {
+        failRawSectionWrite(session, rawDirectoryPath, content, [tagIssue]);
+      }
+      replaceSectionContents(section, nextSection);
+      syncSortValuesForSection(document.meta, section);
+      delete session.rawSectionWipContentByPath?.[`${rawDirectoryPath}/raw.wip.hvy`];
+    },
   });
   entries.defer(`${sectionPath}/raw-preview.hvy.txt`, () => fragment().length < RAW_HVY_MAX_CHARS ? undefined : {
     kind: 'file',
@@ -1125,35 +1126,35 @@ function addRawComponentFiles(
 ): void {
   const fragment = once(() => serializeBlockFragment(block, document.meta));
   entries.defer(`${blockPath}/raw.hvy`, () => fragment().length >= RAW_HVY_MAX_CHARS ? undefined : {
-      kind: 'file',
-      path: `${blockPath}/raw.hvy`,
-      read: () => serializeBlockFragment(block, document.meta),
-      write: (content, addressedPath = `${blockPath}/raw.hvy`) => {
-        // Report and keep the draft under the path the write came through, such as an /id alias.
-        const rawDirectoryPath = addressedPath.replace(/\/raw\.hvy$/, '');
-        const directiveIssue = validateRawComponentFragmentShape(content);
-        if (directiveIssue) {
-          failRawComponentWrite(session, rawDirectoryPath, content, [directiveIssue]);
-        }
-        const parsed = parseAiBlockEditResponse(content, document.meta);
-        if (parsed.hasErrors || !parsed.block) {
-          failRawComponentWrite(
-            session,
-            blockPath,
-            content,
-            parsed.issues.map((issue) => `${issue.severity}: ${issue.message}${issue.hint ? ` ${issue.hint}` : ''}`)
-          );
-        }
-        const tagIssue = validateBlockTagsForRaw(parsed.block);
-        if (tagIssue) {
-          failRawComponentWrite(session, rawDirectoryPath, content, [tagIssue]);
-        }
-        preserveOmittedEmptyTextPlaceholders(block, parsed.block, serializeBlockFragment(block, document.meta), content);
-        replaceBlockContents(block, parsed.block);
-        if (listItem) syncSortValuesForListItem(document.meta, listItem);
-        syncSortValuesInsideBlock(document.meta, block);
-        delete session.rawWipContentByPath?.[`${rawDirectoryPath}/raw.wip.hvy`];
-      },
+    kind: 'file',
+    path: `${blockPath}/raw.hvy`,
+    read: () => serializeBlockFragment(block, document.meta),
+    write: (content, addressedPath = `${blockPath}/raw.hvy`) => {
+      // Report and keep the draft under the path the write came through, such as an /id alias.
+      const rawDirectoryPath = addressedPath.replace(/\/raw\.hvy$/, '');
+      const directiveIssue = validateRawComponentFragmentShape(content);
+      if (directiveIssue) {
+        failRawComponentWrite(session, rawDirectoryPath, content, [directiveIssue]);
+      }
+      const parsed = parseAiBlockEditResponse(content, document.meta);
+      if (parsed.hasErrors || !parsed.block) {
+        failRawComponentWrite(
+          session,
+          blockPath,
+          content,
+          parsed.issues.map((issue) => `${issue.severity}: ${issue.message}${issue.hint ? ` ${issue.hint}` : ''}`)
+        );
+      }
+      const tagIssue = validateBlockTagsForRaw(parsed.block);
+      if (tagIssue) {
+        failRawComponentWrite(session, rawDirectoryPath, content, [tagIssue]);
+      }
+      preserveOmittedEmptyTextPlaceholders(block, parsed.block, serializeBlockFragment(block, document.meta), content);
+      replaceBlockContents(block, parsed.block);
+      if (listItem) syncSortValuesForListItem(document.meta, listItem);
+      syncSortValuesInsideBlock(document.meta, block);
+      delete session.rawWipContentByPath?.[`${rawDirectoryPath}/raw.wip.hvy`];
+    },
   });
   entries.defer(`${blockPath}/raw-preview.hvy.txt`, () => fragment().length < RAW_HVY_MAX_CHARS ? undefined : {
     kind: 'file',
@@ -2599,8 +2600,7 @@ function readDelimitedSegment(value: string, startIndex: number, delimiter: stri
 }
 
 function getReadableFile(ctx: { fs: HvyVirtualFileSystem; cwd: string }, path: string): HvyVirtualFile {
-  const normalized = resolveReadablePath(ctx.fs, ctx.cwd, path);
-  const entry = ctx.fs.entries.get(normalized);
+  const { path: normalized, entry } = resolveReadableEntry(ctx.fs, ctx.cwd, path);
   if (!entry) {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, path, `No such file: ${normalized}`, 'file'));
   }
@@ -2611,28 +2611,32 @@ function getReadableFile(ctx: { fs: HvyVirtualFileSystem; cwd: string }, path: s
 }
 
 function resolveReadablePath(fs: HvyVirtualFileSystem, cwd: string, path: string): string {
-  const normalized = resolveVirtualPath(fs, cwd, path);
-  const entry = fs.entries.get(normalized);
-  if (entry?.kind === 'file') {
-    return normalized;
+  return resolveReadableEntry(fs, cwd, path).path;
+}
+
+/** The file a read of `path` means (a component directory means its body file), with its entry, each path looked up once. */
+function resolveReadableEntry(fs: HvyVirtualFileSystem, cwd: string, path: string): { path: string; entry: HvyVirtualEntry | undefined } {
+  const resolved = resolveVirtualEntry(fs, cwd, path);
+  if (resolved.entry?.kind === 'file') {
+    return resolved;
   }
-  if (entry?.kind === 'dir') {
-    const componentBody = readableBodyFileForDirectory(fs, normalized);
+  if (resolved.entry?.kind === 'dir') {
+    const componentBody = readableBodyFileForDirectory(fs, resolved.path);
     if (componentBody) {
-      return componentBody;
+      return { path: componentBody, entry: fs.entries.get(componentBody) };
     }
   }
-  if (normalized.endsWith('.txt')) {
-    const withoutExtension = normalized.slice(0, -'.txt'.length);
+  if (resolved.path.endsWith('.txt')) {
+    const withoutExtension = resolved.path.slice(0, -'.txt'.length);
     const directoryEntry = fs.entries.get(withoutExtension);
     if (directoryEntry?.kind === 'dir') {
       const componentBody = readableBodyFileForDirectory(fs, withoutExtension);
       if (componentBody) {
-        return componentBody;
+        return { path: componentBody, entry: fs.entries.get(componentBody) };
       }
     }
   }
-  return normalized;
+  return resolved;
 }
 
 function readableBodyFileForDirectory(fs: HvyVirtualFileSystem, directory: string): string | null {

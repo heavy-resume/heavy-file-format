@@ -1089,6 +1089,12 @@ function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | 
   return rootBlocks ? findBlockPathInList(rootBlocks, blockId) : null;
 }
 
+// The outermost block containing `blockId`. Opening or closing a block changes how
+// its ancestors render, so editor refreshes target this block rather than the leaf.
+export function getEditorTopLevelBlockId(sectionKey: string, blockId: string): string {
+  return getEditorBlockPathIds(sectionKey, blockId)?.[0] ?? blockId;
+}
+
 function createEditorBlockSnapshot(sectionKey: string, blockId: string): AppState['activeEditorBlockSnapshot'] {
   const block = findBlockByIds(sectionKey, blockId);
   return block ? { sectionKey, blockId, block: cloneVisualBlock(block) } : null;

@@ -1,7 +1,7 @@
 import { listValueKindForElement, type ListValueKind } from '../../sort-values';
 import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, getRefreshReaderPanels, getRefreshReaderSection } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
-import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
+import { findBlockByIds, getEditorTopLevelBlockId, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { splitTextParagraphsOnCommit } from '../../text-paragraph-split';
 import { flushPendingInputHistory, recordHistory } from '../../history';
 import { saveSessionState } from '../../state-persistence';
@@ -165,7 +165,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   }
   event.stopPropagation();
   const block = findBlockByIds(sectionKey, blockId);
-  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
+  const refreshBlockId = getEditorTopLevelBlockId(sectionKey, blockId);
   const editorBlock = actionButton.closest?.<HTMLElement>('.editor-block') ?? null;
   if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block), getSortValueDefsForBlock(state.document, block, 'group'))) {
     return;
@@ -235,7 +235,7 @@ const cancelBlockEdit: AppActionHandler = ({ app, actionButton, event, sectionKe
     return;
   }
   event.stopPropagation();
-  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
+  const refreshBlockId = getEditorTopLevelBlockId(sectionKey, blockId);
   const deactivationAnchor = captureEditorDeactivationAnchor(
     app,
     sectionKey,

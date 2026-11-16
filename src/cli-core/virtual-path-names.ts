@@ -51,18 +51,3 @@ export function sanitizePathSegment(value: string): string {
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
-
-/** The name the item at `index` gets when siblings are named in order and repeated names get `-2`, `-3`, ... */
-export function nthUniqueName<T>(items: T[], index: number, nameOf: (item: T, index: number) => string): string {
-  const names = new Set<string>();
-  let name = '';
-  for (let current = 0; current <= index; current += 1) {
-    const base = nameOf(items[current]!, current);
-    name = base;
-    for (let suffix = 2; names.has(name); suffix += 1) {
-      name = `${base}-${suffix}`;
-    }
-    names.add(name);
-  }
-  return name;
-}

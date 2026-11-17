@@ -13,13 +13,61 @@ export interface UnusedEmbeddedFile extends HvyAttachmentDescriptor {
   kind: UnusedEmbeddedFileKind;
 }
 
+export interface EmbeddedFileUsage {
+  /** Removable attachments that authored content does not reference. */
+  unused: UnusedEmbeddedFile[];
+  /** Reference count per attachment id, from one read-only pass over the document. */
+  referenceCounts: ReadonlyMap<string, number>;
+}
+
 /** Returns removable file attachments that are not referenced by authored document content. */
 export function findUnusedEmbeddedFiles(document: VisualDocument): UnusedEmbeddedFile[] {
-  const references = collectEmbeddedFileReferences(document);
-  return getAttachmentDescriptors(document).flatMap((descriptor) => {
+  return getEmbeddedFileUsage(document).unused;
+}
+
+export function getEmbeddedFileUsage(document: VisualDocument): EmbeddedFileUsage {
+  const referenceCounts = collectEmbeddedFileReferences(document);
+  const unused = getAttachmentDescriptors(document).flatMap((descriptor) => {
     const kind = getPurgeableFileKind(descriptor);
-    return kind && !references.has(descriptor.id) ? [{ ...descriptor, kind }] : [];
+    return kind && !referenceCounts.has(descriptor.id) ? [{ ...descriptor, kind }] : [];
   });
+  return { unused, referenceCounts };
+}
+
+let cachedEmbeddedFileUsage: {
+  document: VisualDocument;
+  attachmentStoreVersion: number;
+  componentDefs: unknown;
+  sectionDefs: unknown;
+  usage: EmbeddedFileUsage;
+} | null = null;
+
+/**
+ * Display-only usage, reused until the document, its attachments, or its template
+ * definitions are replaced. In-place block edits are not detected, so callers drop
+ * the cache when leaving the surface that shows it. Deletion must not rely on this;
+ * `deleteUnusedEmbeddedFiles` re-checks against a fresh pass.
+ */
+export function getCachedEmbeddedFileUsage(document: VisualDocument): EmbeddedFileUsage {
+  const attachmentStoreVersion = ensureDocumentAttachmentStore(document).getVersion();
+  const componentDefs = document.meta.component_defs;
+  const sectionDefs = document.meta.section_defs;
+  if (
+    cachedEmbeddedFileUsage
+    && cachedEmbeddedFileUsage.document === document
+    && cachedEmbeddedFileUsage.attachmentStoreVersion === attachmentStoreVersion
+    && cachedEmbeddedFileUsage.componentDefs === componentDefs
+    && cachedEmbeddedFileUsage.sectionDefs === sectionDefs
+  ) {
+    return cachedEmbeddedFileUsage.usage;
+  }
+  const usage = getEmbeddedFileUsage(document);
+  cachedEmbeddedFileUsage = { document, attachmentStoreVersion, componentDefs, sectionDefs, usage };
+  return usage;
+}
+
+export function clearCachedEmbeddedFileUsage(): void {
+  cachedEmbeddedFileUsage = null;
 }
 
 /** Removes the current unused-file set from both the host attachment store and the document. */
@@ -75,8 +123,11 @@ export async function deleteUnusedEmbeddedSqliteDatabase(
   return true;
 }
 
-function collectEmbeddedFileReferences(document: VisualDocument): Set<string> {
-  const references = new Set<string>();
+function collectEmbeddedFileReferences(document: VisualDocument): Map<string, number> {
+  const references = new Map<string, number>();
+  const addReference = (id: string): void => {
+    references.set(id, (references.get(id) ?? 0) + 1);
+  };
   const namedFiles = getAttachmentDescriptors(document).filter((entry) => entry.meta.role === USER_FILE_ATTACHMENT_ROLE);
   const names = new Map<string, string[]>();
   for (const entry of namedFiles) {
@@ -84,30 +135,29 @@ function collectEmbeddedFileReferences(document: VisualDocument): Set<string> {
     const name = normalizeUserFileAttachmentName(entry.meta.name);
     names.set(name, [...(names.get(name) ?? []), entry.id]);
   }
+  const collectNamedFileLinks = (markdown: string): void => {
+    for (const target of markdown.match(/@attachment:[^\s)>]+/g) ?? []) {
+      const name = decodeUserFileAttachmentTarget(target);
+      const ids = name ? names.get(normalizeUserFileAttachmentName(name)) : null;
+      for (const id of ids ?? []) addReference(id);
+    }
+  };
   visitAllDocumentBlocks(document, (block) => {
-    if (block.schema.imageFile) references.add(`image:${block.schema.imageFile}`);
-    for (const image of block.schema.carouselImages ?? []) references.add(`image:${image.imageFile}`);
+    if (block.schema.imageFile) addReference(`image:${block.schema.imageFile}`);
+    for (const image of block.schema.carouselImages ?? []) addReference(`image:${image.imageFile}`);
     if (block.schema.plugin === 'hvy.model-3d') {
       const modelFile = block.schema.pluginConfig.modelFile;
-      if (typeof modelFile === 'string' && modelFile.trim()) references.add(`model-3d:${modelFile.trim()}`);
+      if (typeof modelFile === 'string' && modelFile.trim()) addReference(`model-3d:${modelFile.trim()}`);
     }
-    if (block.schema.encryptedAttachmentId) references.add(block.schema.encryptedAttachmentId);
-    collectNamedFileLinks(block.text, names, references);
-    for (const column of block.schema.tableColumns ?? []) collectNamedFileLinks(column, names, references);
+    if (block.schema.encryptedAttachmentId) addReference(block.schema.encryptedAttachmentId);
+    collectNamedFileLinks(block.text);
+    for (const column of block.schema.tableColumns ?? []) collectNamedFileLinks(column);
     for (const row of block.schema.tableRows ?? []) {
-      for (const cell of row.cells) collectNamedFileLinks(cell, names, references);
+      for (const cell of row.cells) collectNamedFileLinks(cell);
     }
-    if (block.schema.caption) collectNamedFileLinks(block.schema.caption.text, names, references);
+    if (block.schema.caption) collectNamedFileLinks(block.schema.caption.text);
   });
   return references;
-}
-
-function collectNamedFileLinks(markdown: string, names: Map<string, string[]>, references: Set<string>): void {
-  for (const target of markdown.match(/@attachment:[^\s)>]+/g) ?? []) {
-    const name = decodeUserFileAttachmentTarget(target);
-    const ids = name ? names.get(normalizeUserFileAttachmentName(name)) : null;
-    for (const id of ids ?? []) references.add(id);
-  }
 }
 
 function getPurgeableFileKind(descriptor: HvyAttachmentDescriptor): UnusedEmbeddedFileKind | null {
@@ -120,17 +170,20 @@ function getPurgeableFileKind(descriptor: HvyAttachmentDescriptor): UnusedEmbedd
 
 function visitAllDocumentBlocks(document: VisualDocument, visitor: (block: VisualBlock) => void): void {
   visitBlocks(document.sections, visitor);
+  // Template blocks are stored as authored in the header, where `text` is optional
+  // and defaults to empty (HVY-SPEC 5.9). Visit them with that default applied.
+  const visitTemplateBlock = (block: VisualBlock): void => visitor(typeof block.text === 'string' ? block : { ...block, text: '' });
   for (const definition of getComponentDefsFromMeta(document.meta)) {
-    if (definition.template) visitBlocksInList([definition.template], visitor);
-    if (definition.schema) visitSchema(definition.schema, visitor);
+    if (definition.template) visitBlocksInList([definition.template], visitTemplateBlock);
+    if (definition.schema) visitSchema(definition.schema, visitTemplateBlock);
     for (const flavor of definition.flavors ?? []) {
-      if (flavor.template) visitBlocksInList([flavor.template], visitor);
-      if (flavor.schema) visitSchema(flavor.schema, visitor);
+      if (flavor.template) visitBlocksInList([flavor.template], visitTemplateBlock);
+      if (flavor.schema) visitSchema(flavor.schema, visitTemplateBlock);
     }
   }
   for (const definition of getSectionDefsFromMeta(document.meta)) {
-    visitBlocks([definition.template], visitor);
-    for (const flavor of definition.flavors ?? []) visitBlocks([flavor.template], visitor);
+    visitBlocks([definition.template], visitTemplateBlock);
+    for (const flavor of definition.flavors ?? []) visitBlocks([flavor.template], visitTemplateBlock);
   }
 }
 

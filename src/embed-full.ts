@@ -175,7 +175,7 @@ import { hydrateHostAttachmentDescriptors, hydrateHostAttachmentDescriptorsSync,
 import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
 import type { UserFileAttachmentLimits } from './document-attachments';
 import { reviewUnusedEmbeddedFiles } from './editor/components/document-attachments/document-attachments';
-import { deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles, type UnusedEmbeddedFile } from './attachment-cleanup';
+import { clearCachedEmbeddedFileUsage, deleteUnusedEmbeddedSqliteDatabase, findUnusedEmbeddedFiles, isEmbeddedSqliteDatabaseUnused, purgeUnusedEmbeddedFiles, type UnusedEmbeddedFile } from './attachment-cleanup';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
@@ -692,6 +692,10 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
   const isDocumentMetaView = isEditor && state.showAdvancedEditor && state.metaPanelOpen;
+  if (!isDocumentMetaView) {
+    // Other views edit blocks in place, which the Document Meta usage cache cannot detect.
+    clearCachedEmbeddedFileUsage();
+  }
   const pdfDocument = isPdfDocument(state.document);
   const readerToolsAvailable = !(pdfDocument && state.currentView === 'viewer');
   const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();

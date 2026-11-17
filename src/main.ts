@@ -1,4 +1,5 @@
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
+import { clearCachedEmbeddedFileUsage } from './attachment-cleanup';
 import './default-theme.css';
 import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
@@ -736,6 +737,10 @@ function renderApp(): void {
   const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
   const isDocumentMetaView = isEditorView && state.metaPanelOpen;
+  if (!isDocumentMetaView) {
+    // Other views edit blocks in place, which the Document Meta usage cache cannot detect.
+    clearCachedEmbeddedFileUsage();
+  }
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
   const pdfDocument = isPdfDocument(state.document);
   const readerToolsAvailable = !(pdfDocument && isViewerView);

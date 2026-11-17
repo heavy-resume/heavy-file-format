@@ -2,7 +2,6 @@ import './document-attachments.css';
 
 import {
   canPreviewUserFileAttachment,
-  countUserFileAttachmentReferences,
   createUniqueUserFileAttachmentId,
   defaultUserFileAttachmentName,
   formatUserFileAttachmentByteLength,
@@ -19,7 +18,7 @@ import {
   type UserFileAttachmentCategory,
 } from '../../../document-attachments';
 import { performUserFileAttachmentAction } from '../../../document-attachment-actions';
-import { deleteUnusedEmbeddedFiles, findUnusedEmbeddedFiles, type UnusedEmbeddedFile } from '../../../attachment-cleanup';
+import { deleteUnusedEmbeddedFiles, findUnusedEmbeddedFiles, getCachedEmbeddedFileUsage, getEmbeddedFileUsage, type UnusedEmbeddedFile } from '../../../attachment-cleanup';
 import { runUserFileAttachmentHistoryCommand } from '../../../attachment-history-controller';
 import { captureHistoryStackState, recordHistory, restoreHistoryStackState } from '../../../history';
 import { closeIcon, plusIcon } from '../../../icons';
@@ -41,7 +40,7 @@ export function renderDocumentAttachmentManager(
   helpers: AttachmentManagerRenderHelpers,
 ): string {
   const attachments = listUserFileAttachments(document);
-  const unusedFiles = findUnusedEmbeddedFiles(document);
+  const usage = getCachedEmbeddedFileUsage(document);
   const availableCategories = new Set(attachments.map((attachment) => getUserFileAttachmentCategory(attachment.mediaType)));
   const filters = ([
     { value: 'pdf', label: 'PDF' },
@@ -59,7 +58,7 @@ export function renderDocumentAttachmentManager(
         <span>${attachments.length} file${attachments.length === 1 ? '' : 's'}</span>
       </div>
       <div class="document-attachment-head-actions">
-        <button type="button" class="hvy-button ghost document-attachment-purge" data-document-attachment-purge="true">Remove unused${unusedFiles.length > 0 ? ` (${unusedFiles.length})` : ''}</button>
+        <button type="button" class="hvy-button ghost document-attachment-purge" data-document-attachment-purge="true">Remove unused${usage.unused.length > 0 ? ` (${usage.unused.length})` : ''}</button>
         <label class="hvy-button secondary document-attachment-add">
           ${plusIcon()}
           <span>Add files</span>
@@ -83,7 +82,7 @@ export function renderDocumentAttachmentManager(
     <div class="document-attachment-list">
       ${attachments.length === 0
         ? `<div class="document-attachment-empty">${attachmentDocumentIcon()}<strong>No document attachments</strong><span>Add a file here, or attach one while creating a link.</span></div>`
-        : attachments.map((attachment) => renderAttachmentRow(document, attachment, helpers)).join('')}
+        : attachments.map((attachment) => renderAttachmentRow(attachment, usage.referenceCounts.get(attachment.id) ?? 0, helpers)).join('')}
     </div>
   </section>`;
 }
@@ -149,7 +148,7 @@ export function bindDocumentAttachmentManager(app: HTMLElement): void {
     } else if (action.dataset.documentAttachmentAction === 'delete') {
       const descriptor = listUserFileAttachments(state.document).find((entry) => entry.id === id);
       if (!descriptor) return;
-      const references = countUserFileAttachmentReferences(state.document, descriptor.name);
+      const references = getEmbeddedFileUsage(state.document).referenceCounts.get(id) ?? 0;
       openRemoveConfirmationModal(() => void deleteAttachment(app, id), app);
       setAttachmentManagerStatus(app, references > 0
         ? `${descriptor.name} is linked ${references} time${references === 1 ? '' : 's'}. Confirm deletion to remove it.`
@@ -269,12 +268,11 @@ async function purgeUnusedAttachments(app: HTMLElement, unused: UnusedEmbeddedFi
 }
 
 function renderAttachmentRow(
-  document: VisualDocument,
   attachment: UserFileAttachmentDescriptor,
+  references: number,
   helpers: AttachmentManagerRenderHelpers,
 ): string {
   const category = getUserFileAttachmentCategory(attachment.mediaType);
-  const references = countUserFileAttachmentReferences(document, attachment.name);
   const usage = references === 0 ? 'Not linked' : `Linked ${references} time${references === 1 ? '' : 's'}`;
   const searchable = `${attachment.name} ${attachment.filename}`.toLocaleLowerCase();
   return `<article class="document-attachment-row" data-document-attachment-row="true" data-document-attachment-category="${category}" data-document-attachment-searchable="${helpers.escapeAttr(searchable)}" data-document-attachment-id="${helpers.escapeAttr(attachment.id)}">

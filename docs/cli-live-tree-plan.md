@@ -2,7 +2,7 @@
 
 ## Goal
 
-The deserialized `VisualDocument` is the only state. A CLI path is a route through that tree, resolved when used. Nothing is precomputed, so nothing is cached, invalidated, or rebuilt.
+The deserialized `VisualDocument` is the only state. A CLI path is a route through that tree, resolved when used.
 
 ## Problem
 

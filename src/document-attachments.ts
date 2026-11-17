@@ -279,21 +279,6 @@ function normalizeAttachmentLimit(value: number | undefined, name: string): numb
   return value;
 }
 
-export function countUserFileAttachmentReferences(document: VisualDocument, name: string): number {
-  const normalizedName = normalizeUserFileAttachmentName(name);
-  let count = 0;
-  visitDocumentMarkdown(document, (markdown) => {
-    for (const target of findUserFileAttachmentTargets(markdown)) {
-      const decoded = decodeUserFileAttachmentTarget(target);
-      if (decoded && normalizeUserFileAttachmentName(decoded) === normalizedName) {
-        count += 1;
-      }
-    }
-    return markdown;
-  });
-  return count;
-}
-
 export async function renameUserFileAttachment(
   document: VisualDocument,
   id: string,
@@ -422,10 +407,6 @@ function createUserFileAttachmentId(existingIds: string[]): string {
     id = `${USER_FILE_ATTACHMENT_ID_PREFIX}${crypto.randomUUID()}`;
   }
   return id;
-}
-
-function findUserFileAttachmentTargets(markdown: string): string[] {
-  return markdown.match(/@attachment:[^\s)>]+/g) ?? [];
 }
 
 function visitDocumentMarkdown(document: VisualDocument, visitor: (markdown: string) => string): void {

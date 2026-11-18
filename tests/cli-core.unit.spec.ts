@@ -2945,7 +2945,7 @@ test('cli rejects css values that look like serialized JSON metadata', async () 
   ).rejects.toThrow('text.json css must be an inline CSS declaration string, not serialized component or section JSON.');
 
   await expect(
-    executeHvyCliCommand(document, session, 'echo \'{"id":"summary","title":"Summary","level":1,"lock":false,"editorOnly":false,"expanded":true,"highlight":false,"contained":false,"css":"{\\"id\\":\\"summary\\"}","tags":"","description":"","location":"main","hideIfUnmodified":false,"exclude_from_import":false,"templateKey":""}\' > /body/summary/section.json')
+    executeHvyCliCommand(document, session, 'echo \'{"id":"summary","title":"Summary","level":1,"lock":false,"editorOnly":false,"expanded":true,"highlight":false,"contained":false,"css":"{\\"id\\":\\"summary\\"}","tags":"","description":"","location":"main","hideIfUnmodified":false,"excludeFromImport":false,"templateKey":""}\' > /body/summary/section.json')
   ).rejects.toThrow('section.json css must be an inline CSS declaration string, not serialized component or section JSON.');
 
   await expect(executeHvyCliCommand(document, session, `cat > /header.yaml <<'YAML'

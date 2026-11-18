@@ -207,6 +207,14 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'section-start-on-new-page' && target instanceof HTMLInputElement) {
+      if (!section) {
+        return;
+      }
+      section.startOnNewPage = target.checked;
+      return;
+    }
+
     if (field === 'section-editor-only' && target instanceof HTMLInputElement) {
       if (!section) {
         return;
@@ -221,7 +229,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (!section) {
         return;
       }
-      section.exclude_from_import = target.checked;
+      section.excludeFromImport = target.checked;
       getRefreshReaderPanels()();
       return;
     }

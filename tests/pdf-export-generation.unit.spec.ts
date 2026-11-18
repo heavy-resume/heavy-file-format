@@ -24,7 +24,7 @@ test('pdfmake backend produces a PDF blob for a strategy-filtered document', asy
   };
 
   const expectedResult = await getHvyPdfBlob(document, {
-    strategy: { rules: [{ id: 'summary', keepWithNext: true }] },
+    strategy: { rules: [{ id: 'summary', pageBreakBefore: true }] },
   });
 
   expect(expectedResult.type).toBe('application/pdf');
@@ -88,9 +88,6 @@ test('PDF text rendering keeps soft-wrapped text line styles in one styled node'
     '',
     {
       visibility: 'show',
-      keepTogether: false,
-      keepWithNext: false,
-      allowSplit: true,
       pageBreakBefore: false,
       pageBreakAfter: false,
       pdfStyle: {},
@@ -110,9 +107,6 @@ test('PDF text rendering preserves markdown links as PDF annotations', () => {
     '',
     {
       visibility: 'show',
-      keepTogether: false,
-      keepWithNext: false,
-      allowSplit: true,
       pageBreakBefore: false,
       pageBreakAfter: false,
       pdfStyle: {},
@@ -132,9 +126,6 @@ test('PDF text rendering does not apply paragraph spacing between bullet items',
     '',
     {
       visibility: 'show',
-      keepTogether: false,
-      keepWithNext: false,
-      allowSplit: true,
       pageBreakBefore: false,
       pageBreakAfter: false,
       pdfStyle: {},

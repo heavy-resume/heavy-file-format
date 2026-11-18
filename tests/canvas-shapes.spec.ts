@@ -113,7 +113,7 @@ test('before, bend an arrow by its curve handle, undo/redo: the adjustment and t
   // BEFORE: a straight arrow, still selected after placement.
   await drag(page, [60, 100], [300, 100]);
   const [straight] = await readItems(page);
-  expect(straight).toMatchObject({ kind: 'shape', shape: 'line', endHead: true });
+  expect(straight).toMatchObject({ kind: 'shape', shape: 'line', endHead: 'arrow' });
   expect(straight!.control).toBeUndefined();
 
   // ADJUST: drag the curve handle at the midpoint upward.
@@ -145,19 +145,22 @@ test('before, quick click away from a selected shape, after: it is deselected an
   expect((await readItems(page)).map((item) => item.shape)).toEqual(['ellipse']);
 });
 
-test('line style picker sets arrowheads and dash for new arrows and restyles the selected arrow', async ({ page }) => {
+test('line style picker cycles line ends (none, arrow, round) and dash for new arrows and restyles the selected arrow', async ({ page }) => {
   test.setTimeout(5_000);
   await mountCanvasEditor(page);
   await chooseTool(page, 'Arrow');
   const toolbar = page.locator('.hvy-canvas-toolbar');
-  await toolbar.getByRole('button', { name: 'Start arrowhead' }).click();
+  await toolbar.getByRole('button', { name: 'Start of line: none' }).click();
+  await toolbar.getByRole('button', { name: 'Start of line: arrow' }).click();
   await toolbar.getByRole('button', { name: 'Line style: solid' }).click();
 
   await drag(page, [60, 60], [300, 60]);
-  expect((await readItems(page))[0]).toMatchObject({ startHead: true, endHead: true, dash: 'dashed' });
+  expect((await readItems(page))[0]).toMatchObject({ startHead: 'round', endHead: 'arrow', dash: 'dashed' });
 
   // The arrow is selected, so the picker now restyles it as an undo step.
-  await toolbar.getByRole('button', { name: 'End arrowhead' }).click();
+  await toolbar.getByRole('button', { name: 'End of line: arrow' }).click();
+  expect((await readItems(page))[0]!.endHead).toBe('round');
+  await toolbar.getByRole('button', { name: 'End of line: round' }).click();
   expect((await readItems(page))[0]!.endHead).toBeUndefined();
 });
 

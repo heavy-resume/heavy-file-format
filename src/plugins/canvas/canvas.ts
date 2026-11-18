@@ -188,7 +188,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let activeLayerId = savedUiState && findCanvasLayer(drawing, savedUiState.activeLayerId) ? savedUiState.activeLayerId : drawing.layers[drawing.layers.length - 1]!.id;
   // The editor starts on the hand tool, so a stray click or drag pans instead of drawing.
   let activeTool: CanvasTool = savedUiState?.tool ?? 'hand';
-  let lineStyle: CanvasLineStyle = savedUiState?.lineStyle ?? { startHead: false, endHead: true, dash: 'solid' };
+  let lineStyle: CanvasLineStyle = savedUiState?.lineStyle ?? { startHead: null, endHead: 'arrow', dash: 'solid' };
   let textSize = savedUiState?.textSize ?? 24;
   // Item selection, in any selected layer; the draw layer is always selected.
   let selectedIds: string[] = [];
@@ -421,8 +421,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       }
       const next = { ...item, ...(storedColor ? { color: storedColor } : {}), ...(patch.width ? { width: patch.width } : {}), ...(patch.dash ? { dash: patch.dash } : {}) };
       if (next.kind === 'shape' && next.shape === 'line') {
-        if (patch.startHead !== undefined) next.startHead = patch.startHead;
-        if (patch.endHead !== undefined) next.endHead = patch.endHead;
+        // null removes the end marker.
+        for (const end of ['startHead', 'endHead'] as const) {
+          const value = patch[end];
+          if (value === null) delete next[end];
+          else if (value) next[end] = value;
+        }
       }
       return [item.id, next];
     }));

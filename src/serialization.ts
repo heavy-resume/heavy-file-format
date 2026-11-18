@@ -25,6 +25,7 @@ import {
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
   parseTableColumnProperties,
+  readSectionImportFlags,
 } from './document-factory';
 import { isPdfAllowedDocumentComponentInstance, isPdfDocument } from './pdf-document-rules';
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
@@ -237,13 +238,13 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
     priority: sectionMeta.priority === true,
+    startOnNewPage: sectionMeta.startOnNewPage === true,
     css: typeof sectionMeta.css === 'string' ? sectionMeta.css : '',
     tags: typeof sectionMeta.tags === 'string' ? sectionMeta.tags : '',
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: sectionMeta.hideIfUnmodified === true,
-    exclude_from_import: sectionMeta.exclude_from_import === true,
-    protect_from_import: sectionMeta.protect_from_import === true,
+    ...readSectionImportFlags(sectionMeta),
     templateKey: typeof sectionMeta.templateKey === 'string' ? sectionMeta.templateKey : undefined,
     blocks,
   };
@@ -1153,6 +1154,9 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject, docu
   if (section.priority === true) {
     result.priority = true;
   }
+  if (section.startOnNewPage === true) {
+    result.startOnNewPage = true;
+  }
   if (typeof section.css === 'string' && section.css.trim().length > 0) {
     result.css = section.css;
   }
@@ -1168,11 +1172,11 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject, docu
   if (section.hideIfUnmodified === true) {
     result.hideIfUnmodified = true;
   }
-  if (section.exclude_from_import === true) {
-    result.exclude_from_import = true;
+  if (section.excludeFromImport === true) {
+    result.excludeFromImport = true;
   }
-  if (section.protect_from_import === true) {
-    result.protect_from_import = true;
+  if (section.protectFromImport === true) {
+    result.protectFromImport = true;
   }
   result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject, documentMeta)) : [];
   return result;
@@ -1401,6 +1405,9 @@ function serializeSection(section: VisualSection, documentMeta: JsonObject | nul
   if (section.priority === true) {
     meta.priority = true;
   }
+  if (section.startOnNewPage === true) {
+    meta.startOnNewPage = true;
+  }
   if (section.css.trim().length > 0) {
     meta.css = section.css;
   }
@@ -1416,11 +1423,11 @@ function serializeSection(section: VisualSection, documentMeta: JsonObject | nul
   if (section.hideIfUnmodified === true) {
     meta.hideIfUnmodified = true;
   }
-  if (section.exclude_from_import === true) {
-    meta.exclude_from_import = true;
+  if (section.excludeFromImport === true) {
+    meta.excludeFromImport = true;
   }
-  if (section.protect_from_import === true) {
-    meta.protect_from_import = true;
+  if (section.protectFromImport === true) {
+    meta.protectFromImport = true;
   }
   if (section.templateKey && section.templateKey.trim().length > 0) {
     meta.templateKey = section.templateKey;

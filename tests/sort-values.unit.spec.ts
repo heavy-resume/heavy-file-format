@@ -67,8 +67,8 @@ test('syncs date annotations to canonical timezone-free sort keys', () => {
     }] }, sections: [{
       key: 'section', customId: 'section', customIdGenerated: false, contained: true, editorOnly: false, lock: false,
       idEditorOpen: false, isGhost: false, title: 'Section', expanded: true, highlight: false, priority: false,
-      css: '', tags: '', description: '', location: 'main', hideIfUnmodified: false, exclude_from_import: false,
-      protect_from_import: false, blocks: [list],
+      css: '', tags: '', description: '', location: 'main', hideIfUnmodified: false, excludeFromImport: false,
+      protectFromImport: false, blocks: [list],
     }],
   };
 
@@ -133,8 +133,8 @@ test('syncs nested sort value annotations to component-list item sort keys', () 
       description: '',
       location: 'main',
       hideIfUnmodified: false,
-      exclude_from_import: false,
-      protect_from_import: false,
+      excludeFromImport: false,
+      protectFromImport: false,
       blocks: [list],
     }],
   };
@@ -183,8 +183,8 @@ test('syncs edited numeric sort value annotations to component-list item sort ke
       description: '',
       location: 'main',
       hideIfUnmodified: false,
-      exclude_from_import: false,
-      protect_from_import: false,
+      excludeFromImport: false,
+      protectFromImport: false,
       blocks: [list],
     }],
   };
@@ -233,8 +233,8 @@ test('syncs plugin-declared sort values to component-list item sort keys', () =>
       description: '',
       location: 'main',
       hideIfUnmodified: false,
-      exclude_from_import: false,
-      protect_from_import: false,
+      excludeFromImport: false,
+      protectFromImport: false,
       blocks: [list],
     }],
   };
@@ -284,8 +284,8 @@ test('clears stale source-backed sort values without removing manual sort keys',
       description: '',
       location: 'main',
       hideIfUnmodified: false,
-      exclude_from_import: false,
-      protect_from_import: false,
+      excludeFromImport: false,
+      protectFromImport: false,
       blocks: [list],
     }],
   };
@@ -336,8 +336,8 @@ test('clears stale source-backed sort values when the source becomes invalid', (
       description: '',
       location: 'main',
       hideIfUnmodified: false,
-      exclude_from_import: false,
-      protect_from_import: false,
+      excludeFromImport: false,
+      protectFromImport: false,
       blocks: [list],
     }],
   };
@@ -387,8 +387,8 @@ test('applies plugin-declared sort values after moving into a sortable item', ()
       description: '',
       location: 'main',
       hideIfUnmodified: false,
-      exclude_from_import: false,
-      protect_from_import: false,
+      excludeFromImport: false,
+      protectFromImport: false,
       blocks: [rating, list],
     }],
   };

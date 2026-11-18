@@ -27,13 +27,14 @@ export function sectionToCliJson(section: VisualSection): JsonObject {
     editorOnly: section.editorOnly,
     expanded: section.expanded,
     highlight: section.highlight,
+    startOnNewPage: section.startOnNewPage === true,
     contained: section.contained,
     css: section.css,
     tags: section.tags,
     description: section.description,
     location: section.location,
     hideIfUnmodified: section.hideIfUnmodified === true,
-    exclude_from_import: section.exclude_from_import === true,
+    excludeFromImport: section.excludeFromImport === true,
     templateKey: section.templateKey ?? '',
   };
 }
@@ -73,6 +74,7 @@ export function applySectionJson(section: VisualSection, value: JsonObject): voi
   if (typeof value.editorOnly === 'boolean') section.editorOnly = value.editorOnly;
   if (typeof value.expanded === 'boolean') section.expanded = value.expanded;
   if (typeof value.highlight === 'boolean') section.highlight = value.highlight;
+  if (typeof value.startOnNewPage === 'boolean') section.startOnNewPage = value.startOnNewPage;
   if (typeof value.contained === 'boolean') section.contained = value.contained;
   if (typeof value.css === 'string') {
     assertCssValueIsDeclarationString(value.css, 'section.json css');
@@ -82,7 +84,7 @@ export function applySectionJson(section: VisualSection, value: JsonObject): voi
   if (typeof value.description === 'string') section.description = value.description;
   if (value.location === 'sidebar' || value.location === 'main') section.location = value.location;
   if (typeof value.hideIfUnmodified === 'boolean') section.hideIfUnmodified = value.hideIfUnmodified;
-  if (typeof value.exclude_from_import === 'boolean') section.exclude_from_import = value.exclude_from_import;
+  if (typeof value.excludeFromImport === 'boolean') section.excludeFromImport = value.excludeFromImport;
 }
 
 export function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject {

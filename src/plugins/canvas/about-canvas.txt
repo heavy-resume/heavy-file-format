@@ -19,7 +19,8 @@ and ordered items. Item kinds:
 - brush: a freehand path (points, color, width, optional dash).
 - fill: a full-canvas color; erasing over it adds cutouts to that fill only.
 - shape: rect, ellipse, or line, spanning from/to. A line may curve through a
-  control point and may have startHead/endHead arrowheads. Shapes have a dash
+  control point; startHead/endHead may each be "arrow" or "round" (omit for a
+  plain end). Shapes have a dash
   style of solid, dashed, or dotted.
 - text: centered on its "at" point, with a size, color, and font; optional
   "sizes" ranges give some characters their own font size.

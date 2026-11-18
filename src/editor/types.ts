@@ -320,13 +320,14 @@ export interface VisualSection {
   expanded: boolean;
   highlight: boolean;
   priority?: boolean;
+  startOnNewPage?: boolean;
   css: string;
   tags: string;
   description: string;
   location: SectionLocation;
   hideIfUnmodified?: boolean;
-  exclude_from_import?: boolean;
-  protect_from_import?: boolean;
+  excludeFromImport?: boolean;
+  protectFromImport?: boolean;
   templateKey?: string;
   blocks: VisualBlock[];
 

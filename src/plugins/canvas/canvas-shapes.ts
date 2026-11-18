@@ -1,4 +1,4 @@
-import type { CanvasItem, CanvasPoint, CanvasShapeItem, CanvasShapeType, CanvasTextItem } from './canvas-drawing-format';
+import type { CanvasBrushItem, CanvasItem, CanvasLineEnd, CanvasPoint, CanvasShapeItem, CanvasShapeType, CanvasTextItem } from './canvas-drawing-format';
 import { runsToLines, textItemRuns } from './canvas-text-runs';
 
 // Pure geometry for shapes and text: constraints, outlines, handles, hit
@@ -61,23 +61,29 @@ export function linePath(shape: CanvasShapeItem): CanvasPoint[] {
   return Array.from({ length: CURVE_SEGMENTS + 1 }, (_, index) => quadraticPoint(shape.from, shape.control!, shape.to, index / CURVE_SEGMENTS));
 }
 
-// Open chevron arrowheads, so they stay ordinary strokes when erased.
-export function arrowheadPaths(shape: CanvasShapeItem): CanvasPoint[][] {
+// A line's end markers as solid brush-style strokes, so painting and erasing
+// treat them like any other stroke: an arrow is an open chevron at the line's
+// width; a round end is a single-point dot wider than the line.
+export function lineEndStrokes(shape: CanvasShapeItem): Array<{ points: CanvasPoint[]; width: number }> {
   if (shape.shape !== 'line') return [];
   const length = Math.max(10, shape.width * 3.2);
   const spread = Math.PI / 7;
-  const head = (tip: CanvasPoint, toward: CanvasPoint): CanvasPoint[] => {
+  const marker = (end: CanvasLineEnd, tip: CanvasPoint, toward: CanvasPoint) => {
+    if (end === 'round') return { points: [tip], width: Math.max(8, shape.width * 2.5) };
     const angle = Math.atan2(tip.y - toward.y, tip.x - toward.x);
-    return [
-      { x: tip.x - Math.cos(angle - spread) * length, y: tip.y - Math.sin(angle - spread) * length },
-      tip,
-      { x: tip.x - Math.cos(angle + spread) * length, y: tip.y - Math.sin(angle + spread) * length },
-    ];
+    return {
+      points: [
+        { x: tip.x - Math.cos(angle - spread) * length, y: tip.y - Math.sin(angle - spread) * length },
+        tip,
+        { x: tip.x - Math.cos(angle + spread) * length, y: tip.y - Math.sin(angle + spread) * length },
+      ],
+      width: shape.width,
+    };
   };
-  const paths: CanvasPoint[][] = [];
-  if (shape.startHead) paths.push(head(shape.from, shape.control ?? shape.to));
-  if (shape.endHead) paths.push(head(shape.to, shape.control ?? shape.from));
-  return paths;
+  const strokes: Array<{ points: CanvasPoint[]; width: number }> = [];
+  if (shape.startHead) strokes.push(marker(shape.startHead, shape.from, shape.control ?? shape.to));
+  if (shape.endHead) strokes.push(marker(shape.endHead, shape.to, shape.control ?? shape.from));
+  return strokes;
 }
 
 export function shapeOutline(shape: CanvasShapeItem): CanvasPoint[] {
@@ -98,9 +104,13 @@ export function shapeOutline(shape: CanvasShapeItem): CanvasPoint[] {
   return linePath(shape);
 }
 
-// The shape as plain polylines: outline (or line path) plus arrowheads.
-export function shapeToPolylines(shape: CanvasShapeItem): CanvasPoint[][] {
-  return [shapeOutline(shape), ...arrowheadPaths(shape)];
+// The shape as brush strokes: its outline (or line path) with its dash, then
+// solid end markers. The first stroke keeps the shape's id.
+export function shapeToBrushStrokes(shape: CanvasShapeItem): CanvasBrushItem[] {
+  return [
+    { kind: 'brush', id: shape.id, points: shapeOutline(shape), color: shape.color, width: shape.width, ...(shape.dash ? { dash: shape.dash } : {}) },
+    ...lineEndStrokes(shape).map((stroke, index): CanvasBrushItem => ({ kind: 'brush', id: `${shape.id}-head-${index + 1}`, ...stroke, color: shape.color })),
+  ];
 }
 
 export function shapeHandles(shape: CanvasShapeItem): Array<{ handle: CanvasHandle; point: CanvasPoint }> {

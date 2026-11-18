@@ -8,6 +8,8 @@ export interface CanvasPoint {
 }
 
 export type CanvasDash = 'solid' | 'dashed' | 'dotted';
+// How a line ends: an open chevron arrowhead or a round dot. Absent means a plain end.
+export type CanvasLineEnd = 'arrow' | 'round';
 
 // A path removed from a fill layer: everything within width / 2 of the
 // polyline, with round caps and joins.
@@ -45,9 +47,9 @@ export interface CanvasShapeItem {
   color: string;
   width: number;
   dash?: CanvasDash;
-  // Lines only: arrowheads at either end.
-  startHead?: boolean;
-  endHead?: boolean;
+  // Lines only: end markers.
+  startHead?: CanvasLineEnd;
+  endHead?: CanvasLineEnd;
 }
 
 // Characters [start, end) of a text item drawn at `size` instead of the item's size.
@@ -181,6 +183,8 @@ export function normalizeCanvasItem(value: unknown): CanvasItem | null {
     const shape = raw.shape === 'rect' || raw.shape === 'ellipse' || raw.shape === 'line' ? raw.shape : null;
     if (!from || !to || !shape || typeof raw.id !== 'string' || !raw.id) return null;
     const control = shape === 'line' ? normalizePoint(raw.control) : null;
+    const startHead = normalizeLineEnd(raw.startHead);
+    const endHead = normalizeLineEnd(raw.endHead);
     return {
       kind: 'shape',
       id: raw.id,
@@ -191,8 +195,8 @@ export function normalizeCanvasItem(value: unknown): CanvasItem | null {
       color,
       width: finiteNumber(raw.width, 4, 1, CANVAS_MAX_STROKE_WIDTH),
       ...(dash ? { dash } : {}),
-      ...(shape === 'line' && raw.startHead === true ? { startHead: true } : {}),
-      ...(shape === 'line' && raw.endHead === true ? { endHead: true } : {}),
+      ...(shape === 'line' && startHead ? { startHead } : {}),
+      ...(shape === 'line' && endHead ? { endHead } : {}),
     };
   }
   if (raw.kind === 'text') {
@@ -245,6 +249,10 @@ function normalizeTextSizes(value: unknown, length: number): CanvasTextSizeRange
     if (kept.length === 0 || range.start >= kept[kept.length - 1]!.end) kept.push(range);
   }
   return kept;
+}
+
+function normalizeLineEnd(value: unknown): CanvasLineEnd | null {
+  return value === 'arrow' || value === 'round' ? value : null;
 }
 
 function normalizeDash(value: unknown): CanvasDash | null {

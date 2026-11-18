@@ -78,8 +78,10 @@ export function canvasLineBodyIcon(dash: 'solid' | 'dashed' | 'dotted'): string 
   return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18" ${LINE_STYLE_STROKE} stroke-width="3"${pattern}/></svg>`;
 }
 
-export function canvasLineHeadIcon(side: 'start' | 'end', present: boolean): string {
-  const tip = side === 'start' ? 'M14 6.5 8.5 12l5.5 5.5' : 'M10 6.5l5.5 5.5-5.5 5.5';
+export function canvasLineHeadIcon(side: 'start' | 'end', end: 'arrow' | 'round' | null): string {
   const stub = side === 'start' ? 'M9 12h12' : 'M3 12h12';
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${stub}" ${LINE_STYLE_STROKE} stroke-width="2.8"${present ? '' : ' opacity="0.45"'}/>${present ? `<path d="${tip}" ${LINE_STYLE_STROKE} stroke-width="2.8"/>` : ''}</svg>`;
+  const body = `<path d="${stub}" ${LINE_STYLE_STROKE} stroke-width="2.8"${end ? '' : ' opacity="0.45"'}/>`;
+  if (end === 'round') return `<svg viewBox="0 0 24 24" aria-hidden="true">${body}<circle cx="${side === 'start' ? 9 : 15}" cy="12" r="4" fill="currentColor"/></svg>`;
+  const tip = side === 'start' ? 'M14 6.5 8.5 12l5.5 5.5' : 'M10 6.5l5.5 5.5-5.5 5.5';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${body}${end === 'arrow' ? `<path d="${tip}" ${LINE_STYLE_STROKE} stroke-width="2.8"/>` : ''}</svg>`;
 }

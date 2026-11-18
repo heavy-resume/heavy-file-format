@@ -251,15 +251,24 @@ export function parseVisualSection(candidate: unknown, seen = new WeakSet<object
     expanded: raw.expanded === false ? false : true,
     highlight: raw.highlight === true,
     priority: raw.priority === true,
+    startOnNewPage: raw.startOnNewPage === true,
     css: typeof raw.css === 'string' ? raw.css : '',
     tags: typeof raw.tags === 'string' ? raw.tags : '',
     description: typeof raw.description === 'string' ? raw.description : '',
     location: raw.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: raw.hideIfUnmodified === true,
-    exclude_from_import: raw.exclude_from_import === true,
-    protect_from_import: raw.protect_from_import === true,
+    ...readSectionImportFlags(raw),
     templateKey: typeof raw.templateKey === 'string' ? raw.templateKey : undefined,
     blocks: Array.isArray(raw.blocks) ? raw.blocks.map((block) => parseVisualBlock(block, seen, documentMeta)) : [],
+  };
+}
+
+// Files written before the camelCase rename use `exclude_from_import` / `protect_from_import`.
+// Readers accept both spellings; writers only emit camelCase.
+export function readSectionImportFlags(raw: JsonObject): Pick<VisualSection, 'excludeFromImport' | 'protectFromImport'> {
+  return {
+    excludeFromImport: raw.excludeFromImport === true || raw.exclude_from_import === true,
+    protectFromImport: raw.protectFromImport === true || raw.protect_from_import === true,
   };
 }
 
@@ -691,8 +700,8 @@ export function createEmptySectionWithMeta(component = 'container', isGhost = fa
     description: '',
     location: 'main',
     hideIfUnmodified: false,
-    exclude_from_import: false,
-    protect_from_import: false,
+    excludeFromImport: false,
+    protectFromImport: false,
     templateKey: undefined,
     blocks: component ? [createEmptyBlock(component, false, documentMeta)] : [],
   };
@@ -816,13 +825,14 @@ export function cloneReusableSection(section: VisualSection, documentMeta?: Json
     lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,
+    startOnNewPage: section.startOnNewPage === true,
     css: section.css,
     tags: section.tags,
     description: section.description,
     location: section.location ?? 'main',
     hideIfUnmodified: section.hideIfUnmodified === true,
-    exclude_from_import: section.exclude_from_import === true,
-    protect_from_import: section.protect_from_import === true,
+    excludeFromImport: section.excludeFromImport === true,
+    protectFromImport: section.protectFromImport === true,
     templateKey: section.templateKey,
     blocks: section.blocks.map((block) => documentMeta ? cloneReusableBlockFromMeta(block, documentMeta) : cloneReusableBlock(block)),
   };

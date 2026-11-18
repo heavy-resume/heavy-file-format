@@ -35,7 +35,7 @@ vi.mock('../src/plugins/scripting/wrapper', () => ({
   runUserScript: vi.fn(async (options) => {
     options.document.sections[0].blocks[0].text = 'Export clone text';
     options.exportRuleRecorder.hide('#hidden-by-prep');
-    options.exportRuleRecorder.strategy({ componentTag: 'prep-keep', keepTogether: true });
+    options.exportRuleRecorder.strategy({ componentTag: 'prep-page-break', pageBreakBefore: true });
     return { ok: true, stepsExecuted: 1, stepBudget: 100_000, linesExecuted: 1, toolCalls: 0 };
   }),
 }));
@@ -87,7 +87,7 @@ function createDocument(): VisualDocument {
     extension: '.hvy',
     attachments: [],
     sections: [
-      createSection('summary', [createTextBlock('intro', 'Intro text', 'lead prep-keep')], 'resume-primary'),
+      createSection('summary', [createTextBlock('intro', 'Intro text', 'lead prep-page-break')], 'resume-primary'),
       createSection('details', [createTextBlock('skip', 'Hidden text')]),
       createSection('extras', [createExpandableBlock('expandable')]),
     ],
@@ -104,7 +104,7 @@ describe('PDF export strategy', () => {
     const expectedResult = resolvePdfExportStrategy(document, {
       rules: [
         { id: 'intro', hide: true },
-        { id: 'intro', include: true, keepTogether: true },
+        { id: 'intro', include: true, pageBreakBefore: true },
         { path: '/id/summary/intro', pdfStyle: { fontSize: 9 } },
         { component: 'text', dim: true },
         { tag: 'lead', highlight: true },
@@ -115,7 +115,7 @@ describe('PDF export strategy', () => {
 
     expect(expectedResult.getBlockDecision('block-intro')).toMatchObject({
       visibility: 'highlight',
-      keepTogether: true,
+      pageBreakBefore: true,
       pdfStyle: { fontSize: 9 },
     });
     expect(expectedResult.getSectionDecision('section-summary').role).toBe('heading');
@@ -161,7 +161,7 @@ describe('PDF export strategy', () => {
     expect(expectedResult.strategy.rules).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'hidden-by-prep', hide: true }),
-        expect.objectContaining({ componentTag: 'prep-keep', keepTogether: true }),
+        expect.objectContaining({ componentTag: 'prep-page-break', pageBreakBefore: true }),
       ])
     );
   });
@@ -172,7 +172,6 @@ describe('PDF export strategy', () => {
     recorder.hide('#intro');
     recorder.include('resume-primary');
     recorder.expand('#expandable');
-    recorder.keep_together('pdf-keep');
     recorder.style('#intro', { fontSize: 8 });
     recorder.strategy([{ id: 'intro', asMetadata: true }]);
 
@@ -180,7 +179,6 @@ describe('PDF export strategy', () => {
       { id: 'intro', hide: true },
       { tag: 'resume-primary', include: true },
       { id: 'expandable', expand: true },
-      { tag: 'pdf-keep', keepTogether: true },
       { id: 'intro', pdfStyle: { fontSize: 8 } },
       { id: 'intro', asMetadata: true },
     ]);
@@ -461,7 +459,7 @@ hvy_version: 0.1
       contentView: { skip: ['hidden'] },
       strategy: {
         defaults: { unsupportedPluginPolicy: 'placeholder' },
-        rules: [{ id: 'intro', keepWithNext: true }],
+        rules: [{ id: 'intro', pageBreakBefore: true }],
       },
     });
     const text = await expectedResult.text();
@@ -518,7 +516,6 @@ hvy_version: 0.1
     const text = await expectedResult.text();
 
     expect(expectedResult.type).toBe('application/pdf');
-    expect(text).toContain('qr-code-static');
     expect(text).toContain('<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>QR</text></svg>');
   });
 

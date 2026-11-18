@@ -204,8 +204,8 @@ export function attachCanvasPointer(host: CanvasPointerHost): { isInteracting():
       color: host.color(),
       width: host.strokeWidth(),
       ...(style.dash !== 'solid' ? { dash: style.dash } : {}),
-      ...(shape === 'line' && style.startHead ? { startHead: true } : {}),
-      ...(shape === 'line' && style.endHead ? { endHead: true } : {}),
+      ...(shape === 'line' && style.startHead ? { startHead: style.startHead } : {}),
+      ...(shape === 'line' && style.endHead ? { endHead: style.endHead } : {}),
     };
   };
 

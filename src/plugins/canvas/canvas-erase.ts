@@ -1,6 +1,6 @@
 import type { CanvasBrushItem, CanvasCutout, CanvasDrawing, CanvasFillItem, CanvasItem, CanvasPoint } from './canvas-drawing-format';
 import { findCanvasLayer, withCanvasLayerItems } from './canvas-drawing-format';
-import { distanceToSegment, shapeToPolylines, textBounds } from './canvas-shapes';
+import { distanceToSegment, shapeToBrushStrokes, textBounds } from './canvas-shapes';
 
 // Erasing removes geometry instead of recording an erase layer, and only
 // touches one layer. Brush strokes the sweep touches are cut and their
@@ -45,14 +45,7 @@ function eraseItem(item: CanvasItem, sweeps: EraserSweep[], eraserPath: CanvasPo
     return touched ? [] : [item];
   }
   if (item.kind === 'shape') {
-    const strokes: CanvasBrushItem[] = shapeToPolylines(item).map((points, index) => ({
-      kind: 'brush',
-      id: index === 0 ? item.id : `${item.id}-head-${index}`,
-      points,
-      color: item.color,
-      width: item.width,
-      ...(item.dash ? { dash: item.dash } : {}),
-    }));
+    const strokes = shapeToBrushStrokes(item);
     const cut = strokes.flatMap((stroke) => cutAlongSweeps(stroke, sweeps));
     const untouched = cut.length === strokes.length && cut.every((piece, index) => piece === strokes[index]);
     return untouched ? [item] : cut;

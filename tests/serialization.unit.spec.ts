@@ -246,8 +246,8 @@ section_defs:
     template:
       id: projects
       title: Projects
-      exclude_from_import: true
-      protect_from_import: true
+      excludeFromImport: true
+      protectFromImport: true
       tags: reciprocal-xref-source
       blocks:
         - text: "# Projects"
@@ -264,17 +264,17 @@ section_defs:
       children: []
 ---
 
-<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true,"protect_from_import":true}-->
+<!--hvy: {"id":"projects","templateKey":"resume-projects","excludeFromImport":true,"protectFromImport":true}-->
 #! Projects
 `, '.hvy');
 
   const expectedResult = serializeWithState(document);
 
   expect(expectedResult).toContain('key: resume-projects');
-  expect(expectedResult).toContain('exclude_from_import: true');
-  expect(expectedResult).toContain('protect_from_import: true');
+  expect(expectedResult).toContain('excludeFromImport: true');
+  expect(expectedResult).toContain('protectFromImport: true');
   expect(expectedResult).toContain('repeatable: true');
-  expect(expectedResult).toContain('"exclude_from_import":true,"protect_from_import":true,"templateKey":"resume-projects"');
+  expect(expectedResult).toContain('"excludeFromImport":true,"protectFromImport":true,"templateKey":"resume-projects"');
   expect(expectedResult).not.toContain('idEditorOpen');
 });
 

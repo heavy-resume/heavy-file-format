@@ -1280,12 +1280,13 @@ function replaceSectionContents(target: VisualSection, source: VisualSection): v
   target.title = source.title;
   target.expanded = source.expanded;
   target.highlight = source.highlight;
+  target.startOnNewPage = source.startOnNewPage;
   target.css = source.css;
   target.tags = source.tags;
   target.description = source.description;
   target.location = source.location;
   target.hideIfUnmodified = source.hideIfUnmodified;
-  target.exclude_from_import = source.exclude_from_import;
+  target.excludeFromImport = source.excludeFromImport;
   target.blocks = source.blocks;
   target.key = key;
 }

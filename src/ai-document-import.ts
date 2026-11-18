@@ -737,7 +737,7 @@ function buildImportTemplateSectionOutline(document: VisualDocument, options: Im
   const lines: string[] = [];
   const appendSections = (sections: VisualDocument['sections'], depth: number): void => {
     for (const section of sections) {
-      if (section.protect_from_import === true) {
+      if (section.protectFromImport === true) {
         continue;
       }
       if (options.newSectionsOnly === true) {
@@ -2589,10 +2589,10 @@ function getImportTemplateSectionCandidates(document: VisualDocument, options: I
   const sectionDefinitions = getImportSectionDefinitions(document);
   const appendSections = (sections: VisualSection[]): void => {
     for (const section of sections) {
-      if (section.exclude_from_import === true) {
+      if (section.excludeFromImport === true) {
         continue;
       }
-      if (section.protect_from_import === true) {
+      if (section.protectFromImport === true) {
         continue;
       }
       if (options.newSectionsOnly !== true) {
@@ -2613,7 +2613,7 @@ function getImportTemplateSectionCandidates(document: VisualDocument, options: I
   };
   appendSections(document.sections);
   for (const definition of sectionDefinitions) {
-    if (definition.template.exclude_from_import === true) {
+    if (definition.template.excludeFromImport === true) {
       continue;
     }
     candidates.push({

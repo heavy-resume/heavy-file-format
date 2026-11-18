@@ -59,7 +59,7 @@ describe('canvas drawing format', () => {
           locked: false,
           items: [
             { kind: 'shape', id: 'shape-box', shape: 'rect', from: { x: 10, y: 10 }, to: { x: 60, y: 40 }, color: '#111111', width: 2 },
-            { kind: 'shape', id: 'shape-arrow', shape: 'line', from: { x: 60, y: 25 }, to: { x: 120, y: 25 }, control: { x: 90, y: 5 }, color: '#111111', width: 2, dash: 'dotted', startHead: true, endHead: true },
+            { kind: 'shape', id: 'shape-arrow', shape: 'line', from: { x: 60, y: 25 }, to: { x: 120, y: 25 }, control: { x: 90, y: 5 }, color: '#111111', width: 2, dash: 'dotted', startHead: 'round', endHead: 'arrow' },
             { kind: 'text', id: 'text-label', text: 'Placeholder\nlabel', at: { x: 35, y: 25 }, size: 18, color: '#222222', font: 'sans-serif' },
           ],
         },
@@ -77,7 +77,8 @@ describe('canvas drawing format', () => {
         items: [
           { kind: 'brush', color: '#abcdef', width: 2, points: [{ x: 1, y: 2 }], cutouts: [{ width: 4, points: [{ x: 0, y: 0 }] }] },
           { kind: 'brush', color: '#000000', width: 2, points: [{ x: 'bad', y: 2 }] },
-          { kind: 'shape', id: 'shape-box', shape: 'rect', from: { x: 0, y: 0 }, to: { x: 5, y: 5 }, endHead: true, control: { x: 1, y: 1 } },
+          { kind: 'shape', id: 'shape-box', shape: 'rect', from: { x: 0, y: 0 }, to: { x: 5, y: 5 }, endHead: 'arrow', control: { x: 1, y: 1 } },
+          { kind: 'shape', id: 'shape-line', shape: 'line', from: { x: 0, y: 0 }, to: { x: 5, y: 0 }, startHead: true, endHead: 'triangle' },
           { kind: 'text', id: 'text-empty', text: '   ', at: { x: 0, y: 0 } },
           { kind: 'sticker', id: 'unknown' },
         ],
@@ -85,6 +86,7 @@ describe('canvas drawing format', () => {
     })).toEqual(singleLayer([
       { kind: 'brush', color: '#abcdef', width: 2, points: [{ x: 1, y: 2 }] },
       { kind: 'shape', id: 'shape-box', shape: 'rect', from: { x: 0, y: 0 }, to: { x: 5, y: 5 }, color: '#1f2937', width: 4 },
+      { kind: 'shape', id: 'shape-line', shape: 'line', from: { x: 0, y: 0 }, to: { x: 5, y: 0 }, color: '#1f2937', width: 4 },
     ]));
   });
 
@@ -174,6 +176,22 @@ describe('canvas eraser', () => {
     expect(roundedItems).toEqual([
       { kind: 'brush', id: 'shape-box', color: '#111111', width: 2, dash: 'dashed', points: [{ x: 0, y: 0 }, { x: 45, y: 0 }] },
       { kind: 'brush', id: 'shape-box@55,0', color: '#111111', width: 2, dash: 'dashed', points: [{ x: 55, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }, { x: 0, y: 50 }, { x: 0, y: 0 }] },
+    ]);
+  });
+
+  test('before, erase through a dashed line with round and arrow ends, after: the line is cut and its ends become solid strokes', () => {
+    const before = singleLayer([{ kind: 'shape', id: 'shape-line', shape: 'line', from: { x: 0, y: 0 }, to: { x: 100, y: 0 }, color: '#111111', width: 2, dash: 'dashed', startHead: 'round', endHead: 'arrow' }]);
+
+    const after = eraseCanvasDrawing(before, 'layer-1', [{ x: 50, y: -10 }, { x: 50, y: 10 }], 8);
+
+    const roundedItems = after.layers[0]!.items.map((item) => (item.kind === 'brush'
+      ? { ...item, points: item.points.map((point) => ({ x: Math.round(point.x), y: Math.round(point.y) })) }
+      : item));
+    expect(roundedItems).toEqual([
+      { kind: 'brush', id: 'shape-line', color: '#111111', width: 2, dash: 'dashed', points: [{ x: 0, y: 0 }, { x: 45, y: 0 }] },
+      { kind: 'brush', id: 'shape-line@55,0', color: '#111111', width: 2, dash: 'dashed', points: [{ x: 55, y: 0 }, { x: 100, y: 0 }] },
+      { kind: 'brush', id: 'shape-line-head-1', color: '#111111', width: 8, points: [{ x: 0, y: 0 }] },
+      { kind: 'brush', id: 'shape-line-head-2', color: '#111111', width: 2, points: [{ x: 91, y: 4 }, { x: 100, y: 0 }, { x: 91, y: -4 }] },
     ]);
   });
 

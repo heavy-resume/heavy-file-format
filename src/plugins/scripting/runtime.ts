@@ -167,7 +167,6 @@ export interface ScriptingExportApi {
   hide(idOrTag: string): void;
   include(idOrTag: string): void;
   expand(idOrTag: string): void;
-  keep_together(idOrTag: string): void;
   style(idOrTag: string, style: Record<string, unknown>): void;
   strategy(rule: HvyPdfExportStrategyRule | HvyPdfExportStrategyRule[]): void;
 }
@@ -235,7 +234,6 @@ function createUnavailableExportApi(): ScriptingExportApi {
     hide: fail,
     include: fail,
     expand: fail,
-    keep_together: fail,
     style: fail,
     strategy: fail,
   };
@@ -246,7 +244,6 @@ function createExportApi(recorder: HvyPdfExportRuleRecorder): ScriptingExportApi
     hide: (idOrTag) => recorder.hide(String(idOrTag)),
     include: (idOrTag) => recorder.include(String(idOrTag)),
     expand: (idOrTag) => recorder.expand(String(idOrTag)),
-    keep_together: (idOrTag) => recorder.keep_together(String(idOrTag)),
     style: (idOrTag, style) => recorder.style(String(idOrTag), normalizeScriptObject(style)),
     strategy: (rule) => recorder.strategy(normalizeExportRuleInput(rule)),
   };

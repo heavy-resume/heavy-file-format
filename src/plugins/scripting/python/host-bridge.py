@@ -329,9 +329,6 @@ class __HvyExportProxy__:
     def expand(self, id_or_tag):
         self.__js_export.expand(__hvy_text_arg__("doc.export.expand id_or_tag", id_or_tag))
 
-    def keep_together(self, id_or_tag):
-        self.__js_export.keep_together(__hvy_text_arg__("doc.export.keep_together id_or_tag", id_or_tag))
-
     def style(self, id_or_tag, style):
         self.__js_export.style(
             __hvy_text_arg__("doc.export.style id_or_tag", id_or_tag),

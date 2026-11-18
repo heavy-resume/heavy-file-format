@@ -1,6 +1,6 @@
 import type { JsonObject } from '../../hvy/types';
 import { settingsIcon } from '../../icons';
-import type { CanvasDash } from './canvas-drawing-format';
+import type { CanvasDash, CanvasLineEnd } from './canvas-drawing-format';
 import {
   canvasArrowIcon,
   canvasBrushIcon,
@@ -19,9 +19,10 @@ import type { CanvasSelectableItem } from './canvas-selection';
 
 export type CanvasTool = 'select' | 'hand' | 'brush' | 'eraser' | 'fill' | 'rect' | 'ellipse' | 'arrow' | 'text';
 
+// null is a plain line end.
 export interface CanvasLineStyle {
-  startHead: boolean;
-  endHead: boolean;
+  startHead: CanvasLineEnd | null;
+  endHead: CanvasLineEnd | null;
   dash: CanvasDash;
 }
 
@@ -30,8 +31,9 @@ export interface CanvasSelectionStylePatch {
   width?: number;
   size?: number;
   dash?: CanvasDash;
-  startHead?: boolean;
-  endHead?: boolean;
+  // null removes the end marker.
+  startHead?: CanvasLineEnd | null;
+  endHead?: CanvasLineEnd | null;
 }
 
 export interface CanvasToolbarModel {
@@ -62,6 +64,8 @@ const BRUSH_SIZES = [2, 4, 8, 16, 32];
 // Tools whose strokes use the Size control.
 const SIZED_TOOLS: CanvasTool[] = ['brush', 'eraser', 'rect', 'ellipse', 'arrow'];
 const DASH_ORDER: CanvasDash[] = ['solid', 'dashed', 'dotted'];
+const LINE_END_ORDER: Array<CanvasLineEnd | null> = [null, 'arrow', 'round'];
+const LINE_END_LABELS: Record<CanvasLineEnd | 'none', string> = { none: 'none', arrow: 'arrow', round: 'round' };
 
 // Controls the host updates in place, without rebuilding the toolbar.
 export interface CanvasToolbarHandles {
@@ -86,8 +90,8 @@ export function renderCanvasToolbar(toolbar: HTMLElement, model: CanvasToolbarMo
   const color = selection[0]?.color ?? model.color;
   const lineStyle: CanvasLineStyle = firstStroked
     ? {
-      startHead: firstLine?.kind === 'shape' && firstLine.startHead === true,
-      endHead: firstLine?.kind === 'shape' && firstLine.endHead === true,
+      startHead: firstLine?.kind === 'shape' ? firstLine.startHead ?? null : null,
+      endHead: firstLine?.kind === 'shape' ? firstLine.endHead ?? null : null,
       dash: firstStroked.dash ?? 'solid',
     }
     : model.lineStyle;
@@ -190,8 +194,9 @@ function makeChoicePicker(
   return wrapControl(caption, choices);
 }
 
-// Three independently clickable segments: start head, line body (cycles the
-// dash style), end head. Outline shapes only show the body.
+// Three independently clickable segments, each cycling its own setting: start
+// end (none, arrow, round), line body (dash style), end end. Outline shapes
+// only show the body.
 function makeLineStylePicker(
   style: CanvasLineStyle,
   withHeads: boolean,
@@ -207,13 +212,17 @@ function makeLineStylePicker(
     return button;
   };
   const nextDash = DASH_ORDER[(DASH_ORDER.indexOf(style.dash) + 1) % DASH_ORDER.length]!;
-  if (withHeads) {
-    segments.append(segment('Start arrowhead', canvasLineHeadIcon('start', style.startHead), style.startHead, () => commit({ startHead: !style.startHead }), 'start'));
-  }
+  const nextEnd = (end: CanvasLineEnd | null) => LINE_END_ORDER[(LINE_END_ORDER.indexOf(end) + 1) % LINE_END_ORDER.length]!;
+  const endSegment = (side: 'start' | 'end', end: CanvasLineEnd | null, run: () => void) => segment(
+    `${side === 'start' ? 'Start' : 'End'} of line: ${LINE_END_LABELS[end ?? 'none']}`,
+    canvasLineHeadIcon(side, end),
+    end !== null,
+    run,
+    side,
+  );
+  if (withHeads) segments.append(endSegment('start', style.startHead, () => commit({ startHead: nextEnd(style.startHead) })));
   segments.append(segment(`Line style: ${style.dash}`, canvasLineBodyIcon(style.dash), style.dash !== 'solid', () => commit({ dash: nextDash }), 'body'));
-  if (withHeads) {
-    segments.append(segment('End arrowhead', canvasLineHeadIcon('end', style.endHead), style.endHead, () => commit({ endHead: !style.endHead }), 'end'));
-  }
+  if (withHeads) segments.append(endSegment('end', style.endHead, () => commit({ endHead: nextEnd(style.endHead) })));
   return wrapControl('Line', segments);
 }
 

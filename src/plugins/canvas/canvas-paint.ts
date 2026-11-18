@@ -1,6 +1,6 @@
 import type { CanvasBrushItem, CanvasDash, CanvasDrawing, CanvasFillItem, CanvasItem, CanvasLayerFilter, CanvasPoint, CanvasShapeItem, CanvasTextItem } from './canvas-drawing-format';
 import { boxHandles, itemBounds, type CanvasBounds } from './canvas-selection';
-import { arrowheadPaths, CANVAS_TEXT_LINE_HEIGHT, linePath, shapeBounds, shapeHandles } from './canvas-shapes';
+import { CANVAS_TEXT_LINE_HEIGHT, lineEndStrokes, linePath, shapeBounds, shapeHandles } from './canvas-shapes';
 import { runsToLines, textItemRuns } from './canvas-text-runs';
 
 // Painting shared by the live surface and static image export. Callers set
@@ -163,9 +163,8 @@ function drawShape(context: CanvasRenderingContext2D, shape: CanvasShapeItem): v
     else context.lineTo(shape.to.x, shape.to.y);
   }
   context.stroke();
-  context.setLineDash([]);
-  for (const head of arrowheadPaths(shape)) strokePolyline(context, head);
   context.restore();
+  for (const end of lineEndStrokes(shape)) drawBrush(context, { kind: 'brush', ...end, color: shape.color });
 }
 
 // Lines are laid out from their sized runs and centered on `at`; each line is

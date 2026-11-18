@@ -10,6 +10,7 @@ import { isExternalCssAllowed } from '../reference-config';
 import { normalizePdfPageMargins, normalizePdfPageSize } from '../pdf-page-settings';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { getHeadingStylesFromMeta } from '../heading-styles';
+import { isPdfDocument } from '../pdf-document-rules';
 import { getTextCaptionMarkdown, normalizeTextCaption } from '../caption';
 import type {
   HvyPdfExportDecision,
@@ -88,6 +89,7 @@ export function buildPdfExportDocDefinition(
       ? [{ columns: [{ width: '*', stack: mainContent }, { width: PDF_SIDEBAR_WIDTH, stack: sidebarContent }], columnGap: PDF_SIDEBAR_COLUMN_GAP }]
       : mainContent.concat(sidebarContent);
   const background = resolved.defaults.debugPageBounds ? renderPdfDebugPageBounds(resolved.defaults.pageMargins) : undefined;
+  const startOnNewPageSectionIds = collectStartOnNewPageSectionIds(document);
 
   const strikethroughColor = getDocumentRecolorStrikethrough(document.meta)
     ? getCssColorDeclarationValue(document, 'color: var(--hvy-strikethrough-color)', 'color')
@@ -134,13 +136,36 @@ export function buildPdfExportDocDefinition(
       if (currentNode.pageBreak === 'before') {
         return true;
       }
+      if (typeof currentNode.id === 'string' && startOnNewPageSectionIds.has(currentNode.id)) {
+        return nodeContainer.getPreviousNodesOnPage().some(isPdfLayoutContentLeaf);
+      }
       return Boolean(
-        (currentNode.headlineLevel || currentNode.hvyKeepWithNext) &&
+        currentNode.headlineLevel &&
           nodeContainer.getFollowingNodesOnPage().length === 0 &&
           nodeContainer.getNodesOnNextPage().length > 0
       );
     },
   };
+}
+
+function collectStartOnNewPageSectionIds(document: VisualDocument): Set<string> {
+  if (!isPdfDocument(document)) {
+    return new Set();
+  }
+  return new Set(
+    document.sections
+      .filter((section) => section.startOnNewPage === true)
+      .map((section) => section.key)
+  );
+}
+
+// pdfmake lists layout nodes in pre-order, so earlier nodes on a page are either
+// ancestors (stacks/columns without their own content) or rendered content above.
+function isPdfLayoutContentLeaf(node: HvyPdfMakeNode): boolean {
+  if (typeof node === 'string') {
+    return node.length > 0;
+  }
+  return node.text !== undefined || node.image !== undefined || node.canvas !== undefined || node.svg !== undefined || node.qr !== undefined;
 }
 
 function renderSections(
@@ -183,9 +208,8 @@ function renderSection(
     return null;
   }
   return applyPdfBoxStyle(document, css, applyDecisionToNode(decision, {
-    id: section.customId || section.key,
+    id: section.key,
     stack,
-    hvyRole: decision.role ?? (childSidebar ? 'sidebar' : 'body'),
     margin: getPdfCssMargin(css, childSidebar ? [0, 0, 0, 8] : [0, 0, 0, 6]),
   }), layout);
 }
@@ -267,7 +291,7 @@ function renderBlock(
   const rendered = applyPdfBoxStyle(
     document,
     block.schema.css,
-    applyDecisionToNode(decision, applyBlockCssMargin({ id: block.schema.id || block.id, ...node }, block.schema.css)),
+    applyDecisionToNode(decision, applyBlockCssMargin({ id: block.id, ...node }, block.schema.css)),
     layout,
     { requireBoxSignal: baseComponent === 'text' }
   );
@@ -339,9 +363,6 @@ function applyPdfBoxStyle(
     margin,
     pageBreak,
     headlineLevel,
-    hvyKeepWithNext,
-    hvyKeepTogether,
-    hvyRole,
     ...inner
   } = node;
   const cell: HvyPdfMakeNodeObject = {
@@ -356,9 +377,6 @@ function applyPdfBoxStyle(
     ...(margin !== undefined ? { margin } : {}),
     ...(pageBreak ? { pageBreak } : {}),
     ...(typeof headlineLevel === 'number' ? { headlineLevel } : {}),
-    ...(hvyKeepWithNext ? { hvyKeepWithNext } : {}),
-    ...(hvyKeepTogether ? { hvyKeepTogether } : {}),
-    ...(typeof hvyRole === 'string' ? { hvyRole } : {}),
     table: {
       widths: [tableWidth],
       body: [[cell]],
@@ -395,7 +413,7 @@ function renderContainerBlock(
     : layout;
   const stack: HvyPdfMakeNode[] = [];
   if (block.schema.containerTitle.trim()) {
-    stack.push({ text: block.schema.containerTitle, bold: true, margin: [0, 0, 0, 3], hvyKeepWithNext: true });
+    stack.push({ text: block.schema.containerTitle, bold: true, margin: [0, 0, 0, 3] });
   }
   stack.push(...renderBlocks(document, resolved, block.schema.containerBlocks, childLayout));
   return { stack, style: 'container' };
@@ -885,9 +903,6 @@ function renderImageBlock(
 function createCaptionPdfDecision(): HvyPdfExportDecision {
   return {
     visibility: 'include',
-    keepTogether: false,
-    keepWithNext: false,
-    allowSplit: true,
     role: 'body',
     pageBreakBefore: false,
     pageBreakAfter: false,
@@ -968,9 +983,6 @@ function applyDecisionToNode(decision: HvyPdfExportDecision, node: HvyPdfMakeNod
     ...decision.pdfStyle,
     style: style.length ? style : undefined,
     pageBreak: decision.pageBreakBefore ? 'before' : decision.pageBreakAfter ? 'after' : node.pageBreak,
-    hvyKeepTogether: decision.keepTogether || (!decision.allowSplit && node.hvyKeepTogether !== false) || node.hvyKeepTogether,
-    hvyKeepWithNext: decision.keepWithNext || node.hvyKeepWithNext,
-    hvyRole: decision.role ?? node.hvyRole,
   };
 }
 
@@ -1080,14 +1092,11 @@ function applyPdfDebugBlockBounds(
   if (!resolved.defaults.debugPageBounds) {
     return node;
   }
-  const { margin, pageBreak, headlineLevel, hvyKeepWithNext, hvyKeepTogether, hvyRole, id, ...inner } = node;
+  const { margin, pageBreak, headlineLevel, id, ...inner } = node;
   return {
     ...(typeof id === 'string' ? { id } : {}),
     ...(pageBreak ? { pageBreak } : {}),
     ...(typeof headlineLevel === 'number' ? { headlineLevel } : {}),
-    ...(hvyKeepWithNext ? { hvyKeepWithNext } : {}),
-    ...(hvyKeepTogether ? { hvyKeepTogether } : {}),
-    ...(typeof hvyRole === 'string' ? { hvyRole } : {}),
     ...(margin !== undefined ? { margin } : {}),
     stack: [renderPdfDebugBlockMarker(layout.availableWidth), inner],
   };

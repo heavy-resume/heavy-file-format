@@ -220,7 +220,7 @@ Presentation keys in document metadata include:
 AI-facing document metadata includes:
 - `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
 - `ai-import-guidance`: optional string with import-specific guidance for mapping source facts to existing body sections, section templates, component template records, and cross references. Importers MAY include this guidance in planning and execution prompts; readers that do not use AI SHOULD preserve and ignore it.
-- `importPreplan`: optional ordered list for AI import batching. Each entry is either a section target id string or a list of section target id strings. When present, importers SHOULD use it as the authoritative initial section import order instead of asking AI to discover the initial section list. A target id resolves first to an existing body section `id`, then to `section_defs[*].key`, then to `section_defs[*].template.id`. Sections marked `exclude_from_import` MUST NOT resolve as import targets. Importers MAY group targets from one list into a single source-information extraction call and SHOULD preserve and ignore invalid targets they cannot resolve. Readers that do not use AI SHOULD preserve and ignore it.
+- `importPreplan`: optional ordered list for AI import batching. Each entry is either a section target id string or a list of section target id strings. When present, importers SHOULD use it as the authoritative initial section import order instead of asking AI to discover the initial section list. A target id resolves first to an existing body section `id`, then to `section_defs[*].key`, then to `section_defs[*].template.id`. Sections marked `excludeFromImport` MUST NOT resolve as import targets. Importers MAY group targets from one list into a single source-information extraction call and SHOULD preserve and ignore invalid targets they cannot resolve. Readers that do not use AI SHOULD preserve and ignore it.
 
 Responsive rendering SHOULD be based on the rendered document container's inline size, not only the browser viewport. Renderers that support responsive behavior SHOULD establish a named CSS query container around the document surface, for example:
 
@@ -358,12 +358,13 @@ Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
 - `priority`
+- `startOnNewPage`
 - `lock`
 - `editorOnly`
 - `contained`
 - `hideIfUnmodified`
-- `exclude_from_import`
-- `protect_from_import`
+- `excludeFromImport`
+- `protectFromImport`
 - `css`
 - `location`
 - `templateKey`
@@ -375,8 +376,9 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default, unless overridden by `document.meta.section_defaults.contained` for newly created manual sections), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
-`exclude_from_import` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
-`protect_from_import` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `exclude_from_import` and `protect_from_import` are present, `exclude_from_import` controls target discovery.
+`excludeFromImport` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
+`protectFromImport` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `excludeFromImport` and `protectFromImport` are present, `excludeFromImport` controls target discovery.
+Readers MUST also accept the legacy spellings `exclude_from_import` and `protect_from_import` as equivalent to `excludeFromImport` and `protectFromImport` on sections and section templates. Writers MUST write only the camelCase names.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 `templateKey` is optional authoring metadata identifying the section template definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable section template definitions have already been used.
 
@@ -1301,6 +1303,8 @@ pdf_page:
 - `debug` is optional and defaults to `false`. Authoring clients MAY use it to show page and printable-area bounds in PHVY preview surfaces. Exporters SHOULD render diagnostic page and printable-area bounds into generated PDFs when `debug` is `true`; authors SHOULD disable it for final PDFs.
 - Explicit PDF export strategy defaults override `pdf_page` for that export operation.
 
+`.phvy` sections MAY set `startOnNewPage: true` in section metadata. PDF export renderers MUST begin such a section at the top of a new page when other rendered content precedes it on the current page. A section that already begins at the top of a page MUST NOT produce an empty page. Readers and non-PDF documents ignore `startOnNewPage`.
+
 With optional schema:
 
 ```yaml
@@ -1589,7 +1593,7 @@ that requires a later version. Documents without `versionRange` may use it.
 Sections can request plugin behavior with metadata:
 
 ```markdown
-<!--hvy: {"plugin":"com.example.timeline","plugin_config":{"start":"2026-01-01"}}-->
+<!--hvy: {"plugin":"com.example.timeline","pluginConfig":{"start":"2026-01-01"}}-->
 #! Launch Timeline
 ```
 
@@ -2378,7 +2382,7 @@ An example drawing attachment payload with a box, a curved arrow, and a label:
       "locked": false,
       "items": [
         { "kind": "shape", "id": "shape-a", "shape": "rect", "from": { "x": 80, "y": 140 }, "to": { "x": 280, "y": 260 }, "color": "#1f2937", "width": 4 },
-        { "kind": "shape", "id": "shape-b", "shape": "line", "from": { "x": 280, "y": 200 }, "to": { "x": 520, "y": 200 }, "control": { "x": 400, "y": 40 }, "color": "#1f2937", "width": 4, "endHead": true },
+        { "kind": "shape", "id": "shape-b", "shape": "line", "from": { "x": 280, "y": 200 }, "to": { "x": 520, "y": 200 }, "control": { "x": 400, "y": 40 }, "color": "#1f2937", "width": 4, "endHead": "arrow" },
         { "kind": "text", "id": "text-a", "text": "Placeholder", "at": { "x": 180, "y": 200 }, "size": 24, "color": "#1f2937", "font": "sans-serif" }
       ]
     }
@@ -2442,9 +2446,11 @@ Normative configuration and data:
     `from` and `to` points, `color`, positive `width`, and optional `dash`.
     `rect` and `ellipse` are outlined within the box spanned by `from` and
     `to`. A `line` runs from `from` to `to`; an optional `control` point makes
-    it a quadratic curve. A `line` MAY set `startHead` and/or `endHead` to
-    `true` to draw an open chevron arrowhead at that end, oriented along the
-    line's direction at that end and drawn solid regardless of `dash`.
+    it a quadratic curve. A `line` MAY set `startHead` and/or `endHead` to mark
+    that end: `arrow` draws an open chevron arrowhead oriented along the
+    line's direction at that end; `round` draws a filled dot centered on the
+    end point. End markers are drawn solid regardless of `dash`; an absent
+    value is a plain end.
   - `text`: a unique string `id`, non-empty `text` (lines separated by
     `\n`), `at` (the center of the text block), positive font `size` in
     logical units, `color`, and `font` (a CSS font family). An optional

@@ -2607,10 +2607,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   type="checkbox"
                   data-section-key="${deps.escapeAttr(section.key)}"
                   data-field="section-exclude-from-import"
-                  ${section.exclude_from_import ? 'checked' : ''}
+                  ${section.excludeFromImport ? 'checked' : ''}
                 />
                 Exclude From Import
               </label>
+              ${isPdfReaderDocument() ? `<label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-start-on-new-page"
+                  ${section.startOnNewPage ? 'checked' : ''}
+                />
+                Start on new page
+              </label>` : ''}
             </div>
           </div>
         </section>

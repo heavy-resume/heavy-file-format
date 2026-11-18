@@ -21,8 +21,10 @@
 .hvy-document .modal-panel {
   position: relative;
   z-index: var(--hvy-modal-panel-z, 2);
-  width: min(920px, calc(100% - 2rem));
-  max-height: min(88vh, calc(100% - 2rem));
+  /* Modals size themselves by setting these variables on their own class,
+     rather than by out-specifying this rule. */
+  width: min(var(--hvy-modal-panel-width, 920px), calc(100% - 2rem));
+  max-height: min(var(--hvy-modal-panel-max-height, 88vh), calc(100% - 2rem));
   overflow: auto;
   margin: 0;
   border-radius: 12px;

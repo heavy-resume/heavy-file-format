@@ -6,11 +6,11 @@ import { getMatchingImagePresetCss, mergeImagePresetCss } from '../../editor/com
 import type { VisualBlock } from '../../editor/types';
 import { escapeHtml } from '../../utils';
 import { createBuiltInPluginMetadata, QR_CODE_PLUGIN_ID } from '../registry';
+import { writePluginStaticImageBlock } from '../plugin-static-image-block';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance, HvyPluginPdfStaticRenderContext } from '../types';
 import qrCodeDocumentation from './about-qr-code.txt?raw';
 import {
   createQrCodePluginConfig,
-  createQrCodeStaticImageFilename,
   createQrCodeStylingOptions,
   DEFAULT_QR_CODE_CONFIG,
   QR_CODE_IMAGE_PRESET_OVERRIDES,
@@ -19,6 +19,7 @@ import {
   QR_CODE_DOT_TYPES,
   QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
+  QR_CODE_STATIC_IMAGE_PREFIX,
   QR_CODE_STATIC_PDF_MARGIN,
   readQrCodeConfig,
   type QrCodeConfig,
@@ -292,48 +293,14 @@ export async function renderQrCodeStaticBlock(ctx: HvyPluginPdfStaticRenderConte
   if (!text) {
     throw new Error('QR code plugin cannot be exported without QR text.');
   }
-  const imageBytes = await renderQrCodePngBytes(text, config, QR_CODE_STATIC_PDF_MARGIN);
-  const sourceId = ctx.block.schema.id || ctx.block.id || 'qr-code';
-  const imageFile = createQrCodeStaticImageFilename(sourceId);
-  ctx.attachments.set(`image:${imageFile}`, { mediaType: 'image/png' }, imageBytes);
-
-  const block: VisualBlock = {
-    id: `${ctx.block.id}-static`,
-    text: '',
-    schema: createStaticImageSchema(`${sourceId}-static`, imageFile, config.caption, ctx.block.schema.css),
-    schemaMode: false,
-  };
-  return block;
-}
-
-function createStaticImageSchema(id: string, imageFile: string, caption: QrCodeConfig['caption'], css: string): VisualBlock['schema'] {
-  return {
-    kind: 'image',
-    id,
-    component: 'image',
-    editorOnly: false,
-    lock: false,
-    align: 'left',
-    slot: 'center',
-    css,
-    sortKeys: {},
-    groupKeys: {},
-    tags: '',
-    description: '',
-    hideIfYes: '',
-    visibleScript: '',
-    placeholder: '',
-    fillIn: false,
-    showCopy: false,
-    metaOpen: false,
-    xrefTitle: '',
-    xrefDetail: '',
-    imageFile,
+  return writePluginStaticImageBlock(ctx, {
+    filenamePrefix: QR_CODE_STATIC_IMAGE_PREFIX,
+    bytes: await renderQrCodePngBytes(text, config, QR_CODE_STATIC_PDF_MARGIN),
+    mediaType: 'image/png',
     imageAlt: 'Generated QR code',
-    caption,
-  } as unknown as VisualBlock['schema'];
+    caption: config.caption,
+  });
 }
-
 
 export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig, margin = 24): Promise<Uint8Array> {
   return renderQrCodeImageBytes(text, config, 'svg', margin);

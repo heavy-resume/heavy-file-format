@@ -64,6 +64,7 @@ import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from '
 import { recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
 import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
+import { destroyPluginHistory } from './plugin-history-controller';
 import type { HvyHistoryArtifactStore } from './history-artifact-store';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
@@ -1543,6 +1544,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       });
       void destroyDatabaseHistory(runtime);
       void destroyAttachmentHistory(runtime);
+      destroyPluginHistory(runtime);
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);

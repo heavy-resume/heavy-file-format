@@ -44,6 +44,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
       ...state.pendingEditorActivation,
       ...(typeof anchor?.top === 'number' ? { anchorTop: anchor.top } : {}),
       passiveHeight: passiveBlock?.getBoundingClientRect().height,
+      contentTop: passiveBlock?.querySelector<HTMLElement>('.editor-block-content')?.getBoundingClientRect().top,
       clientX: event.clientX,
       clientY: event.clientY,
       preferTextFocus: true,

@@ -842,6 +842,9 @@ function requireWriter(config: DbTableConfig): HvyDatabaseTableWriter {
   return writer;
 }
 
+// db-table reaches into the internal database history controller directly. It
+// could instead move onto the public plugin history API (ctx.history.record with
+// a plugin history capability) once that API covers database checkpoints.
 function runDbTableMutation<T>(
   ctx: HvyPluginContext,
   label: string,

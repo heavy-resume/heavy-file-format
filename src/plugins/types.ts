@@ -123,6 +123,7 @@ export interface HvyPluginContext {
   document: HvyPluginDocumentApi;
   attachments: HvyPluginAttachmentsApi;
   header: HvyPluginHeaderApi;
+  history: HvyPluginHistoryApi;
   // Ephemeral state for the open document, shared with scripts' `session`.
   session: ScriptingSession;
   // Raw document — exposed so plugins like db-table that already integrate
@@ -238,6 +239,36 @@ export interface HvyPluginPdfCapability {
   // render. Plugins may update attachments in the context before returning
   // image/carousel blocks that point at those static assets.
   renderStatic(ctx: HvyPluginPdfStaticRenderContext): Promise<HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined> | HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined;
+}
+
+export interface HvyPluginHistoryStep {
+  // Short description of the user action, e.g. "Draw stroke".
+  label: string;
+  // Plugin-owned data handed back to the plugin's history capability on undo
+  // and redo. Kept in memory only; it never enters the document text.
+  data: unknown;
+  // Performs the change. Runs once, after the app records the state before it.
+  apply(): void;
+}
+
+export interface HvyPluginHistoryApi {
+  // Records a user action as an app undo step owned by this plugin. Use it for
+  // direct user edits only; script-driven changes should write without it.
+  record(step: HvyPluginHistoryStep): void;
+}
+
+export interface HvyPluginHistoryRestoreContext {
+  sectionKey: string;
+  blockId: string;
+  data: unknown;
+  attachments: HvyPluginAttachmentsApi;
+}
+
+export interface HvyPluginHistoryCapability {
+  // Runs during app undo/redo, independent of any mounted plugin instance. The
+  // host rerenders afterwards, so mounted instances pick changes up on refresh.
+  undo(ctx: HvyPluginHistoryRestoreContext): void | Promise<void>;
+  redo(ctx: HvyPluginHistoryRestoreContext): void | Promise<void>;
 }
 
 export interface HvyPluginVisualDescriptionContext {
@@ -358,6 +389,8 @@ export interface HvyPlugin {
   // invokes this at export time and replaces the plugin block with the returned
   // PDF-compatible HVY blocks in the export clone.
   pdf?: HvyPluginPdfCapability;
+  // Optional undo/redo handlers for steps recorded through ctx.history.record.
+  history?: HvyPluginHistoryCapability;
   // Optional searchable description of what the plugin renders for this block.
   // Agent-facing consumers label it as rendered output so it is not confused
   // with literal serialized HVY text.

@@ -603,6 +603,33 @@ test('rich editor uses normal spaces while typing prose', async ({ page }) => {
   await expect(editor.locator('p')).toHaveJSProperty('innerHTML', 'Hello world');
 });
 
+test('rich editor uses normal spaces while typing prose after toggling bold off', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.press('Control+B');
+  await page.keyboard.type('Term');
+  await page.keyboard.press('Control+B');
+  await page.keyboard.type(' - a definition that wraps');
+
+  await expect(editor.locator('strong')).toHaveText('Term');
+  await expect.poll(() => editor.locator('p').evaluate((node) => (node.textContent ?? '').replace(/​/g, ''))).toBe('Term - a definition that wraps');
+});
+
 test('rich editor wraps long text without expanding its block', async ({ page }) => {
   await page.setViewportSize({ width: 520, height: 720 });
   await page.goto('/');

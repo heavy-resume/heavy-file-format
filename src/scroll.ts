@@ -436,7 +436,16 @@ function focusPendingEditorActivation(
   const scrollContainer = block.closest<HTMLElement>(
     '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
   );
-  if (typeof pending.anchorTop === 'number') {
+  // A block without an editable target (a canvas or other plugin, an image)
+  // keeps its content where it was. The text anchor recorded at the click may
+  // sit anywhere inside that content, so it can't be compared with the block edge.
+  const activeContent = anchorTarget === block ? block.querySelector<HTMLElement>('.editor-block-content') : null;
+  if (activeContent && typeof pending.contentTop === 'number') {
+    const displacement = activeContent.getBoundingClientRect().top - pending.contentTop;
+    if (scrollContainer && Math.abs(displacement) > 0.5) {
+      scrollContainer.scrollTop += displacement;
+    }
+  } else if (typeof pending.anchorTop === 'number') {
     const editableTop = anchorTarget.isContentEditable
       ? getFirstRenderedTextTop(anchorTarget) ?? anchorTarget.getBoundingClientRect().top
       : anchorTarget.getBoundingClientRect().top;

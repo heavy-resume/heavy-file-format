@@ -604,6 +604,19 @@ editor does not pretend otherwise. `addColumn` returns the name it chose and
 `renameColumn` returns the name actually stored, so the editor can build those
 inverses.
 
+Plugins whose data lives in attachments can join app undo/redo without putting
+that data in the document text. A plugin records a user action with
+`ctx.history.record({ label, data, apply })` and supplies
+`history: { undo(ctx), redo(ctx) }` on its plugin object. The app records the
+state before the action, runs `apply`, and keeps `data` in memory only; app
+history snapshots name a plugin history version (`src/plugin-history-controller.ts`),
+the same way they name database and attachment versions. Undo/redo handlers run
+against the document's attachments, not a mounted plugin instance, because the
+instance that recorded the step may have been remounted since; mounted instances
+pick up the restored data on refresh. Record direct user actions only: the
+canvas plugin records whiteboard brush, erase, fill, and clear actions, while
+script calls through its `hvyCanvas` API save without undo steps.
+
 Editor and AI mounts resize large uploaded JPEG, PNG, and WebP image attachments
 to fit within 2048 x 2048 pixels by default. Hosts can override the bound, or
 disable resizing with `null`:

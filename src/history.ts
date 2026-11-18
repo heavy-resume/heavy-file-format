@@ -24,6 +24,11 @@ import {
   hasAttachmentHistoryVersionTransition,
   restoreAttachmentHistoryVersion,
 } from './attachment-history-controller';
+import {
+  getPluginHistoryVersion,
+  hasPluginHistoryVersionTransition,
+  restorePluginHistoryVersion,
+} from './plugin-history-controller';
 import { findSectionByKey } from './section-ops';
 import { navigateReusableDefinitionHistory, recordReusableDefinitionHistory } from './reusable-definition-history';
 import {
@@ -37,6 +42,7 @@ interface ParsedHistorySnapshot {
   document: VisualDocument;
   databaseHistoryVersion?: string | null;
   attachmentHistoryVersion?: string | null;
+  pluginHistoryVersion?: string | null;
   templateValues: Record<string, string>;
   filename: string;
   editorMode?: 'basic' | 'advanced' | 'raw' | 'cli';
@@ -128,6 +134,9 @@ export function snapshotState(): string {
         : {}),
       ...(getAttachmentHistoryVersion() !== null
         ? { attachmentHistoryVersion: getAttachmentHistoryVersion() }
+        : {}),
+      ...(getPluginHistoryVersion() !== null
+        ? { pluginHistoryVersion: getPluginHistoryVersion() }
         : {}),
       templateValues: state.templateValues,
       filename: state.filename,
@@ -467,8 +476,10 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
     await prepareHistoryViewportTransition(activeHistoryContext, root);
     const targetDatabaseVersion = getHistoryDatabaseVersion(target);
     const targetAttachmentVersion = getHistoryAttachmentVersion(target);
+    const targetPluginVersion = getHistoryPluginVersion(target);
     if (!hasDatabaseHistoryVersionTransition(targetDatabaseVersion)
-      && !hasAttachmentHistoryVersionTransition(targetAttachmentVersion)) {
+      && !hasAttachmentHistoryVersionTransition(targetAttachmentVersion)
+      && !hasPluginHistoryVersionTransition(targetPluginVersion)) {
       undoState();
       return;
     }
@@ -479,11 +490,13 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
       if (target) restoreFromParsedSnapshot(target);
       await restoreDatabaseHistoryVersion(targetDatabaseVersion);
       await restoreAttachmentHistoryVersion(targetAttachmentVersion);
+      await restorePluginHistoryVersion(targetPluginVersion);
     } catch (error) {
       const parsedCurrent = parseHistorySnapshot(current);
       if (parsedCurrent) restoreFromParsedSnapshot(parsedCurrent);
       await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(parsedCurrent)).catch(() => {});
       await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(parsedCurrent)).catch(() => {});
+      await restorePluginHistoryVersion(getHistoryPluginVersion(parsedCurrent)).catch(() => {});
       markPluginDocumentHooksCurrent();
       state.isRestoring = false;
       throw error;
@@ -514,8 +527,10 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
     const parsedNext = parseHistorySnapshot(next);
     const nextDatabaseVersion = getHistoryDatabaseVersion(parsedNext);
     const nextAttachmentVersion = getHistoryAttachmentVersion(parsedNext);
+    const nextPluginVersion = getHistoryPluginVersion(parsedNext);
     if (!hasDatabaseHistoryVersionTransition(nextDatabaseVersion)
-      && !hasAttachmentHistoryVersionTransition(nextAttachmentVersion)) {
+      && !hasAttachmentHistoryVersionTransition(nextAttachmentVersion)
+      && !hasPluginHistoryVersionTransition(nextPluginVersion)) {
       redoState();
       return;
     }
@@ -527,11 +542,13 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
       if (parsedNext) restoreFromParsedSnapshot(parsedNext);
       await restoreDatabaseHistoryVersion(nextDatabaseVersion);
       await restoreAttachmentHistoryVersion(nextAttachmentVersion);
+      await restorePluginHistoryVersion(nextPluginVersion);
     } catch (error) {
       const parsedCurrent = parseHistorySnapshot(current);
       if (parsedCurrent) restoreFromParsedSnapshot(parsedCurrent);
       await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(parsedCurrent)).catch(() => {});
       await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(parsedCurrent)).catch(() => {});
+      await restorePluginHistoryVersion(getHistoryPluginVersion(parsedCurrent)).catch(() => {});
       markPluginDocumentHooksCurrent();
       state.isRestoring = false;
       throw error;
@@ -1114,6 +1131,10 @@ function getHistoryDatabaseVersion(parsed: ParsedHistorySnapshot | null): string
 
 function getHistoryAttachmentVersion(parsed: ParsedHistorySnapshot | null): string | null {
   return parsed?.attachmentHistoryVersion ?? null;
+}
+
+function getHistoryPluginVersion(parsed: ParsedHistorySnapshot | null): string | null {
+  return parsed?.pluginHistoryVersion ?? null;
 }
 
 function documentToHistorySnapshot(document: VisualDocument): VisualDocument {

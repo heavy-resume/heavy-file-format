@@ -1863,10 +1863,11 @@ Tail directive fields:
 
 Rules:
 - Tail payloads are NOT part of Markdown parsing.
-- Tail payloads are valid for `.hvy` and `.thvy`. A `.thvy` template may carry
-  the same database, image, plugin, and other attachment data as an `.hvy`
-  document; the template extension is an authoring convention, not a reduced
-  storage format.
+- Tail payloads are valid for `.hvy`, `.thvy`, and `.phvy`. A `.thvy` template
+  may carry the same database, image, plugin, and other attachment data as an
+  `.hvy` document; the template extension is an authoring convention, not a
+  reduced storage format. A `.phvy` document uses the same tail for image and
+  plugin attachments that its PDF-compatible components reference.
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
 - User-file attachment names MUST be unique according to §3.1. Replacing a
   user file SHOULD preserve its `id` and `name` while updating its `filename`,
@@ -2360,36 +2361,129 @@ plugins:
   - id: hvy.canvas
 ---
 
-<!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4}}-->
+<!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4,"drawing":"canvas-sketch"}}-->
 Sketching surface. Vector artwork is stored in the HVY tail attachment.
+```
+
+An example drawing attachment payload with a box, a curved arrow, and a label:
+
+```json
+{
+  "version": 2,
+  "layers": [
+    {
+      "id": "layer-1",
+      "name": "Layer 1",
+      "visible": true,
+      "locked": false,
+      "items": [
+        { "kind": "shape", "id": "shape-a", "shape": "rect", "from": { "x": 80, "y": 140 }, "to": { "x": 280, "y": 260 }, "color": "#1f2937", "width": 4 },
+        { "kind": "shape", "id": "shape-b", "shape": "line", "from": { "x": 280, "y": 200 }, "to": { "x": 520, "y": 200 }, "control": { "x": 400, "y": 40 }, "color": "#1f2937", "width": 4, "endHead": true },
+        { "kind": "text", "id": "text-a", "text": "Placeholder", "at": { "x": 180, "y": 200 }, "size": 24, "color": "#1f2937", "font": "sans-serif" }
+      ]
+    }
+  ]
+}
 ```
 
 Normative configuration and data:
 
 - `pluginConfig.width` and `pluginConfig.height` are optional positive integer
-  logical dimensions. Clients SHOULD default to `800` by `450`.
+  logical dimensions of the drawing area. Clients SHOULD default to `800` by
+  `450`. One logical unit is one CSS pixel when the drawing is shown at 100%,
+  so stroke widths and font sizes read like document pixels at that scale.
+  Clients MAY show the drawing scaled (for example fitted to the document
+  width) or let authors zoom and pan it.
+- `pluginConfig.gridSize` is an optional non-negative number: the spacing, in
+  logical units, of a grid authoring clients MAY draw behind the drawing while
+  editing. `0` means no grid. It is not part of the drawing or its export.
 - `pluginConfig.viewerDrawing` is an optional boolean that defaults to `false`.
   When false, viewer surfaces MUST NOT modify the authored drawing through
-  pointer interaction. Editor surfaces MAY always pre-draw.
+  pointer interaction. Editor surfaces MAY always pre-draw. In `.phvy`
+  documents, clients MUST treat `viewerDrawing` as `false` regardless of the
+  stored value, and authoring clients SHOULD show the setting as fixed.
 - `pluginConfig.strokeColor` is an optional CSS color. When absent, clients
   SHOULD derive the brush color from the shared document text theme role.
 - `pluginConfig.strokeWidth` is an optional positive number in logical canvas
   units and SHOULD default to `4`.
+- `pluginConfig.drawing` is a string naming the canvas's drawing, unique among
+  the canvases in the document. Drawing data MUST be stored in the tail
+  attachment named `canvas:<drawing>` with media type
+  `application/vnd.hvy.canvas+json`; it does not depend on the component's
+  `id`, so renaming the component keeps its drawing. Authoring clients SHOULD
+  generate a name when inserting a canvas. A canvas without `drawing` has an
+  empty drawing; a client storing drawing data for it MUST first assign a
+  unique name in `pluginConfig.drawing`.
 - The plugin text body SHOULD contain only a concise human/AI-facing
-  description. Drawing data MUST be stored in the tail attachment named
-  `canvas:<block-id>` with media type `application/vnd.hvy.canvas+json`.
+  description.
 - The attachment payload MUST be interpreted as a JSON object with `version:
-  1` and a `strokes` array. Each stroke contains a `color` string, positive `width`
-  number, and one or more `{x, y}` logical coordinate points. An optional
-  `mode` is `erase` for a vector erase path or `fill` for a full-canvas color
-  layer; absent mode means a brush path. Clients MUST preserve valid drawing
-  data across responsive resizing and MUST replay operations in array order.
+  2` and a `layers` array, ordered bottom to top. Each layer has a unique
+  string `id`, a `name`, a `visible` boolean, a `locked` boolean, and an
+  `items` array replayed in order. Clients MUST NOT render items of layers
+  whose `visible` is `false`, including in exported images, and MUST NOT
+  modify a locked layer through pointer interaction. A payload with no valid
+  layers is equivalent to one empty, visible, unlocked layer.
+- A layer MAY have a `filter` object applied to the layer's rendered pixels
+  (after its items are drawn, before it is composited): if `invert` is `true`,
+  color channels are inverted; then, if `multiply` (`{r, g, b, a}` with `r`,
+  `g`, `b` from 0 to 255 and `a` from 0 to 1) is present, each color channel
+  is multiplied by its value / 255 and the layer's alpha by `a`. Filters apply
+  in exported images too.
+- Each item has a `kind`:
+  - `brush`: an optional `id` string, `points` (one or more `{x, y}` logical
+    coordinates), `color`, positive `width`, and optional `dash`. Drawn as a
+    path with round caps and joins; a single point is a dot.
+  - `fill`: `color` and optional `cutouts`, an array of `{width, points}`
+    objects with a positive `width` and one or more `{x, y}` points. A fill
+    covers the whole canvas; each cutout removes that fill's paint within
+    `width / 2` of its polyline, with round caps and joins, and does not
+    affect any other item.
+  - `shape`: a unique string `id`, `shape` (`rect`, `ellipse`, or `line`),
+    `from` and `to` points, `color`, positive `width`, and optional `dash`.
+    `rect` and `ellipse` are outlined within the box spanned by `from` and
+    `to`. A `line` runs from `from` to `to`; an optional `control` point makes
+    it a quadratic curve. A `line` MAY set `startHead` and/or `endHead` to
+    `true` to draw an open chevron arrowhead at that end, oriented along the
+    line's direction at that end and drawn solid regardless of `dash`.
+  - `text`: a unique string `id`, non-empty `text` (lines separated by
+    `\n`), `at` (the center of the text block), positive font `size` in
+    logical units, `color`, and `font` (a CSS font family). An optional
+    `sizes` array of `{start, end, size}` objects gives characters
+    `[start, end)` of `text` (UTF-16 offsets) their own positive font `size`;
+    ranges are sorted, MUST NOT overlap, and override the item `size`. Each
+    line is as tall as its largest size times the line height, its pieces share
+    one baseline, lines are centered horizontally, and the block is centered
+    vertically on `at`.
+- `dash` is `solid` (the default), `dashed`, or `dotted`.
+- Item `id` values identify items for selection and editing and MUST be unique
+  within the drawing.
+- Clients MUST preserve valid drawing data across responsive resizing and MUST
+  ignore unknown item kinds.
+- Erasing is not stored as its own item and only affects one layer. An eraser
+  with logical width `w` sweeping a path MUST remove the portion of each
+  `brush` item whose centerline lies within `w / 2` plus that item's own half
+  width of the sweep, replacing it with its remaining runs as separate `brush`
+  items in the same position. Items reduced to nothing are removed. When a
+  `brush` item with an `id` splits, clients SHOULD keep that `id` on one piece
+  and give the others new unique ids. A `shape`
+  the sweep touches is first replaced by `brush` items tracing its outline (or
+  line) and arrowheads with its `color`, `width`, and `dash`, which are then
+  cut the same way. A `text` item whose block the sweep touches is removed.
+  Each `fill` item instead gains the eraser path as a cutout of width `w`;
+  clients MAY extend the fill's last cutout when the eraser path continues
+  from its final point with the same width.
 - The plugin surface SHOULD expose a script API for retrieving and replacing
-  drawing data, adding strokes, clearing, undoing, redrawing, and exporting the
-  rendered bitmap. Script-driven mutations MUST update the drawing attachment.
+  drawing data, adding items, erasing along a path, clearing, undoing,
+  redrawing, and exporting the rendered bitmap. Script-driven mutations MUST update the drawing attachment.
 - Clients SHOULD emit lifecycle/change/render notifications so other installed
   scripts can discover the surface and draw non-persistent overlays. Document
   content itself MUST NOT be executed as script.
+- PHVY/PDF export renderers SHOULD resolve canvas plugin blocks to ordinary
+  `image` blocks backed by a rasterized PNG image attachment of the replayed
+  drawing at the configured aspect ratio, carrying over the block `css`. An
+  empty or missing drawing SHOULD export as a blank image of the configured
+  size. Script overlays are not part of the exported image. The authored plugin
+  block and drawing attachment MUST remain unchanged.
 
 ### 7.14 Sandboxed scripting plugin contract
 
@@ -2595,7 +2689,7 @@ Normative behavior:
 Document is valid HVY if:
 - It is parseable Markdown text.
 - Any `hvy:*` JSON directive is syntactically valid JSON.
-- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy` or `.thvy`.
+- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy`, `.thvy`, or `.phvy`.
 
 Additional validity for `.thvy`:
 - If `schema` is present, it is valid against the supported subset.

@@ -1,4 +1,5 @@
 import type { VisualBlock } from '../editor/types';
+import { createCanvasDrawingName } from './canvas/canvas-drawing-format';
 import { createQrCodePluginConfig, QR_CODE_DEFAULT_CSS, QR_CODE_PLUGIN_DEFAULT_TEXT } from './qr-code/qr-code-model';
 import { DEFAULT_DIAGRAM_SOURCE, DEFAULT_DIAGRAM_SYNTAX } from './diagram-defaults';
 import { CANVAS_PLUGIN_ID, DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, MODEL_3D_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID, QR_CODE_PLUGIN_ID, SCRIPTING_PLUGIN_ID, VIDEO_PLUGIN_ID } from './registry';
@@ -25,7 +26,7 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
     : nextId === VIDEO_PLUGIN_ID
       ? { ...DEFAULT_VIDEO_CONFIG }
     : nextId === CANVAS_PLUGIN_ID
-      ? { width: 800, height: 450, viewerDrawing: false, strokeColor: '', strokeWidth: 4 }
+      ? { width: 800, height: 450, viewerDrawing: false, strokeColor: '', strokeWidth: 4, drawing: createCanvasDrawingName() }
     : nextId === MODEL_3D_PLUGIN_ID
       ? { ...DEFAULT_MODEL_3D_CONFIG }
     : nextId === POWER_SCRIPTING_PLUGIN_ID

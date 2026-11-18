@@ -3,6 +3,7 @@ import type { ImagePresetDefinition } from '../../editor/components/image/image-
 import type { JsonObject } from '../../hvy/types';
 import type { TextCaptionPayload } from '../../editor/types';
 import { normalizeTextCaption, serializeTextCaption } from '../../caption';
+import { createPluginStaticImageFilename } from '../plugin-static-image-block';
 
 export const QR_CODE_PLUGIN_DEFAULT_TEXT = 'https://example.invalid/qr-code';
 
@@ -121,7 +122,8 @@ export function createQrCodePluginConfig(config: QrCodeConfig = DEFAULT_QR_CODE_
   };
 }
 
+export const QR_CODE_STATIC_IMAGE_PREFIX = 'qr-code';
+
 export function createQrCodeStaticImageFilename(blockId: string): string {
-  const safeId = blockId.trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'qr-code';
-  return `qr-code-${safeId}.png`;
+  return createPluginStaticImageFilename(QR_CODE_STATIC_IMAGE_PREFIX, blockId, 'png');
 }

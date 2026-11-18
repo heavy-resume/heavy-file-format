@@ -2206,7 +2206,7 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
         existing.setAttribute('href', href);
         return;
       }
-      moveCollapsedCaretOutsideInline(existing, range);
+      moveCollapsedCaretOutsideInlineKeepingFormatting(editable, existing, range, action);
       setPendingInlineAction(editable, action, false);
       setSuppressedInlineAction(editable, action, true);
       return;
@@ -2318,6 +2318,32 @@ const inlineActionTagByAction: Record<InlineRichAction, InlineRichTag> = {
   link: 'a',
   code: 'code',
 };
+
+// Inline formatting that typing at a collapsed caret can start, innermost wrapper first.
+const typingWrapInlineActions: InlineRichAction[] = ['strikethrough', 'underline', 'italic', 'bold'];
+
+/**
+ * Moves the caret out of `element` for `action` while keeping the other typing formatting
+ * the caret had: leaving `<em><u>…</u></em>` to stop italic also leaves the `<u>`, so
+ * underline is queued as pending to be applied to the next typed text.
+ */
+function moveCollapsedCaretOutsideInlineKeepingFormatting(
+  editable: HTMLElement,
+  element: HTMLElement,
+  range: Range,
+  action: InlineRichAction
+): void {
+  const formattingBefore = typingWrapInlineActions.filter((candidate) =>
+    candidate !== action && getInlineAncestor(range, editable, inlineActionTagByAction[candidate])
+  );
+  moveCollapsedCaretOutsideInline(element, range);
+  const rangeAfter = getEditableSelectionRange(editable);
+  formattingBefore.forEach((candidate) => {
+    if (!rangeAfter || !getInlineAncestor(rangeAfter, editable, inlineActionTagByAction[candidate])) {
+      setPendingInlineAction(editable, candidate, true);
+    }
+  });
+}
 
 function getPendingInlineActions(editable: HTMLElement): Set<InlineRichAction> {
   return new Set(
@@ -3739,15 +3765,16 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   for (const action of suppressedActions) {
     const existing = getInlineAncestor(range, editable, inlineActionTagByAction[action]);
     if (existing) {
-      moveCollapsedCaretOutsideInline(existing, range);
+      moveCollapsedCaretOutsideInlineKeepingFormatting(editable, existing, range, action);
     }
   }
   const insertionRange = getEditableSelectionRange(editable) ?? range;
+  const insertionActions = getPendingInlineActions(editable);
   insertionRange.deleteContents();
   const text = document.createTextNode(shouldPreserveVisibleSpace ? '\u00a0' : event.data);
   let node: Node = text;
-  for (const action of ['strikethrough', 'underline', 'italic', 'bold'] as InlineRichAction[]) {
-    if (!pendingActions.has(action) || getInlineAncestor(insertionRange, editable, inlineActionTagByAction[action])) {
+  for (const action of typingWrapInlineActions) {
+    if (!insertionActions.has(action) || getInlineAncestor(insertionRange, editable, inlineActionTagByAction[action])) {
       continue;
     }
     const wrapper = document.createElement(inlineActionTagByAction[action]);
@@ -3761,6 +3788,10 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(nextRange);
+  // The caret now sits in a text node with the requested formatting, so native typing
+  // continues it. Keeping the toggles would route every later keystroke through this
+  // path, turning each space into a separate non-breaking space that cannot wrap.
+  clearInlineTypingState(editable);
   updateRichToolbarState(editable);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
   return true;

@@ -1,17 +1,50 @@
 Canvas plugin (hvy.canvas)
 
 The canvas stores its versioned JSON vector drawing in the HVY tail attachment
-named canvas:<block id>. The plugin text body remains a short human/AI-facing
-description. pluginConfig supports width, height, strokeColor, strokeWidth,
-and viewerDrawing. Editors can pre-draw. Readers can draw only when
-viewerDrawing is true.
+named canvas:<drawing>, where pluginConfig.drawing is a name unique among the
+document's canvases (the client assigns one if it is missing). The plugin text
+body remains a short human/AI-facing description. pluginConfig supports width,
+height, strokeColor, strokeWidth, viewerDrawing, drawing, and gridSize. One
+logical unit is one CSS pixel at 100% zoom, so width/height are the artboard
+size and font sizes match document pixels at that scale. The editor shows the
+artboard through a window that zooms (Cmd/Ctrl+scroll, pinch, corner controls)
+and pans (scroll); viewers see it fitted to the block width. Editors can pre-draw. Readers can draw only when
+viewerDrawing is true; in .phvy documents viewerDrawing is always treated as
+false. PDF export replaces the canvas with a PNG image of the drawing; scripts
+are not available in .phvy documents.
 
-Brush and eraser marks remain vector paths. Fill-canvas operations remain
-ordered vector layers and can be undone like strokes. They are rasterized only
-for display and image export.
+A drawing is a list of layers, bottom first. Each layer has an id, name,
+visible and locked flags, an optional filter (invert and an rgba multiply),
+and ordered items. Item kinds:
+- brush: a freehand path (points, color, width, optional dash).
+- fill: a full-canvas color; erasing over it adds cutouts to that fill only.
+- shape: rect, ellipse, or line, spanning from/to. A line may curve through a
+  control point and may have startHead/endHead arrowheads. Shapes have a dash
+  style of solid, dashed, or dotted.
+- text: centered on its "at" point, with a size, color, and font; optional
+  "sizes" ranges give some characters their own font size.
+
+The eraser only affects the active layer and is not stored as its own item:
+it cuts brush paths into their remaining pieces, turns a touched shape into
+brush paths before cutting it, and removes touched text.
+
+The arrow tool fits a freehand drag to the best straight line or single
+curve, so the stored line has just from/to and an optional control point.
+
+In the editor, a newly drawn shape or text stays selected for adjustment. The
+Select tool picks existing brush strokes, shapes, and text (click, Shift-click,
+or drag a selection box) on every selected layer; the selection can be moved,
+scaled by its box handles, restyled, nudged with arrow keys, or deleted. A
+single line or arrow shows end and curve handles instead of a box. Clicking a
+layer row makes it the draw layer, where new drawing goes; Shift-click adds a
+layer to the selection or isolates a selected one. Moving and drawing snap to
+the edges, centers, and ends of other items; hold Cmd or Alt to place freely.
+Placing, adjusting, restyling, and layer changes made by hand are app
+undo/redo steps; changes made by scripts are saved but are not undo steps.
 
 Scripts can find an instance with [data-hvy-canvas-id="<block id>"] and use the
-element's hvyCanvas API: getDrawing, setDrawing, addStroke, clear, undo, redraw,
-and toDataURL. Listen for bubbling hvy:canvas:ready, hvy:canvas:change, and
-hvy:canvas:render events. The render event detail includes the scaled 2D
-context for script-owned overlays.
+element's hvyCanvas API: getDrawing, setDrawing, addItem(item, layerId?),
+erase(path, width, layerId?), clear(layerId?), undo (removes the newest item
+of the active layer), redraw, and toDataURL. Listen for bubbling
+hvy:canvas:ready, hvy:canvas:change, and hvy:canvas:render events. The render
+event detail includes the scaled 2D context for script-owned overlays.

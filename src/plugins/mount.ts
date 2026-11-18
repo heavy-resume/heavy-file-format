@@ -1,6 +1,7 @@
 import { state, getRenderApp, getRefreshReaderPanels, getObserveLinks, getActiveStateRuntime, getCachedComponentRenderHelpers, runWithStateRuntime, type StateRuntime } from '../state';
 import { findBlockByIds, indexSectionBlocksByKey } from '../block-ops';
 import { recordHistory } from '../history';
+import { recordPluginHistoryStep } from '../plugin-history-controller';
 import { syncReusableTemplateForBlock } from '../reusable';
 import { serializeDocument } from '../serialization';
 import { getAttachment, setAttachment, removeAttachment } from '../attachments';
@@ -248,6 +249,15 @@ function buildContext(
       set: (key, value) => runWithStateRuntime(runtime, () => {
         recordHistory(`plugin-header:${plugin.id}:${sectionKey}:${blockId}:${key}`);
         (state.document.meta as Record<string, unknown>)[key] = value;
+      }),
+    },
+    history: {
+      record: (step) => runWithStateRuntime(runtime, () => {
+        recordPluginHistoryStep(
+          { pluginId: plugin.id, sectionKey, blockId },
+          step,
+          () => recordHistory(),
+        );
       }),
     },
     session: runWithStateRuntime(runtime, () => getDocumentScriptingSession(state.document)),

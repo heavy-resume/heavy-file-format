@@ -617,6 +617,9 @@ export interface AppState {
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
     passiveHeight?: number;
+    // Top of the passive block's content wrapper at the click, for blocks
+    // without an editable activation target to anchor on.
+    contentTop?: number;
     preferredEditorTarget?: {
       field: string;
       fieldIndex?: number;

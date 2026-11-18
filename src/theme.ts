@@ -353,6 +353,14 @@ export function colorValueToPickerHex(value: string): string {
   return '#000000';
 }
 
+// The RGB inverse of a hex or rgb()/rgba() color, keeping its alpha.
+export function invertCssColor(value: string): string {
+  const hex = colorValueToPickerHex(value);
+  const inverted = `#${[1, 3, 5].map((start) => (255 - Number.parseInt(hex.slice(start, start + 2), 16)).toString(16).padStart(2, '0')).join('')}`;
+  const alpha = colorValueToAlpha(value);
+  return alpha < 1 ? mergeAlphaIntoCssColor(inverted, alpha) : inverted;
+}
+
 export function colorValueToAlpha(value: string): number {
   const alpha = extractCssAlpha(value);
   return alpha === null ? 1 : alpha;

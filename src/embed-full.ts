@@ -126,6 +126,7 @@ import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from '
 import { commitHistorySnapshot, recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
 import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
+import { destroyPluginHistory } from './plugin-history-controller';
 import type { HvyHistoryArtifactStore } from './history-artifact-store';
 import { resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
@@ -1677,6 +1678,7 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
       });
       void destroyDatabaseHistory(runtime);
       void destroyAttachmentHistory(runtime);
+      destroyPluginHistory(runtime);
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);

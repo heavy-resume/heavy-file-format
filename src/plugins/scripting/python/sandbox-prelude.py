@@ -27,15 +27,16 @@ __hvy_forbidden_global_names__ = (
     '__hvy_user_globals__',
     '__hvy_user_main__',
 )
-__hvy_forbidden_global_name_set__ = frozenset(__hvy_forbidden_global_names__)
 
 
 # Runs on every traced line. Brython's dict.pop(missing, default) costs
-# microseconds per call, so check membership first and delete only hits.
+# microseconds per call, so check membership first and delete only hits. The
+# forbidden names are looked up in the globals, not the other way round: a set
+# operation over the globals walks every one, re-hashing each name (Brython
+# keeps no string hashes), so each step would cost as much as the script has
+# globals.
 def __hvy_sanitize_user_globals__():
     try:
-        if __hvy_forbidden_global_name_set__.isdisjoint(__hvy_user_globals__):
-            return
         for __hvy_name__ in __hvy_forbidden_global_names__:
             if __hvy_name__ in __hvy_user_globals__:
                 del __hvy_user_globals__[__hvy_name__]

@@ -421,6 +421,8 @@ VS Code configuration is included:
   - `HVY: Open In Chrome`
 - Tasks:
   - `Install Dependencies`
+  - `Audit Fix Dependencies` (`npm audit fix`)
+  - `Audit Fix Dependencies (--force)` (`npm audit fix --force`; may apply breaking major-version upgrades)
   - `Run Reference App (Vite)`
   - `Build Reference App`
 

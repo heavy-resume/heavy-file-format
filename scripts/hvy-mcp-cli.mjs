@@ -365,7 +365,7 @@ async function buildBundledRunner() {
       {
         name: 'vite-glob-loader',
         setup(buildApi) {
-          buildApi.onLoad({ filter: /src\/component-help\.ts$/ }, async (loadArgs) => {
+          buildApi.onLoad({ filter: /src[\\/]component-help\.ts$/ }, async (loadArgs) => {
             const contents = await readFile(loadArgs.path, 'utf8');
             const modules = globTextFiles(join(packageRoot, 'src/component-docs'), /^about-.+\.txt$/, './component-docs');
             return {
@@ -376,7 +376,7 @@ async function buildBundledRunner() {
               loader: 'ts',
             };
           });
-          buildApi.onLoad({ filter: /src\/cli-core\/reference-library\.ts$/ }, async (loadArgs) => {
+          buildApi.onLoad({ filter: /src[\\/]cli-core[\\/]reference-library\.ts$/ }, async (loadArgs) => {
             const contents = await readFile(loadArgs.path, 'utf8');
             const cheatsheets = globTextFiles(join(packageRoot, 'src/cli-core/cheatsheets'), /^.+\.md$/, './cheatsheets');
             const recipes = globTextFiles(join(packageRoot, 'src/cli-core/recipes'), /^.+\.hvy$/, './recipes');

@@ -399,9 +399,16 @@ export class HvyVirtualTreeEntries {
   }
 }
 
+function isDeferredEntry(value: HvyVirtualEntry | DeferredEntry): value is DeferredEntry {
+  return !('kind' in value);
+}
+
 function listedEntry(listing: DirectoryListing, path: string): HvyVirtualEntry | undefined {
   const value = listing.entries.get(path);
-  if (!value || 'kind' in value) {
+  if (!value) {
+    return undefined;
+  }
+  if (!isDeferredEntry(value)) {
     return value;
   }
   value.resolved ??= { entry: value.resolve() };

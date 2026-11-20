@@ -1,9 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { readFileSync, readdirSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { extname, join, relative, sep } from 'node:path';
 import postcss, { type Rule } from 'postcss';
 import { expect, test } from 'vitest';
 
-const sourceRoot = new URL('../src', import.meta.url).pathname;
+const sourceRoot = fileURLToPath(new URL('../src', import.meta.url));
 const stylesheetBoundaries = new Map([
   ['layout/reference-application-controls.css', '.hvy-reference-app'],
   ['layout/reference-shell.css', '.hvy-reference-host'],
@@ -30,7 +31,7 @@ test('expected result: authored CSS owns an explicit application boundary', () =
   const failures: Array<{ file: string; selector: string; expectedBoundary: string }> = [];
 
   for (const file of listCssFiles(sourceRoot)) {
-    const relativePath = relative(sourceRoot, file);
+    const relativePath = relative(sourceRoot, file).split(sep).join('/');
     if (relativePath.startsWith('palettes/')) continue;
     const expectedBoundary = stylesheetBoundaries.get(relativePath) ?? '.hvy-document';
     postcss.parse(readFileSync(file, 'utf8'), { from: file }).walkRules((rule) => {
@@ -71,7 +72,7 @@ test('expected result: shared editor block shells do not style plugin-owned form
   const protectedShells = ['.editor-block', '.editor-block-content', '.hvy-plugin-mount'];
 
   for (const file of listCssFiles(sourceRoot)) {
-    const relativePath = relative(sourceRoot, file);
+    const relativePath = relative(sourceRoot, file).split(sep).join('/');
     postcss.parse(readFileSync(file, 'utf8'), { from: file }).walkRules((rule) => {
       if (isInsideKeyframes(rule)) return;
       for (const selector of rule.selectors) {

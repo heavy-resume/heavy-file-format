@@ -77,7 +77,8 @@ function createScriptingSession(): ScriptingSession {
 }
 
 function copySessionValue(value: unknown, path: string): ScriptingSessionValue {
-  if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
+  if (value === null) return null;
+  if (typeof value === 'boolean' || typeof value === 'string') return value;
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new TypeError(`session.state["${path}"] must be a finite number.`);
     return value;

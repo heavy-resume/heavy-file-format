@@ -9,6 +9,20 @@
       "problemMatcher": []
     },
     {
+      "label": "Audit Fix Dependencies",
+      "type": "shell",
+      "command": "node scripts/audit-fix.mjs",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Audit Fix Dependencies (--force)",
+      "type": "shell",
+      "command": "node scripts/audit-fix.mjs --force",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
       "label": "Run Reference App (Vite)",
       "type": "npm",
       "script": "dev",

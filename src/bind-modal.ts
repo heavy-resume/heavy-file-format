@@ -1,4 +1,5 @@
 import './modal.css';
+import './pdf-template-import-modal.css';
 import { parse as parseYaml } from 'yaml';
 import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } from './state';
 import { findSectionByKey } from './section-ops';

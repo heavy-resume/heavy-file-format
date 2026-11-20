@@ -73,7 +73,7 @@ import { createReferenceEncryptionOptions } from './reference-encryption-keyring
 import { registerHvyWebMcpTools } from './webmcp';
 import { notifyDocumentMayHaveChanged } from './document-change';
 import { isAdvancedEditorActive } from './component-availability';
-import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
+import { installWebMCP } from '@mcp-b/webmcp-polyfill';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -1626,7 +1626,7 @@ async function bootstrap(): Promise<void> {
   initState(applySessionState(createInitialState(await createDefaultDocument(), createReferenceEncryptionOptions()), savedSession));
   await decryptEncryptedComponents(state.document, state.encryption);
   initializeReferenceDocumentDirtyTracking();
-  initializeWebMCPPolyfill();
+  installWebMCP();
   const webMcpRegistration = registerHvyWebMcpTools({}, {
     getDocument: () => state.document,
     embeddingProvider: state.embeddingProvider,

@@ -34,6 +34,14 @@ interface HvyBuiltInPluginDefinition {
   exportName: string;
   modulePath: string;
   displayName: string;
+  version?: string;
+  advancedComponent?: boolean;
+  minimumEditorWidth?: string;
+  preferredEditorWidth?: string;
+  mount?: {
+    strategy?: 'viewport' | 'immediate';
+    placeholderHeight?: string;
+  };
   pdfStatic?: boolean;
 }
 
@@ -44,6 +52,8 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'dbTablePlugin',
     modulePath: 'src/plugins/db-table/db-table-component.ts',
     displayName: 'DB Table',
+    version: '0.2.0',
+    mount: { strategy: 'immediate' },
   },
   {
     id: 'hvy.form',
@@ -51,6 +61,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'formPlugin',
     modulePath: 'src/plugins/form.ts',
     displayName: 'Form',
+    mount: { strategy: 'immediate' },
   },
   {
     id: 'hvy.progress-bar',
@@ -65,6 +76,8 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'scriptingPlugin',
     modulePath: 'src/plugins/scripting/scripting.ts',
     displayName: 'Scripting',
+    mount: { strategy: 'immediate' },
+    advancedComponent: true,
   },
   {
     id: 'hvy.graph',
@@ -72,6 +85,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'graphPlugin',
     modulePath: 'src/plugins/graph.ts',
     displayName: 'Graph',
+    mount: { placeholderHeight: '360px' },
   },
   {
     id: 'hvy.diagram',
@@ -79,6 +93,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'diagramPlugin',
     modulePath: 'src/plugins/diagram.ts',
     displayName: 'Diagram',
+    mount: { placeholderHeight: '360px' },
   },
   {
     id: 'hvy.qr-code',
@@ -94,6 +109,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'videoPlugin',
     modulePath: 'src/plugins/video/video.ts',
     displayName: 'Video',
+    mount: { placeholderHeight: '360px' },
   },
   {
     id: 'hvy.editable-text',
@@ -108,6 +124,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'canvasPlugin',
     modulePath: 'src/plugins/canvas/canvas.ts',
     displayName: 'Canvas',
+    pdfStatic: true,
   },
   {
     id: 'hvy.model-3d',
@@ -115,6 +132,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'model3dPlugin',
     modulePath: 'src/plugins/model-3d/model-3d.ts',
     displayName: '3D Model',
+    mount: { placeholderHeight: '360px' },
   },
   {
     id: 'hvy.power-scripting',
@@ -122,6 +140,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'powerScriptingPlugin',
     modulePath: 'src/plugins/power-scripting/power-scripting.ts',
     displayName: 'Power Scripting',
+    mount: { strategy: 'immediate' },
   },
 ];
 
@@ -263,10 +282,14 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
   const selected = HVY_BUILT_IN_PLUGIN_DEFINITIONS.filter((definition) => selectedIds.includes(definition.id));
   const definitions = selected.map((definition) => ({
     id: definition.id,
-    version: '0.1.0',
+    version: definition.version ?? '0.1.0',
     hvyApiVersion: '0.1',
     key: definition.key,
     displayName: definition.displayName,
+    ...(definition.advancedComponent ? { advancedComponent: true } : {}),
+    ...(definition.minimumEditorWidth ? { minimumEditorWidth: definition.minimumEditorWidth } : {}),
+    ...(definition.preferredEditorWidth ? { preferredEditorWidth: definition.preferredEditorWidth } : {}),
+    ...(definition.mount ? { mount: definition.mount } : {}),
     pdfStatic: definition.pdfStatic === true,
     exportName: definition.exportName,
     importPath: toViteRootImportPath(definition.modulePath),
@@ -334,6 +357,10 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
     `    version: definition.version,`,
     `    hvyApiVersion: definition.hvyApiVersion,`,
     `    displayName: definition.displayName,`,
+    `    ...(definition.advancedComponent ? { advancedComponent: true } : {}),`,
+    `    ...(definition.minimumEditorWidth ? { minimumEditorWidth: definition.minimumEditorWidth } : {}),`,
+    `    ...(definition.preferredEditorWidth ? { preferredEditorWidth: definition.preferredEditorWidth } : {}),`,
+    `    ...(definition.mount ? { mount: definition.mount } : {}),`,
     `    create(ctx) {`,
     `      const root = document.createElement('div');`,
     `      root.className = 'hvy-plugin-loading';`,

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 
+import { isAdvancedComponentBlock, isAdvancedOnlySection } from '../src/component-availability';
 import { renderAddComponentPicker } from '../src/editor/component-picker';
 import { deserializeDocument } from '../src/serialization';
 import { initState, state } from '../src/state';
@@ -7,6 +8,8 @@ import { createConditionallyAllowedPlugin } from '../src/plugins/authorization/c
 import { setPluginAuthorizationMode } from '../src/plugins/authorization/plugin-authorization-policy';
 import { setHostPlugins } from '../src/plugins/registry';
 import { scriptingPlugin } from '../src/plugins/scripting/scripting';
+import type { HvyPlugin } from '../src/plugins/types';
+import { createLazyHvyBuiltInPluginsModuleSource } from '../vite-built-in-plugins';
 import { createTestState } from './serialization-test-helpers';
 
 const pickerDeps = {
@@ -98,4 +101,33 @@ plugins:
   expect(renderPickerRow(sectionKey, 'data-plugin-id="example.conditional"')).toBe('');
   state.showAdvancedEditor = true;
   expect(renderPickerRow(sectionKey, 'data-plugin-id="example.conditional"')).toBe('');
+});
+
+test('lazy embed scripting placeholder is treated as an advanced component before loading', () => {
+  const doc = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-script-section"}-->
+#! Fake Script Section
+
+<!--hvy:plugin {"id":"fake-script","plugin":"hvy.scripting"}-->
+return
+`, '.hvy');
+  initState(createTestState(doc));
+  const source = createLazyHvyBuiltInPluginsModuleSource(['hvy.scripting']);
+  const evaluateLazyModule = new Function(
+    `${source.replaceAll('export const ', 'const ')}\nreturn { builtInPlugins };`
+  ) as () => { builtInPlugins: HvyPlugin[] };
+  setHostPlugins(evaluateLazyModule().builtInPlugins);
+  state.showAdvancedEditor = false;
+
+  const section = state.document.sections[0]!;
+  const block = section.blocks[0]!;
+  expect(isAdvancedComponentBlock(block, state.document.meta)).toBe(true);
+  expect(isAdvancedOnlySection(section, state.document.meta)).toBe(true);
+
+  const scriptingRow = renderPickerRow(section.key, 'data-plugin-id="hvy.scripting"');
+  expect(scriptingRow).toContain('data-component-picker-disabled="true"');
+  expect(scriptingRow).toContain('<span class="component-picker-row-badge">Advanced</span>');
 });

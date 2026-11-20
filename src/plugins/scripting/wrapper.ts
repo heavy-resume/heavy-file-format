@@ -1,4 +1,4 @@
-import { loadBrython, getBrython } from './brython-loader';
+import { loadBrython, getBrython, getBrythonWindow } from './brython-loader';
 import { instrumentPythonSource, stripPythonImports, wrapPythonSourceInFunction } from './python-source';
 import {
   buildPythonProgram,
@@ -55,9 +55,10 @@ function getScriptingValueKind(value: unknown): HvyScriptingValueKind {
   if (typeof value === 'function') return 'function';
   if (!value || typeof value !== 'object') return 'other';
   if (Array.isArray(value)) return 'array';
-  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return 'bytes';
+  const realmWindow = getBrythonWindow();
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer || value instanceof realmWindow.ArrayBuffer) return 'bytes';
   const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null ? 'object' : 'other';
+  return prototype === Object.prototype || prototype === realmWindow.Object.prototype || prototype === null ? 'object' : 'other';
 }
 
 interface HvyScriptingGlobal {
@@ -137,11 +138,9 @@ declare global {
 }
 
 function getScriptingGlobal(): HvyScriptingGlobal {
-  if (typeof window === 'undefined') {
-    throw new Error('Scripting runtime requires a browser environment.');
-  }
-  if (!window.__HVY_SCRIPTING__) {
-    window.__HVY_SCRIPTING__ = {
+  const realmWindow = getBrythonWindow() as Window & { __HVY_SCRIPTING__?: HvyScriptingGlobal };
+  if (!realmWindow.__HVY_SCRIPTING__) {
+    realmWindow.__HVY_SCRIPTING__ = {
       runtimes: {},
       sources: {},
       instrumentedSources: {},
@@ -155,41 +154,41 @@ function getScriptingGlobal(): HvyScriptingGlobal {
       injectedGlobals: {},
       startingRuntimeId: null,
       compiledCode: new Map(),
-      getCompiledCode: (key) => getCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key),
-      rememberCompiledCode: (key, code) => rememberCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key, code),
+      getCompiledCode: (key) => getCompiledCode(realmWindow.__HVY_SCRIPTING__!.compiledCode, key),
+      rememberCompiledCode: (key, code) => rememberCompiledCode(realmWindow.__HVY_SCRIPTING__!.compiledCode, key, code),
       compiledPrograms: new Map(),
     };
   }
-  if (!window.__HVY_SCRIPTING__.callbacks) {
-    window.__HVY_SCRIPTING__.callbacks = {};
+  if (!realmWindow.__HVY_SCRIPTING__.callbacks) {
+    realmWindow.__HVY_SCRIPTING__.callbacks = {};
   }
-  if (!window.__HVY_SCRIPTING__.instrumentedSources) {
-    window.__HVY_SCRIPTING__.instrumentedSources = {};
+  if (!realmWindow.__HVY_SCRIPTING__.instrumentedSources) {
+    realmWindow.__HVY_SCRIPTING__.instrumentedSources = {};
   }
-  if (!window.__HVY_SCRIPTING__.results) {
-    window.__HVY_SCRIPTING__.results = {};
+  if (!realmWindow.__HVY_SCRIPTING__.results) {
+    realmWindow.__HVY_SCRIPTING__.results = {};
   }
-  if (!window.__HVY_SCRIPTING__.regex) {
-    window.__HVY_SCRIPTING__.regex = createScriptingRegexBridge();
+  if (!realmWindow.__HVY_SCRIPTING__.regex) {
+    realmWindow.__HVY_SCRIPTING__.regex = createScriptingRegexBridge();
   }
-  if (!window.__HVY_SCRIPTING__.valueKind) {
-    window.__HVY_SCRIPTING__.valueKind = getScriptingValueKind;
+  if (!realmWindow.__HVY_SCRIPTING__.valueKind) {
+    realmWindow.__HVY_SCRIPTING__.valueKind = getScriptingValueKind;
   }
-  if (!window.__HVY_SCRIPTING__.traceFilenames) {
-    window.__HVY_SCRIPTING__.traceFilenames = {};
+  if (!realmWindow.__HVY_SCRIPTING__.traceFilenames) {
+    realmWindow.__HVY_SCRIPTING__.traceFilenames = {};
   }
-  if (!window.__HVY_SCRIPTING__.injectedGlobals) {
-    window.__HVY_SCRIPTING__.injectedGlobals = {};
+  if (!realmWindow.__HVY_SCRIPTING__.injectedGlobals) {
+    realmWindow.__HVY_SCRIPTING__.injectedGlobals = {};
   }
-  if (!window.__HVY_SCRIPTING__.compiledCode) {
-    window.__HVY_SCRIPTING__.compiledCode = new Map();
-    window.__HVY_SCRIPTING__.getCompiledCode = (key) => getCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key);
-    window.__HVY_SCRIPTING__.rememberCompiledCode = (key, code) => rememberCompiledCode(window.__HVY_SCRIPTING__!.compiledCode, key, code);
+  if (!realmWindow.__HVY_SCRIPTING__.compiledCode) {
+    realmWindow.__HVY_SCRIPTING__.compiledCode = new Map();
+    realmWindow.__HVY_SCRIPTING__.getCompiledCode = (key) => getCompiledCode(realmWindow.__HVY_SCRIPTING__!.compiledCode, key);
+    realmWindow.__HVY_SCRIPTING__.rememberCompiledCode = (key, code) => rememberCompiledCode(realmWindow.__HVY_SCRIPTING__!.compiledCode, key, code);
   }
-  if (!window.__HVY_SCRIPTING__.compiledPrograms) {
-    window.__HVY_SCRIPTING__.compiledPrograms = new Map();
+  if (!realmWindow.__HVY_SCRIPTING__.compiledPrograms) {
+    realmWindow.__HVY_SCRIPTING__.compiledPrograms = new Map();
   }
-  return window.__HVY_SCRIPTING__;
+  return realmWindow.__HVY_SCRIPTING__;
 }
 
 
@@ -199,32 +198,41 @@ function shouldSuppressBrythonConsoleNoise(args: unknown[]): boolean {
 }
 
 function withSuppressedBrythonConsoleNoise(run: () => void): void {
-  const originalLog = console.log;
-  const originalWarn = console.warn;
-  const originalError = console.error;
+  const realmConsole = getBrythonWindow().console;
+  const targets = realmConsole && realmConsole !== console ? [console, realmConsole] : [console];
+  const originals = targets.map((target) => ({
+    target,
+    log: target.log,
+    warn: target.warn,
+    error: target.error,
+  }));
 
-  console.log = (...args: unknown[]) => {
-    if (!shouldSuppressBrythonConsoleNoise(args)) {
-      originalLog(...args);
-    }
-  };
-  console.warn = (...args: unknown[]) => {
-    if (!shouldSuppressBrythonConsoleNoise(args)) {
-      originalWarn(...args);
-    }
-  };
-  console.error = (...args: unknown[]) => {
-    if (!shouldSuppressBrythonConsoleNoise(args)) {
-      originalError(...args);
-    }
-  };
+  for (const { target, log, warn, error } of originals) {
+    target.log = (...args: unknown[]) => {
+      if (!shouldSuppressBrythonConsoleNoise(args)) {
+        log.apply(target, args);
+      }
+    };
+    target.warn = (...args: unknown[]) => {
+      if (!shouldSuppressBrythonConsoleNoise(args)) {
+        warn.apply(target, args);
+      }
+    };
+    target.error = (...args: unknown[]) => {
+      if (!shouldSuppressBrythonConsoleNoise(args)) {
+        error.apply(target, args);
+      }
+    };
+  }
 
   try {
     run();
   } finally {
-    console.log = originalLog;
-    console.warn = originalWarn;
-    console.error = originalError;
+    for (const { target, log, warn, error } of originals) {
+      target.log = log;
+      target.warn = warn;
+      target.error = error;
+    }
   }
 }
 
@@ -260,10 +268,11 @@ function executeCachedPythonProgram(
     }
     const scriptId = `hvy_script_program_${++compiledProgramCounter}`;
     const translated = brython.python_to_js(source, scriptId);
+    const realmWindow = getBrythonWindow();
     cached = {
       source,
       scriptId,
-      execute: new Function(`return ${translated}`) as () => unknown,
+      execute: new realmWindow.Function(`return ${translated}`) as () => unknown,
     };
     scripting.compiledPrograms.set(cacheKey, cached);
   }
@@ -605,9 +614,10 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         let message = String(error);
         try {
           const brython = getBrython() as unknown as { error_trace?: (e: unknown) => string };
+          const realmWindow = getBrythonWindow();
           if (typeof brython.error_trace === 'function' && error && typeof error === 'object' && '__class__' in error) {
             message = brython.error_trace(error);
-          } else if (error instanceof Error) {
+          } else if (error instanceof Error || error instanceof realmWindow.Error) {
             message = error.message;
           }
         } catch (_) {

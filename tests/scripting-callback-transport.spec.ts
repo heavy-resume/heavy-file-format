@@ -41,13 +41,14 @@ plugin = {
   }));
 
   const expectedResult = await page.evaluate(async (bytes) => {
-    const [{ loadHvyPluginZip }, registry, stateModule, serialization, wrapper, callbackLifecycle] = await Promise.all([
+    const [{ loadHvyPluginZip }, registry, stateModule, serialization, wrapper, callbackLifecycle, brythonLoader] = await Promise.all([
       import('/src/plugin-package-zip.ts'),
       import('/src/plugins/registry.ts'),
       import('/src/state.ts'),
       import('/src/serialization.ts'),
       import('/src/plugins/scripting/wrapper.ts'),
       import('/src/plugins/scripting/callback-lifecycle.ts'),
+      import('/src/plugins/scripting/brython-loader.ts'),
     ]);
     const loaded = await loadHvyPluginZip(Uint8Array.from(bytes));
     const callbackReturns: unknown[] = [];
@@ -187,7 +188,7 @@ doc.plugins.call("com.example.fake-js-callback", "invoke", {"delay": 20, "on_com
       pythonStatus: previousDocument.meta.fake_python_status,
       pythonValues: previousDocument.meta.fake_python_values,
       callbackReturns: initialCallbackReturns,
-      pythonCallbackReturns: (window as Window & { fakePythonCallbackReturns?: unknown[] }).fakePythonCallbackReturns,
+      pythonCallbackReturns: (brythonLoader.getBrythonWindow() as Window & { fakePythonCallbackReturns?: unknown[] }).fakePythonCallbackReturns,
       callbackError,
       errorCallbackReturn,
       stepCallbackError,

@@ -1,4 +1,4 @@
-import { getBrython } from './brython-loader';
+import { getBrython, getBrythonWindow } from './brython-loader';
 
 interface BrythonValueConverter {
   builtins: Record<string, unknown>;
@@ -56,7 +56,8 @@ export function normalizeBrythonHostValue(
     normalized.push(...converted.map((entry) => normalizeBrythonHostValue(entry, seen)));
     return normalized;
   }
-  if (Object.getPrototypeOf(converted) !== Object.prototype) return converted;
+  const prototype = Object.getPrototypeOf(converted);
+  if (prototype !== Object.prototype && prototype !== getBrythonWindow().Object.prototype) return converted;
   const normalized: Record<string, unknown> = {};
   seen.set(converted, normalized);
   for (const [key, entry] of Object.entries(converted)) {

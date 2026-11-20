@@ -289,42 +289,7 @@
   gap: 0.4rem;
   min-height: 2.35rem;
   font-size: 0.82rem;
-}
-
-.hvy-document .db-table-check input {
-  appearance: none;
-  display: grid;
-  place-items: center;
-  width: 1.05rem;
-  height: 1.05rem;
-  border: 1px solid var(--hvy-border-input, var(--reader-border));
-  border-radius: 0.3rem;
-  background: var(--hvy-surface, var(--reader-panel));
   cursor: pointer;
-}
-
-.hvy-document .db-table-check input::after {
-  content: '';
-  width: 0.25rem;
-  height: 0.5rem;
-  border: solid var(--hvy-accent-1-text);
-  border-width: 0 0.14rem 0.14rem 0;
-  transform: rotate(45deg) scale(0);
-  transition: transform 120ms ease;
-}
-
-.hvy-document .db-table-check input:checked {
-  border-color: var(--hvy-accent-1-alt);
-  background: var(--hvy-accent-1);
-}
-
-.hvy-document .db-table-check input:checked::after {
-  transform: rotate(45deg) scale(1);
-}
-
-.hvy-document .db-table-check input:focus-visible {
-  outline: 2px solid var(--hvy-focus-ring, var(--reader-accent));
-  outline-offset: 2px;
 }
 
 .hvy-document .db-table-select-shell {

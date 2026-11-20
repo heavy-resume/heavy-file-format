@@ -55,7 +55,7 @@ test('before, three script runs, after: the wrapper is translated once and user 
   const result = await page.evaluate(async () => {
     const { runUserScript } = await import(/* @vite-ignore */ '/src/plugins/scripting/wrapper.ts');
     const { deserializeDocument } = await import(/* @vite-ignore */ '/src/serialization.ts');
-    const { loadBrython, getBrython } = await import(/* @vite-ignore */ '/src/plugins/scripting/brython-loader.ts');
+    const { loadBrython, getBrython, getBrythonWindow } = await import(/* @vite-ignore */ '/src/plugins/scripting/brython-loader.ts');
     const document = deserializeDocument(`---\nhvy_version: 0.1\n---\n`, '.hvy');
     await loadBrython();
     const brython = getBrython();
@@ -65,7 +65,7 @@ test('before, three script runs, after: the wrapper is translated once and user 
       translations += 1;
       return translate(source, scriptId);
     };
-    const fakeCodeKeys = () => [...((window as Window & { __HVY_SCRIPTING__?: { compiledCode: Map<string, unknown> } }).__HVY_SCRIPTING__?.compiledCode.keys() ?? [])]
+    const fakeCodeKeys = () => [...((getBrythonWindow() as Window & { __HVY_SCRIPTING__?: { compiledCode: Map<string, unknown> } }).__HVY_SCRIPTING__?.compiledCode.keys() ?? [])]
       .filter((key) => key.startsWith('<fake-cached-'));
     const runs = [];
     try {

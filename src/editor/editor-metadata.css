@@ -738,6 +738,7 @@
   flex-direction: row;
   align-items: center;
   gap: 0.35rem;
+  cursor: pointer;
 }
 
 .hvy-document .modal-panel label.schema-meta-checkbox {
@@ -745,10 +746,6 @@
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-}
-
-.hvy-document .schema-meta-checkbox input {
-  width: auto;
 }
 
 .hvy-document .schema-grid {

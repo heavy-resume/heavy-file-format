@@ -99,7 +99,10 @@ plugin = make_plugin
   });
 
   const expectedResult = await page.evaluate(async ({ factoryBytes, mappingBytes, invalidBytes, tracebackBytes }) => {
-    const { loadHvyPluginZip } = await import('/src/plugin-package-zip.ts');
+    const [{ loadHvyPluginZip }, { getBrython }] = await Promise.all([
+      import('/src/plugin-package-zip.ts'),
+      import('/src/plugins/scripting/brython-loader.ts'),
+    ]);
     const loaded = await loadHvyPluginZip(Uint8Array.from(factoryBytes));
     const callbackArguments: unknown[] = [];
     const methodResult = loaded.plugin.scripting!.methods.start({
@@ -118,7 +121,7 @@ plugin = make_plugin
     instance.refresh!();
     instance.unmount!();
     await loaded.plugin.hooks!.documentLoad!.run({} as never);
-    const packageModules = Object.keys(window.__BRYTHON__!.VFS!).filter((name) => name.startsWith('__hvy_plugin_'));
+    const packageModules = Object.keys(getBrython().VFS!).filter((name) => name.startsWith('__hvy_plugin_'));
     const result = {
       id: loaded.plugin.id,
       componentText: instance.element.textContent,
@@ -150,7 +153,7 @@ plugin = make_plugin
       mappingId,
       identityError,
       tracebackError,
-      remainingPackageModules: Object.keys(window.__BRYTHON__!.VFS!).filter((name) => name.startsWith('__hvy_plugin_')).length,
+      remainingPackageModules: Object.keys(getBrython().VFS!).filter((name) => name.startsWith('__hvy_plugin_')).length,
     };
   }, {
     factoryBytes: archive,

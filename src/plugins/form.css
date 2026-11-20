@@ -73,7 +73,7 @@
   font-size: 0.85rem;
 }
 
-.hvy-document .hvy-form-plugin input,
+.hvy-document .hvy-form-plugin input:not([type='checkbox']):not([type='radio']):not([type='range']),
 .hvy-document .hvy-form-plugin select,
 .hvy-document .hvy-form-plugin textarea {
   width: 100%;
@@ -101,10 +101,7 @@
   align-items: center;
   justify-content: end;
   gap: 0.45rem;
-}
-
-.hvy-document label.hvy-form-checkbox-label input {
-  width: auto;
+  cursor: pointer;
 }
 
 .hvy-document .hvy-form-options-editor,
@@ -156,7 +153,6 @@
 
 .hvy-document label.hvy-form-field-checkbox input {
   order: 1;
-  width: auto;
 }
 
 .hvy-document label.hvy-form-field-checkbox .hvy-form-field-error {

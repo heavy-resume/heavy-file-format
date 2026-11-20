@@ -23,27 +23,59 @@ export interface BrythonGlobal {
   meta_path?: unknown[];
 }
 
-declare global {
-  interface Window {
-    __BRYTHON__?: BrythonGlobal;
-    brython?: (options?: Record<string, unknown>) => void;
-  }
-}
+export type BrythonRealmWindow = Window & typeof globalThis & {
+  __BRYTHON__?: BrythonGlobal;
+  brython?: (options?: Record<string, unknown>) => void;
+};
+
+const HVY_BRYTHON_IFRAME_ATTR = 'data-hvy-brython-realm';
 
 let loadPromise: Promise<void> | null = null;
+let realmIframe: HTMLIFrameElement | null = null;
 
-async function loadBrythonCore(): Promise<void> {
+function ensureBrythonRealmWindow(): BrythonRealmWindow {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    throw new Error('Brython requires a browser environment.');
+  }
+  if (realmIframe?.isConnected && realmIframe.contentWindow) {
+    return realmIframe.contentWindow as BrythonRealmWindow;
+  }
+  const existing = document.querySelector<HTMLIFrameElement>(`iframe[${HVY_BRYTHON_IFRAME_ATTR}="true"]`);
+  if (existing?.isConnected && existing.contentWindow) {
+    realmIframe = existing;
+    return existing.contentWindow as BrythonRealmWindow;
+  }
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute(HVY_BRYTHON_IFRAME_ATTR, 'true');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.tabIndex = -1;
+  iframe.style.display = 'none';
+  const container = document.body ?? document.documentElement;
+  if (!container) {
+    throw new Error('Document root is unavailable for Brython runtime.');
+  }
+  container.appendChild(iframe);
+  const realmWindow = iframe.contentWindow as BrythonRealmWindow | null;
+  if (!realmWindow || !iframe.contentDocument) {
+    iframe.remove();
+    throw new Error('Failed to create isolated Brython iframe realm.');
+  }
+  realmIframe = iframe;
+  return realmWindow;
+}
+
+async function loadBrythonCore(realmDocument: Document): Promise<void> {
   const [coreModule, minimalVfsModule] = await Promise.all([
     import('brython/brython.min.js?raw'),
     import('virtual:hvy-brython-minimal-vfs'),
   ]);
-  await loadScriptSource(`${applyBrythonSourcePatches(coreModule.default)}\n${minimalVfsModule.default}`);
+  await loadScriptSource(realmDocument, `${applyBrythonSourcePatches(coreModule.default)}\n${minimalVfsModule.default}`);
 }
 
-function loadScriptSource(source: string): Promise<void> {
+function loadScriptSource(realmDocument: Document, source: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
-    const script = document.createElement('script');
+    const script = realmDocument.createElement('script');
     script.src = url;
     script.async = true;
     script.onload = () => {
@@ -54,7 +86,7 @@ function loadScriptSource(source: string): Promise<void> {
       URL.revokeObjectURL(url);
       reject(new Error('Failed to load local Brython bundle.'));
     };
-    document.head.appendChild(script);
+    (realmDocument.head ?? realmDocument.documentElement).appendChild(script);
   });
 }
 
@@ -63,29 +95,41 @@ export function loadBrython(): Promise<void> {
     return loadPromise;
   }
   loadPromise = (async () => {
-    if (typeof window === 'undefined') {
-      throw new Error('Brython requires a browser environment.');
+    const realmWindow = ensureBrythonRealmWindow();
+    if (!realmWindow.__BRYTHON__) {
+      await loadBrythonCore(realmWindow.document);
     }
-    if (!window.__BRYTHON__) {
-      await loadBrythonCore();
-    }
-    if (typeof window.brython !== 'function') {
+    if (typeof realmWindow.brython !== 'function') {
       throw new Error('Brython did not register its global initializer.');
     }
-    if (typeof window.__BRYTHON__?.run_script !== 'function') {
+    if (typeof realmWindow.__BRYTHON__?.run_script !== 'function') {
       // debug: 0 = no source maps, faster init.
-      window.brython({ debug: 0 });
+      realmWindow.brython({ debug: 0 });
     }
-    installBrythonInteropPolicy(window.__BRYTHON__ as unknown as BrythonInteropRuntime);
-  })();
+    const interopRuntime = realmWindow.__BRYTHON__ as unknown as BrythonInteropRuntime;
+    if (!interopRuntime.hvyBlockedAttributeNames) {
+      installBrythonInteropPolicy(interopRuntime);
+    }
+  })().catch((error) => {
+    loadPromise = null;
+    throw error;
+  });
   return loadPromise;
 }
 
-export function getBrython(): BrythonGlobal {
-  if (typeof window === 'undefined' || !window.__BRYTHON__) {
+export function getBrythonWindow(): BrythonRealmWindow {
+  if (typeof window === 'undefined' || !realmIframe?.isConnected || !realmIframe.contentWindow) {
     throw new Error('Brython is not loaded yet. Call loadBrython() first.');
   }
-  return window.__BRYTHON__;
+  return realmIframe.contentWindow as BrythonRealmWindow;
+}
+
+export function getBrython(): BrythonGlobal {
+  const realmWindow = getBrythonWindow();
+  if (!realmWindow.__BRYTHON__) {
+    throw new Error('Brython is not loaded yet. Call loadBrython() first.');
+  }
+  return realmWindow.__BRYTHON__;
 }
 
 export async function loadBrythonPythonImports(names: readonly string[]): Promise<void> {

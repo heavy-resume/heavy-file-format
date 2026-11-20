@@ -22,7 +22,8 @@ function writeFileCommand(path: string, content: string): string {
 
 async function waitForScriptingIdle(page: Page): Promise<void> {
   await page.waitForFunction(() => {
-    const scripting = (window as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } }).__HVY_SCRIPTING__;
+    const iframe = document.querySelector<HTMLIFrameElement>('iframe[data-hvy-brython-realm="true"]');
+    const scripting = (iframe?.contentWindow as unknown as { __HVY_SCRIPTING__?: { runtimes: Record<string, unknown> } } | null)?.__HVY_SCRIPTING__;
     return Boolean(scripting) && Object.keys(scripting.runtimes).length === 0;
   }, undefined, { timeout: SCRIPTING_IDLE_TIMEOUT_MS });
 }

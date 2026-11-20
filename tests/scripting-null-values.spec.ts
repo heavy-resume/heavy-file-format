@@ -174,7 +174,7 @@ test('Brython maps JavaScript null and undefined to None and None to null at eve
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw', exact: true }).waitFor();
   const expectedResult = await page.evaluate(async () => {
-    const { loadBrython, getBrython } = await import('/src/plugins/scripting/brython-loader.ts');
+    const { loadBrython, getBrython, getBrythonWindow } = await import('/src/plugins/scripting/brython-loader.ts');
     await loadBrython();
     const probe = {
       source: { present: 1, nullValue: null, undefinedValue: undefined, nested: [null], list: [1] },
@@ -182,7 +182,7 @@ test('Brython maps JavaScript null and undefined to None and None to null at eve
       describeArgument: (value: unknown) => (value === null ? 'null' : typeof value),
       out: {} as Record<string, unknown>,
     };
-    (window as Window & { fakeNoneProbe?: unknown }).fakeNoneProbe = probe;
+    (getBrythonWindow() as Window & { fakeNoneProbe?: unknown }).fakeNoneProbe = probe;
     (getBrython() as unknown as { runPythonSource(source: string, name: string): void }).runPythonSource(`
 from browser import window
 probe = window.fakeNoneProbe

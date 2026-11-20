@@ -60,19 +60,21 @@ function fillPercent(value: string, { min, max }: FormRangeBounds): string {
 }
 
 // Reserves the widest reachable value so the track does not shift under the pointer mid-drag.
-function readoutWidthCh({ min, max, step }: FormRangeBounds): number {
+function readoutWidthCh({ min, max, step }: FormRangeBounds, unit = ''): number {
   const decimals = Math.max(decimalPlaces(min), decimalPlaces(step));
   const integerWidth = Math.max(String(Math.trunc(min)).length, String(Math.trunc(max)).length);
-  return integerWidth + (decimals > 0 ? decimals + 1 : 0);
+  return integerWidth + (decimals > 0 ? decimals + 1 : 0) + unit.length;
 }
 
 interface CreateFormRangeControlOptions {
   name: string;
   bounds: FormRangeBounds;
   value: string;
+  unit?: string;
 }
 
 export function createFormRangeControl(options: CreateFormRangeControlOptions): { control: HTMLElement; input: HTMLInputElement } {
+  const unit = options.unit ?? '';
   const control = document.createElement('span');
   control.className = 'hvy-form-range-control';
   const input = document.createElement('input');
@@ -88,9 +90,13 @@ export function createFormRangeControl(options: CreateFormRangeControlOptions): 
   readout.className = 'hvy-form-range-readout';
   // The slider already exposes its value; left visible here it would also join the label's accessible name.
   readout.setAttribute('aria-hidden', 'true');
-  readout.style.minWidth = `${readoutWidthCh(options.bounds)}ch`;
+  readout.style.minWidth = `${readoutWidthCh(options.bounds, unit)}ch`;
   const syncDisplay = () => {
-    readout.textContent = input.value;
+    const formatted = `${input.value}${unit}`;
+    readout.textContent = formatted;
+    if (unit) {
+      input.setAttribute('aria-valuetext', formatted);
+    }
     input.style.setProperty('--hvy-form-range-fill', fillPercent(input.value, options.bounds));
   };
   syncDisplay();

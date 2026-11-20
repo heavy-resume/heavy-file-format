@@ -2230,6 +2230,23 @@ Plugin-specific rules:
 - `pluginConfig.title`, `pluginConfig.xAxisLabel`, and
   `pluginConfig.yAxisLabel` are optional strings.
 - `pluginConfig.legend` is optional and defaults to `true`.
+- `pluginConfig.seriesLayout` is optional and defaults to `"grouped"`. It
+  applies to `"bar"` and `"line"` charts and is ignored by other types.
+  Supported values:
+  - `"grouped"`: each series is drawn independently; bars for the same label
+    sit side by side.
+  - `"stacked"`: series values for the same label are stacked on top of each
+    other.
+  - `"overlapped"`: bars for the same label share one position and overlap,
+    with later columns drawn over earlier ones. For line charts this is
+    equivalent to `"grouped"`.
+- `pluginConfig.barWidth` is an optional number from `0.05` to `1` (default
+  `0.8`) giving the share of each label's slot covered by its bars. It applies
+  only to `"bar"` charts. Out-of-range values MUST be clamped.
+- `pluginConfig.barGap` is an optional number from `0` to `0.9` (default `0.1`)
+  giving the share of each grouped bar's slot left empty between neighboring
+  bars of the same label. It applies only to `"bar"` charts with a `"grouped"`
+  series layout. Out-of-range values MUST be clamped.
 - The plugin text body MUST be interpreted as CSV with the first row as column
   headers.
 - Graph renderers MUST use existing shared theme color variables for chart text,

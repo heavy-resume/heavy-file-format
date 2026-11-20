@@ -387,7 +387,7 @@ function createTableRowDragImage(app: HTMLElement, sourceRow: HTMLElement): HTML
     element.removeAttribute('contenteditable');
     element.removeAttribute('tabindex');
   });
-  row.querySelectorAll<HTMLElement>('.table-inline-toolbar, .table-grabber-insert-menu, .table-row-remove-cell > button').forEach((element) => element.remove());
+  row.querySelectorAll<HTMLElement>('.table-grabber-insert-menu, .table-row-remove-cell > button').forEach((element) => element.remove());
   body.append(row);
   table.append(body);
   dragImage.append(table);

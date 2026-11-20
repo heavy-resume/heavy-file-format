@@ -4,7 +4,7 @@
   gap: 0.6rem;
 }
 
-.hvy-document .hvy-form-plugin .hvy-form-range-input {
+.hvy-document .hvy-form-range-control .hvy-form-range-input {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
@@ -82,7 +82,7 @@
   box-shadow: 0 3px 10px var(--hvy-shadow-md);
 }
 
-.hvy-document .hvy-form-plugin .hvy-form-range-input:focus-visible {
+.hvy-document .hvy-form-range-control .hvy-form-range-input:focus-visible {
   outline: none;
 }
 
@@ -110,7 +110,7 @@
   text-align: center;
 }
 
-.hvy-document .hvy-form-plugin .hvy-form-range-input:disabled {
+.hvy-document .hvy-form-range-control .hvy-form-range-input:disabled {
   border-style: none;
   background: transparent;
   cursor: not-allowed;

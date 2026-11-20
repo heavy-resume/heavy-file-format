@@ -6,6 +6,11 @@ Chart attributes live in pluginConfig:
 - xAxisLabel: optional horizontal axis label.
 - yAxisLabel: optional vertical axis label.
 - legend: boolean, default true.
+- seriesLayout: grouped (default), stacked, or overlapped. Applies to bar and
+  line charts. Overlapped bars share one position, later columns on top.
+- barWidth: 0.05 to 1, default 0.8. Share of each label's slot covered by bars.
+- barGap: 0 to 0.9, default 0.1. Share of each grouped bar's slot left empty
+  between neighboring bars. Only used by grouped bar charts.
 
 The plugin text body is CSV. The first row is treated as headers. For bar, line,
 radar, and polarArea charts, the first column is labels and remaining columns are

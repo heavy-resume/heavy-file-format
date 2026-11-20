@@ -49,9 +49,7 @@
 .hvy-document .table-editor-grid th:has(.table-inline-edit-shell:hover),
 .hvy-document .table-editor-grid th:has(.table-inline-edit-shell:focus-within),
 .hvy-document .table-editor-grid td:has(.table-inline-edit-shell:hover),
-.hvy-document .table-editor-grid td:has(.table-inline-edit-shell:focus-within),
-.hvy-document .table-editor-grid th:has(.table-inline-toolbar .is-selected),
-.hvy-document .table-editor-grid td:has(.table-inline-toolbar .is-selected) {
+.hvy-document .table-editor-grid td:has(.table-inline-edit-shell:focus-within) {
   z-index: 20;
 }
 
@@ -135,7 +133,7 @@
   min-width: 0;
 }
 
-.hvy-document .table-row-drag-image :is(.table-inline-toolbar, .table-grabber-insert-menu, .table-row-remove-cell > button) {
+.hvy-document .table-row-drag-image :is(.table-grabber-insert-menu, .table-row-remove-cell > button) {
   display: none;
 }
 
@@ -167,11 +165,20 @@
 }
 
 .hvy-document .table-column-head {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  display: flex;
   align-items: start;
   gap: 0.2rem;
+  min-width: 0;
   padding: 0.05rem 0.08rem;
+}
+
+.hvy-document .table-column-head > .table-inline-edit-shell {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.hvy-document .table-column-head > :not(.table-inline-edit-shell) {
+  flex: 0 0 auto;
 }
 
 .hvy-document .table-column-settings {
@@ -290,51 +297,6 @@
 .hvy-document .table-inline-edit-shell {
   position: relative;
   min-width: 0;
-}
-
-.hvy-document .table-inline-toolbar {
-  position: absolute;
-  top: calc(100% + 0.15rem);
-  right: 0;
-  z-index: 30;
-  display: none;
-  gap: 0.25rem;
-  justify-content: flex-end;
-  min-width: 0;
-  width: fit-content;
-  height: auto;
-  padding: 0.18rem;
-  border: 1px solid var(--hvy-border-translucent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--hvy-surface) 96%, transparent);
-  box-shadow: 0 8px 18px var(--hvy-shadow);
-  margin: 0;
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
-}
-
-.hvy-document .table-inline-edit-shell:focus-within .table-inline-toolbar,
-.hvy-document .table-inline-edit-shell:hover .table-inline-toolbar,
-.hvy-document .table-inline-toolbar:has(.is-selected) {
-  display: flex;
-}
-
-.hvy-document .table-inline-toolbar button {
-  padding: 0.12rem 0.28rem;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  line-height: 1.1;
-  background: transparent;
-}
-
-.hvy-document .hvy-surface-phone .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-alt="true"]) .table-inline-toolbar [data-rich-action="alt"],
-.hvy-document .hvy-surface-tablet .table-inline-edit-shell:not(.is-previewing-full):has([data-hvy-alt="true"]) .table-inline-toolbar [data-rich-action="alt"],
-.hvy-document .table-inline-edit-shell.is-previewing-compact .table-inline-toolbar [data-rich-action="alt"],
-.hvy-document .table-inline-edit-shell.is-previewing-nowrap .table-inline-toolbar [data-rich-action="nowrap"] {
-  background: var(--hvy-button-bg);
-  border-color: var(--hvy-button-bg);
-  color: var(--hvy-button-text);
 }
 
 .hvy-document .table-drag-handle {

@@ -1,33 +1,26 @@
-import '../editor/components/table/table.css';
 import './graph.css';
 
-import { plusIcon, closeIcon } from '../icons';
+import { chevronDownIcon, closeIcon } from '../icons';
+import { renderTableEditorFrame, renderTableEditorGrid } from '../editor/components/table/table-editor-grid';
 import { createBuiltInPluginMetadata, GRAPH_PLUGIN_ID } from './registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from './types';
 import graphDocumentation from './graph.about.txt?raw';
-
-export const GRAPH_TYPES = ['bar', 'line', 'pie', 'doughnut', 'scatter', 'bubble', 'radar', 'polarArea'] as const;
-export type GraphType = (typeof GRAPH_TYPES)[number];
-
-interface GraphConfig {
-  type: GraphType;
-  title: string;
-  xAxisLabel: string;
-  yAxisLabel: string;
-  legend: boolean;
-}
-
-interface GraphTheme {
-  text: string;
-  grid: string;
-  axis: string;
-  outline: string;
-  series: string[];
-}
-
-interface GraphChartOptionOverrides {
-  legend?: boolean;
-}
+import { createFormRangeControl, createFormRangeDragTracker, type FormRangeDragTracker } from './form-range-field/form-range-field';
+import {
+  GRAPH_BAR_GAP_RANGE,
+  GRAPH_BAR_WIDTH_RANGE,
+  GRAPH_SERIES_LAYOUTS,
+  GRAPH_TYPES,
+  buildGraphChartOptions,
+  graphTypeSupportsAxes,
+  graphTypeSupportsSeriesLayout,
+  readGraphConfig,
+  readGraphTheme,
+  styleGraphChartData,
+  type GraphConfig,
+  type GraphSeriesLayout,
+  type GraphType,
+} from './graph-chart-config';
 
 export interface CsvParseResult {
   rows: string[][];
@@ -43,30 +36,12 @@ type ChartModule = typeof import('chart.js/auto');
 type ChartInstance = InstanceType<ChartModule['Chart']>;
 
 const DEFAULT_CSV = 'Label,Value\nExample A,10\nExample B,20\nExample C,15';
-const DEFAULT_CONFIG: GraphConfig = {
-  type: 'bar',
-  title: '',
-  xAxisLabel: '',
-  yAxisLabel: '',
-  legend: true,
-};
 
 let chartModulePromise: Promise<ChartModule> | null = null;
 
 function loadChartModule(): Promise<ChartModule> {
   chartModulePromise ??= import('chart.js/auto');
   return chartModulePromise;
-}
-
-function readConfig(raw: Record<string, unknown>): GraphConfig {
-  const rawType = typeof raw.type === 'string' ? raw.type : '';
-  return {
-    type: GRAPH_TYPES.includes(rawType as GraphType) ? rawType as GraphType : DEFAULT_CONFIG.type,
-    title: typeof raw.title === 'string' ? raw.title : DEFAULT_CONFIG.title,
-    xAxisLabel: typeof raw.xAxisLabel === 'string' ? raw.xAxisLabel : DEFAULT_CONFIG.xAxisLabel,
-    yAxisLabel: typeof raw.yAxisLabel === 'string' ? raw.yAxisLabel : DEFAULT_CONFIG.yAxisLabel,
-    legend: typeof raw.legend === 'boolean' ? raw.legend : DEFAULT_CONFIG.legend,
-  };
 }
 
 export function parseGraphCsv(csv: string): CsvParseResult {
@@ -207,44 +182,6 @@ export function buildGraphChartData(csv: string, type: GraphType): GraphBuildRes
   return { data: { labels, datasets }, error: null };
 }
 
-function renderChartOptions(config: GraphConfig, theme: GraphTheme, overrides: GraphChartOptionOverrides = {}): Record<string, unknown> {
-  const axisScales = config.type === 'pie' || config.type === 'doughnut' || config.type === 'polarArea' || config.type === 'radar'
-    ? {}
-    : {
-        x: {
-          border: { color: theme.axis },
-          grid: { color: theme.grid },
-          ticks: { color: theme.text },
-          title: { color: theme.text, display: Boolean(config.xAxisLabel.trim()), text: config.xAxisLabel },
-        },
-        y: {
-          border: { color: theme.axis },
-          grid: { color: theme.grid },
-          ticks: { color: theme.text },
-          title: { color: theme.text, display: Boolean(config.yAxisLabel.trim()), text: config.yAxisLabel },
-        },
-      };
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    color: theme.text,
-    plugins: {
-      legend: {
-        display: overrides.legend ?? config.legend,
-        labels: {
-          color: theme.text,
-          boxWidth: 10,
-          boxHeight: 10,
-          padding: 10,
-          usePointStyle: true,
-        },
-      },
-      title: { color: theme.text, display: Boolean(config.title.trim()), text: config.title },
-    },
-    scales: axisScales,
-  };
-}
-
 export function shouldCollapseInlineGraphLegend(width: number, height: number, datasetCount: number): boolean {
   return datasetCount >= 4 && (width < 720 || height < 340);
 }
@@ -291,79 +228,6 @@ function readLegendColor(dataset: Record<string, unknown>): string {
   return 'var(--hvy-accent-1)';
 }
 
-function readGraphTheme(root: HTMLElement): GraphTheme {
-  const computed = getComputedStyle(root);
-  const read = (name: string, fallbackValue: string) => computed.getPropertyValue(name).trim() || fallbackValue;
-  const text = read('--hvy-text', '#1a2530');
-  return {
-    text,
-    grid: colorWithAlpha(text, 0.15),
-    axis: colorWithAlpha(text, 0.52),
-    outline: read('--hvy-surface', '#ffffff'),
-    series: [
-      read('--hvy-accent-1', '#2c5e78'),
-      read('--hvy-danger', '#c86464'),
-      read('--hvy-success', '#1c6231'),
-      read('--hvy-accent-2', '#325f6e'),
-      read('--hvy-warning', '#c79200'),
-      read('--hvy-link-color', '#162f3d'),
-      read('--hvy-focus', '#8cb0c4'),
-      read('--hvy-text-muted', '#6b8fa0'),
-    ],
-  };
-}
-
-function styleGraphChartData(data: Record<string, unknown>, type: GraphType, theme: GraphTheme): Record<string, unknown> {
-  const datasets = Array.isArray(data.datasets) ? data.datasets : [];
-  const styledDatasets = datasets.map((dataset, index) => styleGraphDataset(dataset, index, type, theme));
-  return { ...data, datasets: styledDatasets };
-}
-
-function styleGraphDataset(dataset: unknown, index: number, type: GraphType, theme: GraphTheme): Record<string, unknown> {
-  const source = dataset && typeof dataset === 'object' && !Array.isArray(dataset) ? dataset as Record<string, unknown> : {};
-  const color = theme.series[index % theme.series.length] ?? theme.series[0] ?? '#2563eb';
-  if (type === 'pie' || type === 'doughnut' || type === 'polarArea') {
-    const count = Array.isArray(source.data) ? source.data.length : theme.series.length;
-    return {
-      ...source,
-      backgroundColor: Array.from({ length: count }, (_value, itemIndex) => colorWithAlpha(theme.series[itemIndex % theme.series.length] ?? color, 0.78)),
-      borderColor: theme.outline,
-      borderWidth: 2,
-      hoverBorderColor: theme.outline,
-      hoverBorderWidth: 3,
-    };
-  }
-  return {
-    ...source,
-    backgroundColor: colorWithAlpha(color, type === 'line' ? 0.16 : 0.72),
-    borderColor: type === 'bar' ? theme.outline : color,
-    borderWidth: type === 'bar' ? 2 : 2.5,
-    pointBackgroundColor: color,
-    pointBorderColor: theme.outline,
-    pointBorderWidth: 2,
-  };
-}
-
-function colorWithAlpha(color: string, alpha: number): string {
-  const trimmed = color.trim();
-  const hex = trimmed.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (hex) {
-    const raw = hex[1]!.length === 3
-      ? hex[1]!.split('').map((char) => `${char}${char}`).join('')
-      : hex[1]!;
-    const numeric = Number.parseInt(raw, 16);
-    return `rgba(${(numeric >> 16) & 255}, ${(numeric >> 8) & 255}, ${numeric & 255}, ${alpha})`;
-  }
-  const rgb = trimmed.match(/^rgba?\(([^)]+)\)$/i);
-  if (rgb) {
-    const parts = rgb[1]!.split(',').map((part) => part.trim()).slice(0, 3);
-    if (parts.length === 3) {
-      return `rgba(${parts.join(', ')}, ${alpha})`;
-    }
-  }
-  return trimmed;
-}
-
 function renderChartFrame(): string {
   return '<div class="hvy-graph-frame"><canvas></canvas></div>';
 }
@@ -390,19 +254,61 @@ function renderEmpty(): string {
   return '<div class="hvy-graph-empty">Add CSV data to render a graph.</div>';
 }
 
+// Remounts (view switches, undo, full rerenders) create a fresh chart for a graph the reader
+// has already watched animate in; those draw at rest instead of replaying the entrance.
+const animatedGraphKeys = new Set<string>();
+
+// Draws overlapped bar elements tallest-first per column so shorter series stay visible in front even when series cross.
+const overlappedBarDrawOrderPlugin = {
+  id: 'hvyOverlappedBarDrawOrder',
+  beforeDatasetsDraw(chart: ChartInstance): boolean | void {
+    const configType = (chart.config as { type?: string }).type;
+    if (configType !== 'bar') return;
+    const datasets = chart.data.datasets as { grouped?: boolean }[];
+    if (datasets.length < 2 || !datasets.some((dataset) => dataset.grouped === false)) return;
+    const entries: { element: { draw(ctx: CanvasRenderingContext2D): void }; height: number; datasetIndex: number }[] = [];
+    datasets.forEach((_dataset, datasetIndex) => {
+      if (!chart.isDatasetVisible(datasetIndex)) return;
+      const meta = chart.getDatasetMeta(datasetIndex);
+      meta.data.forEach((rawElement) => {
+        const element = rawElement as unknown as { draw(ctx: CanvasRenderingContext2D): void; y?: number; base?: number; skip?: boolean };
+        if (element.skip) return;
+        const height = typeof element.y === 'number' && typeof element.base === 'number' ? Math.abs(element.base - element.y) : 0;
+        entries.push({ element, height, datasetIndex });
+      });
+    });
+    entries.sort((a, b) => b.height - a.height || a.datasetIndex - b.datasetIndex);
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
+    entries.forEach(({ element }) => element.draw(ctx));
+    ctx.restore();
+    return false;
+  },
+};
+
+function graphAnimationKey(ctx: HvyPluginContext): string {
+  return `${ctx.sectionKey}\u0000${ctx.block.id}`;
+}
+
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-graph hvy-graph-${ctx.mode}`;
   let chart: ChartInstance | null = null;
   let expandedChart: ChartInstance | null = null;
   let chartType: GraphType | null = null;
+  let chartSignature = '';
   let renderVersion = 0;
+  const rangeDragTracker = createFormRangeDragTracker();
   let expandedKeydownListener: ((event: KeyboardEvent) => void) | null = null;
 
   const destroyChart = () => {
     chart?.destroy();
     chart = null;
     chartType = null;
+    chartSignature = '';
   };
 
   const destroyExpandedChart = () => {
@@ -447,26 +353,35 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       canvas = live;
     }
     const theme = readGraphTheme(root);
-    const styledData = styleGraphChartData(builtData, config.type, theme);
+    const styledData = styleGraphChartData(builtData, config, theme);
     const frameRect = canvas.parentElement?.getBoundingClientRect() ?? canvas.getBoundingClientRect();
     const datasetCount = Array.isArray(builtData.datasets) ? builtData.datasets.length : 0;
     const useExternalLegend = config.legend && shouldCollapseInlineGraphLegend(frameRect.width, frameRect.height, datasetCount);
-    const options = renderChartOptions(config, theme, {
+    const options = buildGraphChartOptions(config, theme, {
       legend: config.legend && !useExternalLegend,
     });
+    const signature = JSON.stringify([config, styledData, options]);
     if (chart && chart.canvas === canvas && chartType === config.type) {
+      if (signature === chartSignature) return;
       chart.data = styledData as never;
       chart.options = options as never;
-      chart.update();
+      // Edits and redraws show the new state directly; only a graph's first appearance animates.
+      chart.update('none');
+      chartSignature = signature;
       syncExternalGraphLegend(canvas, styledData, useExternalLegend);
       return;
     }
     destroyChart();
+    const animationKey = graphAnimationKey(ctx);
+    const animate = !animatedGraphKeys.has(animationKey);
+    animatedGraphKeys.add(animationKey);
     chart = new module.Chart(canvas, {
       type: config.type,
       data: styledData as never,
-      options,
+      options: animate ? options : { ...options, animation: false },
+      plugins: [overlappedBarDrawOrderPlugin],
     });
+    chartSignature = signature;
     syncExternalGraphLegend(canvas, styledData, useExternalLegend);
     chartType = config.type;
   };
@@ -482,14 +397,15 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     expandedChart?.destroy();
     expandedChart = new module.Chart(canvas, {
       type: config.type,
-      data: styleGraphChartData(builtData, config.type, theme) as never,
-      options: renderChartOptions(config, theme),
+      data: styleGraphChartData(builtData, config, theme) as never,
+      options: buildGraphChartOptions(config, theme),
+      plugins: [overlappedBarDrawOrderPlugin],
     });
   };
 
   const openExpandedChart = (frame: HTMLElement) => {
     if (ctx.mode !== 'reader' || !shouldOpenExpandedChart(frame)) return;
-    const config = readConfig(ctx.block.schema.pluginConfig);
+    const config = readGraphConfig(ctx.block.schema.pluginConfig);
     const csv = ctx.block.text.trim().length > 0 ? ctx.block.text : DEFAULT_CSV;
     const built = buildGraphChartData(csv, config.type);
     if (built.error) return;
@@ -527,11 +443,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   const renderPreview = () => {
     const version = ++renderVersion;
-    const config = readConfig(ctx.block.schema.pluginConfig);
+    const config = readGraphConfig(ctx.block.schema.pluginConfig);
     const csv = ctx.block.text.trim().length > 0 ? ctx.block.text : DEFAULT_CSV;
     const parsed = parseGraphCsv(csv);
     if (ctx.mode === 'editor') {
-      syncEditorShell(ctx, root, config, csv);
+      syncEditorShell(root, config, csv, rangeDragTracker);
     }
     if (parsed.rows.length === 0) {
       destroyChart();
@@ -572,6 +488,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
     if (field === 'legend' && target instanceof HTMLInputElement) {
       ctx.setConfig({ legend: target.checked });
+      return;
+    }
+    if (target instanceof HTMLInputElement && target.type === 'range') {
+      ctx.setConfig({ [field]: Number(target.value) / 100 });
       return;
     }
     if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {
@@ -711,6 +631,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     refresh: renderPreview,
     unmount: () => {
       destroyChart();
+      rangeDragTracker.dispose();
       destroyExpandedChart();
       if (ctx.mode === 'editor') {
         root.removeEventListener('input', onInput);
@@ -749,7 +670,7 @@ function getEditableRows(csv: string): string[][] {
   return parseGraphCsv(DEFAULT_CSV).rows.map((row) => [...row]);
 }
 
-function syncEditorShell(ctx: HvyPluginContext, root: HTMLElement, config: GraphConfig, csv: string): void {
+function syncEditorShell(root: HTMLElement, config: GraphConfig, csv: string, rangeDragTracker: FormRangeDragTracker): void {
   const active = document.activeElement;
   const inRoot = active instanceof HTMLElement && root.contains(active);
   const activeField = inRoot ? active.dataset.graphField ?? '' : '';
@@ -759,148 +680,243 @@ function syncEditorShell(ctx: HvyPluginContext, root: HTMLElement, config: Graph
     ? { start: active.selectionStart, end: active.selectionEnd, direction: active.selectionDirection }
     : null;
   const focusedInTable = activeField === 'cell' || activeField === 'column';
-  const focusedInData = focusedInTable;
-  if (!focusedInData || !root.querySelector('.hvy-graph-editor')) {
-    root.innerHTML = renderEditorShell(ctx, config, csv);
+  const editor = root.querySelector<HTMLElement>('.hvy-graph-editor');
+  // The shell is built once and patched afterward, so the chart canvas and any
+  // slider being dragged survive edits.
+  if (!editor) {
+    root.innerHTML = renderEditorShell(config, csv);
   } else if (!focusedInTable) {
-    const panel = root.querySelector<HTMLElement>('.hvy-graph-data-panel');
-    if (panel) {
-      const tableHtml = renderDataTable(csv, activeField, activeRow, activeColumn);
-      const existingTable = panel.querySelector<HTMLElement>('.table-editor');
-      if (existingTable) {
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = tableHtml;
-        const next = wrapper.firstElementChild;
-        if (next) existingTable.replaceWith(next);
-      }
-    }
+    const existingTable = root.querySelector<HTMLElement>('.hvy-graph-data-panel .table-editor');
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = renderDataTable(csv);
+    const next = wrapper.firstElementChild;
+    if (existingTable && next) existingTable.replaceWith(next);
   }
-  root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input[data-graph-field], select[data-graph-field], textarea[data-graph-field]').forEach((input) => {
+  syncGraphControlVisibility(root, config);
+  root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[data-graph-field]:not([type="range"]), select[data-graph-field]').forEach((input) => {
     const field = input.dataset.graphField ?? '';
-    if (field === 'type' && input instanceof HTMLSelectElement) input.value = config.type;
-    if (field === 'title' && input instanceof HTMLInputElement) input.value = config.title;
-    if (field === 'xAxisLabel' && input instanceof HTMLInputElement) input.value = config.xAxisLabel;
-    if (field === 'yAxisLabel' && input instanceof HTMLInputElement) input.value = config.yAxisLabel;
-    if (field === 'legend' && input instanceof HTMLInputElement) input.checked = config.legend;
+    if (field === 'legend' && input instanceof HTMLInputElement) {
+      input.checked = config.legend;
+      return;
+    }
+    const value = readGraphTextControlValue(config, field);
+    if (value !== null && input.value !== value) input.value = value;
   });
+  syncGraphRangeControls(root, config, rangeDragTracker);
   restoreGraphFocus(root, activeField, activeRow, activeColumn, activeSelection);
 }
 
-function renderEditorShell(_ctx: HvyPluginContext, config: GraphConfig, csv: string): string {
+function readGraphTextControlValue(config: GraphConfig, field: string): string | null {
+  switch (field) {
+    case 'type': return config.type;
+    case 'title': return config.title;
+    case 'xAxisLabel': return config.xAxisLabel;
+    case 'yAxisLabel': return config.yAxisLabel;
+    case 'seriesLayout': return config.type === 'line' && config.seriesLayout !== 'stacked' ? 'grouped' : config.seriesLayout;
+    default: return null;
+  }
+}
+
+type GraphRangeField = 'barWidth' | 'barGap';
+
+const GRAPH_RANGE_FIELDS: Record<GraphRangeField, { min: number; max: number }> = {
+  barWidth: GRAPH_BAR_WIDTH_RANGE,
+  barGap: GRAPH_BAR_GAP_RANGE,
+};
+
+// Sliders work in whole percents; pluginConfig stores the fraction.
+function syncGraphRangeControls(root: HTMLElement, config: GraphConfig, rangeDragTracker: FormRangeDragTracker): void {
+  if (rangeDragTracker.isDragging()) return;
+  (Object.keys(GRAPH_RANGE_FIELDS) as GraphRangeField[]).forEach((field) => {
+    const slot = root.querySelector<HTMLElement>(`[data-graph-range-slot="${field}"]`);
+    if (!slot) return;
+    const value = String(Math.round(config[field] * 100));
+    const existing = slot.querySelector<HTMLInputElement>('input');
+    if (existing?.value === value) return;
+    const wasFocused = existing !== null && existing === document.activeElement;
+    const range = GRAPH_RANGE_FIELDS[field];
+    const { control, input } = createFormRangeControl({
+      name: `hvy-graph-${field}`,
+      bounds: { min: Math.round(range.min * 100), max: Math.round(range.max * 100), step: 5 },
+      value,
+      unit: '%',
+    });
+    input.dataset.graphField = field;
+    rangeDragTracker.watch(input);
+    slot.replaceChildren(control);
+    if (wasFocused) input.focus({ preventScroll: true });
+  });
+}
+
+function syncGraphControlVisibility(root: HTMLElement, config: GraphConfig): void {
+  const isBar = config.type === 'bar';
+  const isLine = config.type === 'line';
+  const hasAxes = graphTypeSupportsAxes(config.type);
+  const seriesHidden: Record<string, boolean> = {
+    seriesLayout: !graphTypeSupportsSeriesLayout(config.type),
+    barWidth: !isBar,
+    barGap: !isBar || config.seriesLayout !== 'grouped',
+  };
+  const hidden: Record<string, boolean> = {
+    xAxisLabel: !hasAxes,
+    yAxisLabel: !hasAxes,
+    ...seriesHidden,
+  };
+  Object.entries(hidden).forEach(([control, isHidden]) => {
+    root.querySelector<HTMLElement>(`[data-graph-control="${control}"]`)?.toggleAttribute('hidden', isHidden);
+  });
+  const controls = root.querySelector<HTMLElement>('.hvy-graph-controls');
+  if (controls) {
+    controls.dataset.graphHasAxes = hasAxes ? 'true' : 'false';
+  }
+  const seriesSelect = root.querySelector<HTMLSelectElement>('select[data-graph-field="seriesLayout"]');
+  if (seriesSelect) {
+    const allowedLayouts = isLine ? GRAPH_LINE_SERIES_LAYOUTS : GRAPH_SERIES_LAYOUTS;
+    const labels = isLine ? GRAPH_LINE_SERIES_LAYOUT_LABELS : GRAPH_SERIES_LAYOUT_LABELS;
+    const currentValues = Array.from(seriesSelect.options).map((option) => option.value);
+    const sameOptions = currentValues.length === allowedLayouts.length
+      && allowedLayouts.every((layout, index) => currentValues[index] === layout);
+    if (!sameOptions) {
+      seriesSelect.replaceChildren(
+        ...allowedLayouts.map((layout) => {
+          const option = document.createElement('option');
+          option.value = layout;
+          option.textContent = labels[layout];
+          return option;
+        })
+      );
+    } else {
+      Array.from(seriesSelect.options).forEach((option) => {
+        const nextLabel = labels[option.value as GraphSeriesLayout];
+        if (nextLabel && option.textContent !== nextLabel) {
+          option.textContent = nextLabel;
+        }
+      });
+    }
+  }
+  root.querySelector<HTMLElement>('.hvy-graph-series-controls')?.toggleAttribute('hidden', Object.values(seriesHidden).every(Boolean));
+}
+
+const GRAPH_TYPE_LABELS: Record<GraphType, string> = {
+  bar: 'Bar',
+  line: 'Line',
+  pie: 'Pie',
+  doughnut: 'Doughnut',
+  scatter: 'Scatter',
+  bubble: 'Bubble',
+  radar: 'Radar',
+  polarArea: 'Polar area',
+};
+
+const GRAPH_SERIES_LAYOUT_LABELS: Record<GraphSeriesLayout, string> = {
+  grouped: 'Side by side',
+  stacked: 'Stacked',
+  overlapped: 'Overlapped',
+};
+
+const GRAPH_LINE_SERIES_LAYOUTS: readonly GraphSeriesLayout[] = ['grouped', 'stacked'];
+
+const GRAPH_LINE_SERIES_LAYOUT_LABELS: Record<GraphSeriesLayout, string> = {
+  grouped: 'Separate',
+  stacked: 'Stacked',
+  overlapped: 'Overlapped',
+};
+
+function renderEditorShell(config: GraphConfig, csv: string): string {
+  const hasAxes = graphTypeSupportsAxes(config.type);
+  const seriesLayouts = config.type === 'line' ? GRAPH_LINE_SERIES_LAYOUTS : GRAPH_SERIES_LAYOUTS;
+  const seriesLabels = config.type === 'line' ? GRAPH_LINE_SERIES_LAYOUT_LABELS : GRAPH_SERIES_LAYOUT_LABELS;
+  const activeSeriesLayout = config.type === 'line' && config.seriesLayout !== 'stacked' ? 'grouped' : config.seriesLayout;
   return `<div class="hvy-graph-editor" data-editor-activation-autofocus="false">
-    <div class="hvy-graph-controls">
-      <label><span>Type</span><select data-graph-field="type">
-        ${GRAPH_TYPES.map((type) => `<option value="${type}"${config.type === type ? ' selected' : ''}>${type}</option>`).join('')}
-      </select></label>
-      <label><span>Title</span><input type="text" data-graph-field="title" value="${escapeAttr(config.title)}"></label>
-      <label><span>X axis</span><input type="text" data-graph-field="xAxisLabel" value="${escapeAttr(config.xAxisLabel)}"></label>
-      <label><span>Y axis</span><input type="text" data-graph-field="yAxisLabel" value="${escapeAttr(config.yAxisLabel)}"></label>
-      <label class="hvy-graph-toggle"><input type="checkbox" data-graph-field="legend"${config.legend ? ' checked' : ''}><span>Legend</span></label>
-    </div>
-    <div class="hvy-graph-data-panel">
-      ${renderDataTable(csv, '', '', '')}
+    <div class="hvy-graph-controls" data-graph-has-axes="${hasAxes ? 'true' : 'false'}">
+      <label class="hvy-graph-field">
+        <span class="hvy-graph-field-label">Type</span>
+        <span class="hvy-graph-select-shell">
+          <select data-graph-field="type">
+            ${GRAPH_TYPES.map((type) => `<option value="${type}"${config.type === type ? ' selected' : ''}>${GRAPH_TYPE_LABELS[type]}</option>`).join('')}
+          </select>
+          ${chevronDownIcon()}
+        </span>
+      </label>
+      <label class="hvy-graph-field">
+        <span class="hvy-graph-field-label">Title</span>
+        <input type="text" data-graph-field="title" value="${escapeAttr(config.title)}" placeholder="Chart title">
+      </label>
+      <label class="hvy-graph-field" data-graph-control="xAxisLabel"${hasAxes ? '' : ' hidden'}>
+        <span class="hvy-graph-field-label">X axis</span>
+        <input type="text" data-graph-field="xAxisLabel" value="${escapeAttr(config.xAxisLabel)}" placeholder="Optional">
+      </label>
+      <label class="hvy-graph-field" data-graph-control="yAxisLabel"${hasAxes ? '' : ' hidden'}>
+        <span class="hvy-graph-field-label">Y axis</span>
+        <input type="text" data-graph-field="yAxisLabel" value="${escapeAttr(config.yAxisLabel)}" placeholder="Optional">
+      </label>
+      <label class="checkbox-label hvy-graph-toggle">
+        <input type="checkbox" data-graph-field="legend"${config.legend ? ' checked' : ''}>
+        <span>Legend</span>
+      </label>
+      <div class="hvy-graph-series-controls">
+        <label class="hvy-graph-field" data-graph-control="seriesLayout">
+          <span class="hvy-graph-field-label">Series</span>
+          <span class="hvy-graph-select-shell">
+            <select data-graph-field="seriesLayout">
+              ${seriesLayouts.map((layout) => `<option value="${layout}"${activeSeriesLayout === layout ? ' selected' : ''}>${seriesLabels[layout]}</option>`).join('')}
+            </select>
+            ${chevronDownIcon()}
+          </span>
+        </label>
+        <label class="hvy-graph-field hvy-graph-range-field" data-graph-control="barWidth">
+          <span class="hvy-graph-field-label">Bar width</span>
+          <span class="hvy-graph-range-slot" data-graph-range-slot="barWidth"></span>
+        </label>
+        <label class="hvy-graph-field hvy-graph-range-field" data-graph-control="barGap">
+          <span class="hvy-graph-field-label">Bar gap</span>
+          <span class="hvy-graph-range-slot" data-graph-range-slot="barGap"></span>
+        </label>
+      </div>
     </div>
     <div data-graph-preview="true"></div>
+    <div class="hvy-graph-data-panel">
+      ${renderDataTable(csv)}
+    </div>
   </div>`;
 }
 
-function renderDataTable(csv: string, _activeField: string, _activeRow: string, _activeColumn: string): string {
+function renderDataTable(csv: string): string {
   const parsed = parseGraphCsv(csv.trim().length > 0 ? csv : DEFAULT_CSV);
   if (parsed.error) {
-    return `<div class="table-editor"><div class="table-editor-frame">${renderError(parsed.error)}</div></div>`;
+    return renderTableEditorFrame(renderError(parsed.error));
   }
   const rows = parsed.rows.length > 0 ? parsed.rows : getEditableRows(DEFAULT_CSV);
   const [headers = [], ...bodyRows] = rows;
-  const columnCount = Math.max(headers.length, 1);
   const canRemoveColumn = headers.length > 1;
 
-  const renderHeaderCell = (cell: string, columnIndex: number) => {
-    return `<th data-graph-column-drop="true" data-column-index="${columnIndex}">
-      <div class="table-column-head">
-        <button
-          type="button"
-          class="table-drag-handle"
-          draggable="true"
-          data-graph-drag="column"
-          data-column-index="${columnIndex}"
-          title="Drag to reorder column"
-        >::</button>
-        <div class="table-inline-edit-shell">
-          <div
-            class="inline-editable table-inline-text table-column-name"
-            contenteditable="true"
-            spellcheck="false"
-            data-graph-field="column"
-            data-column-index="${columnIndex}"
-            data-placeholder="Column ${columnIndex + 1}"
-          >${escapeHtml(cell)}</div>
-        </div>
-        ${canRemoveColumn
-          ? `<button type="button" class="danger remove-x" data-graph-action="remove-column" data-column-index="${columnIndex}" title="Remove column">${closeIcon()}</button>`
-          : ''}
-      </div>
-    </th>`;
-  };
-
-  const renderBodyRow = (row: string[], rowOffset: number) => {
-    const rowIndex = rowOffset + 1;
-    return `<tr class="table-row-editor table-row-editor-main" data-graph-row-drop="true" data-row-index="${rowIndex}">
-      <td class="table-row-utility">
-        <button
-          type="button"
-          class="table-drag-handle"
-          draggable="true"
-          data-graph-drag="row"
-          data-row-index="${rowIndex}"
-          title="Drag to reorder row"
-        >::</button>
-      </td>
-      ${headers.map((_header, columnIndex) => {
-        const value = row[columnIndex] ?? '';
-        const placeholder = headers[columnIndex] || 'Cell value';
-        return `<td>
-          <div class="table-inline-edit-shell">
-            <div
-              class="inline-editable table-inline-text"
-              contenteditable="true"
-              spellcheck="false"
-              data-graph-field="cell"
-              data-row-index="${rowIndex}"
-              data-column-index="${columnIndex}"
-              data-placeholder="${escapeAttr(placeholder)}"
-            >${escapeHtml(value)}</div>
-          </div>
-        </td>`;
-      }).join('')}
-      <td class="table-row-utility table-row-remove-cell">
-        <button type="button" class="danger remove-x" data-graph-action="remove-row" data-row-index="${rowIndex}" title="Remove row">${closeIcon()}</button>
-      </td>
-    </tr>`;
-  };
-
-  return `<div class="table-editor">
-    <div class="table-editor-frame">
-      <table class="table-editor-grid" style="--hvy-table-editor-columns: ${columnCount};">
-        <thead>
-          <tr>
-            <th class="table-utility-cell"></th>
-            ${headers.map((cell, columnIndex) => renderHeaderCell(cell, columnIndex)).join('')}
-            <th class="table-add-column-cell">
-              <button type="button" class="ghost table-add-button" data-graph-action="add-column" title="Add column" aria-label="Add column">${plusIcon()}</button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          ${bodyRows.map((row, rowOffset) => renderBodyRow(row, rowOffset)).join('')}
-          <tr class="table-add-row-line">
-            <td colspan="${columnCount + 2}">
-              <button type="button" class="ghost" data-graph-action="add-row">${plusIcon()} Row</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+  return renderTableEditorGrid({
+    columns: headers.map((cell, columnIndex) => ({
+      thAttrs: `data-graph-column-drop="true" data-column-index="${columnIndex}"`,
+      leadingHtml: `<button type="button" class="table-drag-handle" draggable="true" data-graph-drag="column" data-column-index="${columnIndex}" title="Drag to reorder column">::</button>`,
+      editableAttrs: `contenteditable="true" spellcheck="false" data-graph-field="column" data-column-index="${columnIndex}" data-placeholder="Column ${columnIndex + 1}"`,
+      contentHtml: escapeHtml(cell),
+      removeButtonAttrs: canRemoveColumn ? `data-graph-action="remove-column" data-column-index="${columnIndex}"` : null,
+    })),
+    addColumnButtonAttrs: 'data-graph-action="add-column"',
+    rows: bodyRows.map((row, rowOffset) => {
+      const rowIndex = rowOffset + 1;
+      return {
+        trAttrs: `data-graph-row-drop="true" data-row-index="${rowIndex}"`,
+        leadingHtml: `<button type="button" class="table-drag-handle" draggable="true" data-graph-drag="row" data-row-index="${rowIndex}" title="Drag to reorder row">::</button>`,
+        cells: headers.map((_header, columnIndex) => {
+          const value = row[columnIndex] ?? '';
+          const placeholder = headers[columnIndex] || 'Cell value';
+          return {
+            editableAttrs: `contenteditable="true" spellcheck="false" data-graph-field="cell" data-row-index="${rowIndex}" data-column-index="${columnIndex}" data-placeholder="${escapeAttr(placeholder)}"`,
+            contentHtml: escapeHtml(value),
+          };
+        }),
+        removeButtonAttrs: `data-graph-action="remove-row" data-row-index="${rowIndex}"`,
+      };
+    }),
+    addRowButtonAttrs: 'data-graph-action="add-row"',
+  });
 }
 
 function restoreGraphFocus(
@@ -955,6 +971,7 @@ export const graphPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${GRAPH_PLUGIN_ID}","pluginConfig":{"type":"bar","title":"Example"}}-->\`.`,
     'Store CSV data in the plugin body, with the first row as headers.',
     'Supported types are bar, line, pie, doughnut, scatter, bubble, radar, and polarArea.',
+    'Bar and line charts accept seriesLayout grouped, stacked, or overlapped; bar charts accept barWidth (0.05-1) and barGap (0-0.9) fractions.',
   ].join(' '),
   create: graphPluginFactory,
 };

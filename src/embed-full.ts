@@ -128,7 +128,7 @@ import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './databas
 import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
 import { destroyPluginHistory } from './plugin-history-controller';
 import type { HvyHistoryArtifactStore } from './history-artifact-store';
-import { resetTransientUiState } from './navigation';
+import { navigateToReaderTarget, resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
@@ -287,6 +287,8 @@ export interface HvyMount {
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setMode(mode: HvyEmbedMode): Promise<void>;
   setEditorMode(mode: HvyEditorMode): void;
+  /** Scroll the reader to a section or component by its id, as a link to "#id" does (switching to the reader). */
+  navigateToTarget(targetId: string): void;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
   setThemeOverrides(overrides: HvyThemeOverrides | null): void;
@@ -1844,6 +1846,9 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
         }
         changeEditorMode(mode);
       });
+    },
+    navigateToTarget(targetId) {
+      runWithStateRuntime(runtime, () => navigateToReaderTarget({ targetId }, options.root));
     },
     setLinkObserver(observer) {
       runWithStateRuntime(runtime, () => {

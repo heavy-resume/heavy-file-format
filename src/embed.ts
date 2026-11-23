@@ -49,6 +49,7 @@ import {
 } from './document-factory';
 import { resolveBaseComponent } from './component-defs';
 import { bindReaderUi } from './bind-reader-ui';
+import { navigateToReaderTarget } from './navigation';
 import { capturePluginFocus, reconcilePluginMounts, refreshConnectedPlugins, unmountAllPlugins } from './plugins/mount';
 import { renderExpandableModalHost, syncExpandableModals } from './editor/components/expandable/expandable-modal';
 import { rememberRenderedDocument, runScopedReaderRedraw } from './reader/scoped-redraw';
@@ -268,6 +269,8 @@ export interface HvyMount {
   setMode(mode: HvyEmbedMode): Promise<void>;
   /** Switch an editor mount in place; calls during bundle loading are queued. */
   setEditorMode(mode: HvyEditorMode): void;
+  /** Scroll the reader to a section or component by its id, as a link to "#id" does (switching to the reader). */
+  navigateToTarget(targetId: string): void;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
   setThemeOverrides(overrides: HvyThemeOverrides | null): void;
@@ -1272,6 +1275,9 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     setEditorMode(mode) {
       withMount((mount) => mount.setEditorMode(mode));
     },
+    navigateToTarget(targetId) {
+      withMount((mount) => mount.navigateToTarget(targetId));
+    },
     setLinkObserver(observer) {
       withMount((mount) => mount.setLinkObserver(observer));
     },
@@ -1666,6 +1672,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     setEditorMode() {
       throw new Error('setEditorMode requires an editor mount.');
+    },
+    navigateToTarget(targetId) {
+      runWithStateRuntime(runtime, () => navigateToReaderTarget({ targetId }, options.root));
     },
     setLinkObserver(observer) {
       runWithStateRuntime(runtime, () => {

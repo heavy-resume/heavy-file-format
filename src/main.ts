@@ -206,6 +206,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     history: [],
     future: [],
     isRestoring: false,
+    undoDisabled: false,
     componentMetaModal: null,
     encryptionModal: null,
     dbTableRowComponentModal: null,

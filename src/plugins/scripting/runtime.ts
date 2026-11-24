@@ -12,6 +12,8 @@ import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-
 import { serializeBlockFragment, serializeDocument } from '../../serialization';
 import { setSortValueAnnotationText, syncSortValuesForDocument } from '../../sort-values';
 import { state, getActiveStateRuntime, getRefreshAfterScriptEdit, getRenderApp, runWithStateRuntime, type StateRuntime } from '../../state';
+import { disableUndo, enableUndo, isUndoDisabled } from '../../history';
+import { beginScriptHistoryRun } from '../../script-history-step';
 import { expandBlockPathByBlockId } from '../../navigation';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
@@ -83,6 +85,8 @@ export interface ScriptingDocApi {
   cli: ScriptingCliApi;
   plugins: ScriptingPluginsApi;
   rerender: () => void;
+  disable_undo: () => void;
+  enable_undo: () => void;
 }
 
 interface ScriptingComponentApi {
@@ -541,6 +545,17 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       },
     },
     rerender: flushIfMutated,
+    disable_undo: () => {
+      if (state?.document === options.document) {
+        disableUndo();
+      }
+    },
+    enable_undo: () => {
+      if (state?.document === options.document && isUndoDisabled()) {
+        enableUndo();
+        beginScriptHistoryRun({ startedByUser: true });
+      }
+    },
   };
 
   // Bind only when state is initialized to avoid throwing during tests that

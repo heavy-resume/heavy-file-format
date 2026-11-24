@@ -1744,6 +1744,16 @@ dirty, emit a document-content change, create or amend an undo history entry,
 or affect serialized HVY output, and undo and redo MUST NOT restore or clear
 it.
 
+Scripting runtimes SHOULD expose `doc.disable_undo()` and `doc.enable_undo()`
+to control document-level undo tracking. Calling `doc.disable_undo()` when
+already disabled, or `doc.enable_undo()` when already enabled, MUST be a no-op.
+While document-level undo is disabled, document, database, attachment, and
+plugin changes are one-directional: the client MUST NOT record document undo
+entries or database/attachment checkpoints, document-level undo and redo MUST
+be no-ops, and native browser undo inside text inputs MUST remain unaffected.
+Re-enabling undo with `doc.enable_undo()` resumes document-level undo tracking
+from the current document state without allowing undo past the disabled period.
+
 A visual-description capability receives the current plugin block and document
 and returns optional plain text describing rendered output that is not otherwise
 represented by ordinary HVY block text. Hosts MAY index this text and expose it

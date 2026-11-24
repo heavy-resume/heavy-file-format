@@ -483,3 +483,9 @@ class __HvyDocProxy__:
 
     def rerender(self):
         self.__js_doc.rerender()
+
+    def disable_undo(self):
+        self.__js_doc.disable_undo()
+
+    def enable_undo(self):
+        self.__js_doc.enable_undo()

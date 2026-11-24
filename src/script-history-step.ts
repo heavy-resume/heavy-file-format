@@ -1,7 +1,7 @@
 import { getActiveStateRuntime, state, type StateRuntime } from './state';
 import type { VisualDocument } from './types';
 import { closeDatabaseHistorySpan, isQueuedDatabaseHistoryCommandActive, openDatabaseHistorySpan } from './database-history-controller';
-import { amendLastHistorySnapshot, ensureHistoryInitialized, recordScriptHistorySnapshot, snapshotStateMatchesLastHistoryEntry } from './history';
+import { amendLastHistorySnapshot, ensureHistoryInitialized, isUndoDisabled, recordScriptHistorySnapshot, snapshotStateMatchesLastHistoryEntry } from './history';
 import { scheduleSessionStateSave } from './state-persistence';
 
 // A user action can start a long chain of script runs, plugin callbacks, and database
@@ -27,7 +27,7 @@ const openSteps = new WeakMap<StateRuntime, ScriptHistoryStep>();
 
 /** Starts or joins the undo step for a script run. A run a user started always starts a step. */
 export function beginScriptHistoryRun(options: { startedByUser?: boolean } = {}): void {
-  if (state.isRestoring) return;
+  if (state.isRestoring || isUndoDisabled()) return;
   if (!options.startedByUser && getJoinableStep()) return;
   openStepAfterClosing(!options.startedByUser && isBeforeFirstUndoStep());
 }
@@ -37,7 +37,7 @@ export function beginScriptHistoryRun(options: { startedByUser?: boolean } = {})
  * state the hooks start from, the hooks' changes belong to that entry's step.
  */
 export function beginReactiveScriptHistory(): void {
-  if (state.isRestoring || state.reusableDefinitionEditModal || !Array.isArray(state.history) || getJoinableStep()) return;
+  if (state.isRestoring || isUndoDisabled() || state.reusableDefinitionEditModal || !Array.isArray(state.history) || getJoinableStep()) return;
   closeScriptHistoryStep();
   ensureHistoryInitialized();
   openStep(snapshotStateMatchesLastHistoryEntry());
@@ -46,13 +46,17 @@ export function beginReactiveScriptHistory(): void {
 /** Records a document change made by script work into its undo step. */
 export function noteScriptHistoryChange(): void {
   if (state.isRestoring) return;
+  if (isUndoDisabled()) {
+    scheduleSessionStateSave(state);
+    return;
+  }
   // The change has already happened, so a step opened here starts from the newest entry.
   recordStepChange(getJoinableStep() ?? openStep(false));
 }
 
 /** Call before writing the live document's database, so the step can checkpoint it first. */
 export function noteScriptHistoryDatabaseWrite(document: VisualDocument): void {
-  if (state.isRestoring || isQueuedDatabaseHistoryCommandActive()) return;
+  if (state.isRestoring || isUndoDisabled() || isQueuedDatabaseHistoryCommandActive()) return;
   const step = getJoinableStep() ?? openStepAfterClosing(false);
   if (step.databaseSpanOpen) return;
   openDatabaseHistorySpan(document);

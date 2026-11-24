@@ -56,6 +56,7 @@ export function bindBeforeinput(app: HTMLElement): void {
     const inputEvent = event as InputEvent;
     if (
       (inputEvent.inputType === 'historyUndo' || inputEvent.inputType === 'historyRedo')
+      && !state?.undoDisabled
       && isDocumentUndoTarget(event.target)
     ) {
       event.preventDefault();

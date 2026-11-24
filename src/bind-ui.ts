@@ -138,6 +138,7 @@ function replaceLoadedDocument(
     : normalizeFilename(filename);
   state.history = [];
   state.future = [];
+  state.undoDisabled = false;
   endScriptingSession(state);
   clearChatConversation(state.chat);
   resetTransientUiState();

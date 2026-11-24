@@ -55,7 +55,7 @@ export function bindShortcuts(_app: HTMLElement): void {
         return;
       }
       if (key === 'z' && !event.shiftKey) {
-        if (isNativeUndoTarget(event.target) && !isDocumentUndoTarget(event.target)) {
+        if (state?.undoDisabled || (isNativeUndoTarget(event.target) && !isDocumentUndoTarget(event.target))) {
           return;
         }
         event.preventDefault();
@@ -63,7 +63,7 @@ export function bindShortcuts(_app: HTMLElement): void {
         return;
       }
       if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        if (isNativeUndoTarget(event.target) && !isDocumentUndoTarget(event.target)) {
+        if (state?.undoDisabled || (isNativeUndoTarget(event.target) && !isDocumentUndoTarget(event.target))) {
           return;
         }
         event.preventDefault();

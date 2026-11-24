@@ -703,6 +703,7 @@ export function resetToBlankDocument(extension: VisualDocument['extension'] = '.
   state.selectedExample = 'blank';
   state.history = [];
   state.future = [];
+  state.undoDisabled = false;
   endScriptingSession(state);
   clearChatConversation(state.chat);
   resetTransientUiState();

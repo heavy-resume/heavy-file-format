@@ -55,6 +55,10 @@ export function recordPluginHistoryStep(
   step: HvyPluginHistoryStep,
   recordBefore: () => void,
 ): void {
+  if (getActiveStateRuntime().state.undoDisabled) {
+    step.apply();
+    return;
+  }
   const history = getState();
   history.currentVersion ??= `plugin-base:${crypto.randomUUID()}`;
   const beforeVersion = history.currentVersion;
@@ -84,6 +88,13 @@ export async function restorePluginHistoryVersion(targetVersion: string | null):
   if (transition.beforeVersion === targetVersion) await capability.undo(ctx);
   else await capability.redo(ctx);
   history.currentVersion = targetVersion;
+}
+
+export function clearPluginHistory(): void {
+  const history = states.get(getActiveStateRuntime());
+  if (!history) return;
+  history.transitions = [];
+  history.currentVersion = null;
 }
 
 export function destroyPluginHistory(runtime: StateRuntime): void {

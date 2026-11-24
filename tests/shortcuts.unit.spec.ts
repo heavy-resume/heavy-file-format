@@ -1,13 +1,15 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const { undoStateMock, redoStateMock, activeRuntimeBox, runWithStateRuntimeMock } = vi.hoisted(() => ({
+const { undoStateMock, redoStateMock, activeRuntimeBox, runWithStateRuntimeMock, mockState } = vi.hoisted(() => ({
   undoStateMock: vi.fn(),
   redoStateMock: vi.fn(),
   activeRuntimeBox: { current: null },
   runWithStateRuntimeMock: vi.fn((_runtime, action: () => void) => action()),
+  mockState: { undoDisabled: false, search: { open: false } },
 }));
 
 vi.mock('../src/state', () => ({
+  state: mockState,
   getActiveStateRuntime: () => {
     if (!activeRuntimeBox.current) {
       throw new Error('state runtime not initialized');
@@ -445,4 +447,59 @@ test('global undo shortcut handles theme modal inputs', async () => {
 
   expect(prevented).toBe(true);
   expect(undoStateMock).toHaveBeenCalledTimes(1);
+});
+
+test('global undo and redo shortcuts do not intercept browser undo when document undo is disabled', async () => {
+  let listener: ((event: {
+    target: EventTarget | null;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    key: string;
+    shiftKey: boolean;
+    preventDefault: () => void;
+  }) => void) | null = null;
+  vi.stubGlobal('window', {
+    addEventListener: (_type: string, handler: typeof listener) => {
+      listener = handler;
+    },
+  });
+  const { bindShortcuts } = await import('../src/bind/handlers/shortcuts');
+  const { setShortcutsBound } = await import('../src/bind/handlers/_imports');
+  setShortcutsBound(false);
+  bindShortcuts(new TestHTMLElement() as unknown as HTMLElement);
+
+  mockState.undoDisabled = true;
+  try {
+    const input = new TestInputElement();
+    input.activeEditorAncestor = true;
+    let undoPrevented = false;
+    listener?.({
+      target: input,
+      metaKey: true,
+      ctrlKey: false,
+      key: 'z',
+      shiftKey: false,
+      preventDefault: () => {
+        undoPrevented = true;
+      },
+    });
+    let redoPrevented = false;
+    listener?.({
+      target: input,
+      metaKey: true,
+      ctrlKey: false,
+      key: 'z',
+      shiftKey: true,
+      preventDefault: () => {
+        redoPrevented = true;
+      },
+    });
+
+    expect(undoPrevented).toBe(false);
+    expect(redoPrevented).toBe(false);
+    expect(undoStateMock).not.toHaveBeenCalled();
+    expect(redoStateMock).not.toHaveBeenCalled();
+  } finally {
+    mockState.undoDisabled = false;
+  }
 });

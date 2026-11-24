@@ -6,6 +6,9 @@ import { createDefaultSearchState } from '../src/search/state';
 import { createEmptyBlock } from '../src/document-factory';
 import {
   captureHistoryStackState,
+  disableUndo,
+  enableUndo,
+  isUndoDisabled,
   markDatabaseAttachmentChanged,
   recordHistory,
   redoState,
@@ -942,4 +945,91 @@ test('a restored history stack is not compared against the replaced stack', () =
   undoState();
 
   expect(state.document.meta.fake_value).toBe(2);
+});
+
+test('disableUndo and enableUndo are no-ops when already in the target state', () => {
+  setUpFakeEditHistory();
+  recordFakeEdit(1);
+  recordFakeEdit(2);
+  const historyBeforeEnable = [...state.history];
+
+  // Already enabled: no-op, preserves existing undo stack.
+  enableUndo();
+  expect(isUndoDisabled()).toBe(false);
+  expect(state.history).toEqual(historyBeforeEnable);
+
+  disableUndo();
+  expect(isUndoDisabled()).toBe(true);
+  expect(state.history).toEqual([]);
+
+  // Already disabled: no-op.
+  disableUndo();
+  expect(isUndoDisabled()).toBe(true);
+  expect(state.history).toEqual([]);
+
+  enableUndo();
+  expect(isUndoDisabled()).toBe(false);
+  expect(state.history.length).toBe(1);
+});
+
+test('disabling undo makes document and database changes one-directional without checkpointing, while keeping dirty tracking', async () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  const store = new CountingHistoryStore();
+  configureDatabaseHistoryStore(getActiveStateRuntime(), store);
+  const changeApi = createDocumentChangeApi(getActiveStateRuntime());
+
+  const seed = await createScriptingDbRuntime(state.document);
+  seed.api.execute('CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL)');
+  seed.api.execute("INSERT INTO items (label) VALUES ('initial')");
+  seed.dispose();
+  changeApi.markSaved();
+
+  disableUndo();
+  const putsBefore = store.puts;
+
+  // Document edit and script DB write while disabled: no history, no checkpoints, still marks dirty.
+  state.document.meta.fake_value = 'one-way';
+  recordHistory();
+  const runtime = await createScriptingDbRuntime(state.document);
+  runtime.api.execute("INSERT INTO items (label) VALUES ('untracked')");
+  runtime.dispose();
+
+  expect(state.history).toEqual([]);
+  expect(store.puts).toBe(putsBefore);
+  expect(changeApi.isDirty()).toBe(true);
+
+  await undoStateAsync();
+  undoState();
+  await redoStateAsync();
+  redoState();
+  expect(state.document.meta.fake_value).toBe('one-way');
+
+  // Re-enabling undo tracks new changes from the current state, never past the disabled period.
+  enableUndo();
+  beginScriptHistoryRun({ startedByUser: true });
+  const afterEnable = await createScriptingDbRuntime(state.document);
+  afterEnable.api.execute("INSERT INTO items (label) VALUES ('tracked')");
+  afterEnable.dispose();
+  state.document.meta.fake_value = 'undoable';
+  noteScriptHistoryChange();
+
+  await undoStateAsync();
+  expect(state.document.meta.fake_value).toBe('one-way');
+  const readerAfterFirstUndo = await createScriptingDbRuntime(state.document);
+  expect(readerAfterFirstUndo.api.query('SELECT label FROM items ORDER BY id').map((row) => row.label)).toEqual(['initial', 'untracked']);
+  readerAfterFirstUndo.dispose();
+
+  // A second undo cannot revert the one-directional writes made while disabled.
+  await undoStateAsync();
+  expect(state.document.meta.fake_value).toBe('one-way');
+  const readerAfterSecondUndo = await createScriptingDbRuntime(state.document);
+  expect(readerAfterSecondUndo.api.query('SELECT label FROM items ORDER BY id').map((row) => row.label)).toEqual(['initial', 'untracked']);
+  readerAfterSecondUndo.dispose();
 });

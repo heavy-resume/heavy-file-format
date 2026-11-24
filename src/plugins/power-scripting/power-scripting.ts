@@ -61,6 +61,8 @@ function buildPowerDoc(
 ): HvyPowerDocApi {
   const coreDb = runtime.doc.db;
   const coreRerender = runtime.doc.rerender;
+  const coreDisableUndo = runtime.doc.disable_undo;
+  const coreEnableUndo = runtime.doc.enable_undo;
   const openDialog = <T>(options: {
     title: string;
     message: string;
@@ -136,6 +138,8 @@ function buildPowerDoc(
       }),
     },
     rerender: () => runWithStateRuntime(stateRuntime, coreRerender),
+    disable_undo: () => runWithStateRuntime(stateRuntime, coreDisableUndo),
+    enable_undo: () => runWithStateRuntime(stateRuntime, coreEnableUndo),
     canvas: {
       get: (id: string) => findCanvas(ctx.hostRoot, id),
       wait: (id: string, timeoutMs = 5000) => new Promise<HvyCanvasApi>((resolve, reject) => {

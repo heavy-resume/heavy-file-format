@@ -12,6 +12,7 @@ import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachme
 import { hasTextFillInMarker } from './text-fill-in';
 import {
   adoptDatabaseHistoryVersion,
+  clearDatabaseHistory,
   enqueueDatabaseHistoryNavigation,
   getDatabaseHistoryVersion,
   hasDatabaseHistoryVersionTransition,
@@ -20,11 +21,13 @@ import {
   restoreDatabaseHistoryVersion,
 } from './database-history-controller';
 import {
+  clearAttachmentHistory,
   getAttachmentHistoryVersion,
   hasAttachmentHistoryVersionTransition,
   restoreAttachmentHistoryVersion,
 } from './attachment-history-controller';
 import {
+  clearPluginHistory,
   getPluginHistoryVersion,
   hasPluginHistoryVersionTransition,
   restorePluginHistoryVersion,
@@ -150,8 +153,40 @@ export function snapshotState(): string {
   );
 }
 
+export function isUndoDisabled(): boolean {
+  return Boolean(state?.undoDisabled);
+}
+
+export function disableUndo(): void {
+  if (!state || state.undoDisabled) {
+    return;
+  }
+  flushPendingInputHistory();
+  closeScriptHistoryStep();
+  state.undoDisabled = true;
+  state.history = [];
+  state.future = [];
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
+  clearDatabaseHistory();
+  clearAttachmentHistory();
+  clearPluginHistory();
+}
+
+export function enableUndo(): void {
+  if (!state || !state.undoDisabled) {
+    return;
+  }
+  state.undoDisabled = false;
+  state.history = [];
+  state.future = [];
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
+  commitHistorySnapshot();
+}
+
 export function commitHistorySnapshot(): void {
-  if (state.isRestoring) {
+  if (state.isRestoring || isUndoDisabled()) {
     return;
   }
   if (state.reusableDefinitionEditModal) {
@@ -177,6 +212,9 @@ export function snapshotStateMatchesLastHistoryEntry(): boolean {
 
 /** Records the current state as a new undo step when it differs from the newest entry. */
 export function recordScriptHistorySnapshot(): boolean {
+  if (isUndoDisabled()) {
+    return false;
+  }
   ensureHistoryInitialized();
   const snapshot = snapshotState();
   if (getLastHistorySnapshot() === snapshot) {
@@ -188,6 +226,9 @@ export function recordScriptHistorySnapshot(): boolean {
 
 /** Moves the newest entry forward to the current state, folding changes into its undo step. */
 export function amendLastHistorySnapshot(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
   ensureHistoryInitialized();
   const entryIndex = state.history.length - 1;
   const previous = entryIndex > 0 ? getHistorySnapshotAt(entryIndex - 1) : null;
@@ -199,6 +240,9 @@ export function amendLastHistorySnapshot(): void {
 }
 
 export function ensureHistoryInitialized(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
   if (!Array.isArray(state.history)) {
     state.history = [];
   }
@@ -213,6 +257,15 @@ export function ensureHistoryInitialized(): void {
 export function recordHistory(group?: string, options: { notify?: boolean } = {}): void {
   flushPendingInputHistory();
   if (state.isRestoring) {
+    return;
+  }
+  if (isUndoDisabled()) {
+    if (!state.reusableDefinitionEditModal && !isQueuedDatabaseHistoryCommandActive()) {
+      markKeywordChatContextDocumentChanged(state.document);
+      const changeSource = inferDocumentChangeSource(group);
+      saveSessionState(state);
+      if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
+    }
     return;
   }
   // Keep draft checkpoints separate from the document's undo stack.
@@ -288,6 +341,14 @@ export function recordHistory(group?: string, options: { notify?: boolean } = {}
 
 export function recordInputHistory(group: string, options: { notify?: boolean } = {}): void {
   if (state.isRestoring) {
+    return;
+  }
+  if (isUndoDisabled()) {
+    if (!state.reusableDefinitionEditModal && !isQueuedDatabaseHistoryCommandActive()) {
+      markKeywordChatContextDocumentChanged(state.document);
+      const changeSource = inferDocumentChangeSource(group);
+      if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
+    }
     return;
   }
   if (state.reusableDefinitionEditModal || isQueuedDatabaseHistoryCommandActive()) {
@@ -386,6 +447,9 @@ export function restoreHistoryStackState(value: unknown): void {
 }
 
 export function undoState(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
   flushPendingInputHistory();
   closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('undo')) return;
@@ -428,6 +492,9 @@ export function undoState(): void {
 }
 
 export function redoState(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
   flushPendingInputHistory();
   closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('redo')) return;
@@ -458,6 +525,9 @@ export function redoState(): void {
 }
 
 export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
+  if (isUndoDisabled()) {
+    return Promise.resolve();
+  }
   flushPendingInputHistory();
   closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('undo')) return Promise.resolve();
@@ -513,6 +583,9 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
 }
 
 export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
+  if (isUndoDisabled()) {
+    return Promise.resolve();
+  }
   flushPendingInputHistory();
   closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('redo')) return Promise.resolve();

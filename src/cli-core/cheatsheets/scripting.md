@@ -24,6 +24,8 @@ doc.cli.run("hvy request_structure --collapse")
 doc.cli.write("/id/example/text.txt", "Updated text")
 doc.json.parse_array(response)
 doc.tool.request_structure()
+doc.disable_undo()
+doc.enable_undo()
 ```
 
 `doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout. It supports document/file commands such as `hvy insert`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. It does not run pipes, shell chains, redirection, `ask`, `done`, or db-table SQL commands; use `doc.db.query` and `doc.db.execute` for SQL.

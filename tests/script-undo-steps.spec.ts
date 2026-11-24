@@ -253,3 +253,48 @@ test('expected result: database writes from load-time scripts are not undoable',
   await undo(page);
   expect(await readFakeRows(page)).toEqual({ labels: ['seeded'], summaryCount: 0 });
 });
+
+const undoToggleDocument = `${FAKE_FRONT_MATTER}
+<!--hvy:plugin {"id":"fake-disable-write","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitScript":"run","submitLabel":"Fake disable and write"}}-->
+fields: []
+scripts:
+  run: |
+    doc.disable_undo()
+    doc.disable_undo()
+    doc.component.set_text("fake-status", "Fake status locked")
+    doc.db.execute("INSERT INTO fake_rows (label) VALUES ('one-way')")
+
+<!--hvy:plugin {"id":"fake-enable-write","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitScript":"run","submitLabel":"Fake enable and write"}}-->
+fields: []
+scripts:
+  run: |
+    doc.enable_undo()
+    doc.enable_undo()
+    doc.component.set_text("fake-status", "Fake status undoable")
+    doc.db.execute("INSERT INTO fake_rows (label) VALUES ('undoable')")
+`;
+
+test('expected result: doc.disable_undo makes script changes one-directional and doc.enable_undo resumes from the current state', async ({ page }) => {
+  test.setTimeout(5_000);
+  await mountFakeDocument(page, undoToggleDocument);
+
+  await page.getByRole('button', { name: 'Fake disable and write' }).click();
+  await expect.poll(() => readFakeRows(page)).toEqual({ labels: ['one-way'], summaryCount: 0 });
+  await expect(page.getByText('Fake status locked')).toBeVisible();
+
+  await undo(page);
+  expect(await readFakeRows(page)).toEqual({ labels: ['one-way'], summaryCount: 0 });
+  await expect(page.getByText('Fake status locked')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Fake enable and write' }).click();
+  await expect.poll(() => readFakeRows(page)).toEqual({ labels: ['one-way', 'undoable'], summaryCount: 0 });
+  await expect(page.getByText('Fake status undoable')).toBeVisible();
+
+  await undo(page);
+  expect(await readFakeRows(page)).toEqual({ labels: ['one-way'], summaryCount: 0 });
+  await expect(page.getByText('Fake status locked')).toBeVisible();
+
+  await undo(page);
+  expect(await readFakeRows(page)).toEqual({ labels: ['one-way'], summaryCount: 0 });
+  await expect(page.getByText('Fake status locked')).toBeVisible();
+});

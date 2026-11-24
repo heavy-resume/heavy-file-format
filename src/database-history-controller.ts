@@ -115,6 +115,15 @@ export function closeDatabaseHistorySpan(): void {
   getState().spanOpen = false;
 }
 
+export function clearDatabaseHistory(): void {
+  const history = states.get(getActiveStateRuntime());
+  if (!history) return;
+  history.spanOpen = false;
+  const released = history.transitions.splice(0, history.transitions.length);
+  released.forEach((transition) => void transition.release().catch(() => {}));
+  history.currentVersion = `database-base:${crypto.randomUUID()}`;
+}
+
 export function adoptDatabaseHistoryVersion(version: string | null): void {
   getState().currentVersion = version;
 }
@@ -140,6 +149,16 @@ export function runQueuedDatabaseHistoryCommand<T>(command: QueuedDatabaseHistor
   const runtime = getActiveStateRuntime();
   return enqueueWork(runtime, command.label, async () => {
     const history = getState(runtime);
+    if (runtime.state.undoDisabled) {
+      history.commandActive = true;
+      try {
+        const result = await command.execute();
+        history.currentVersion = `database-untracked:${crypto.randomUUID()}`;
+        return result;
+      } finally {
+        history.commandActive = false;
+      }
+    }
     history.currentVersion ??= `database-base:${crypto.randomUUID()}`;
     const beforeVersion = history.currentVersion;
     if (command.mode === 'logical' && !command.createLogicalTransition) {

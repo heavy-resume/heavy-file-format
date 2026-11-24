@@ -123,7 +123,7 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation } from './scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { commitHistorySnapshot, recordHistory, redoStateAsync, undoStateAsync } from './history';
+import { commitHistorySnapshot, disableUndo, enableUndo, isUndoDisabled, recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
 import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
 import { destroyPluginHistory } from './plugin-history-controller';
@@ -283,6 +283,9 @@ export interface HvyMount {
   isDirty(): boolean;
   undo(): Promise<void>;
   redo(): Promise<void>;
+  disableUndo(): void;
+  enableUndo(): void;
+  isUndoDisabled(): boolean;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setMode(mode: HvyEmbedMode): Promise<void>;
@@ -401,6 +404,7 @@ function createEmbedState(
     history: [],
     future: [],
     isRestoring: false,
+    undoDisabled: false,
     componentMetaModal: null,
     encryptionModal: null,
     dbTableRowComponentModal: null,
@@ -1819,6 +1823,15 @@ function attachFullEmbed(options: HvyMountOptions, existing?: { runtime: StateRu
     },
     redo() {
       return runWithStateRuntimeAsync(runtime, () => redoStateAsync());
+    },
+    disableUndo() {
+      runWithStateRuntime(runtime, () => disableUndo());
+    },
+    enableUndo() {
+      runWithStateRuntime(runtime, () => enableUndo());
+    },
+    isUndoDisabled() {
+      return runWithStateRuntime(runtime, () => isUndoDisabled());
     },
     buildImportPlan(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));

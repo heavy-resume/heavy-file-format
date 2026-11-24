@@ -62,7 +62,7 @@ import {
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { recordHistory, redoStateAsync, undoStateAsync } from './history';
+import { disableUndo, enableUndo, isUndoDisabled, recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
 import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
 import { destroyPluginHistory } from './plugin-history-controller';
@@ -263,6 +263,9 @@ export interface HvyMount {
   isDirty(): boolean;
   undo(): Promise<void>;
   redo(): Promise<void>;
+  disableUndo(): void;
+  enableUndo(): void;
+  isUndoDisabled(): boolean;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   /** Switch document views in place; await loading when promoting a lightweight viewer. */
@@ -428,6 +431,7 @@ function createEmbedState(
     history: [],
     future: [],
     isRestoring: false,
+    undoDisabled: false,
     componentMetaModal: null,
     encryptionModal: null,
     dbTableRowComponentModal: null,
@@ -1258,6 +1262,15 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     redo() {
       return ready.then((mount) => mount.redo());
     },
+    disableUndo() {
+      withMount((mount) => mount.disableUndo());
+    },
+    enableUndo() {
+      withMount((mount) => mount.enableUndo());
+    },
+    isUndoDisabled() {
+      return mounted?.isUndoDisabled() ?? false;
+    },
     buildImportPlan(importOptions) {
       return ready.then((mount) => mount.buildImportPlan(importOptions));
     },
@@ -1663,6 +1676,15 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     redo() {
       return runWithStateRuntimeAsync(runtime, () => redoStateAsync());
+    },
+    disableUndo() {
+      runWithStateRuntime(runtime, () => disableUndo());
+    },
+    enableUndo() {
+      runWithStateRuntime(runtime, () => enableUndo());
+    },
+    isUndoDisabled() {
+      return runWithStateRuntime(runtime, () => isUndoDisabled());
     },
     buildImportPlan(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));

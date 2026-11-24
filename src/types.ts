@@ -671,6 +671,7 @@ export interface AppState {
   history: string[];
   future: string[];
   isRestoring: boolean;
+  undoDisabled?: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   encryptionModal?: { sectionKey: string; blockId: string } | null;
   dbTableRowComponentModal: DbTableRowComponentModalState | null;

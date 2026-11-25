@@ -197,6 +197,7 @@ export interface ScriptingRuntimeOptions {
   beforeMutationRender?: () => void;
   databaseChanges?: DatabaseChangeSnapshot;
   onCallbackError?: (error: string) => void;
+  stateRuntime?: StateRuntime | null;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -362,6 +363,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   };
 
   let renderOnMutation = options.renderOnMutation !== false;
+  const ownerStateRuntime = options.stateRuntime ?? getRenderStateRuntime();
   const flushIfMutated = () => {
     if (!mutated && pendingExpansions.size === 0) return;
     const documentMutated = mutated;
@@ -400,10 +402,10 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       }
       if (!renderGuardError) {
         if (hooksSettled) {
-          const stateRuntime = getRenderStateRuntime();
+          const stateRuntime = ownerStateRuntime ?? getRenderStateRuntime();
           void hooksSettled.then(() => renderMutation(stateRuntime, allowPartialRedraw), () => renderMutation(stateRuntime, allowPartialRedraw));
         } else {
-          renderMutation(null, allowPartialRedraw);
+          renderMutation(ownerStateRuntime, allowPartialRedraw);
         }
       }
     }

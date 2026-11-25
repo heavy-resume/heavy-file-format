@@ -92,36 +92,39 @@ function getOrderedHandlers(hookName: DocumentHookName, plugins: HvyPlugin[]): O
 }
 
 function createHookContext(
+  runtime: StateRuntime,
   document: VisualDocument,
   changeReason: HvyPluginHookChangeReason,
   hostRendersAfter: boolean,
   serializedDocument: string,
   settledListeners: Array<(serializedDocument: string) => void>
 ): HvyDocumentHookContext {
-  const runtime = getActiveStateRuntime();
   return {
     document,
-    view: state.currentView,
+    view: runtime.state.currentView,
     changeReason,
     hostRendersAfter,
     serializedDocument,
     onSettled: (listener) => settledListeners.push(listener),
-    refreshPlugins: (pluginId) => refreshMountedPlugins(pluginId),
+    refreshPlugins: (pluginId) => runWithStateRuntime(runtime, () => refreshMountedPlugins(pluginId)),
     requestRerender: () => runWithStateRuntime(runtime, () => getRenderApp()()),
-    isCurrentDocument: () => state.document === document,
+    isCurrentDocument: () => runtime.state.document === document,
   };
 }
 
-async function runHookHandlers(hookName: DocumentHookName, ctx: HvyDocumentHookContext): Promise<void> {
-  const hookState = getHookState();
+async function runHookHandlers(hookName: DocumentHookName, ctx: HvyDocumentHookContext, runtime: StateRuntime): Promise<void> {
+  const { hookState, handlers } = runWithStateRuntime(runtime, () => ({
+    hookState: getHookState(),
+    handlers: getOrderedHandlers(hookName, getHostPlugins()),
+  }));
   hookState.hookRunDepth += 1;
   try {
-    for (const { handler } of getOrderedHandlers(hookName, getHostPlugins())) {
+    for (const { handler } of handlers) {
       if (!ctx.isCurrentDocument()) {
         return;
       }
       try {
-        await handler.run(ctx);
+        await runWithStateRuntimeAsync(runtime, () => Promise.resolve(handler.run(ctx)));
       } catch {
         // A plugin hook should not prevent later document lifecycle handling.
       }
@@ -208,7 +211,7 @@ export function runPluginDocumentHooks(
   }
 
   const settledListeners: Array<(serializedDocument: string) => void> = [];
-  const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason, options.hostRendersAfter === true, serializedDocument, settledListeners);
+  const ctx = createHookContext(runtime, document, hookName === 'documentLoad' ? 'load' : changeReason, options.hostRendersAfter === true, serializedDocument, settledListeners);
   const releaseChangeFlush = holdDocumentChangeFlush(runtime);
   let settledDocumentText: string | undefined;
   const hookResult = hookState.hookRun.then(async (): Promise<PluginDocumentHookResult> => {
@@ -218,10 +221,12 @@ export function runPluginDocumentHooks(
       changeReason,
       signatureMs,
     });
-    const result = await runWithStateRuntimeAsync(runtime, async (): Promise<PluginDocumentHookResult> => {
+    runWithStateRuntime(runtime, () => {
       // Hook output joins the undo step of the change that triggered the hooks.
       beginReactiveScriptHistory();
-      await runHookHandlers(hookName, ctx);
+    });
+    await runHookHandlers(hookName, ctx, runtime);
+    const result = runWithStateRuntime(runtime, (): PluginDocumentHookResult => {
       if (ctx.isCurrentDocument()) {
         const settledText = serializeDocument(document);
         settledDocumentText = settledText;
@@ -247,6 +252,6 @@ export function runPluginDocumentHooks(
     return result;
   });
   hookState.hookRun = hookResult.then(() => undefined);
-  void hookResult.finally(() => releaseChangeFlush(settledDocumentText));
+  void hookResult.finally(() => runWithStateRuntime(runtime, () => releaseChangeFlush(settledDocumentText)));
   return hookResult;
 }

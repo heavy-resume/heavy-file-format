@@ -7,20 +7,30 @@ export function bindEmbedRuntimeActivation(root: HTMLElement, runtime: StateRunt
   rootRuntimes.set(root, runtime);
   if (boundRuntimeRoots.has(root)) return;
   boundRuntimeRoots.add(root);
-  root.addEventListener('click', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('dblclick', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('mousedown', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('mouseup', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('pointerdown', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('pointerup', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('contextmenu', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('input', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('change', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('keydown', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('keyup', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('focusin', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('submit', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('dragstart', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('dragover', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
-  root.addEventListener('drop', () => activateStateRuntime(rootRuntimes.get(root)!), { capture: true });
+  const activate = () => {
+    const bound = rootRuntimes.get(root);
+    if (bound) activateStateRuntime(bound);
+  };
+  root.addEventListener('click', activate, { capture: true });
+  root.addEventListener('dblclick', activate, { capture: true });
+  root.addEventListener('mousedown', activate, { capture: true });
+  root.addEventListener('mouseup', activate, { capture: true });
+  root.addEventListener('pointerdown', activate, { capture: true });
+  root.addEventListener('pointerup', activate, { capture: true });
+  root.addEventListener('contextmenu', activate, { capture: true });
+  root.addEventListener('input', activate, { capture: true });
+  root.addEventListener('change', activate, { capture: true });
+  root.addEventListener('keydown', activate, { capture: true });
+  root.addEventListener('keyup', activate, { capture: true });
+  root.addEventListener('focusin', activate, { capture: true });
+  root.addEventListener('submit', activate, { capture: true });
+  root.addEventListener('dragstart', activate, { capture: true });
+  root.addEventListener('dragover', activate, { capture: true });
+  root.addEventListener('drop', activate, { capture: true });
+}
+
+export function unbindEmbedRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
+  if (rootRuntimes.get(root) === runtime) {
+    rootRuntimes.delete(root);
+  }
 }

@@ -1,6 +1,6 @@
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { runImportOperation } from './import-errors';
-import { bindEmbedRuntimeActivation } from './embed-runtime-activation';
+import { bindEmbedRuntimeActivation, unbindEmbedRuntimeActivation } from './embed-runtime-activation';
 import './default-theme.css';
 import {
   getBlockAnswerGroups,
@@ -139,7 +139,7 @@ import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { createHvyAgentTools } from './agent-tools';
-import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
+import { disposeScriptingCallbacks, HvyDisposedCallbackError, type HvyDisposedCallbackReason } from './plugins/scripting/callback-lifecycle';
 import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
 import { exportTargetHvy, type HvyTarget } from './embed-target';
 import { destroyTargetRenderHookController, getTargetRenderHookController, type HvyTargetRenderHook } from './target-render-hooks';
@@ -231,6 +231,12 @@ export type HvyTemplateFormResult =
   | { status: 'cancelled' };
 
 export interface HvyMount {
+  /** Resolves when the mount's initial documentLoad hook run settles. */
+  whenLoaded(): Promise<void>;
+  /** Tear down the DOM UI while keeping the runtime, session, and script callbacks alive. */
+  detach(): void;
+  /** Reattach a detached mount to a DOM root and render without re-running documentLoad hooks. */
+  attach(root: HTMLElement): void;
   /** Reveal a component list and collect template values. Resolves on insertion or cancellation. */
   openTemplateForm(options: HvyTemplateFormOptions): Promise<HvyTemplateFormResult>;
   destroy(): void;
@@ -1041,48 +1047,64 @@ function ensureEmbedRuntime(
   plugins: HvyPluginInput[],
   databaseSources: HvyDatabaseTableSource[],
   runtime: StateRuntime,
-  root: HTMLElement,
+  getRoot: () => HTMLElement | null,
   getLinkObserver: () => HvyLinkObserver | null
 ): void {
   const renderer = ensureReaderRenderer();
   initCallbacks({
     renderApp: () => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       setThemeRoot(root);
       renderApp();
     }),
     refreshSearchSurface: (target, options) => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return false;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshSearchSurface(target, options);
     }),
     refreshReaderPanels: (options) => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       refreshReaderPanels(options);
     }),
     refreshReaderSection: (target, sectionKey, options) => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return false;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshReaderSection(target, sectionKey, options);
     }),
     refreshAfterScriptEdit: () => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return true;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshAfterScriptEdit();
     }),
     refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return false;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshReaderBlock(target, sectionKey, blockId, options);
     }),
     refreshModalPreview: () => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       refreshModalPreview();
     }),
     observeLinks: (target) => runWithStateRuntime(runtime, () => {
+      const root = getRoot();
+      if (!root) return;
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       observeRenderedLinks(target, currentLinkObserver);
@@ -1132,13 +1154,18 @@ async function loadFullEmbed(): Promise<FullEmbedModule> {
 function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
   let mounted: HvyMount | null = null;
   let destroyed = false;
+  let activeRoot: HTMLElement | null = options.root;
   let queuedSearchSnapshot = options.searchSnapshot ?? null;
   const pending: Array<(mount: HvyMount) => void> = [];
-  options.root.classList.add('hvy-document');
-  options.root.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane hvy-full-pane"><p>Loading HVY...</p></section></main>';
+  activeRoot.classList.add('hvy-document');
+  activeRoot.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane hvy-full-pane"><p>Loading HVY...</p></section></main>';
   const ready = loadFullEmbed().then((module) => {
     if (destroyed) throw new Error('HVY mount has been destroyed.');
-    mounted = module.mountHvy(options);
+    const initialRoot = activeRoot ?? options.root;
+    mounted = module.mountHvy({ ...options, root: initialRoot });
+    if (!activeRoot) {
+      mounted.detach();
+    }
     for (const action of pending.splice(0)) {
       action(mounted);
     }
@@ -1153,10 +1180,10 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     }
   };
   const renderQueuedThemeModal = (): void => {
-    if (mounted || options.root.querySelector('.modal-root')) {
+    if (mounted || !activeRoot || activeRoot.querySelector('.modal-root')) {
       return;
     }
-    options.root.insertAdjacentHTML('beforeend', `
+    activeRoot.insertAdjacentHTML('beforeend', `
       <div class="modal-root" style="isolation: isolate; z-index: var(--hvy-modal-root-z, 1200);">
         <div class="modal-overlay" style="z-index: var(--hvy-modal-overlay-z, 1);"></div>
         <div class="modal-panel" style="z-index: var(--hvy-modal-panel-z, 2);"></div>
@@ -1164,6 +1191,35 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     `);
   };
   return {
+    whenLoaded() {
+      return ready.then((mount) => mount.whenLoaded());
+    },
+    detach() {
+      if (destroyed) return;
+      if (mounted) {
+        mounted.detach();
+        activeRoot = null;
+        return;
+      }
+      if (activeRoot) {
+        activeRoot.innerHTML = '';
+        activeRoot = null;
+      }
+    },
+    attach(root) {
+      if (destroyed) throw new Error('HVY mount has been destroyed.');
+      if (mounted) {
+        activeRoot = root;
+        mounted.attach(root);
+        return;
+      }
+      if (activeRoot && activeRoot !== root) {
+        activeRoot.innerHTML = '';
+      }
+      activeRoot = root;
+      activeRoot.classList.add('hvy-document');
+      activeRoot.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane hvy-full-pane"><p>Loading HVY...</p></section></main>';
+    },
     openTemplateForm(formOptions) {
       return ready.then((mount) => mount.openTemplateForm(formOptions));
     },
@@ -1174,8 +1230,11 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
         mounted.destroy();
       } else {
         pending.length = 0;
-        options.root.innerHTML = '';
+        if (activeRoot) {
+          activeRoot.innerHTML = '';
+        }
       }
+      activeRoot = null;
     },
     getDocument() {
       return mounted?.getDocument() ?? options.document;
@@ -1453,10 +1512,11 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     maxCandidates: options.semanticFilterMaxWindowCandidates ?? null,
   });
   setEditorClipboardHost(options.editorClipboard ?? null);
-  currentRoot = options.root;
-  options.root.classList.add('hvy-document');
-  setThemeRoot(options.root);
-  const targetRenderHookController = getTargetRenderHookController(options.root, () => runtime.state.currentView);
+  let activeRoot: HTMLElement | null = options.root;
+  currentRoot = activeRoot;
+  activeRoot.classList.add('hvy-document');
+  setThemeRoot(activeRoot);
+  let targetRenderHookController: ReturnType<typeof getTargetRenderHookController> | null = getTargetRenderHookController(activeRoot, () => runtime.state.currentView);
   targetRenderHookController.setHooks(options.targetRenderHooks ?? []);
   currentLinkObserver = linkObserver;
   if ('paletteId' in options) {
@@ -1469,10 +1529,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
-  bindEmbedRuntimeActivation(options.root, runtime);
+  bindEmbedRuntimeActivation(activeRoot, runtime);
   // Built-in plugins are opt-in per mount: some of them execute document-supplied
   // code, so a host that asks for nothing gets nothing.
-  ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver);
+  ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, () => activeRoot, () => linkObserver);
   const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
   const webMcpRegistration = options.webMcp
     ? registerHvyWebMcpTools(options.webMcp === true ? {} : options.webMcp, {
@@ -1488,7 +1548,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       })
     : null;
   runtime.callbacks.renderApp();
-  void runPluginDocumentHooks('load');
+  const initialLoad = runPluginDocumentHooks('load').then(() => undefined);
   // Only re-render when there was actually something encrypted to reveal.
   void decryptEncryptedComponents(state.document, options.encryption ?? null)
     .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
@@ -1496,11 +1556,53 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   let promotion: Promise<HvyMount> | null = null;
   let destroyed = false;
   let modeTransition: Promise<void> = Promise.resolve();
+  const detachUi = (): void => {
+    const detachedRoot = activeRoot;
+    if (!detachedRoot) return;
+    activeRoot = null;
+    targetRenderHookController = null;
+    runWithStateRuntime(runtime, () => {
+      destroyTargetRenderHookController(detachedRoot);
+      releasePdfPreviewRuntime(runtime);
+      unmountAllPlugins();
+      unbindEmbedRuntimeActivation(detachedRoot, runtime);
+      detachedRoot.innerHTML = '';
+      if (currentRoot === detachedRoot) {
+        currentRoot = null;
+        currentLinkObserver = null;
+        setThemeRoot(null);
+      }
+    });
+  };
+  const attachUi = (nextRoot: HTMLElement): void => {
+    if (destroyed) throw new Error('HVY mount has been destroyed.');
+    if (activeRoot && activeRoot !== nextRoot) {
+      detachUi();
+    }
+    activeRoot = nextRoot;
+    runWithStateRuntime(runtime, () => {
+      nextRoot.classList.add('hvy-document');
+      bindEmbedRuntimeActivation(nextRoot, runtime);
+      targetRenderHookController = getTargetRenderHookController(nextRoot, () => runtime.state.currentView);
+      targetRenderHookController.setHooks(options.targetRenderHooks ?? []);
+      currentRoot = nextRoot;
+      currentLinkObserver = linkObserver;
+      setThemeRoot(nextRoot);
+      applyTheme();
+      renderApp();
+    });
+  };
   const ensureFullMount = (): Promise<HvyMount> => {
     if (!promotion) {
       promotion = loadFullEmbed().then((module) => {
         if (destroyed) throw new Error('HVY mount has been destroyed.');
-        promoted = module.promoteHvyRuntime({ ...options, linkObserver }, runtime, documentChangeApi);
+        promoted = module.promoteHvyRuntime(
+          { ...options, root: activeRoot ?? options.root, linkObserver },
+          runtime,
+          documentChangeApi,
+          initialLoad,
+          activeRoot === null
+        );
         return promoted;
       });
     }
@@ -1521,6 +1623,31 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     return transition;
   };
   const mount: HvyMount = {
+    whenLoaded() {
+      return initialLoad;
+    },
+    detach() {
+      if (destroyed) return;
+      if (promoted) {
+        promoted.detach();
+        if (activeRoot && currentRoot === activeRoot) {
+          currentRoot = null;
+          currentLinkObserver = null;
+        }
+        activeRoot = null;
+        return;
+      }
+      detachUi();
+    },
+    attach(nextRoot) {
+      if (destroyed) throw new Error('HVY mount has been destroyed.');
+      if (promoted) {
+        activeRoot = nextRoot;
+        promoted.attach(nextRoot);
+        return;
+      }
+      attachUi(nextRoot);
+    },
     openTemplateForm(formOptions) {
       return ensureFullMount().then((mount) => mount.openTemplateForm(formOptions));
     },
@@ -1532,19 +1659,17 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       webMcpRegistration?.destroy();
       if (promoted) {
         promoted.destroy();
-        if (currentRoot === options.root) {
+        if (activeRoot && currentRoot === activeRoot) {
           currentRoot = null;
           currentLinkObserver = null;
         }
+        activeRoot = null;
         return;
       }
+      detachUi();
       runWithStateRuntime(runtime, () => {
-        destroyTargetRenderHookController(options.root);
-        releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
         disposeScriptingCallbacks(runtime);
-        unmountAllPlugins();
-        options.root.innerHTML = '';
         setHostPlugins([]);
         setHostDatabaseTableSources([]);
         setEditorClipboardHost(null);
@@ -1555,11 +1680,6 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         clearPowerScriptingMode(runtime);
         clearPluginAuthorization(runtime);
         clearSaveRequestHandler(runtime);
-        if (currentRoot === options.root) {
-          currentRoot = null;
-          currentLinkObserver = null;
-          setThemeRoot(null);
-        }
       });
       void destroyDatabaseHistory(runtime);
       void destroyAttachmentHistory(runtime);
@@ -1624,7 +1744,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     setTargetRenderHooks(hooks) {
       options.targetRenderHooks = [...hooks];
-      targetRenderHookController.setHooks(hooks);
+      targetRenderHookController?.setHooks(hooks);
     },
     encryptDocumentAsync() {
       return runWithStateRuntimeAsync(runtime, async () => {
@@ -1698,37 +1818,51 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       throw new Error('setEditorMode requires an editor mount.');
     },
     navigateToTarget(targetId) {
-      runWithStateRuntime(runtime, () => navigateToReaderTarget({ targetId }, options.root));
+      if (!activeRoot) return;
+      runWithStateRuntime(runtime, () => navigateToReaderTarget({ targetId }, activeRoot!));
     },
     setLinkObserver(observer) {
       runWithStateRuntime(runtime, () => {
         linkObserver = observer;
-        currentRoot = options.root;
+        if (!activeRoot) return;
+        currentRoot = activeRoot;
         currentLinkObserver = linkObserver;
         setLinkObserver(observer);
       });
     },
     setPaletteOverrideId(id) {
       runWithStateRuntime(runtime, () => {
-        currentRoot = options.root;
+        if (!activeRoot) {
+          state.paletteOverrideId = typeof id === 'string' && getPaletteById(id) ? id : null;
+          return;
+        }
+        currentRoot = activeRoot;
         currentLinkObserver = linkObserver;
-        setThemeRoot(options.root);
+        setThemeRoot(activeRoot);
         setPaletteOverrideId(id);
       });
     },
     setThemeOverrides(overrides) {
       runWithStateRuntime(runtime, () => {
-        currentRoot = options.root;
+        if (!activeRoot) {
+          setRuntimeThemeOverrides(overrides);
+          return;
+        }
+        currentRoot = activeRoot;
         currentLinkObserver = linkObserver;
-        setThemeRoot(options.root);
+        setThemeRoot(activeRoot);
         updateThemeOverrides(overrides);
       });
     },
     setSearchSnapshot(snapshot) {
       runWithStateRuntime(runtime, () => {
-        currentRoot = options.root;
+        if (!activeRoot) {
+          setMountedSearchSnapshot(snapshot, { render: false });
+          return;
+        }
+        currentRoot = activeRoot;
         currentLinkObserver = linkObserver;
-        setThemeRoot(options.root);
+        setThemeRoot(activeRoot);
         setMountedSearchSnapshot(snapshot);
       });
     },
@@ -1754,7 +1888,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   // Keep the host's original handle usable after its rendering capabilities expand.
   return new Proxy(mount, {
     get(target, property, receiver) {
-      if (property === 'setMode' || property === 'destroy') {
+      if (property === 'setMode' || property === 'destroy' || property === 'detach' || property === 'attach') {
         return Reflect.get(target, property, receiver);
       }
       const value = Reflect.get(promoted ?? target, property);
@@ -1796,7 +1930,9 @@ export {
   buildDocumentRichTextCopyPayload,
   createHvyAgentTools,
   registerHvyWebMcpTools,
+  HvyDisposedCallbackError,
 };
+export type { HvyDisposedCallbackReason };
 export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
 export type { HvyWebMcpModelContext, HvyWebMcpOptions, HvyWebMcpTool, HvyWebMcpToolContext } from './webmcp';
 export type { HostChatClient, ProxyChatRequest, ProxyChatResponse, ProxyChatStreamEvent } from './chat/chat';
@@ -1926,6 +2062,7 @@ declare global {
       renderPdfExportPromptTemplate: typeof renderPdfExportPromptTemplate;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
+      HvyDisposedCallbackError: typeof HvyDisposedCallbackError;
       plugins: typeof builtInPluginMap;
       builtInPlugins: typeof builtInPlugins;
     };
@@ -1962,6 +2099,7 @@ window.HVY = {
   renderPdfExportPromptTemplate,
   mountHvy,
   mountHvyViewer,
+  HvyDisposedCallbackError,
   plugins: builtInPluginMap,
   builtInPlugins,
 };

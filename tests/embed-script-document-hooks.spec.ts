@@ -307,3 +307,381 @@ test('get_updated_components reports each script edit and removal through the do
   await root.getByLabel('Fake remove').check();
   await expect.poll(() => readMeta(page, ['fake_updates'])).toEqual({ fake_updates: 'removed:fake-removed-text' });
 });
+
+for (const mode of ['viewer', 'editor'] as const) {
+  test(`${mode} mount: whenLoaded resolves only after the initial documentLoad hook run settles`, async ({ page }) => {
+    test.setTimeout(5_000);
+    await page.goto('/');
+    const source = mode === 'editor' ? editorScriptDocument : toggleDocument;
+    const expectedMetaKey = mode === 'editor' ? 'fake_editor_runs' : 'fake_load_runs';
+    const result = await page.evaluate(async ({ source, mode, expectedMetaKey }) => {
+      const embedPath = '/src/embed.ts';
+      const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ embedPath);
+      document.body.innerHTML = '<div id="fakeRoot" style="height:600px"></div>';
+
+      let markEntered!: () => void;
+      const gateEntered = new Promise<void>((resolve) => {
+        markEntered = resolve;
+      });
+      let releaseGate!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        releaseGate = resolve;
+      });
+
+      const mount = mountHvy({
+        root: document.querySelector('#fakeRoot') as HTMLElement,
+        mode,
+        document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+        plugins: [plugins.form, plugins.scripting, {
+          id: 'fake.load-gate',
+          displayName: 'Fake load gate',
+          create: () => ({ element: document.createElement('div') }),
+          hooks: {
+            documentLoad: {
+              priority: 10,
+              run: async () => {
+                markEntered();
+                await gate;
+              },
+            },
+          },
+        }],
+      });
+
+      let loadedBeforeRelease = false;
+      const loadPromise = mount.whenLoaded().then(() => {
+        loadedBeforeRelease = true;
+      });
+
+      await gateEntered;
+      await new Promise((r) => setTimeout(r, 20));
+      const settledWhileBlocked = loadedBeforeRelease;
+      const runsWhileBlocked = mount.getDocument().meta[expectedMetaKey] ?? null;
+
+      releaseGate();
+      await loadPromise;
+      const runsAfterLoad = mount.getDocument().meta[expectedMetaKey] ?? null;
+
+      // Calling whenLoaded() again resolves without re-running hooks.
+      await mount.whenLoaded();
+      const runsAfterSecondAwait = mount.getDocument().meta[expectedMetaKey] ?? null;
+      mount.destroy();
+
+      return {
+        settledWhileBlocked,
+        runsWhileBlocked,
+        runsAfterLoad,
+        runsAfterSecondAwait,
+      };
+    }, { source, mode, expectedMetaKey });
+
+    expect(result).toEqual({
+      settledWhileBlocked: false,
+      runsWhileBlocked: null,
+      runsAfterLoad: 1,
+      runsAfterSecondAwait: 1,
+    });
+  });
+}
+
+const backgroundQueueDocument = `---
+hvy_version: 0.1
+plugins:
+  - id: fake.queue
+    versionRange: ^1.0.0
+    permissions: [scripting]
+---
+
+<!--hvy: {"id":"fake-bg-section"}-->
+#! Fake background queue
+
+<!--hvy:text {"id":"fake-bg-status"}-->
+initial
+
+<!--hvy:plugin {"id":"fake-bg-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
+if run_context.invoke_reason == "load":
+    doc.header.set("fake_load_runs", (doc.header.get("fake_load_runs") or 0) + 1)
+    session.state["seen"] = []
+
+    def on_result(item):
+        seen = session.state["seen"]
+        seen.append(item)
+        session.state["seen"] = seen
+        doc.component.set_text("fake-bg-status", ",".join(seen))
+        doc.header.set("fake_seen_count", len(seen))
+
+    doc.plugins.call("fake.queue", "subscribe", {"on_result": on_result})
+`;
+
+const otherTabDocument = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-other-section"}-->
+#! Fake other tab
+
+<!--hvy:text {"id":"fake-other-text"}-->
+Other tab visible
+`;
+
+for (const mode of ['viewer', 'editor'] as const) {
+  test(`${mode} mount: detach keeps script callbacks and session alive while another tab uses the root, and attach renders without rerunning load`, async ({ page }) => {
+    test.setTimeout(5_000);
+    await page.goto('/');
+
+    const result = await page.evaluate(async ({ bgSource, otherSource, mode }) => {
+      const embedPath = '/src/embed.ts';
+      const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ embedPath);
+      document.body.innerHTML = '<div id="sharedRoot" style="height:600px"></div>';
+      const sharedRoot = document.querySelector('#sharedRoot') as HTMLElement;
+
+      let deliverResult: ((item: string) => void) | null = null;
+      const queuePlugin = {
+        id: 'fake.queue',
+        version: '1.0.0',
+        hvyApiVersion: '0.1',
+        displayName: 'Fake queue',
+        create: () => ({ element: document.createElement('div') }),
+        scripting: {
+          methods: {
+            subscribe: (args: unknown) => {
+              const record = args as { on_result?: (item: string) => void };
+              deliverResult = record.on_result ?? null;
+              return true;
+            },
+          },
+        },
+      };
+
+      const docChangeEvents: string[] = [];
+      const bgDoc = deserializeDocumentBytes(new TextEncoder().encode(bgSource), '.hvy');
+      const mountA = mountHvy({
+        root: sharedRoot,
+        mode,
+        document: bgDoc,
+        plugins: [plugins.scripting, queuePlugin],
+        onDocumentChange: (event: { reason: string }) => {
+          docChangeEvents.push(event.reason);
+        },
+      });
+      await mountA.whenLoaded();
+
+      if (!deliverResult) {
+        mountA.destroy();
+        return { skipped: true };
+      }
+
+      const loadRunsAfterMount = mountA.getDocument().meta.fake_load_runs ?? null;
+
+      // Switch away to Tab B: detach Tab A and mount Tab B into the same root.
+      mountA.detach();
+      const rootHtmlAfterDetach = sharedRoot.innerHTML;
+
+      const mountB = mountHvy({
+        root: sharedRoot,
+        mode: 'viewer',
+        document: deserializeDocumentBytes(new TextEncoder().encode(otherSource), '.hvy'),
+        plugins: [],
+      });
+      await mountB.whenLoaded();
+
+      // Deliver a queued result while Tab A is detached and Tab B owns sharedRoot.
+      const changesBeforeBg = docChangeEvents.length;
+      deliverResult('bg-item-alpha');
+      await new Promise((r) => setTimeout(r, 30));
+      const otherTabTextWhileBgRan = sharedRoot.textContent ?? '';
+      const bgSeenCountWhileDetached = mountA.getDocument().meta.fake_seen_count ?? null;
+      const changesAfterBg = docChangeEvents.length;
+
+      // Switch back to Tab A: destroy Tab B and reattach Tab A to sharedRoot.
+      mountB.destroy();
+      mountA.attach(sharedRoot);
+      const renderedTextAfterReattach = sharedRoot.textContent ?? '';
+      const loadRunsAfterReattach = mountA.getDocument().meta.fake_load_runs ?? null;
+
+      // Deliver a second result after reattaching: session.state and callback must still be alive.
+      deliverResult('bg-item-beta');
+      await new Promise((r) => setTimeout(r, 30));
+      const renderedTextAfterSecond = sharedRoot.textContent ?? '';
+      const bgSeenCountAfterSecond = mountA.getDocument().meta.fake_seen_count ?? null;
+
+      // Close Tab A: destroy() disposes callbacks and invoking them throws HvyDisposedCallbackError.
+      mountA.destroy();
+      let destroyCallbackError: { name: string; code?: string; reason?: string } | null = null;
+      try {
+        deliverResult('bg-item-gamma');
+      } catch (error) {
+        const err = error as Error & { code?: string; reason?: string };
+        destroyCallbackError = { name: err.name, code: err.code, reason: err.reason };
+      }
+      await new Promise((r) => setTimeout(r, 30));
+      const bgSeenCountAfterDestroy = mountA.getDocument().meta.fake_seen_count ?? null;
+
+      return {
+        skipped: false,
+        loadRunsAfterMount,
+        rootHtmlAfterDetach,
+        otherTabStillVisible: otherTabTextWhileBgRan.includes('Other tab visible'),
+        otherTabNotClobbered: !otherTabTextWhileBgRan.includes('bg-item-alpha'),
+        bgSeenCountWhileDetached,
+        firedDocumentChangeWhileDetached: changesAfterBg > changesBeforeBg,
+        renderedFirstAfterReattach: renderedTextAfterReattach.includes('bg-item-alpha'),
+        loadRunsAfterReattach,
+        renderedSecondAfterReattach: renderedTextAfterSecond.includes('bg-item-alpha,bg-item-beta'),
+        bgSeenCountAfterSecond,
+        bgSeenCountAfterDestroy,
+        destroyCallbackError,
+      };
+    }, {
+      bgSource: mode === 'editor'
+        ? backgroundQueueDocument.replace('"hvy.scripting"', '"hvy.scripting","editorOnly":true')
+        : backgroundQueueDocument,
+      otherSource: otherTabDocument,
+      mode,
+    });
+
+    expect(result).toEqual({
+      skipped: false,
+      loadRunsAfterMount: 1,
+      rootHtmlAfterDetach: '',
+      otherTabStillVisible: true,
+      otherTabNotClobbered: true,
+      bgSeenCountWhileDetached: 1,
+      firedDocumentChangeWhileDetached: true,
+      renderedFirstAfterReattach: true,
+      loadRunsAfterReattach: 1,
+      renderedSecondAfterReattach: true,
+      bgSeenCountAfterSecond: 2,
+      bgSeenCountAfterDestroy: 2,
+      destroyCallbackError: {
+        name: 'HvyDisposedCallbackError',
+        code: 'HVY_CALLBACK_DISPOSED',
+        reason: 'disposed',
+      },
+    });
+  });
+}
+
+const resubscribingQueueDocument = `---
+hvy_version: 0.1
+plugins:
+  - id: fake.queue
+    versionRange: ^1.0.0
+    permissions: [scripting]
+---
+
+<!--hvy: {"id":"fake-resub-section"}-->
+#! Fake resubscribe
+
+<!--hvy:text {"id":"fake-resub-status"}-->
+initial
+
+<!--hvy:plugin {"id":"fake-resub-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
+run_num = (doc.header.get("fake_resub_runs") or 0) + 1
+doc.header.set("fake_resub_runs", run_num)
+
+def on_result(item):
+    doc.component.set_text("fake-resub-status", f"run{run_num}:{item}")
+
+doc.plugins.call("fake.queue", "subscribe", {"run": run_num, "on_result": on_result})
+`;
+
+test('queued documentChange rerun runs in its detached mount runtime and replaces prior component callbacks', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/');
+
+  const result = await page.evaluate(async ({ resubSource, otherSource }) => {
+    const embedPath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, plugins, HvyDisposedCallbackError } = await import(/* @vite-ignore */ embedPath);
+    document.body.innerHTML = '<div id="sharedRoot" style="height:600px"></div>';
+    const sharedRoot = document.querySelector('#sharedRoot') as HTMLElement;
+
+    const handlers: Array<{ run: number; cb: (item: string) => void }> = [];
+    const queuePlugin = {
+      id: 'fake.queue',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
+      displayName: 'Fake queue',
+      create: () => ({ element: document.createElement('div') }),
+      scripting: {
+        methods: {
+          subscribe: (args: unknown) => {
+            const record = args as { run: number; on_result: (item: string) => void };
+            handlers.push({ run: record.run, cb: record.on_result });
+            return true;
+          },
+        },
+      },
+    };
+
+    const mountA = mountHvy({
+      root: sharedRoot,
+      mode: 'viewer',
+      document: deserializeDocumentBytes(new TextEncoder().encode(resubSource), '.hvy'),
+      plugins: [plugins.scripting, queuePlugin],
+    });
+    await mountA.whenLoaded();
+
+    // Trigger a document edit via run 1's callback (which queues a documentChange rerun),
+    // then immediately detach Tab A and mount Tab B *without* fake.queue before the rerun finishes.
+    const firstHandler = handlers[0]!.cb;
+    firstHandler('from-run-1');
+    mountA.detach();
+
+    const mountB = mountHvy({
+      root: sharedRoot,
+      mode: 'viewer',
+      document: deserializeDocumentBytes(new TextEncoder().encode(otherSource), '.hvy'),
+      plugins: [plugins.scripting],
+    });
+    await mountB.whenLoaded();
+    await new Promise((r) => setTimeout(r, 80));
+
+    // The queued rerun must have executed in Tab A's runtime (where fake.queue exists)
+    // and registered a replacement handler (run 2).
+    const runsAfterSwitch = mountA.getDocument().meta.fake_resub_runs ?? null;
+    const handlerCount = handlers.length;
+
+    // Calling run 1's replaced callback must throw HvyDisposedCallbackError('replaced').
+    let replacedError: { isInstance: boolean; code?: string; reason?: string } | null = null;
+    try {
+      firstHandler('stale-item');
+    } catch (error) {
+      const err = error as Error & { code?: string; reason?: string };
+      replacedError = {
+        isInstance: error instanceof HvyDisposedCallbackError,
+        code: err.code,
+        reason: err.reason,
+      };
+    }
+
+    // Calling run 2's replacement callback while still detached must succeed.
+    handlers[1]?.cb('from-run-2');
+    await new Promise((r) => setTimeout(r, 40));
+
+    mountB.destroy();
+    mountA.attach(sharedRoot);
+    const renderedAfterReattach = sharedRoot.textContent ?? '';
+    mountA.destroy();
+
+    return {
+      runsAfterSwitch,
+      handlerCount,
+      replacedError,
+      renderedRun2Result: renderedAfterReattach.includes('run2:from-run-2'),
+      didNotRenderStale: !renderedAfterReattach.includes('stale-item'),
+    };
+  }, { resubSource: resubscribingQueueDocument, otherSource: otherTabDocument });
+
+  expect(result).toEqual({
+    runsAfterSwitch: 2,
+    handlerCount: 2,
+    replacedError: {
+      isInstance: true,
+      code: 'HVY_CALLBACK_DISPOSED',
+      reason: 'replaced',
+    },
+    renderedRun2Result: true,
+    didNotRenderStale: true,
+  });
+});

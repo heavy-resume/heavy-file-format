@@ -6,6 +6,7 @@ import type {
   HvyPluginInstance,
 } from '../types';
 import { createBuiltInPluginMetadata, SCRIPTING_PLUGIN_ID } from '../registry';
+import { getActiveStateRuntime, type StateRuntime } from '../../state';
 import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
 import { deserializeDocument } from '../../serialization';
@@ -461,6 +462,15 @@ function createPreviousComponents(
 }
 
 async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Promise<void> {
+  let hookRuntime: StateRuntime | null = null;
+  try {
+    const active = getActiveStateRuntime();
+    if (active.state.document === ctx.document) {
+      hookRuntime = active;
+    }
+  } catch {
+    // Standalone hook runs may not have an active state runtime.
+  }
   const isLoad = ctx.changeReason === 'load';
   const previousState = isLoad ? null : scriptedDocumentStates.get(ctx.document) ?? null;
   const previousDatabaseRevision = isLoad
@@ -508,6 +518,8 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       renderOnMutation: !ctx.hostRendersAfter,
       libraries: target.libraries,
       databaseChanges,
+      stateRuntime: hookRuntime,
+      callbackOwnerKey: getScriptingResultCacheKey(target.sectionKey, target.blockId),
       onCallbackError: (callbackResult) => {
         if (!ctx.isCurrentDocument()) return;
         storeScriptingResult(

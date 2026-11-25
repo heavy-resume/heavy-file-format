@@ -33,8 +33,11 @@ import {
 import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
 import type { PreviousScriptingComponents } from './updated-components';
 import {
+  HvyDisposedCallbackError,
   isScriptingCallbackRuntimeDisposed,
   registerScriptingCallbackCleanup,
+  replaceScriptingCallbackCleanups,
+  type HvyDisposedCallbackReason,
 } from './callback-lifecycle';
 import {
   normalizeBrythonHostArguments,
@@ -318,9 +321,26 @@ export interface RunUserScriptOptions {
   libraries?: readonly string[];
   databaseChanges?: DatabaseChangeSnapshot;
   onCallbackError?: (result: ScriptingRunResult) => void;
+  stateRuntime?: StateRuntime | null;
+  callbackOwnerKey?: string;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
+  let stateRuntime: StateRuntime | null = options.stateRuntime ?? null;
+  if (!stateRuntime) {
+    try {
+      const activeStateRuntime = getActiveStateRuntime();
+      if (activeStateRuntime.state.document === options.document) {
+        stateRuntime = activeStateRuntime;
+      }
+    } catch {
+      // Standalone scripting tests and pre-bootstrap runs do not have an active state runtime.
+    }
+  }
+  const runInOwnerRuntime = <T>(action: () => T): T => (
+    stateRuntime ? runWithStateRuntime(stateRuntime, action) : action()
+  );
+
   if (options.source.trim().length === 0) {
     return { ok: true, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, toolCalls: 0 };
   }
@@ -367,15 +387,6 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     };
   }
 
-  let stateRuntime: StateRuntime | null = null;
-  try {
-    const activeStateRuntime = getActiveStateRuntime();
-    if (activeStateRuntime.state.document === options.document) {
-      stateRuntime = activeStateRuntime;
-    }
-  } catch {
-    // Standalone scripting tests and pre-bootstrap runs do not have an active state runtime.
-  }
   let dbMutated = false;
   let runtime: ScriptingRuntime | null = null;
   let scriptingDb: LoadedScriptingDbRuntime | null = null;
@@ -412,13 +423,15 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   let initialExecutionActive = true;
   let hasPluginCallbacks = false;
   let callbackResourcesActive = true;
+  let disposedCallbackReason: HvyDisposedCallbackReason | null = null;
   const callbackIdentity = createScriptInvocationIdentity(
     options.componentId ?? 'hvy-script',
     options.source
   );
-  const releaseCallbackResources = () => {
+  const releaseCallbackResources = (reason: HvyDisposedCallbackReason = 'disposed') => {
     if (!callbackResourcesActive) return;
     callbackResourcesActive = false;
+    disposedCallbackReason = reason;
     scriptingDb?.dispose();
   };
   let lastExecutionEndedAt = 0;
@@ -437,7 +450,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       logs: [...(runtime?.stats.logs ?? [])],
     });
   };
-  runtime = createScriptingRuntime({
+  runtime = runInOwnerRuntime(() => createScriptingRuntime({
     document: options.document,
     previousComponents: options.previousComponents,
     maxLines: options.maxLines,
@@ -445,6 +458,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     renderOnMutation: options.renderOnMutation,
     form: options.form,
     db: scriptingDb?.api,
+    stateRuntime,
     plugins: createScriptingPluginsApi(options.document, {
       allowAsync: false,
       requireDocumentPermission: true,
@@ -452,16 +466,18 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       wrapCallback: (callback) => {
         hasPluginCallbacks = true;
         return (...args) => {
-          if (!callbackResourcesActive) return undefined;
-          if (
-            stateRuntime
-            && (
-              isScriptingCallbackRuntimeDisposed(stateRuntime)
-              || stateRuntime.state.document !== options.document
-            )
-          ) {
-            releaseCallbackResources();
-            return undefined;
+          if (!callbackResourcesActive) {
+            throw new HvyDisposedCallbackError(disposedCallbackReason ?? 'disposed');
+          }
+          if (stateRuntime) {
+            if (isScriptingCallbackRuntimeDisposed(stateRuntime)) {
+              releaseCallbackResources('disposed');
+              throw new HvyDisposedCallbackError('disposed');
+            }
+            if (stateRuntime.state.document !== options.document) {
+              releaseCallbackResources('document-changed');
+              throw new HvyDisposedCallbackError('document-changed');
+            }
           }
           const invokeCallback = () => {
             callbackErrorReported = false;
@@ -535,7 +551,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     },
     beforeMutationRender: () => renderCycleExecution?.beforeMutationRender(),
     onCallbackError: reportCallbackError,
-  });
+  }));
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
   const requestedLibraries = options.libraries ?? [];
@@ -591,8 +607,20 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         delete scripting.errors[runtimeId];
         delete scripting.results[runtimeId];
         delete scripting.callbacks[runtimeId];
+        if (stateRuntime && options.callbackOwnerKey) {
+          if (hasPluginCallbacks) {
+            replaceScriptingCallbackCleanups(stateRuntime, options.callbackOwnerKey);
+          } else {
+            replaceScriptingCallbackCleanups(stateRuntime, options.callbackOwnerKey, {
+              onlyIfSourceChangedFrom: options.source,
+            });
+          }
+        }
         if (hasPluginCallbacks && stateRuntime) {
-          registerScriptingCallbackCleanup(stateRuntime, releaseCallbackResources);
+          registerScriptingCallbackCleanup(stateRuntime, releaseCallbackResources, {
+            ownerKey: options.callbackOwnerKey,
+            source: options.source,
+          });
         } else {
           releaseCallbackResources();
         }
@@ -607,8 +635,10 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       };
 
       try {
-        withSuppressedBrythonConsoleNoise(() => {
-          executeCachedPythonProgram(scripting, libraries, runtimeId);
+        runInOwnerRuntime(() => {
+          withSuppressedBrythonConsoleNoise(() => {
+            executeCachedPythonProgram(scripting, libraries, runtimeId);
+          });
         });
       } catch (error) {
         let message = String(error);

@@ -62,7 +62,7 @@ import {
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { disableUndo, enableUndo, isUndoDisabled, recordHistory, redoStateAsync, undoStateAsync } from './history';
+import { disableUndo, enableUndo, flushPendingInputHistory, isUndoDisabled, recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
 import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
 import { destroyPluginHistory } from './plugin-history-controller';
@@ -1666,6 +1666,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       });
     },
     markSaved() {
+      // Typing announces its change once input goes idle; announce it now, or it lands after the save and reads as a new edit.
+      runWithStateRuntime(runtime, () => flushPendingInputHistory());
       documentChangeApi.markSaved();
     },
     isDirty() {

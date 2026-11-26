@@ -134,8 +134,14 @@
   color: var(--hvy-icon-muted);
 }
 
+.hvy-document .reader-block-container > .reader-container {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 .hvy-document .reader-container-body {
   margin-top: 0;
+  min-width: 0;
 }
 
 .hvy-document .reader-container-body > .reader-block-text:last-child {

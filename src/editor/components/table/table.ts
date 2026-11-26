@@ -1,8 +1,9 @@
 import './table.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { TableRow } from '../../types';
-import { closeIcon, plusIcon, settingsIcon } from '../../../icons';
+import { settingsIcon } from '../../../icons';
 import { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from '../../../markdown';
+import { markdownToPlainText } from '../../../markdown-plain-text';
 import { findSortValueOwnerBlock, getComponentSortValueDefs, replaceSortValueAnnotations, type ListValueKind } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { state } from '../../../state';
@@ -10,6 +11,7 @@ import { findReusableOwner } from '../../../reusable';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { getTableColumnProperties } from '../../../table-ops';
 import { renderTableGrabberInsertMenu } from './table-grabber-insert-menu';
+import { renderTableEditorGrid, type TableEditorGridRow } from './table-editor-grid';
 
 let readerTableStripeIndex = 0;
 
@@ -85,14 +87,9 @@ function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentR
   return unwrapTableParagraphs(helpers.renderComponentFragment('text', value, block));
 }
 
-function renderTableInlineToolbar(
-  _sectionKey: string,
-  _blockId: string,
-  _field: 'table-column' | 'table-cell',
-  _helpers: Parameters<ComponentEditorRenderer>[2],
-  _indices: { columnIndex?: number; rowIndex?: number; cellIndex?: number }
-): string {
-  return '';
+function renderTableHoverTitleAttr(markdown: string, helpers: Parameters<ComponentReaderRenderer>[2]): string {
+  const visibleText = markdownToPlainText(markdown);
+  return visibleText ? ` title="${helpers.escapeAttr(visibleText)}"` : '';
 }
 
 function tableColumnClassNames(block: Parameters<ComponentEditorRenderer>[1], column: string, header: boolean): string {
@@ -150,56 +147,36 @@ function renderTableColumnSettings(
   </details>`;
 }
 
-function renderTableRowEditor(
+function buildTableEditorRow(
   sectionKey: string,
   block: Parameters<ComponentEditorRenderer>[1],
   columns: string[],
   row: TableRow,
   rowIndex: number,
   helpers: Parameters<ComponentEditorRenderer>[2]
-): string {
+): TableEditorGridRow {
   const blockId = block.id;
+  const escapedSection = helpers.escapeAttr(sectionKey);
+  const escapedBlockId = helpers.escapeAttr(blockId);
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
   const isEmptyRow = safeColumns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
-  return `
-    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${blockId}-row-${rowIndex}`)}">
-      <td class="table-row-utility">
-        ${renderTableGrabberInsertMenu({ kind: 'row', sectionKey, blockId, index: rowIndex, escapeAttr: helpers.escapeAttr })}
-      </td>
-      ${safeColumns
-        .map(
-          (_column, cellIndex) => {
-            const rawPlaceholder = safeColumns[cellIndex] || 'Cell value';
-            const placeholder = renderAltAnnotationsAsFullText(rawPlaceholder);
-            const compactPlaceholder = renderAltAnnotationsAsMobileText(rawPlaceholder);
-            return `<td class="${tableColumnClassNames(block, safeColumns[cellIndex], false)}" data-table-column-index="${cellIndex}">
-            <div class="table-inline-edit-shell">
-              <div
-                class="inline-editable table-inline-text"
-                contenteditable="true"
-                spellcheck="true"
-                data-inline-text="true"
-                data-section-key="${helpers.escapeAttr(sectionKey)}"
-                data-block-id="${helpers.escapeAttr(blockId)}"
-                data-row-index="${rowIndex}"
-                data-cell-index="${cellIndex}"
-                data-field="table-cell"
-                data-placeholder="${helpers.escapeAttr(placeholder)}"
-                data-placeholder-compact="${helpers.escapeAttr(compactPlaceholder)}"
-              >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', sectionKey, blockId, block, helpers)}</div>
-              ${renderTableInlineToolbar(sectionKey, blockId, 'table-cell', helpers, { rowIndex, cellIndex })}
-            </div>
-          </td>`;
-          }
-        )
-        .join('')}
-      <td class="table-row-utility table-row-remove-cell">
-        <button type="button" class="danger remove-x" data-action="remove-table-row" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" title="Remove row">${closeIcon()}</button>
-      </td>
-    </tr>
-  `;
+  return {
+    trClassName: isEmptyRow ? 'table-row-editor-empty' : '',
+    trAttrs: `data-table-row-drop="true" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}" data-row-index="${rowIndex}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${blockId}-row-${rowIndex}`)}"`,
+    leadingHtml: renderTableGrabberInsertMenu({ kind: 'row', sectionKey, blockId, index: rowIndex, escapeAttr: helpers.escapeAttr }),
+    cells: safeColumns.map((_column, cellIndex) => {
+      const rawPlaceholder = safeColumns[cellIndex] || 'Cell value';
+      const placeholder = renderAltAnnotationsAsFullText(rawPlaceholder);
+      const compactPlaceholder = renderAltAnnotationsAsMobileText(rawPlaceholder);
+      return {
+        tdClassName: tableColumnClassNames(block, safeColumns[cellIndex], false),
+        tdAttrs: `data-table-column-index="${cellIndex}"`,
+        editableAttrs: `contenteditable="true" spellcheck="true" data-inline-text="true" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}" data-row-index="${rowIndex}" data-cell-index="${cellIndex}" data-field="table-cell" data-placeholder="${helpers.escapeAttr(placeholder)}" data-placeholder-compact="${helpers.escapeAttr(compactPlaceholder)}"`,
+        contentHtml: renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', sectionKey, blockId, block, helpers),
+      };
+    }),
+    removeButtonAttrs: `data-action="remove-table-row" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}" data-row-index="${rowIndex}"`,
+  };
 }
 
 function renderTableSortValueEditorControl(
@@ -231,96 +208,56 @@ function renderTableSortValueEditorControl(
 
 export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const columns = helpers.getTableColumns(block.schema);
-  return `
-    <div class="table-editor">
-      <div class="table-editor-head">
-        <strong>Inline Table Editor</strong>
-        <span>Rename headers, edit cells in place, and drag handles to reorder.</span>
-      </div>
-      <label class="table-header-toggle">
-        <input
-          type="checkbox"
-          data-section-key="${helpers.escapeAttr(sectionKey)}"
-          data-block-id="${helpers.escapeAttr(block.id)}"
-          data-field="table-show-header"
-          ${block.schema.tableShowHeader ? 'checked' : ''}
-        />
-        Show header row
-      </label>
-      <div class="table-editor-frame">
-        <table class="table-editor-grid" style="--hvy-table-editor-columns: ${Math.max(columns.length, 1)};">
-          <colgroup>
-            <col class="table-utility-column">
-            ${columns.map((column, columnIndex) => renderTableColumn(block, column, columnIndex, helpers)).join('')}
-            <col class="table-add-column-column">
-          </colgroup>
-          <thead>
-            <tr>
-              <th class="table-utility-cell"></th>
-              ${columns
-                .map(
-                  (column, columnIndex) => `
-                    <th class="${tableColumnClassNames(block, column, true)}" data-table-column-drop="true" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" data-table-column-index="${columnIndex}">
-                      <div class="table-column-head">
-                        ${renderTableGrabberInsertMenu({
-                          kind: 'column',
-                          sectionKey,
-                          blockId: block.id,
-                          index: columnIndex,
-                          disabled: block.schema.lock,
-                          escapeAttr: helpers.escapeAttr,
-                        })}
-                        ${renderTableColumnSettings(sectionKey, block, column, columnIndex, helpers)}
-                        <div class="table-inline-edit-shell">
-                          <div
-                            class="inline-editable table-inline-text table-column-name"
-                            contenteditable="${block.schema.lock ? 'false' : 'true'}"
-                            spellcheck="true"
-                            data-inline-text="true"
-                            data-section-key="${helpers.escapeAttr(sectionKey)}"
-                            data-block-id="${helpers.escapeAttr(block.id)}"
-                            data-column-index="${columnIndex}"
-                            data-field="table-column"
-                          >${unwrapTableParagraphs(helpers.markdownToEditorHtml(column))}</div>
-                          ${renderTableInlineToolbar(sectionKey, block.id, 'table-column', helpers, { columnIndex })}
-                        </div>
-                        ${
-                          block.schema.lock
-                            ? ''
-                            : `<button type="button" class="danger remove-x" data-action="remove-table-column" data-section-key="${helpers.escapeAttr(
-                                sectionKey
-                              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Remove column">${closeIcon()}</button>`
-                        }
-                      </div>
-                      <span class="table-column-resize-handle" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" title="Drag to resize; double-click to fit contents" aria-hidden="true"></span>
-                    </th>`
-                )
-                .join('')}
-              <th class="table-add-column-cell">
-                ${
-                  block.schema.lock
-                    ? ''
-                    : `<button type="button" class="ghost table-add-button" data-action="add-table-column" data-section-key="${helpers.escapeAttr(
-                        sectionKey
-                      )}" data-block-id="${helpers.escapeAttr(block.id)}" title="Add column" aria-label="Add column">${plusIcon()}</button>`
-                }
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            ${block.schema.tableRows.map((row, rowIndex) => renderTableRowEditor(sectionKey, block, columns, row, rowIndex, helpers)).join('')}
-            <tr class="table-add-row-line">
-              <td colspan="${columns.length + 2}">
-                <button type="button" class="ghost" data-action="add-table-row" data-section-key="${helpers.escapeAttr(
-                  sectionKey
-                )}" data-block-id="${helpers.escapeAttr(block.id)}">${plusIcon()} Row</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+  const escapedSection = helpers.escapeAttr(sectionKey);
+  const escapedBlockId = helpers.escapeAttr(block.id);
+  const preambleHtml = `
+    <div class="table-editor-head">
+      <strong>Inline Table Editor</strong>
+      <span>Rename headers, edit cells in place, and drag handles to reorder.</span>
     </div>
-  `;
+    <label class="table-header-toggle">
+      <input
+        type="checkbox"
+        data-section-key="${escapedSection}"
+        data-block-id="${escapedBlockId}"
+        data-field="table-show-header"
+        ${block.schema.tableShowHeader ? 'checked' : ''}
+      />
+      Show header row
+    </label>`;
+  const colgroupHtml = `<colgroup>
+    <col class="table-utility-column">
+    ${columns.map((column, columnIndex) => renderTableColumn(block, column, columnIndex, helpers)).join('')}
+    <col class="table-add-column-column">
+  </colgroup>`;
+
+  return renderTableEditorGrid({
+    preambleHtml,
+    colgroupHtml,
+    columns: columns.map((column, columnIndex) => ({
+      thClassName: tableColumnClassNames(block, column, true),
+      thAttrs: `data-table-column-drop="true" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}" data-column-index="${columnIndex}" data-table-column-index="${columnIndex}"`,
+      leadingHtml: `${renderTableGrabberInsertMenu({
+        kind: 'column',
+        sectionKey,
+        blockId: block.id,
+        index: columnIndex,
+        disabled: block.schema.lock,
+        escapeAttr: helpers.escapeAttr,
+      })}${renderTableColumnSettings(sectionKey, block, column, columnIndex, helpers)}`,
+      editableAttrs: `contenteditable="${block.schema.lock ? 'false' : 'true'}" spellcheck="true" data-inline-text="true" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}" data-column-index="${columnIndex}" data-field="table-column"`,
+      contentHtml: unwrapTableParagraphs(helpers.markdownToEditorHtml(column)),
+      removeButtonAttrs: block.schema.lock
+        ? null
+        : `data-action="remove-table-column" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}" data-column-index="${columnIndex}"`,
+      afterHeadHtml: `<span class="table-column-resize-handle" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}" data-column-index="${columnIndex}" title="Drag to resize; double-click to fit contents" aria-hidden="true"></span>`,
+    })),
+    addColumnButtonAttrs: block.schema.lock
+      ? null
+      : `data-action="add-table-column" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}"`,
+    rows: block.schema.tableRows.map((row, rowIndex) => buildTableEditorRow(sectionKey, block, columns, row, rowIndex, helpers)),
+    addRowButtonAttrs: `data-action="add-table-row" data-section-key="${escapedSection}" data-block-id="${escapedBlockId}"`,
+  });
 };
 
 export const renderTableReader: ComponentReaderRenderer = (_section, block, helpers) => {
@@ -333,7 +270,7 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     ${
       block.schema.tableShowHeader
         ? `<thead>
-      <tr>${columns.map((column, columnIndex) => `<th class="${tableColumnClassNames(block, column, true)}" data-table-column-index="${columnIndex}" title="${helpers.escapeAttr(renderAltAnnotationsAsFullText(column))}">${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
+      <tr>${columns.map((column, columnIndex) => `<th class="${tableColumnClassNames(block, column, true)}" data-table-column-index="${columnIndex}"${renderTableHoverTitleAttr(column, helpers)}>${renderTableInlineReaderHtml(column, block, helpers)}</th>`).join('')}</tr>
     </thead>`
         : ''
     }
@@ -347,9 +284,8 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
               ${columns.map((_column, cellIndex) => {
                 const rawValue = row.cells[cellIndex] ?? '';
                 const value = helpers.escapeHtml(rawValue);
-                const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
                 if (value) {
-                  return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}" title="${title}">${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`;
+                  return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}"${renderTableHoverTitleAttr(rawValue, helpers)}>${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`;
                 }
                 if (!isEmptyRow) {
                   return `<td class="${tableColumnClassNames(block, columns[cellIndex], false)}" data-table-column-index="${cellIndex}"></td>`;

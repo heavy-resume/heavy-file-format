@@ -52,6 +52,8 @@ test('scripting document hook runs editor-only scripts in editor view', async ()
     document,
     view: 'editor',
     changeReason: 'load',
+    serializedDocument: '',
+    onSettled: vi.fn(),
     refreshPlugins: vi.fn(),
     requestRerender: vi.fn(),
     isCurrentDocument: () => true,
@@ -62,7 +64,7 @@ test('scripting document hook runs editor-only scripts in editor view', async ()
   expect(runUserScriptMock.mock.calls[0]?.[0].changeReason).toBe('load');
 });
 
-test('scripting document hook runs editor-only scripts in AI view', async () => {
+test('scripting document hook runs editor and viewer scripts in AI view', async () => {
   const document = createScriptingDocument();
   const runUserScriptMock = vi.mocked(runUserScript);
   runUserScriptMock.mockClear();
@@ -71,13 +73,17 @@ test('scripting document hook runs editor-only scripts in AI view', async () => 
     document,
     view: 'ai',
     changeReason: 'load',
+    serializedDocument: '',
+    onSettled: vi.fn(),
     refreshPlugins: vi.fn(),
     requestRerender: vi.fn(),
     isCurrentDocument: () => true,
   } satisfies HvyDocumentHookContext);
 
-  expect(runUserScriptMock).toHaveBeenCalledTimes(1);
-  expect(runUserScriptMock.mock.calls[0]?.[0].source).toContain('print("editor")');
+  expect(runUserScriptMock.mock.calls.map((call) => call[0].source)).toEqual([
+    expect.stringContaining('print("editor")'),
+    expect.stringContaining('print("document")'),
+  ]);
 });
 
 test('scripting document hook skips editor-only scripts in viewer view', async () => {
@@ -89,6 +95,8 @@ test('scripting document hook skips editor-only scripts in viewer view', async (
     document,
     view: 'viewer',
     changeReason: 'load',
+    serializedDocument: '',
+    onSettled: vi.fn(),
     refreshPlugins: vi.fn(),
     requestRerender: vi.fn(),
     isCurrentDocument: () => true,

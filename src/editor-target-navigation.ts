@@ -96,7 +96,10 @@ export function revealEditorTargetInState(result: EditorNavigationTarget): boole
       continue;
     }
     const readerStateKey = `${section.key}:${block.id}`;
-    state.readerExpandableState[readerStateKey] = true;
+    // A modal opens from navigation in the reader; a stored expansion would pin it inline.
+    if (block.schema.expandablePresentation !== 'modal') {
+      state.readerExpandableState[readerStateKey] = true;
+    }
     // Editing surfaces ignore reader session state, so the reveal is recorded separately.
     if (!state.searchRevealedAncestors[readerStateKey]) {
       requiresFullRender = true;

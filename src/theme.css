@@ -201,7 +201,8 @@
 .hvy-document .theme-preview-card[data-theme-preview-state="row-1"] [data-theme-demo-state="row-1"],
 .hvy-document .theme-preview-card[data-theme-preview-state="row-2"] [data-theme-demo-state="row-2"],
 .hvy-document .theme-preview-card[data-theme-preview-state="warning"] [data-theme-demo-state="warning"],
-.hvy-document .theme-preview-card[data-theme-preview-state="error"] [data-theme-demo-state="error"] {
+.hvy-document .theme-preview-card[data-theme-preview-state="error"] [data-theme-demo-state="error"],
+.hvy-document .theme-preview-card[data-theme-preview-state="disabled"] [data-theme-demo-state="disabled"] {
   display: block;
 }
 

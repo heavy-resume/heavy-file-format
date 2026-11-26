@@ -290,6 +290,21 @@
   font-weight: 700;
 }
 
+.hvy-document .component-picker-row-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-accent) 40%, var(--hvy-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-accent) 12%, var(--hvy-surface));
+  color: var(--hvy-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
 .hvy-document .component-picker-row-description {
   color: var(--hvy-text-muted);
   font-size: 0.82rem;

@@ -40,7 +40,10 @@ plugins:
   });
   await expect(form.locator('.hvy-form-photo-preview img')).toBeVisible({ timeout: 1000 });
   await form.getByRole('button', { name: 'Create profile' }).click({ timeout: 1000 });
-  await expect(page.locator('.hvy-form-status')).toContainText('Script ran', { timeout: 1000 });
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.meta.submitted_photo_file ?? null;
+  })).toBe('portrait.png');
 
   const expectedResult = await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');

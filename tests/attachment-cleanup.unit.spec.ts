@@ -1,8 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import {
+  clearCachedEmbeddedFileUsage,
   deleteUnusedEmbeddedSqliteDatabase,
   findUnusedEmbeddedFiles,
+  getCachedEmbeddedFileUsage,
+  getEmbeddedFileUsage,
   isEmbeddedSqliteDatabaseUnused,
   purgeUnusedEmbeddedFiles,
 } from '../src/attachment-cleanup';
@@ -92,5 +95,86 @@ plugins:
     expect(isEmbeddedSqliteDatabaseUnused(document)).toBe(false);
     await expect(deleteUnusedEmbeddedSqliteDatabase(document)).resolves.toBe(false);
     expect(document.attachments.map((entry) => entry.id)).toEqual(['db']);
+  });
+});
+
+describe('embedded file usage', () => {
+  test('before, template blocks without text, expected result: usage reads them as empty text and leaves them unchanged', () => {
+    const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-grid
+    baseType: grid
+    template:
+      id: fake-grid
+      schema:
+        component: grid
+        gridColumns: 3
+        gridItems:
+          - id: fake-cell
+            block:
+              id: fake-image
+              schema:
+                component: image
+                imageFile: fake-template.png
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+`, '.hvy');
+    setAttachment(document, 'image:fake-template.png', { mediaType: 'image/png' }, new Uint8Array([1]));
+    const templateBefore = JSON.stringify(document.meta.component_defs);
+
+    const expectedResult = getEmbeddedFileUsage(document);
+
+    expect(expectedResult.unused).toEqual([]);
+    expect(expectedResult.referenceCounts.get('image:fake-template.png')).toBe(1);
+    expect(JSON.stringify(document.meta.component_defs)).toBe(templateBefore);
+  });
+
+  test('before, a file linked twice, expected result: one pass counts each link', () => {
+    const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+<!--hvy:text {}-->
+[Fake guide](@attachment:Fake%20Guide) and [again](@attachment:Fake%20Guide)
+`, '.hvy');
+    setAttachment(document, 'file:fake-guide', { role: 'user-file', name: 'Fake Guide', filename: 'fake-guide.pdf' }, new Uint8Array([1]));
+    setAttachment(document, 'file:fake-notes', { role: 'user-file', name: 'Fake Notes', filename: 'fake-notes.txt' }, new Uint8Array([2]));
+
+    const expectedResult = getEmbeddedFileUsage(document);
+
+    expect(expectedResult.referenceCounts.get('file:fake-guide')).toBe(2);
+    expect(expectedResult.referenceCounts.has('file:fake-notes')).toBe(false);
+    expect(expectedResult.unused.map((entry) => entry.id)).toEqual(['file:fake-notes']);
+  });
+
+  test('before, cached usage, expected result: reused until attachments, templates, or the document are replaced', () => {
+    clearCachedEmbeddedFileUsage();
+    const document = documentWithComponents();
+    setAttachment(document, 'image:unused.png', { mediaType: 'image/png' }, new Uint8Array([1]));
+    const firstUsage = getCachedEmbeddedFileUsage(document);
+
+    expect(getCachedEmbeddedFileUsage(document)).toBe(firstUsage);
+
+    setAttachment(document, 'image:another-unused.png', { mediaType: 'image/png' }, new Uint8Array([2]));
+    const afterAttachmentChange = getCachedEmbeddedFileUsage(document);
+    expect(afterAttachmentChange).not.toBe(firstUsage);
+    expect(afterAttachmentChange.unused.map((entry) => entry.id)).toEqual(['image:unused.png', 'image:another-unused.png']);
+
+    document.meta.component_defs = [];
+    const afterTemplateChange = getCachedEmbeddedFileUsage(document);
+    expect(afterTemplateChange).not.toBe(afterAttachmentChange);
+
+    const replacedDocument = documentWithComponents();
+    const afterDocumentReplaced = getCachedEmbeddedFileUsage(replacedDocument);
+    expect(afterDocumentReplaced).not.toBe(afterTemplateChange);
+
+    clearCachedEmbeddedFileUsage();
+    expect(getCachedEmbeddedFileUsage(replacedDocument)).not.toBe(afterDocumentReplaced);
   });
 });

@@ -23,25 +23,28 @@ doc.db.execute("INSERT INTO fake_widgets (label) VALUES (?)", ["Orbital Widget"]
 doc.cli.run("hvy request_structure --collapse")
 doc.cli.write("/id/example/text.txt", "Updated text")
 doc.json.parse_array(response)
-doc.time.now_iso()
-doc.time.now_local()
 doc.tool.request_structure()
+doc.disable_undo()
+doc.enable_undo()
 ```
 
 `doc.cli.run(COMMAND)` runs one synchronous virtual CLI command and returns stdout. It supports document/file commands such as `hvy insert`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. It does not run pipes, shell chains, redirection, `ask`, `done`, or db-table SQL commands; use `doc.db.query` and `doc.db.execute` for SQL.
 
 `doc.cli.write(PATH, CONTENT)` replaces one writable non-raw virtual file, such as generated component `.json`, `.css`, `.txt`, and table data files. In generated component `.json` files, removing a property resets that exposed field to its component default; use an explicit empty string when the intended value is empty. It intentionally refuses `raw.hvy`; use structured CLI commands for component creation and removal.
 
-`doc.time.now_iso()` returns the current client timestamp, `doc.time.now_local()` returns a human-readable date/time with the computer's local timezone label, `doc.time.now_unix_ms()` returns Unix milliseconds, and `doc.time.today_iso()` returns the client-local date as `YYYY-MM-DD`.
-
 Component handles expose `handle.set_sort_value(key, value)` and `handle.set_group_value(key, value)`. These update matching source annotations in text and table cells, return the number replaced, and mark the document for key synchronization. The owning reusable list item must define that key in `sortValueDefs` or `groupValueDefs`. Pass the visible label for an enum; do not write derived key caches directly.
 
-Checked libraries are opt-in through `pluginConfig.libraries`. The `datetime` library provides a safe timezone-naive subset:
+Checked libraries are opt-in through `pluginConfig.libraries`: `random`, `re`, `datetime`, `zoneinfo`, and `tzlocal`. The `datetime` library follows CPython, including time zones; `zoneinfo` provides IANA zones and `tzlocal` provides the viewer's zone:
 
 ```python
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from tzlocal import get_localzone
 next_day = datetime.fromisoformat("2026-07-21") + timedelta(days=1)
+utc_now = datetime.now(timezone.utc).isoformat()
+viewer_time = datetime.fromisoformat("2026-07-21T18:00:00Z").astimezone(get_localzone()).strftime("%Y-%m-%d %H:%M %Z")
 ```
+
+The older `doc.time` helpers are deprecated aliases; use `datetime` instead.
 
 Use tool help for exact `doc.tool` call shapes:
 
@@ -87,6 +90,9 @@ Form scripts also get:
 doc.form.get_value("Field label")
 doc.form.set_value("Field label", "value")
 doc.form.set_error("Field label", "Message")
+doc.form.set_field_disabled("Field label", True)
+doc.form.set_submit_disabled(True, "Reason shown under the button")
+doc.form.set_submit_disabled(False)
 ```
 
 Scripts are wrapped in a generated function before Brython runs them, so `return` can stop a script early.

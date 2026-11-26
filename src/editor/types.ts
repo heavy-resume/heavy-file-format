@@ -23,6 +23,8 @@ export interface GridItem {
   block: VisualBlock;
 }
 
+export type ExpandablePresentation = 'inline' | 'modal';
+
 export interface ExpandablePart {
   lock: boolean;
   children: VisualBlock[];
@@ -84,6 +86,7 @@ export interface ContainerBlockSchema extends BaseBlockSchema {
   containerTitle: string;
   containerExpanded: boolean;
   containerCollapsedPreviewRem: number;
+  noSave: boolean;
 }
 
 export interface ComponentListBlockSchema extends BaseBlockSchema {
@@ -115,6 +118,7 @@ export interface ExpandableBlockSchema extends BaseBlockSchema {
   expandableStubBlocks: ExpandablePart;
   expandableAlwaysShowStub: boolean;
   expandableExpanded: boolean;
+  expandablePresentation: ExpandablePresentation;
   expandableContentCss: string;
   expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;
@@ -228,6 +232,7 @@ interface RuntimeSchemaFieldAccess {
   containerTitle: string;
   containerExpanded: boolean;
   containerCollapsedPreviewRem: number;
+  noSave: boolean;
   componentListComponent: string;
   componentListItemLabel: string;
   componentListBlocks: VisualBlock[];
@@ -253,6 +258,7 @@ interface RuntimeSchemaFieldAccess {
   expandableStubBlocks: ExpandablePart;
   expandableAlwaysShowStub: boolean;
   expandableExpanded: boolean;
+  expandablePresentation: ExpandablePresentation;
   expandableContentCss: string;
   expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;
@@ -314,13 +320,14 @@ export interface VisualSection {
   expanded: boolean;
   highlight: boolean;
   priority?: boolean;
+  startOnNewPage?: boolean;
   css: string;
   tags: string;
   description: string;
   location: SectionLocation;
   hideIfUnmodified?: boolean;
-  exclude_from_import?: boolean;
-  protect_from_import?: boolean;
+  excludeFromImport?: boolean;
+  protectFromImport?: boolean;
   templateKey?: string;
   blocks: VisualBlock[];
 

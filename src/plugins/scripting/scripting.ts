@@ -6,17 +6,20 @@ import type {
   HvyPluginInstance,
 } from '../types';
 import { createBuiltInPluginMetadata, SCRIPTING_PLUGIN_ID } from '../registry';
+import { getActiveStateRuntime, type StateRuntime } from '../../state';
 import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
-import { deserializeDocument, serializeDocument } from '../../serialization';
+import { deserializeDocument } from '../../serialization';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import python from 'highlight.js/lib/languages/python';
 import { openScriptingHelpModal } from './help-modal';
-import { runUserScript, SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './wrapper';
+import { SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './python-program';
+import { runUserScript } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { getDatabaseChangesSince, getDatabaseChangeRevision } from '../../database-change-tracker';
 import scriptingDocumentation from './about-scripting.txt?raw';
+import { captureScriptingComponentFingerprints, type PreviousScriptingComponents, type ScriptingComponentFingerprints } from './updated-components';
 
 import './scripting.css';
 
@@ -199,10 +202,19 @@ interface ScriptingState {
 }
 
 const scriptingState = new WeakMap<HTMLElement, ScriptingState>();
-const scriptingResultCache = new Map<string, ScriptingState>();
+const scriptingResultCaches = new WeakMap<HvyPluginContext['rawDocument'], Map<string, ScriptingState>>();
 
 function getScriptingResultCacheKey(sectionKey: string, blockId: string): string {
   return `${sectionKey}|${blockId}`;
+}
+
+function getScriptingResultCache(rawDocument: HvyPluginContext['rawDocument']): Map<string, ScriptingState> {
+  let cache = scriptingResultCaches.get(rawDocument);
+  if (!cache) {
+    cache = new Map();
+    scriptingResultCaches.set(rawDocument, cache);
+  }
+  return cache;
 }
 
 function getScriptingVisualDescription(
@@ -213,7 +225,7 @@ function getScriptingVisualDescription(
   if (!sectionKey) {
     return '';
   }
-  const cached = scriptingResultCache.get(getScriptingResultCacheKey(sectionKey, block.id));
+  const cached = scriptingResultCaches.get(document)?.get(getScriptingResultCacheKey(sectionKey, block.id));
   const result = cached?.sourceSignature === block.text ? cached.lastResult : null;
   if (!result || result.ok) {
     return '';
@@ -245,19 +257,21 @@ function findSectionKeyForScriptingBlock(
 }
 
 export function storeScriptingResult(
+  rawDocument: HvyPluginContext['rawDocument'],
   sectionKey: string,
   blockId: string,
   result: { ok: boolean; error?: string; errorDetail?: string; stepsExecuted: number; stepBudget: number; linesExecuted?: number; toolCalls: number; logs?: string[] },
   sourceSignature = ''
 ): void {
-  scriptingResultCache.set(getScriptingResultCacheKey(sectionKey, blockId), { lastResult: result, sourceSignature });
+  getScriptingResultCache(rawDocument).set(getScriptingResultCacheKey(sectionKey, blockId), { lastResult: result, sourceSignature });
 }
 
-export function clearScriptingResults(): void {
-  scriptingResultCache.clear();
+export function clearScriptingResults(rawDocument: HvyPluginContext['rawDocument']): void {
+  scriptingResultCaches.delete(rawDocument);
 }
 
 export function setScriptingResult(
+  rawDocument: HvyPluginContext['rawDocument'],
   element: HTMLElement,
   result: { ok: boolean; error?: string; errorDetail?: string; stepsExecuted: number; stepBudget: number; linesExecuted?: number; toolCalls: number; logs?: string[] },
   sourceSignature = element.dataset.scriptingSourceSignature ?? ''
@@ -266,7 +280,7 @@ export function setScriptingResult(
   const sectionKey = element.dataset.scriptingSectionKey;
   const blockId = element.dataset.scriptingBlockId;
   if (sectionKey && blockId) {
-    scriptingResultCache.set(getScriptingResultCacheKey(sectionKey, blockId), { lastResult: result, sourceSignature });
+    getScriptingResultCache(rawDocument).set(getScriptingResultCacheKey(sectionKey, blockId), { lastResult: result, sourceSignature });
   }
   const status = element.querySelector<HTMLDivElement>('.hvy-scripting-status');
   const logs = result.logs ?? [];
@@ -325,9 +339,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     return {
       element: root,
       refresh: () => {
-        const cached = getFreshScriptingResult(root, ctx.sectionKey, ctx.block.id, ctx.block.text);
+        const cached = getFreshScriptingResult(ctx.rawDocument, root, ctx.sectionKey, ctx.block.id, ctx.block.text);
         if (cached?.lastResult) {
-          setScriptingResult(root, cached.lastResult);
+          setScriptingResult(ctx.rawDocument, root, cached.lastResult);
         }
       },
     };
@@ -343,9 +357,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       handles.textarea.value = ctx.block.text;
     }
     refreshHighlightedSource(handles.textarea, handles.highlightedCode);
-    const cached = getFreshScriptingResult(root, ctx.sectionKey, ctx.block.id, ctx.block.text);
+    const cached = getFreshScriptingResult(ctx.rawDocument, root, ctx.sectionKey, ctx.block.id, ctx.block.text);
     if (cached?.lastResult) {
-      setScriptingResult(root, cached.lastResult);
+      setScriptingResult(ctx.rawDocument, root, cached.lastResult);
     }
   };
 
@@ -383,10 +397,16 @@ interface ScriptingTarget {
   libraries: ScriptingLibraryName[];
 }
 
-let lastScriptedDocument: HvyDocumentHookContext['document'] | null = null;
-let lastScriptedSignature = '';
-let lastScriptedDocumentSnapshot = '';
-const lastDatabaseRevisionByDocument = new WeakMap<HvyDocumentHookContext['document'], number>();
+interface ScriptedDocumentState {
+  signature: string;
+  snapshot: string;
+  componentFingerprints: ScriptingComponentFingerprints | null;
+  databaseRevision: number;
+}
+
+// Keyed by document rather than held at module level so a remount (or a second
+// mount) gets a fresh run instead of inheriting another mount's dedupe state.
+const scriptedDocumentStates = new WeakMap<HvyDocumentHookContext['document'], ScriptedDocumentState>();
 
 function getScriptingPluginLibraries(pluginConfig: JsonObject | null | undefined): ScriptingLibraryName[] {
   const raw = Array.isArray(pluginConfig?.libraries) ? pluginConfig.libraries : [];
@@ -419,20 +439,46 @@ export function getRunnableScriptingTargetsForView(
   targets: ScriptingTarget[],
   view: HvyDocumentHookContext['view']
 ): ScriptingTarget[] {
-  if (view === 'editor' || view === 'ai') {
+  // AI is both a viewing and an editing surface, so it runs viewer and editor scripts.
+  if (view === 'ai') {
+    return targets;
+  }
+  if (view === 'editor') {
     return targets.filter((target) => target.editorOnly);
   }
   return targets.filter((target) => !target.editorOnly);
 }
 
+function createPreviousComponents(
+  snapshot: string,
+  fingerprints: ScriptingComponentFingerprints | null,
+  extension: HvyDocumentHookContext['document']['extension']
+): PreviousScriptingComponents {
+  let loaded: HvyDocumentHookContext['document'] | null = null;
+  return {
+    fingerprints,
+    loadDocument: () => (loaded ??= deserializeDocument(snapshot, extension)),
+  };
+}
+
 async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Promise<void> {
-  const previousDatabaseRevision = ctx.changeReason === 'load'
+  let hookRuntime: StateRuntime | null = null;
+  try {
+    const active = getActiveStateRuntime();
+    if (active.state.document === ctx.document) {
+      hookRuntime = active;
+    }
+  } catch {
+    // Standalone hook runs may not have an active state runtime.
+  }
+  const isLoad = ctx.changeReason === 'load';
+  const previousState = isLoad ? null : scriptedDocumentStates.get(ctx.document) ?? null;
+  const previousDatabaseRevision = isLoad
     ? getDatabaseChangeRevision(ctx.document)
-    : lastDatabaseRevisionByDocument.get(ctx.document) ?? 0;
+    : previousState?.databaseRevision ?? 0;
   const databaseChanges = getDatabaseChangesSince(ctx.document, previousDatabaseRevision);
-  if (ctx.changeReason === 'load') {
-    clearScriptingResults();
-    lastScriptedDocumentSnapshot = '';
+  if (isLoad) {
+    clearScriptingResults(ctx.document);
     ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
   }
   const targets: ScriptingTarget[] = [];
@@ -443,33 +489,41 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   const scriptSignature = targets
     .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.editorOnly ? 'editor' : 'document'}\u0000${target.pluginVersion}\u0000${target.libraries.join(',')}\u0000${target.source}`)
     .join('\u0001');
-  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${serializeDocument(ctx.document)}\u0002database:${getDatabaseChangeRevision(ctx.document)}`;
-  if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
+  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${ctx.serializedDocument}\u0002database:${getDatabaseChangeRevision(ctx.document)}`;
+  if (previousState?.signature === signature) {
     return;
   }
-  const previousDocument = ctx.document === lastScriptedDocument && lastScriptedDocumentSnapshot
-    ? deserializeDocument(lastScriptedDocumentSnapshot, ctx.document.extension)
+  const previousComponents = previousState?.snapshot
+    ? createPreviousComponents(previousState.snapshot, previousState.componentFingerprints, ctx.document.extension)
     : null;
-  lastScriptedDocument = ctx.document;
-  lastScriptedSignature = signature;
+  const scriptedState: ScriptedDocumentState = {
+    signature,
+    snapshot: '',
+    componentFingerprints: null,
+    databaseRevision: previousState?.databaseRevision ?? previousDatabaseRevision,
+  };
+  scriptedDocumentStates.set(ctx.document, scriptedState);
   for (const target of runnableTargets) {
     if (!ctx.isCurrentDocument()) {
       return;
     }
     const result = await runUserScript({
       document: ctx.document,
-      previousDocument,
+      previousComponents,
       source: target.source,
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
       maxLines: target.maxLines,
       changeReason: ctx.changeReason,
-      renderOnMutation: ctx.changeReason !== 'edit',
+      renderOnMutation: !ctx.hostRendersAfter,
       libraries: target.libraries,
       databaseChanges,
+      stateRuntime: hookRuntime,
+      callbackOwnerKey: getScriptingResultCacheKey(target.sectionKey, target.blockId),
       onCallbackError: (callbackResult) => {
         if (!ctx.isCurrentDocument()) return;
         storeScriptingResult(
+          ctx.document,
           target.sectionKey,
           target.blockId,
           callbackResult,
@@ -493,11 +547,16 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
     if (!ctx.isCurrentDocument()) {
       return;
     }
-    storeScriptingResult(target.sectionKey, target.blockId, result, target.source);
+    storeScriptingResult(ctx.document, target.sectionKey, target.blockId, result, target.source);
   }
   if (ctx.isCurrentDocument()) {
-    lastScriptedDocumentSnapshot = serializeDocument(ctx.document);
-    lastDatabaseRevisionByDocument.set(ctx.document, databaseChanges.revision);
+    ctx.onSettled((serializedDocument) => {
+      scriptedState.snapshot = serializedDocument;
+    });
+    scriptedState.componentFingerprints = runnableTargets.some((target) => target.source.includes('get_updated_components'))
+      ? captureScriptingComponentFingerprints(ctx.document)
+      : null;
+    scriptedState.databaseRevision = databaseChanges.revision;
   }
   ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
 }
@@ -511,6 +570,7 @@ export const scriptingPlugin: HvyPlugin = {
   ...createBuiltInPluginMetadata(SCRIPTING_PLUGIN_ID),
   displayName: 'Scripting',
   mount: { strategy: 'immediate' },
+  advancedComponent: true,
   documentation: {
     filename: 'about-scripting.txt',
     text: scriptingDocumentation,
@@ -540,13 +600,14 @@ export const scriptingPlugin: HvyPlugin = {
 export const scriptingPluginRegistration = scriptingPlugin;
 
 function getFreshScriptingResult(
+  rawDocument: HvyPluginContext['rawDocument'],
   element: HTMLElement,
   sectionKey: string,
   blockId: string,
   sourceSignature: string
 ): ScriptingState | null {
   const existing = scriptingState.get(element)
-    ?? scriptingResultCache.get(getScriptingResultCacheKey(sectionKey, blockId))
+    ?? scriptingResultCaches.get(rawDocument)?.get(getScriptingResultCacheKey(sectionKey, blockId))
     ?? null;
   if (!existing || existing.sourceSignature !== sourceSignature) {
     return null;

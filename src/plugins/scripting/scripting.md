@@ -10,18 +10,41 @@ in `block.schema.pluginConfig`.
 
 - `scripting.ts`: plugin mount UI for editor and reader modes
 - `scripting.css`: editor and reader styling for the plugin
-- `wrapper.ts`: script preparation, version checks, Brython execution, and error cleanup
-- `runtime.ts`: sandboxed runtime surface exposed to user scripts as `doc`
+- `wrapper.ts`: `runUserScript` — source policy and version checks, runtime setup, Brython execution
+- `python-program.ts`: assembles the executed Python program from a per-run header plus `python/*.py`
+- `python/`: the Python side of the runtime, kept as real `.py` files (imported as text, no template interpolation)
+  - `sandbox-prelude.py`: wrapper globals, guarded builtins, restricted builtin stubs, import hook
+  - `random-shim.py`, `re-shim.py`: checked library implementations
+  - `datetime-shim.py`, `datetime-format-shim.py`, `timezone-shim.py`: checked `datetime`, `zoneinfo`, and `tzlocal`
+  - Library files are compiled only into programs that enable that library
+- `clock-bridge.ts`: current time and Intl time zone lookups for the checked date/time libraries
+  - `doc-arguments.py`: parameter-kind helpers that check, convert and reject `doc` call arguments
+  - `host-bridge.py`: plugin callbacks and the `doc` proxies, each declaring its parameter kinds
+  - `program-runner.py`: tracing, compile / definition cache, user globals, `exec`
+- `python-source.ts`: source transforms (function wrapping, import stripping, step instrumentation)
+- `script-source-policy.ts`: lexical policy shared by execution, `eval`, and lint
+- `script-error-text.ts`: traceback summary and cleanup for display
+- `regex-bridge.ts`: JavaScript regex engine behind `re-shim.py`
+- `brython-interop-policy.ts`: blocked attribute names (`constructor`, `prototype`, ...) and the guard installed on Brython
+- `brython-source-patches.ts`: load-time patches to Brython's converters (`null` / `undefined` to `None` and back), attribute lookups (blocked-name guard) and tracer hooks (frames whose tracer is `None`)
+- `runtime.ts`: restricted runtime surface exposed to user scripts as `doc`
+- `scripting-session.ts`: the host-owned JSON store behind the `session` global and plugin `context.session`, owned by the app state (or the document when there is none) and ended when a different document is loaded
 - `brython-loader.ts`: lazy-loads the locally bundled Brython runtime on first execution
 - `help.hvy` / `help-modal.ts`: user-facing help content and modal
 - `version.ts`: supported scripting plugin version constant and helpers
 
 ## Runtime Model
 
-- Scripts do not execute in `editor` view.
-- Scripts execute in `viewer` and document `ai` view.
-- `viewer` may hide the source code while still running the script.
-- Document `ai` view should still show the code preview and also mount the
+See HVY-SPEC.md section 7.14 for the normative view rules.
+
+- Viewer scripts (no `editorOnly`) execute in `viewer` and document `ai` view.
+- Editor scripts (`editorOnly: true`) execute in `editor` and document `ai` view.
+- The plugin declares `advancedComponent: true`, so the editor and `ai` view
+  hide script blocks unless the advanced editor is on, and the add-component
+  picker lists Scripting disabled with an "Advanced" badge. Hidden scripts
+  still run. Visibility rules live in `src/component-availability.ts`.
+- `viewer` hides the source and only surfaces script errors.
+- With the advanced editor on, `ai` view shows the code preview and mounts the
   scripting reader UI so errors can be surfaced there.
 
 Execution is kicked off from the app layer in `src/main.ts`, not from the
@@ -31,36 +54,58 @@ plugin mount itself.
 
 The runtime intentionally avoids Brython AST mutation. The current flow is:
 
-1. Strip unchecked Python `import` statements before execution.
-2. Wrap the source in a generated function so `return` can stop the script early.
-3. Prefer `sys.settrace()` for line counting.
-4. Fall back to host-side source instrumentation when tracing is unavailable.
+1. Check the original source with the shared lexical policy used by lint and `eval`.
+2. Strip unchecked Python `import` statements before execution.
+3. Wrap the source in a generated function so `return` can stop the script early.
+4. Prefer `sys.settrace()` for line counting.
+5. Fall back to host-side source instrumentation when tracing is unavailable.
 
 This was chosen because Brython AST rewriting proved brittle for some compare
 expressions during `compile(...)`.
 
 Document scripts use `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
 virtual filesystem containing only `browser` and `sys`. Keep checked libraries
-such as `random`, `re`, and `datetime` in `wrapper.ts` shims instead of bundling Brython's
+such as `random`, `re`, `datetime`, `zoneinfo`, and `tzlocal` in the `python/*-shim.py` files instead of bundling Brython's
 real stdlib modules such as `re`, `python_re`, or `enum`; otherwise checked
-imports can expose a larger module object graph than the sandbox intends.
+imports can expose a larger module object graph than the restricted environment intends.
 
 Installed format-0.2 Python plugin packages use a separate unrestricted
 adapter. Their requested `random`, `re`, and `datetime` modules and dependency
-closures are split into a lazy VFS payload and do not change the document
-script sandbox.
+closures are split into a lazy VFS payload. The JavaScript interop property guard
+applies to the shared Brython runtime, including those packages.
 
-Brython can resolve standard builtins even when the executed globals contain a
-restricted `__builtins__` dictionary. The runtime therefore includes guarded
-versions of `getattr`, `hasattr`, `setattr`, and `delattr` explicitly in
-`__hvy_safe_builtins__`; merely omitting their names would not disable them.
-Concrete browser-capability access chains are covered in
-`tests/cli-plugin-integration.spec.ts`.
+Brython resolves native builtins even with a restricted `__builtins__` dictionary.
+The wrapper therefore installs `open`, `type`, `object`, `vars`, `locals`,
+`compile`, `exec`, `breakpoint`, `input`, `help`, and `memoryview` as user
+globals bound to stubs that raise when called. Ordinary Python scoping still lets
+scripts use those names for methods, parameters, and locals; only loads that fall
+through to the global scope reach a stub. These are runtime checks, not lexical ones.
 
-The guards preserve ordinary public attribute operations while blocking the
-private runtime attributes that unwrap the `doc` proxy or expose a bound
-method's function globals. Access to `__class__` or ordinary attribute mutation
-alone is not classified as an escape.
+The lexical policy rejects private names containing double underscores in identifiers and decoded
+string literals, including recursively scanned f-string replacement fields.
+Identifiers are NFKC-normalized. The exceptions are `__init__`, `__name__`,
+`__main__`, and definition names immediately after `def` or `class`.
+
+Guarded `getattr`, `hasattr`, `setattr`, and `delattr` reject computed private names
+with the same three exceptions. Attribute names and `eval` expressions are
+copied from string subclasses through the base string operation, so user
+conversion overrides cannot disguise the text being checked. `eval` accepts string
+expressions only, checks them with the source policy, and rejects custom globals or locals. `global`
+declarations cannot replace or delete `getattr`, `setattr`, `delattr`, `hasattr`,
+`eval`, `globals`, or any of the restricted builtin stubs. These guards are placed explicitly in user globals rather
+than relying on the builtins dictionary.
+
+JavaScript object reads, writes, and deletions deny `constructor`, `prototype`,
+`__proto__`, `caller`, `callee`, and `arguments`, including computed string keys.
+Ordinary Python classes, descriptors, and public attribute operations remain
+supported. Concrete capability chains are covered in
+`tests/cli-plugin-integration.spec.ts` and tokenizer cases in
+`tests/script-source-policy.unit.spec.ts`.
+
+These checks harden the shared-realm implementation; they do not provide process
+isolation. A dynamically constructed `str.format` field can still read attributes
+into a string, and component handles expose document data that may bypass mutation
+tracking. Neither behavior is addressed by this source policy.
 
 Brython also emits a noisy console line in some failure paths:
 
@@ -111,5 +156,5 @@ doc.header.set("last_viewed", "from python!")
 
 Version `0.2` also preserves callable values nested in
 `doc.plugins.call(..., args)`. Plugins may invoke them synchronously or later;
-delayed callbacks resume the originating sandbox guards and are discarded when
+delayed callbacks resume the originating script guards and are discarded when
 the document or mount is gone. Version `0.1` blocks remain supported.

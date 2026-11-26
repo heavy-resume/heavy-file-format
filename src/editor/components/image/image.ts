@@ -3,7 +3,7 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderH
 import type { VisualBlock, VisualSection } from '../../types';
 import type { VisualDocument } from '../../../types';
 import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
-import { ensureDocumentAttachmentStore, getAttachmentDescriptors, normalizeAttachmentBytes, type HvyAttachmentHostAdapter } from '../../../attachment-store';
+import { ensureDocumentAttachmentStore, getAttachmentDescriptors, normalizeAttachmentBytes, type AttachmentStore, type HvyAttachmentHostAdapter } from '../../../attachment-store';
 import { state, getRefreshEditorSection, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
@@ -28,7 +28,9 @@ export interface ImageAttachmentResolutionContext {
   attachmentHost: HvyAttachmentHostAdapter | null;
 }
 
-let documentBlobUrlCache = new WeakMap<VisualDocument, Map<string, { url: string; bytes: Uint8Array }>>();
+// Keyed by the attachment store, which owns the bytes: undo and redo restore a new document
+// object onto the same store, and a new URL would make every image decode again.
+let documentBlobUrlCache = new WeakMap<AttachmentStore, Map<string, { url: string; bytes: Uint8Array }>>();
 let hostImageUrlCache = new WeakMap<HvyAttachmentHostAdapter, Map<string, HostImageUrlResolution>>();
 const managedBlobUrls = new Set<string>();
 let imageUrlCacheVersion = 0;
@@ -114,10 +116,11 @@ function getDocumentImageBlobUrl(document: VisualDocument, filename: string): st
   if (!attachment || attachment.bytes.length === 0) {
     return null;
   }
-  let cache = documentBlobUrlCache.get(document);
+  const store = ensureDocumentAttachmentStore(document);
+  let cache = documentBlobUrlCache.get(store);
   if (!cache) {
     cache = new Map();
-    documentBlobUrlCache.set(document, cache);
+    documentBlobUrlCache.set(store, cache);
   }
   const cached = cache.get(filename);
   if (cached && cached.bytes === attachment.bytes) {

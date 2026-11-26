@@ -139,3 +139,89 @@ test('core editor controls receive ownership classes without marking plugin cont
   ]);
   expect(typeSelectHeight).toBe(labelInputHeight);
 });
+
+test('script meta modal and form editor checkboxes use themed HVY checkbox styling', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#downloadName')).toHaveValue(/\.(hvy|thvy)$/);
+  await page.evaluate(async () => {
+    const [{ state, getRenderApp }, { deserializeDocument }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/serialization.ts'),
+    ]);
+    state.document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.scripting
+    source: builtin://scripting
+  - id: hvy.form
+    source: builtin://form
+---
+<!--hvy: {"id":"scripts"}-->
+#! Scripts
+ <!--hvy:plugin {"id":"script-block","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["random"]}}-->
+  def run(api):
+    pass
+ <!--hvy:plugin {"id":"form-block","plugin":"hvy.form"}-->
+  fields: []
+  script_libraries:
+    - random
+`, '.hvy');
+    state.viewMode = 'editor';
+    getRenderApp()();
+  });
+
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await page.locator('.editor-block-passive').first().click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Meta' }).click();
+
+  const metaModal = page.locator('.component-meta-modal');
+  await expect(metaModal).toBeVisible();
+
+  const checkboxStyles = await metaModal.evaluate((modal) => {
+    const editorOnly = modal.querySelector<HTMLInputElement>('input[data-field="block-editor-only"]');
+    const checkedLibrary = modal.querySelector<HTMLInputElement>('input[data-field="block-plugin-scripting-library"][data-library="random"]');
+    const uncheckedLibrary = modal.querySelector<HTMLInputElement>('input[data-field="block-plugin-scripting-library"][data-library="re"]');
+    if (!editorOnly || !checkedLibrary || !uncheckedLibrary) {
+      throw new Error('Expected script meta modal checkboxes were not rendered.');
+    }
+    const read = (input: HTMLInputElement) => {
+      const style = getComputedStyle(input);
+      const rect = input.getBoundingClientRect();
+      return {
+        appearance: style.appearance,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        borderColor: style.borderColor,
+        backgroundImage: style.backgroundImage,
+      };
+    };
+    return {
+      editorOnly: read(editorOnly),
+      checkedLibrary: read(checkedLibrary),
+      uncheckedLibrary: read(uncheckedLibrary),
+    };
+  });
+
+  expect(checkboxStyles.checkedLibrary).toEqual(checkboxStyles.editorOnly);
+  expect(checkboxStyles.checkedLibrary.appearance).toBe('none');
+  expect(checkboxStyles.uncheckedLibrary.appearance).toBe('none');
+  expect(checkboxStyles.uncheckedLibrary.width).toBe(checkboxStyles.editorOnly.width);
+  expect(checkboxStyles.uncheckedLibrary.height).toBe(checkboxStyles.editorOnly.height);
+
+  await metaModal.locator('[data-modal-action="close"]').click();
+  await page.locator('.editor-block-passive').last().click();
+  const formLibraryCheckbox = page.locator('.editor-block[data-active-editor-block="true"] input[data-form-library="random"]');
+  await expect(formLibraryCheckbox).toBeVisible();
+  const formCheckboxStyle = await formLibraryCheckbox.evaluate((input) => {
+    const style = getComputedStyle(input);
+    const rect = input.getBoundingClientRect();
+    return {
+      appearance: style.appearance,
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+  });
+  expect(formCheckboxStyle.appearance).toBe('none');
+  expect(formCheckboxStyle.width).toBe(checkboxStyles.editorOnly.width);
+  expect(formCheckboxStyle.height).toBe(checkboxStyles.editorOnly.height);
+});

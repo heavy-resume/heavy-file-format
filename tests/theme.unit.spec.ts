@@ -18,6 +18,8 @@ test('theme color labels are human readable', () => {
   expect(getThemeColorLabel('--hvy-table-row-bg-2')).toBe('Even Table Row Background');
   expect(getThemeColorLabel('--hvy-accent-1')).toBe('Primary Accent Fill');
   expect(getThemeColorLabel('--hvy-ai-view-hint-bg')).toBe('AI Editing Hint Background');
+  expect(getThemeColorLabel('--hvy-diff-removed-text')).toBe('Diff Removed Text');
+  expect(getThemeColorLabel('--hvy-diff-added-bg')).toBe('Diff Added Background');
 });
 
 test('picker colors normalize rgb and short hex values', () => {
@@ -42,12 +44,39 @@ test('converted palettes provide every conventional HVY theme color', () => {
   }
 });
 
+test('diff foregrounds remain legible against their palette backgrounds', () => {
+  for (const file of [
+    'black-widow-palette.css',
+    'mocha-palette.css',
+    'paper-palette.css',
+    'petrichor-palette.css',
+    'spring-palette.css',
+    'ufo-palette.css',
+  ]) {
+    const colors = parsePaletteCss(readFileSync(fileURLToPath(new URL(`../src/palettes/${file}`, import.meta.url)), 'utf8'));
+    expect(colorContrastRatio(colors['--hvy-diff-removed-text']!, colors['--hvy-diff-removed-bg']!), `${file} removed diff contrast`).toBeGreaterThanOrEqual(4.5);
+    expect(colorContrastRatio(colors['--hvy-diff-added-text']!, colors['--hvy-diff-added-bg']!), `${file} added diff contrast`).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
 test('palette css parser extracts hvy custom properties', () => {
   expect(parsePaletteCss(':root { --hvy-bg: #fff; --other: red; --hvy-text: rgb(1, 2, 3); }')).toEqual({
     '--hvy-bg': '#fff',
     '--hvy-text': 'rgb(1, 2, 3)',
   });
 });
+
+function colorContrastRatio(left: string, right: string): number {
+  const luminance = (hex: string): number => {
+    const channels = [1, 3, 5]
+      .map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255)
+      .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+  };
+  const leftLuminance = luminance(left);
+  const rightLuminance = luminance(right);
+  return (Math.max(leftLuminance, rightLuminance) + 0.05) / (Math.min(leftLuminance, rightLuminance) + 0.05);
+}
 
 test('palette override takes precedence until document theme is selected', () => {
   const style = createStyleDeclaration();

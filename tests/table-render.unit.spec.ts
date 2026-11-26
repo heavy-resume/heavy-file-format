@@ -207,3 +207,24 @@ test('reader table placeholders are available only for wholly empty rows', () =>
   expect(html).toContain('data-placeholder-compact="ORG"');
   expect(html).not.toContain('data-placeholder="<!--hvy:alt');
 });
+
+test('reader table hover titles show visible cell text without HVY annotations', () => {
+  const helpers = {
+    ...createHelpers(),
+    getTableColumns: (schema: VisualBlock['schema']) => schema.tableColumns,
+  };
+  const block = createTableBlock([[
+    '<!--hvy:group-value {"key":"Fit"}--><!--/hvy:group-value-->',
+    '**High** <!--hvy:sort-value {"key":"Rank"}-->priority<!--/hvy:sort-value-->',
+    '<!--hvy:alt {"compact":"Eng"}-->Engineering<!--/hvy:alt-->',
+  ]], { showHeader: true });
+  block.schema.tableColumns = ['<!--hvy:group-value {"key":"Fit"}-->Fit<!--/hvy:group-value-->', 'Rank', 'Team'];
+
+  const html = renderTableReader(section, block, helpers);
+
+  expect(html).toContain('data-table-column-index="0" title="Fit">');
+  expect(html).toContain('<td class="table-column-align-left" data-table-column-index="0">');
+  expect(html).toContain('title="High priority"');
+  expect(html).toContain('title="Engineering"');
+  expect(html).not.toContain('title="<!--hvy:');
+});

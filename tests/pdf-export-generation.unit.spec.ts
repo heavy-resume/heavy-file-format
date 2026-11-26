@@ -24,7 +24,7 @@ test('pdfmake backend produces a PDF blob for a strategy-filtered document', asy
   };
 
   const expectedResult = await getHvyPdfBlob(document, {
-    strategy: { rules: [{ id: 'summary', keepWithNext: true }] },
+    strategy: { rules: [{ id: 'summary', pageBreakBefore: true }] },
   });
 
   expect(expectedResult.type).toBe('application/pdf');
@@ -88,9 +88,6 @@ test('PDF text rendering keeps soft-wrapped text line styles in one styled node'
     '',
     {
       visibility: 'show',
-      keepTogether: false,
-      keepWithNext: false,
-      allowSplit: true,
       pageBreakBefore: false,
       pageBreakAfter: false,
       pdfStyle: {},
@@ -110,9 +107,6 @@ test('PDF text rendering preserves markdown links as PDF annotations', () => {
     '',
     {
       visibility: 'show',
-      keepTogether: false,
-      keepWithNext: false,
-      allowSplit: true,
       pageBreakBefore: false,
       pageBreakAfter: false,
       pdfStyle: {},
@@ -132,9 +126,6 @@ test('PDF text rendering does not apply paragraph spacing between bullet items',
     '',
     {
       visibility: 'show',
-      keepTogether: false,
-      keepWithNext: false,
-      allowSplit: true,
       pageBreakBefore: false,
       pageBreakAfter: false,
       pdfStyle: {},
@@ -176,7 +167,44 @@ test('PDF doc definition applies component CSS margins to block wrappers', () =>
   const secondNode = firstSection.stack?.[1] as HvyPdfMakeNodeObject | undefined;
 
   expect(firstNode?.margin).toEqual([3, 6, 0, 12]);
+  expect(firstNode?.stack).toEqual([
+    { text: 'First block', style: 'paragraph', margin: [0, 0, 0, 0] },
+  ]);
   expect(secondNode?.margin).toEqual([0, 0, 0, 24]);
+});
+
+test('expected result: PDF text component margins preserve paragraph spacing for single and multiple paragraphs', () => {
+  const singleParagraph = createEmptyBlock('text');
+  singleParagraph.schema.id = 'single-paragraph';
+  singleParagraph.schema.css = 'margin: 0.5rem 0 0;';
+  singleParagraph.text = 'A single paragraph that can wrap across rendered lines.';
+  const multipleParagraphs = createEmptyBlock('text');
+  multipleParagraphs.schema.id = 'multiple-paragraphs';
+  multipleParagraphs.schema.css = 'margin: 0.5rem 0 0;';
+  multipleParagraphs.text = 'First paragraph.\n\nSecond paragraph.';
+  const section = createEmptySection('');
+  section.blocks = [singleParagraph, multipleParagraphs];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Paragraph Spacing' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const sectionNode = expectedResult.content[0] as HvyPdfMakeNodeObject;
+  const singleParagraphNode = sectionNode.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const multipleParagraphNode = sectionNode.stack?.[1] as HvyPdfMakeNodeObject | undefined;
+
+  expect(singleParagraphNode?.margin).toEqual([0, 6, 0, 0]);
+  expect(singleParagraphNode?.stack).toEqual([
+    { text: 'A single paragraph that can wrap across rendered lines.', style: 'paragraph', margin: [0, 0, 0, 0] },
+  ]);
+  expect(multipleParagraphNode?.margin).toEqual([0, 6, 0, 0]);
+  expect(multipleParagraphNode?.stack).toEqual([
+    { text: 'First paragraph.', style: 'paragraph' },
+    { text: 'Second paragraph.', style: 'paragraph', margin: [0, 0, 0, 0] },
+  ]);
 });
 
 test('PDF table rendering resolves escaped Markdown punctuation in cells', () => {
@@ -718,7 +746,8 @@ test('PDF doc definition applies document heading font size styles', () => {
   const firstSection = expectedResult.content[0];
   expect(typeof firstSection).not.toBe('string');
   if (typeof firstSection === 'string') return;
-  const headingNode = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const headingWrapper = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const headingNode = headingWrapper?.stack?.[0] as HvyPdfMakeNodeObject | undefined;
 
   expect(headingNode).toEqual(expect.objectContaining({
     text: 'Larger Heading',

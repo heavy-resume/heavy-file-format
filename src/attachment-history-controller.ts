@@ -68,6 +68,11 @@ export async function runUserFileAttachmentHistoryCommand<T>(
 ): Promise<T> {
   const runtime = getActiveStateRuntime();
   return enqueueDatabaseHistoryNavigation(command.label, async () => {
+    if (runtime.state.undoDisabled) {
+      const result = await command.execute();
+      notifyDocumentMayHaveChanged(command.reason, inferDocumentChangeSource(command.reason));
+      return result;
+    }
     const history = getState(runtime);
     history.currentVersion ??= `attachment-base:${crypto.randomUUID()}`;
     const beforeVersion = history.currentVersion;
@@ -121,6 +126,14 @@ export async function restoreAttachmentHistoryVersion(targetVersion: string | nu
   if (transition.beforeVersion === targetVersion) await transition.undo();
   else await transition.redo();
   history.currentVersion = targetVersion;
+}
+
+export function clearAttachmentHistory(): void {
+  const history = states.get(getActiveStateRuntime());
+  if (!history) return;
+  const released = history.transitions.splice(0, history.transitions.length);
+  released.forEach((transition) => void transition.release().catch(() => {}));
+  history.currentVersion = null;
 }
 
 export async function destroyAttachmentHistory(runtime: StateRuntime): Promise<void> {

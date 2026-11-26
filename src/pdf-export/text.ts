@@ -57,7 +57,6 @@ export function renderPdfTextBlock(
             text: renderPdfInlineMarkdown(heading[2] ?? ''),
             style: getHeadingStyle(heading[1].length, style),
             headlineLevel: heading[1].length,
-            hvyKeepWithNext: true,
           }, align),
           { ...headingStyles[headingLevel], ...textStyle }
         )
@@ -77,7 +76,6 @@ export function renderPdfTextBlock(
             text: renderPdfInlineMarkdown(line.text),
             style: line.styleName?.includes('heading') ? getHeadingStyle(4, style) : style,
             headlineLevel: line.styleName?.includes('heading') ? 4 : undefined,
-            hvyKeepWithNext: line.styleName?.includes('heading') ? true : undefined,
           }, align),
           textStyle
         )

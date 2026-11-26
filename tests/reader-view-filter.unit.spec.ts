@@ -11,6 +11,8 @@ import {
 } from '../src/reader/view-filter';
 import { deserializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
+import { setHostPlugins } from '../src/plugins/registry';
+import { scriptingPlugin } from '../src/plugins/scripting/scripting';
 import { createTestState } from './serialization-test-helpers';
 import { refreshLinkDocumentPicker } from '../src/editor/components/link-document-picker/link-document-picker';
 import { defaultBlockSchema } from '../src/document-factory';
@@ -318,7 +320,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
   expect(expectedResult).not.toContain('Second');
 });
 
-test('AI reader hides editor-only scripting blocks outside advanced mode', () => {
+test('AI reader hides editor and viewer scripting blocks outside advanced mode', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -328,8 +330,18 @@ hvy_version: 0.1
 
 <!--hvy:plugin {"id":"cleanup","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 print("maintenance script")
+
+<!--hvy: {"id":"fake-content"}-->
+#! Fake Content
+
+<!--hvy:text {"id":"fake-text"}-->
+fake visible text
+
+<!--hvy:plugin {"id":"fake-viewer-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+print("viewer script")
 `, '.hvy');
   initState(createTestState(document));
+  setHostPlugins([scriptingPlugin]);
   const state = {
     documentMeta: document.meta,
     documentSections: document.sections,
@@ -413,10 +425,15 @@ print("maintenance script")
     isMobileAdjustmentMode: () => false,
   } satisfies ComponentRenderHelpers;
 
-  expect(renderer.renderReaderSections(document.sections)).not.toContain('maintenance script');
+  const basicHtml = renderer.renderReaderSections(document.sections);
+  expect(basicHtml).not.toContain('maintenance script');
+  expect(basicHtml).not.toContain('viewer script');
+  expect(basicHtml).toContain('fake visible text');
 
   state.showAdvancedEditor = true;
-  expect(renderer.renderReaderSections(document.sections)).toContain('maintenance script');
+  const advancedHtml = renderer.renderReaderSections(document.sections);
+  expect(advancedHtml).toContain('maintenance script');
+  expect(advancedHtml).toContain('viewer script');
 });
 
 test('inline link modal includes component ids as document targets', () => {

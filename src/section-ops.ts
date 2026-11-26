@@ -1,9 +1,10 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
-import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
-import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta } from './component-defs';
+import { isAdvancedOnlySection } from './component-availability';
 import { REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX, state } from './state';
 import { sanitizeOptionalId } from './utils';
+export { visitBlocks, visitBlocksInList } from './block-traversal';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
   return sections.slice();
@@ -81,24 +82,24 @@ export function findSectionContainer(
   return null;
 }
 
-export function moveScriptOnlySectionsAfterRegularSections(
+export function moveAdvancedOnlySectionsAfterRegularSections(
   sections: VisualSection[],
   documentMeta: JsonObject | null
 ): boolean {
-  return reorderScriptOnlySectionsInContainer(sections, documentMeta);
+  return reorderAdvancedOnlySectionsInContainer(sections, documentMeta);
 }
 
-export function wouldMoveScriptOnlySectionsAfterRegularSections(
+export function wouldMoveAdvancedOnlySectionsAfterRegularSections(
   sections: VisualSection[],
   documentMeta: JsonObject | null
 ): boolean {
-  return wouldReorderScriptOnlySectionsInContainer(sections, documentMeta);
+  return wouldReorderAdvancedOnlySectionsInContainer(sections, documentMeta);
 }
 
-function reorderScriptOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
+function reorderAdvancedOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
   const reordered = [
-    ...sections.filter((section) => !isScriptOnlySection(section, documentMeta)),
-    ...sections.filter((section) => isScriptOnlySection(section, documentMeta)),
+    ...sections.filter((section) => !isAdvancedOnlySection(section, documentMeta)),
+    ...sections.filter((section) => isAdvancedOnlySection(section, documentMeta)),
   ];
   const changed = reordered.some((section, index) => section !== sections[index]);
   if (changed) {
@@ -107,55 +108,24 @@ function reorderScriptOnlySectionsInContainer(sections: VisualSection[], documen
   return changed;
 }
 
-function wouldReorderScriptOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
-  let seenScriptOnly = false;
+function wouldReorderAdvancedOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
+  let seenAdvancedOnly = false;
   for (const section of sections) {
-    if (isScriptOnlySection(section, documentMeta)) {
-      seenScriptOnly = true;
-    } else if (seenScriptOnly) {
+    if (isAdvancedOnlySection(section, documentMeta)) {
+      seenAdvancedOnly = true;
+    } else if (seenAdvancedOnly) {
       return true;
     }
   }
   return false;
 }
 
-function isScriptOnlySection(section: VisualSection, documentMeta: JsonObject | null): boolean {
-  return section.blocks.length > 0
-    && section.blocks.every((block) => isScriptingBlock(block, documentMeta));
-}
-
-function isScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
-  return resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'plugin'
-    && block.schema.plugin === SCRIPTING_PLUGIN_ID;
-}
-
-export function isHiddenEditorOnlySection(
+export function isHiddenAdvancedOnlySection(
   section: VisualSection,
   documentMeta: JsonObject | null,
   showAdvancedEditor: boolean
 ): boolean {
-  return !showAdvancedEditor
-    && section.editorOnly
-    && sectionContainsHiddenEditorOnlyScriptingBlock(section, documentMeta);
-}
-
-function sectionContainsHiddenEditorOnlyScriptingBlock(section: VisualSection, documentMeta: JsonObject | null): boolean {
-  return section.blocks.some((block) => blockContainsHiddenEditorOnlyScriptingBlock(block, documentMeta));
-}
-
-function blockContainsHiddenEditorOnlyScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
-  return isHiddenEditorOnlyScriptingBlock(block, documentMeta)
-    || (block.schema.containerBlocks ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta))
-    || (block.schema.componentListBlocks ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta))
-    || (block.schema.gridItems ?? []).some((item) => blockContainsHiddenEditorOnlyScriptingBlock(item.block, documentMeta))
-    || (block.schema.expandableStubBlocks?.children ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta))
-    || (block.schema.expandableContentBlocks?.children ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta));
-}
-
-function isHiddenEditorOnlyScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
-  return block.schema.editorOnly
-    && resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'plugin'
-    && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+  return !showAdvancedEditor && isAdvancedOnlySection(section, documentMeta);
 }
 
 export function sectionContainsKey(section: VisualSection, sectionKey: string): boolean {
@@ -488,26 +458,4 @@ export function isDefaultUntitledSectionTitle(title: string): boolean {
 
 export function formatSectionTitle(title: string): string {
   return isDefaultUntitledSectionTitle(title) ? 'Unnamed Section' : title;
-}
-
-export function visitBlocks(sections: VisualSection[], visitor: (block: VisualBlock) => void): void {
-  const seen = new Set<VisualBlock>();
-  sections.forEach((section) => {
-    visitBlocksInList(section.blocks, visitor, seen);
-  });
-}
-
-export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: VisualBlock) => void, seen = new Set<VisualBlock>()): void {
-  blocks.forEach((block) => {
-    if (seen.has(block)) {
-      return;
-    }
-    seen.add(block);
-    visitor(block);
-    visitBlocksInList(block.schema.containerBlocks ?? [], visitor, seen);
-    visitBlocksInList(block.schema.componentListBlocks ?? [], visitor, seen);
-    visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor, seen);
-    visitBlocksInList(block.schema.expandableStubBlocks?.children ?? [], visitor, seen);
-    visitBlocksInList(block.schema.expandableContentBlocks?.children ?? [], visitor, seen);
-  });
 }

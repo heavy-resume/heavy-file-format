@@ -121,3 +121,22 @@ Always repro before fixing! Always test adjacent tests when changing things!
 Don't make README.md changes unless explicilty instructed. If you want to update things for future agents update README.foragents.md instead
 
 Don't update HVY-SPEC.md with features of clients. Its defining the file format not the client.
+
+Please make sure that inputs aren't doing a re-render on each character, where applicable
+
+When running tests while building stick to tests that are likely relevant to the feature. Don't "TSA Test" by running every test. This slows development. If tests are poorly structured to accomplish this goal, then suggest refactoring them.
+
+When giving summaries of your work:
+- State things in about 7 sentences or less
+- Don't say you fixed bugs that you introduced the very same working session. We don't care.
+- Give test gaps instead of desribing the coverage. You worked on it so we aren't obviously going to be able to recognize a test gap from you giving a summary.
+- Absolutely bring up bad names, design smells, and things that reasonably should be refactored.
+
+When creating UI:
+- Look for existing examples
+- Stick to conventions
+- Use reusable components. If an existing example exists but isn't using generic components and there's an opportunity, make the ugprade at three repetitions.
+- Don't put calculation logic in rendering. C'mon you know this. Move it to stored value.
+- Keep work off the main thread where applicable.
+- Consider how errant cursors, mis-clicks, and timing apply. Users need feedback on actions and render delays should always be sub-100ms.
+- Don't fix conflicting CSS rules by tacking on specificity unless it really is the only option.

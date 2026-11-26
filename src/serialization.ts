@@ -10,10 +10,9 @@ import {
   ensureDocumentAttachmentStore,
   getAttachmentDescriptors,
   type HvyAttachmentDescriptor,
-  type MaybePromise,
 } from './attachment-store';
 import { makeId, sanitizeOptionalId } from './utils';
-import { resolveBaseComponentFromMeta, isBuiltinComponentName, getComponentDefsFromMeta } from './component-defs';
+import { resolveBaseComponentFromMeta, isBuiltinComponentName, getComponentDefsFromMeta } from './component-definition-helpers';
 import { resolveReusableTemplateTokensInBlock } from './reusable-template-values';
 import {
   DEFAULT_READER_MAX_WIDTH,
@@ -26,15 +25,16 @@ import {
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
   parseTableColumnProperties,
+  readSectionImportFlags,
 } from './document-factory';
-import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
+import { isPdfAllowedDocumentComponentInstance, isPdfDocument } from './pdf-document-rules';
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
-import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
+import { decryptEncryptedComponents } from './encrypted-component-reader';
 import { classifyXrefTarget } from './workspace-links';
 import { validateDocumentMetadata } from './document-metadata';
 import { parseStaticTableValueMarkdown, serializeStaticTableValueMarkdown } from './table-value-markdown';
 import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './plugins/declarations';
-import { visitBlocks } from './section-ops';
+import { visitBlocks } from './block-traversal';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -48,16 +48,6 @@ export interface DeserializeDocumentResult {
 }
 
 export const HVY_TAIL_SENTINEL = '--HVY-TAIL--';
-
-export interface HvyDocumentSerializerRequest {
-  textBody: string;
-  tail: HvyAttachmentDescriptor[];
-  recallAttachment(id: string): MaybePromise<Uint8Array | null>;
-}
-
-export interface HvyDocumentSerializerAdapter {
-  serializeDocumentBytes(request: HvyDocumentSerializerRequest): MaybePromise<Uint8Array>;
-}
 
 export function deserializeDocument(text: string, extension: VisualDocument['extension']): VisualDocument {
   return deserializeDocumentWithDiagnostics(text, extension).document;
@@ -144,6 +134,19 @@ export function deserializeDocumentBytesWithDiagnostics(
   const result = deserializeDocumentWithDiagnostics(extractedTail.text, extension);
   attachStoreToDocument(result.document, extractedTail.attachmentStore);
   return result;
+}
+
+/**
+ * A section fragment as a document with the given front matter, so it parses with that document's component and
+ * section definitions. Unlike `wrapHvyFragmentAsDocument`, it adds no section: the fragment brings its own.
+ */
+export function wrapHvySectionFragmentAsDocument(source: string, meta: JsonObject): string {
+  return `---
+${stringifyYamlUnfolded(meta).trimEnd()}
+---
+
+${source.trim()}
+`;
 }
 
 export function wrapHvyFragmentAsDocument(
@@ -235,13 +238,13 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
     priority: sectionMeta.priority === true,
+    startOnNewPage: sectionMeta.startOnNewPage === true,
     css: typeof sectionMeta.css === 'string' ? sectionMeta.css : '',
     tags: typeof sectionMeta.tags === 'string' ? sectionMeta.tags : '',
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: sectionMeta.hideIfUnmodified === true,
-    exclude_from_import: sectionMeta.exclude_from_import === true,
-    protect_from_import: sectionMeta.protect_from_import === true,
+    ...readSectionImportFlags(sectionMeta),
     templateKey: typeof sectionMeta.templateKey === 'string' ? sectionMeta.templateKey : undefined,
     blocks,
   };
@@ -737,7 +740,7 @@ function validateSectionSemantics(section: VisualSection, document: VisualDocume
 function validateBlockSemantics(block: VisualBlock, sectionLabel: string, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
 
-  if (isPdfDocument(document) && !isPdfAllowedComponentInstance(block.schema.component, document.meta, block.schema.plugin)) {
+  if (isPdfDocument(document) && !isPdfAllowedDocumentComponentInstance(block.schema.component, document.meta, block.schema.plugin)) {
     const label = block.schema.component === 'plugin' ? block.schema.plugin || 'plugin' : block.schema.component;
     diagnostics.push({
       severity: 'error',
@@ -1031,26 +1034,9 @@ export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
   return combined;
 }
 
-export async function serializeDocumentBytesAsync(
-  document: VisualDocument,
-  serializer?: HvyDocumentSerializerAdapter | null,
-  options?: { encryption?: HvyEncryptionOptions | null }
-): Promise<Uint8Array> {
-  await prepareEncryptedComponentsForSerialization(document, options?.encryption ?? null);
-  if (!serializer) {
-    return serializeDocumentBytes(document);
-  }
-  const store = ensureDocumentAttachmentStore(document);
-  const textBody = serializeDocument(document);
-  const result = await serializer.serializeDocumentBytes({
-    textBody,
-    tail: store.listDescriptors(),
-    recallAttachment(id) {
-      return store.get(id)?.bytes ?? null;
-    },
-  });
-  return result;
-}
+// Header YAML dominates serialization for documents with large reusable definitions and
+// rarely changes, so it is reused until its inputs do. The body is cheap and not cached.
+const headerYamlCache = new WeakMap<VisualDocument, { inputs: string; yaml: string }>();
 
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   const serializedMeta: JsonObject = { ...document.meta };
@@ -1058,6 +1044,17 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   if (builtInPluginDeclarations.length > 0) {
     serializedMeta.plugins = builtInPluginDeclarations;
   }
+  const inputs = JSON.stringify(serializedMeta);
+  const cached = headerYamlCache.get(document);
+  if (cached?.inputs === inputs) {
+    return cached.yaml;
+  }
+  const yaml = buildDocumentHeaderYaml(document, serializedMeta);
+  headerYamlCache.set(document, { inputs, yaml });
+  return yaml;
+}
+
+function buildDocumentHeaderYaml(document: VisualDocument, serializedMeta: JsonObject): string {
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
@@ -1157,6 +1154,9 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject, docu
   if (section.priority === true) {
     result.priority = true;
   }
+  if (section.startOnNewPage === true) {
+    result.startOnNewPage = true;
+  }
   if (typeof section.css === 'string' && section.css.trim().length > 0) {
     result.css = section.css;
   }
@@ -1172,11 +1172,11 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject, docu
   if (section.hideIfUnmodified === true) {
     result.hideIfUnmodified = true;
   }
-  if (section.exclude_from_import === true) {
-    result.exclude_from_import = true;
+  if (section.excludeFromImport === true) {
+    result.excludeFromImport = true;
   }
-  if (section.protect_from_import === true) {
-    result.protect_from_import = true;
+  if (section.protectFromImport === true) {
+    result.protectFromImport = true;
   }
   result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject, documentMeta)) : [];
   return result;
@@ -1405,6 +1405,9 @@ function serializeSection(section: VisualSection, documentMeta: JsonObject | nul
   if (section.priority === true) {
     meta.priority = true;
   }
+  if (section.startOnNewPage === true) {
+    meta.startOnNewPage = true;
+  }
   if (section.css.trim().length > 0) {
     meta.css = section.css;
   }
@@ -1420,11 +1423,11 @@ function serializeSection(section: VisualSection, documentMeta: JsonObject | nul
   if (section.hideIfUnmodified === true) {
     meta.hideIfUnmodified = true;
   }
-  if (section.exclude_from_import === true) {
-    meta.exclude_from_import = true;
+  if (section.excludeFromImport === true) {
+    meta.excludeFromImport = true;
   }
-  if (section.protect_from_import === true) {
-    meta.protect_from_import = true;
+  if (section.protectFromImport === true) {
+    meta.protectFromImport = true;
   }
   if (section.templateKey && section.templateKey.trim().length > 0) {
     meta.templateKey = section.templateKey;
@@ -1503,7 +1506,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'containerTitle', schema.containerTitle, defaults.containerTitle);
     addIfChanged(payload, 'containerExpanded', schema.containerExpanded, defaults.containerExpanded);
     addIfChanged(payload, 'containerCollapsedPreviewRem', schema.containerCollapsedPreviewRem, defaults.containerCollapsedPreviewRem);
-    if (!options.omitContainerBlocks) {
+    addIfChanged(payload, 'noSave', schema.noSave, defaults.noSave);
+    // noSave children are runtime content (e.g. script output) and never written.
+    if (!options.omitContainerBlocks && !schema.noSave) {
       addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks, documentMeta);
     }
   }
@@ -1545,6 +1550,7 @@ function serializeBlockSchema(
   if (component === 'expandable') {
     addIfChanged(payload, 'expandableAlwaysShowStub', schema.expandableAlwaysShowStub, defaults.expandableAlwaysShowStub);
     addIfChanged(payload, 'expandableExpanded', schema.expandableExpanded, defaults.expandableExpanded);
+    addIfChanged(payload, 'expandablePresentation', schema.expandablePresentation, defaults.expandablePresentation);
     // Stub/content blocks are serialized as nested block directives, not inline in schema JSON.
   }
   if (component === 'table') {
@@ -1646,10 +1652,7 @@ function indentMultiline(text: string, indent: number): string {
     return '';
   }
   const prefix = ' '.repeat(indent);
-  return text
-    .split('\n')
-    .map((line) => `${prefix}${line}`)
-    .join('\n');
+  return `${prefix}${text.replaceAll('\n', `\n${prefix}`)}`;
 }
 
 function serializeBlockText(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
@@ -1755,7 +1758,15 @@ function trimBoundaryNewlines(text: string): string {
   if (text.trim().length === 0) {
     return '';
   }
-  return text.replace(/^\n+|\n+$/g, '');
+  let start = 0;
+  let end = text.length;
+  while (text[start] === '\n') {
+    start += 1;
+  }
+  while (text[end - 1] === '\n') {
+    end -= 1;
+  }
+  return text.slice(start, end);
 }
 
 function serializeSlotDirective(name: string, schema: JsonObject, indent: number): string {
@@ -1833,6 +1844,9 @@ function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta:
       .join('\n\n');
   }
   if (component === 'container') {
+    if (block.schema.noSave) {
+      return '';
+    }
     return block.schema.containerBlocks.map((innerBlock) => serializeBlock(innerBlock, indent, documentMeta)).join('\n\n');
   }
   return '';

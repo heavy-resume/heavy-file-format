@@ -1,4 +1,4 @@
-import { buildHvyVirtualFileSystem, resolveVirtualPath, type HvyVirtualEntry } from '../cli-core/virtual-file-system';
+import { createHvyVirtualFileSystem, resolveVirtualPath, type HvyVirtualEntry, type HvyVirtualFileSystem } from '../cli-core/virtual-file-system';
 import { tokenizeCommand } from '../cli-core/commands';
 import { getHvyCliPluginCommandRegistrationByPluginId } from '../cli-core/plugin-command-registry';
 import { extractVirtualPathsFromOutput, formatHvyStructureForPaths } from '../cli-core/request-structure';
@@ -14,7 +14,7 @@ export function buildChatCliComponentHints(params: {
   command: string;
   output?: string;
 }): string {
-  const fs = buildHvyVirtualFileSystem(params.document);
+  const fs = createHvyVirtualFileSystem(params.document);
   const commandHints = collectCommandComponentPaths(params.command, params.cwd, fs)
     .map((path) => buildComponentPathHint(path, fs, params.document))
     .filter((hint): hint is string => !!hint);
@@ -30,14 +30,14 @@ function isSearchStyleCommand(command: string): boolean {
   return firstCommand === 'rg' || firstCommand === 'grep' || firstCommand === 'find';
 }
 
-function collectCommandComponentPaths(command: string, cwd: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {
+function collectCommandComponentPaths(command: string, cwd: string, fs: HvyVirtualFileSystem): string[] {
   return tokenizeCommandSafely(command)
     .filter((arg) => !arg.startsWith('-') && (arg.includes('/') || /\.(?:json|txt|py)$/i.test(arg)))
     .map((arg) => resolveHintPath(fs, cwd, arg))
     .filter((path) => path.startsWith('/body/'));
 }
 
-function resolveHintPath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, cwd: string, arg: string): string {
+function resolveHintPath(fs: HvyVirtualFileSystem, cwd: string, arg: string): string {
   const resolved = resolveVirtualPath(fs, cwd, arg);
   if (fs.entries.has(resolved)) {
     return resolved;
@@ -59,7 +59,7 @@ function tokenizeCommandSafely(command: string): string[] {
   }
 }
 
-function buildComponentPathHint(path: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>, document?: VisualDocument): string | null {
+function buildComponentPathHint(path: string, fs: HvyVirtualFileSystem, document?: VisualDocument): string | null {
   const componentDir = findComponentDirectory(path, fs);
   if (!componentDir) {
     return null;
@@ -82,7 +82,7 @@ function componentSpecificHintLines(componentName: string): string[] {
   return firstHelpLine ? [`  ${firstHelpLine}`] : [];
 }
 
-function formatEditHint(componentDir: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
+function formatEditHint(componentDir: string, componentName: string, fs: HvyVirtualFileSystem): string {
   if (componentName === 'table') {
     return `tableColumns.json and tableRows.json hold static table data; tableColumnProperties.json holds sparse width, wrap, truncation, and alignment settings keyed by exact column name; ${componentName}.json holds other display config; ${bodyFileNameForDirectory(componentDir, componentName, fs)} is a preview.`;
   }
@@ -92,7 +92,7 @@ function formatEditHint(componentDir: string, componentName: string, fs: ReturnT
   return `${bodyFileNameForDirectory(componentDir, componentName, fs)} for body, ${componentName}.json for config.`;
 }
 
-function pluginSpecificHintLines(componentName: string, jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string[] {
+function pluginSpecificHintLines(componentName: string, jsonPath: string, fs: HvyVirtualFileSystem): string[] {
   if (componentName !== 'plugin') {
     return [];
   }
@@ -110,7 +110,7 @@ function pluginSpecificHintLines(componentName: string, jsonPath: string, fs: Re
   ];
 }
 
-function readPluginId(jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
+function readPluginId(jsonPath: string, fs: HvyVirtualFileSystem): string {
   const entry = fs.entries.get(jsonPath);
   if (!entry || entry.kind !== 'file') {
     return '';
@@ -123,7 +123,7 @@ function readPluginId(jsonPath: string, fs: ReturnType<typeof buildHvyVirtualFil
   }
 }
 
-function findComponentDirectory(path: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string | null {
+function findComponentDirectory(path: string, fs: HvyVirtualFileSystem): string | null {
   let current = fs.entries.get(path)?.kind === 'dir' ? path : path.replace(/\/[^/]+$/, '');
   while (current.startsWith('/body/')) {
     if (componentNameForDirectory(current, fs)) {
@@ -134,7 +134,7 @@ function findComponentDirectory(path: string, fs: ReturnType<typeof buildHvyVirt
   return null;
 }
 
-function componentNameForDirectory(path: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string | null {
+function componentNameForDirectory(path: string, fs: HvyVirtualFileSystem): string | null {
   const children = [...fs.entries.values()].filter((entry) => isDirectChild(path, entry));
   const jsonNames = children
     .filter((entry) => entry.kind === 'file' && entry.path.endsWith('.json') && !entry.path.endsWith('/section.json'))
@@ -142,11 +142,11 @@ function componentNameForDirectory(path: string, fs: ReturnType<typeof buildHvyV
   return jsonNames.find((name) => !!name && hasTextSibling(path, name, fs)) ?? null;
 }
 
-function hasTextSibling(path: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): boolean {
+function hasTextSibling(path: string, componentName: string, fs: HvyVirtualFileSystem): boolean {
   return [`${componentName}.txt`, 'script.py'].some((filename) => fs.entries.get(`${path}/${filename}`)?.kind === 'file');
 }
 
-function bodyFileNameForDirectory(path: string, componentName: string, fs: ReturnType<typeof buildHvyVirtualFileSystem>): string {
+function bodyFileNameForDirectory(path: string, componentName: string, fs: HvyVirtualFileSystem): string {
   for (const filename of [`${componentName}.txt`, 'script.py']) {
     if (fs.entries.get(`${path}/${filename}`)?.kind === 'file') {
       return filename;

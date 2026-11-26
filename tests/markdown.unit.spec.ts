@@ -155,6 +155,19 @@ test('expected result: rendered prose keeps explicit hard breaks', () => {
   expect(markdownToReaderHtml('Players  \nchasing')).toContain('Players<br>chasing');
 });
 
+test('expected result: a Markdown hard break after a bare URL stays outside the link', () => {
+  const html = markdownToReaderHtml('Job URL: https://fake.example/jobs?id=57A\\\nFollow-up date: tomorrow');
+
+  expect(html).toContain('href="https://fake.example/jobs?id=57A"');
+  expect(html).not.toContain('%5C');
+  expect(html).toContain('</a> <br>Follow-up date: tomorrow');
+});
+
+test('expected result: URL-like code ending in a backslash remains verbatim', () => {
+  expect(markdownToReaderHtml('```text\nhttps://fake.example/path\\\n```'))
+    .toContain('https://fake.example/path\\\n');
+});
+
 test('expected result: searchable Markdown joins soft wraps but preserves structural boundaries', () => {
   const searchText = (markdown: string): string => renderedMarkdownHtmlToSearchText(markdownToReaderHtml(markdown));
   expect(searchText('Players\nchasing')).toBe('Players chasing');

@@ -237,14 +237,18 @@
   margin: 0 0 var(--hvy-document-paragraph-spacing, 0.45rem);
 }
 
+/* Inline flow, not flex: see the matching rich-editor rule. */
 .hvy-document .reader-block .hvy-inline-checkbox-line {
-  display: flex;
-  align-items: center;
+  --hvy-inline-answer-indent: calc(1.05rem + 0.18rem + 0.25em);
+  display: block;
   margin: 0;
+  padding-left: var(--hvy-inline-answer-indent);
+  text-indent: calc(-1 * var(--hvy-inline-answer-indent));
 }
 
 .hvy-document .reader-block .hvy-inline-checkbox-line input.hvy-inline-checkbox {
-  margin: 0 0.42rem 0 0;
+  margin: 0 0.18rem 0 0;
+  vertical-align: middle;
 }
 
 .hvy-document .reader-block input[type='checkbox'] {

@@ -49,9 +49,6 @@ export interface HvyPdfExportStrategyRule extends HvyPdfExportStrategyTarget {
   stubOnly?: boolean;
   contentOnly?: boolean;
   stubThenContent?: boolean;
-  keepTogether?: boolean;
-  keepWithNext?: boolean;
-  allowSplit?: boolean;
   asHeading?: boolean;
   asBody?: boolean;
   asMetadata?: boolean;
@@ -259,18 +256,12 @@ export interface HvyPdfMakeNodeObject {
   pageBreak?: 'before' | 'after' | 'beforeOdd' | 'beforeEven';
   unbreakable?: boolean;
   headlineLevel?: number;
-  hvyKeepWithNext?: boolean;
-  hvyKeepTogether?: boolean;
-  hvyRole?: HvyPdfExportRole;
   [key: string]: unknown;
 }
 
 export interface HvyPdfExportDecision {
   visibility: HvyPdfExportVisibility;
   pane?: HvyPdfExportPane;
-  keepTogether: boolean;
-  keepWithNext: boolean;
-  allowSplit: boolean;
   role?: HvyPdfExportRole;
   pageBreakBefore: boolean;
   pageBreakAfter: boolean;
@@ -294,7 +285,6 @@ export interface HvyPdfExportRuleRecorder {
   hide(idOrTag: string): void;
   include(idOrTag: string): void;
   expand(idOrTag: string): void;
-  keep_together(idOrTag: string): void;
   style(idOrTag: string, style: Record<string, unknown>): void;
   strategy(rule: HvyPdfExportStrategyRule | HvyPdfExportStrategyRule[]): void;
   getStrategy(): HvyPdfExportStrategy;

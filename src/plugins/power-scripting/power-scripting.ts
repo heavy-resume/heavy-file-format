@@ -1,9 +1,10 @@
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
-import { serializeDocumentBytes, serializeDocumentBytesAsync } from '../../serialization';
+import { serializeDocumentBytes } from '../../serialization';
+import { serializeDocumentBytesAsync } from '../../document-byte-serialization';
 import { normalizeFilename } from '../../utils';
 import { refreshMountedPlugins } from '../mount';
 import type { HvyCanvasApi } from '../canvas/canvas';
-import { createScriptingDbRuntime, resetDbTableRuntimeForDocument } from '../db-table';
+import { createScriptingDbRuntime } from '../db-table';
 import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID } from '../registry';
 import { createScriptingRuntime, type ScriptingDocApi, type ScriptingRuntime } from '../scripting/runtime';
 import { createScriptingPluginsApi } from '../scripting/plugin-apis';
@@ -60,6 +61,8 @@ function buildPowerDoc(
 ): HvyPowerDocApi {
   const coreDb = runtime.doc.db;
   const coreRerender = runtime.doc.rerender;
+  const coreDisableUndo = runtime.doc.disable_undo;
+  const coreEnableUndo = runtime.doc.enable_undo;
   const openDialog = <T>(options: {
     title: string;
     message: string;
@@ -129,13 +132,14 @@ function buildPowerDoc(
       get_updated_tables: (tableName?: string) => runWithStateRuntime(stateRuntime, () => coreDb.get_updated_tables(tableName)),
       execute: (sql: string, params?: unknown) => runWithStateRuntime(stateRuntime, () => {
         const result = coreDb.execute(sql, params);
-        resetDbTableRuntimeForDocument(ctx.rawDocument);
         refreshMountedPlugins(DB_TABLE_PLUGIN_ID);
         refreshMountedPlugins(FORM_PLUGIN_ID);
         return result;
       }),
     },
     rerender: () => runWithStateRuntime(stateRuntime, coreRerender),
+    disable_undo: () => runWithStateRuntime(stateRuntime, coreDisableUndo),
+    enable_undo: () => runWithStateRuntime(stateRuntime, coreEnableUndo),
     canvas: {
       get: (id: string) => findCanvas(ctx.hostRoot, id),
       wait: (id: string, timeoutMs = 5000) => new Promise<HvyCanvasApi>((resolve, reject) => {
@@ -257,7 +261,15 @@ async function startProgram(
     renderOnMutation: false,
   }));
   const doc = buildPowerDoc(ctx, dialogRoot, runtime, stateRuntime, registerCleanup);
-  if (database) registerCleanup(() => database.dispose());
+  if (database) {
+    registerCleanup(() => {
+      // Stopping is neither success nor failure (the viewer may have left mid-await), so discard it.
+      if (database.settleUnfinishedTransaction('rollback')) {
+        report('A doc.db transaction was still open when the program stopped, so its changes were rolled back. End it with doc.db.execute("COMMIT") or doc.db.execute("ROLLBACK").', true);
+      }
+      database.dispose();
+    });
+  }
 
   const stop = () => {
     if (stopped) return;

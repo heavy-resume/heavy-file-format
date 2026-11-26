@@ -1,11 +1,12 @@
 import { getActiveStateRuntime, getRenderApp, runWithStateRuntime, runWithStateRuntimeAsync, state, type StateRuntime } from '../state';
 import { serializeDocument } from '../serialization';
 import type { VisualDocument } from '../types';
-import { notifyDocumentMayHaveChanged } from '../document-change';
+import { holdDocumentChangeFlush, notifyDocumentMayHaveChanged } from '../document-change';
 import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { refreshMountedPlugins } from './mount';
 import { getHostPlugins } from './registry';
 import { getDatabaseChangeRevision } from '../database-change-tracker';
+import { beginReactiveScriptHistory, noteScriptHistoryChange } from '../script-history-step';
 import type {
   HvyDocumentHookContext,
   HvyPlugin,
@@ -90,28 +91,40 @@ function getOrderedHandlers(hookName: DocumentHookName, plugins: HvyPlugin[]): O
     });
 }
 
-function createHookContext(document: VisualDocument, changeReason: HvyPluginHookChangeReason): HvyDocumentHookContext {
-  const runtime = getActiveStateRuntime();
+function createHookContext(
+  runtime: StateRuntime,
+  document: VisualDocument,
+  changeReason: HvyPluginHookChangeReason,
+  hostRendersAfter: boolean,
+  serializedDocument: string,
+  settledListeners: Array<(serializedDocument: string) => void>
+): HvyDocumentHookContext {
   return {
     document,
-    view: state.currentView,
+    view: runtime.state.currentView,
     changeReason,
-    refreshPlugins: (pluginId) => refreshMountedPlugins(pluginId),
+    hostRendersAfter,
+    serializedDocument,
+    onSettled: (listener) => settledListeners.push(listener),
+    refreshPlugins: (pluginId) => runWithStateRuntime(runtime, () => refreshMountedPlugins(pluginId)),
     requestRerender: () => runWithStateRuntime(runtime, () => getRenderApp()()),
-    isCurrentDocument: () => state.document === document,
+    isCurrentDocument: () => runtime.state.document === document,
   };
 }
 
-async function runHookHandlers(hookName: DocumentHookName, ctx: HvyDocumentHookContext): Promise<void> {
-  const hookState = getHookState();
+async function runHookHandlers(hookName: DocumentHookName, ctx: HvyDocumentHookContext, runtime: StateRuntime): Promise<void> {
+  const { hookState, handlers } = runWithStateRuntime(runtime, () => ({
+    hookState: getHookState(),
+    handlers: getOrderedHandlers(hookName, getHostPlugins()),
+  }));
   hookState.hookRunDepth += 1;
   try {
-    for (const { handler } of getOrderedHandlers(hookName, getHostPlugins())) {
+    for (const { handler } of handlers) {
       if (!ctx.isCurrentDocument()) {
         return;
       }
       try {
-        await handler.run(ctx);
+        await runWithStateRuntimeAsync(runtime, () => Promise.resolve(handler.run(ctx)));
       } catch {
         // A plugin hook should not prevent later document lifecycle handling.
       }
@@ -128,12 +141,47 @@ export function resetPluginDocumentHookState(): void {
   hookState.hookRun = Promise.resolve();
 }
 
-export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason = 'unknown'): Promise<PluginDocumentHookResult> {
+// History restores (undo, redo, rollback) return the document to a state that
+// already includes the output of the hooks that ran for it, so they adopt the
+// restored document as current instead of reloading or rerunning hooks.
+export function markPluginDocumentHooksCurrent(): void {
+  const hookState = getHookState();
+  hookState.lastHookDocument = state.document;
+  hookState.lastHookSignature = getHookSignature(state.document);
+}
+
+// The view is part of the signature because hooks receive it and may behave
+// differently per view; entering another view must rerun them.
+function getHookSignature(document: VisualDocument, serializedDocument = serializeDocument(document)): string {
+  return `${state.currentView}\u0000${serializedDocument}\u0000database:${getDatabaseChangeRevision(document)}`;
+}
+
+export interface PluginDocumentHookRunOptions {
+  /** The caller renders once after the hooks settle; see HvyDocumentHookContext.hostRendersAfter. */
+  hostRendersAfter?: boolean;
+  /** The document's text, when the caller serialized it in the same synchronous step. */
+  serializedDocument?: string;
+}
+
+export function runPluginDocumentHooks(
+  changeReason: HvyPluginHookChangeReason = 'unknown',
+  options: PluginDocumentHookRunOptions = {}
+): Promise<PluginDocumentHookResult> {
   const runtime = getActiveStateRuntime();
   const hookState = getHookState();
   const document = state.document;
+  // The run in progress records the document's signature when it ends, so one taken now is never read.
+  if (hookState.hookRunDepth > 0 && hookState.lastHookDocument === document) {
+    logPerfTrace('plugin-document-hooks:skip', {
+      changeReason,
+      skipReason: 'nested-hook-run',
+      signatureMs: 0,
+    });
+    return Promise.resolve({ ran: false, documentChanged: false });
+  }
   const signatureStartedAt = nowMs();
-  const signature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
+  const serializedDocument = options.serializedDocument ?? serializeDocument(document);
+  const signature = getHookSignature(document, serializedDocument);
   const signatureMs = elapsedMs(signatureStartedAt);
   const hookName: DocumentHookName | null = hookState.lastHookDocument !== document
     ? 'documentLoad'
@@ -162,7 +210,10 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
     return hookState.hookRun.then(() => ({ ran: false, documentChanged: false }));
   }
 
-  const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason);
+  const settledListeners: Array<(serializedDocument: string) => void> = [];
+  const ctx = createHookContext(runtime, document, hookName === 'documentLoad' ? 'load' : changeReason, options.hostRendersAfter === true, serializedDocument, settledListeners);
+  const releaseChangeFlush = holdDocumentChangeFlush(runtime);
+  let settledDocumentText: string | undefined;
   const hookResult = hookState.hookRun.then(async (): Promise<PluginDocumentHookResult> => {
     const startedAt = nowMs();
     logPerfTrace('plugin-document-hooks:start', {
@@ -170,14 +221,25 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       changeReason,
       signatureMs,
     });
-    const result = await runWithStateRuntimeAsync(runtime, async (): Promise<PluginDocumentHookResult> => {
-      await runHookHandlers(hookName, ctx);
+    runWithStateRuntime(runtime, () => {
+      // Hook output joins the undo step of the change that triggered the hooks.
+      beginReactiveScriptHistory();
+    });
+    await runHookHandlers(hookName, ctx, runtime);
+    const result = runWithStateRuntime(runtime, (): PluginDocumentHookResult => {
       if (ctx.isCurrentDocument()) {
-        const nextSignature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
+        const settledText = serializeDocument(document);
+        settledDocumentText = settledText;
+        settledListeners.forEach((listener) => listener(settledText));
+        const nextSignature = getHookSignature(document, settledDocumentText);
         hookState.lastHookDocument = document;
         hookState.lastHookSignature = nextSignature;
-        notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
-        return { ran: true, documentChanged: nextSignature !== signature };
+        const documentChanged = nextSignature !== signature;
+        if (documentChanged) {
+          noteScriptHistoryChange();
+          notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
+        }
+        return { ran: true, documentChanged };
       }
       return { ran: true, documentChanged: true };
     });
@@ -190,5 +252,6 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
     return result;
   });
   hookState.hookRun = hookResult.then(() => undefined);
+  void hookResult.finally(() => runWithStateRuntime(runtime, () => releaseChangeFlush(settledDocumentText)));
   return hookResult;
 }

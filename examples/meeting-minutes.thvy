@@ -73,7 +73,7 @@ component_defs:
  <!--hvy:text {"id":"meeting-context","css":"margin: 0 0 0.75rem; color: var(--hvy-text-alt);"}-->
   Add notes as the meeting happens. Each entry is stamped with the current client time.
 
- <!--hvy:plugin {"id":"add-minute-entry","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add minute","showSubmit":true,"submitScript":"add_entry"}}-->
+ <!--hvy:plugin {"id":"add-minute-entry","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Add minute","showSubmit":true,"submitScript":"add_entry","scriptLibraries":["datetime"]}}-->
   fields:
     - label: Note
       type: textarea
@@ -107,8 +107,11 @@ component_defs:
       if entries is None:
           raise RuntimeError("Minute entries list was not found.")
 
-      sort_id = doc.time.now_unix_ms()
-      display_time = doc.time.now_local()
+      from datetime import datetime
+
+      now = datetime.now().astimezone()
+      sort_id = int(now.timestamp() * 1000)
+      display_time = now.strftime("%B %d, %Y at %H:%M %Z")
       entry = entries.append_child(
           "minute-entry",
           {

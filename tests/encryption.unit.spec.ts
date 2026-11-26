@@ -9,8 +9,8 @@ import {
   deserializeDocumentBytesAsync,
   serializeDocument,
   serializeDocumentBytes,
-  serializeDocumentBytesAsync,
 } from '../src/serialization';
+import { serializeDocumentBytesAsync } from '../src/document-byte-serialization';
 
 test('expected result: Fernet helper encrypts and decrypts bytes without numeric array conversion', async () => {
   const key = generateFernetKey();

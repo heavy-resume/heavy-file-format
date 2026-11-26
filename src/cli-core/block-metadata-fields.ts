@@ -25,8 +25,8 @@ const commonBlockFields = [
 ] as const satisfies readonly (keyof BlockSchema)[];
 
 const componentBlockFields: Partial<Record<BuiltinComponentName, readonly (keyof BlockSchema)[]>> = {
-  'container': ['containerTitle', 'containerExpanded', 'containerCollapsedPreviewRem'],
-  'expandable': ['expandableAlwaysShowStub', 'expandableExpanded', 'expandableStubCss', 'expandableContentCss', 'expandableStubDescription', 'expandableContentDescription'],
+  'container': ['containerTitle', 'containerExpanded', 'containerCollapsedPreviewRem', 'noSave'],
+  'expandable': ['expandableAlwaysShowStub', 'expandableExpanded', 'expandablePresentation', 'expandableStubCss', 'expandableContentCss', 'expandableStubDescription', 'expandableContentDescription'],
   'component-list': ['componentListComponent', 'componentListItemLabel', 'componentListDefaultSortKey', 'componentListDefaultSortDirection', 'componentListDefaultGroupKey', 'componentListGroupsExpanded', 'componentListGroupCollapsedPreviewRem'],
   'grid': ['gridColumns', 'gridStackWidth'],
   'xref-card': ['xrefTarget', 'xrefTargetTagFilter'],

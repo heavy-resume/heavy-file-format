@@ -20,6 +20,7 @@ Common field types:
 text
 textarea
 select
+range
 datetime
 ```
 
@@ -32,6 +33,20 @@ fields:
     rows: 4
 ```
 
+Range fields render a slider with the label and current value. `min`, `max`, and `step` default to 0, 100, and 1, and `value` defaults to the midpoint:
+
+```yaml
+fields:
+  - label: Fake volume
+    type: range
+    value: 20
+    min: 0
+    max: 40
+    step: 5
+```
+
+`doc.form.get_value` returns a range value as a string, so use `int(...)` or `float(...)` before arithmetic.
+
 Create a form with submit logic:
 
 ```shell
@@ -40,6 +55,10 @@ echo '{"id":"widget-submit-form","plugin":"hvy.form","pluginConfig":{"version":"
 ```
 
 Store fields and named scripts in `plugin.txt`. Use `pluginConfig.submitScript` in `plugin.json` to run a named script when the submit button is pressed.
+
+Disable the submit button with `"submitDisabled":true` and explain why with `"submitDisabledReason":"..."`; the reason renders under the disabled button. Scripts can toggle it with `doc.form.set_submit_disabled(True, "reason")` and `doc.form.set_submit_disabled(False)`.
+
+Disable a field with `disabled: true` in its YAML to show that its value cannot be changed; the value is still included in `doc.form.get_values()` and submit. Scripts can toggle it with `doc.form.set_field_disabled("Field label", True)` and `doc.form.set_field_disabled("Field label", False)`.
 
 Populate a select from the current SQL backend when the form renders:
 

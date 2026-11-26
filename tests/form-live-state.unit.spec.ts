@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { parseFormSpec } from '../src/plugins/form';
+import { parseFormSpec } from '../src/plugins/form-spec/form-spec';
 import { createLiveState, reconcileLiveState } from '../src/plugins/form-live-state/form-live-state';
 
 test('definition edits replace defaults and options while preserving unrelated live input', () => {
@@ -123,4 +123,48 @@ test('equivalent photo defaults preserve live changes while edited photo default
   reconcileLiveState(live, spec);
 
   expect(live.values['Fake photo']).toEqual({ attachmentId: 'fake-b', imageFile: 'fake-b.png', mediaType: 'image/png' });
+});
+
+test('script submit overrides persist across refreshes until the document submit defaults change', () => {
+  const spec = parseFormSpec('', { submitDisabled: true, submitDisabledReason: 'Fake document reason' }).spec;
+  const live = createLiveState(spec);
+  expect(live.submit).toEqual({ disabled: true, reason: 'Fake document reason' });
+
+  live.submit = { disabled: false, reason: '' };
+  reconcileLiveState(live, structuredClone(spec));
+
+  expect(live.submit).toEqual({ disabled: false, reason: '' });
+
+  spec.submitDisabledReason = 'Fake edited reason';
+  reconcileLiveState(live, spec);
+
+  expect(live.submit).toEqual({ disabled: true, reason: 'Fake edited reason' });
+});
+
+test('script disabled overrides survive refreshes until the field disabled definition changes', () => {
+  const spec = parseFormSpec(`fields:
+  - label: Fake locked
+    disabled: true
+  - label: Fake open
+`).spec;
+  const live = createLiveState(spec);
+  expect(live.disabled).toEqual({ 'Fake locked': true, 'Fake open': false });
+
+  live.disabled['Fake locked'] = false;
+  live.disabled['Fake open'] = true;
+  spec.fields[1]!.placeholder = 'Fake updated hint';
+  reconcileLiveState(live, structuredClone(spec));
+
+  expect(live.disabled).toEqual({ 'Fake locked': false, 'Fake open': true });
+
+  spec.fields[1]!.disabled = true;
+  spec.fields[0]!.disabled = false;
+  reconcileLiveState(live, structuredClone(spec));
+
+  expect(live.disabled).toEqual({ 'Fake locked': false, 'Fake open': true });
+
+  spec.fields[0]!.disabled = true;
+  reconcileLiveState(live, structuredClone(spec));
+
+  expect(live.disabled).toEqual({ 'Fake locked': true, 'Fake open': true });
 });

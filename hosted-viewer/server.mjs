@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 
 const port = Number(process.env.PORT || 8080);
 const publicRoot = resolve(process.env.HVY_VIEWER_PUBLIC || '/app/public');
@@ -111,7 +111,7 @@ function shutdown(server, signal) {
 function safeJoin(root, pathname) {
   const relative = normalize(pathname).replace(/^(\.\.[/\\])+/, '').replace(/^[/\\]+/, '');
   const target = resolve(root, relative);
-  return target === root || target.startsWith(`${root}/`) ? target : null;
+  return target === root || target.startsWith(root.endsWith(sep) ? root : `${root}${sep}`) ? target : null;
 }
 
 async function serveIndexHtml(response, resolvedPublicRoot, resolvedSiteRoot, requestUrl) {

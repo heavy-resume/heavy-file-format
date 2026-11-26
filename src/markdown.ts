@@ -15,6 +15,11 @@ import {
   scanInlineAnswers,
 } from './inline-answer-groups';
 import type { TextPlaceholderDefinition } from './editor/component-helpers';
+import {
+  parseAltAnnotationPayload,
+  renderAltAnnotationsAsFullText,
+} from './responsive-annotation-text';
+export { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from './responsive-annotation-text';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
@@ -369,10 +374,46 @@ function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRen
     .join('');
 }
 
+// Every redraw renders every text block, and almost none of them changed. The result depends only on
+// this text, which already has placeholder and answer values substituted as tokens.
+const SANITIZED_MARKDOWN_CACHE_LIMIT = 4096;
+const sanitizedMarkdownCache = new Map<string, string>();
+
 function renderSanitizedMarkdownHtml(markdown: string): string {
-  return normalizeRenderedMarkdownSoftBreaks(
-    sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string)
-  );
+  let html = sanitizedMarkdownCache.get(markdown);
+  if (html === undefined) {
+    html = normalizeRenderedMarkdownSoftBreaks(
+      sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(separateBareUrlHardBreaks(markdown)))) as string)
+    );
+  } else {
+    sanitizedMarkdownCache.delete(markdown);
+  }
+  sanitizedMarkdownCache.set(markdown, html);
+  if (sanitizedMarkdownCache.size > SANITIZED_MARKDOWN_CACHE_LIMIT) {
+    sanitizedMarkdownCache.delete(sanitizedMarkdownCache.keys().next().value as string);
+  }
+  return html;
+}
+
+function separateBareUrlHardBreaks(markdown: string): string {
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+  return markdown.split(/(\r?\n)/).map((segment, index) => {
+    if (index % 2 === 1) return segment;
+    if (fence) {
+      const closingFence = segment.match(/^ {0,3}([`~]{3,})\s*$/)?.[1];
+      if (closingFence?.[0] === fence.marker && closingFence.length >= fence.length) fence = null;
+      return segment;
+    }
+    const openingFence = segment.match(/^ {0,3}(`{3,}|~{3,})/)?.[1];
+    if (openingFence) {
+      const run = openingFence;
+      const marker = run[0] as '`' | '~';
+      fence = { marker, length: run.length };
+      return segment;
+    }
+    if (/^(?: {4}|\t)/.test(segment)) return segment;
+    return segment.replace(/(https?:\/\/[^\s<\\]+)\\$/, '$1 \\');
+  }).join('');
 }
 
 type TextLineStyleSegment =
@@ -629,14 +670,6 @@ function isBareAnswerMarkerLine(line: string): boolean {
 }
 
 
-export function renderAltAnnotationsAsFullText(markdown: string): string {
-  return replaceAltAnnotations(markdown, (_rawJson, fullText) => fullText);
-}
-
-export function renderAltAnnotationsAsMobileText(markdown: string): string {
-  return replaceAltAnnotations(markdown, (rawJson, fullText) => parseAltAnnotationPayload(rawJson)?.compact ?? fullText);
-}
-
 export function applyMobileAltAdjustment(fullMarkdown: string, mobileMarkdown: string): string {
   const full = renderAltAnnotationsAsFullText(fullMarkdown).trim();
   const mobile = mobileMarkdown.trim();
@@ -731,23 +764,8 @@ function parseSimpleAtxHeading(markdown: string): { prefix: string; text: string
   return text.length > 0 ? { prefix: `${match[1]}${match[2]}`, text } : null;
 }
 
-function replaceAltAnnotations(markdown: string, replacement: (rawJson: string, fullText: string) => string): string {
-  return (markdown || '').replace(/<!--hvy:alt\s+(\{.*?\})-->([\s\S]*?)<!--\/hvy:alt-->/g, (_match, rawJson, fullText) =>
-    replacement(rawJson, fullText)
-  );
-}
-
 function restoreResponsiveAnnotationTokens(html: string, tokens: ResponsiveAnnotationToken[]): string {
   return tokens.reduce((result, token) => result.replaceAll(token.token, token.html), html);
-}
-
-function parseAltAnnotationPayload(rawJson: string): { compact: string } | null {
-  try {
-    const parsed = JSON.parse(rawJson) as { compact?: unknown };
-    return typeof parsed.compact === 'string' ? { compact: parsed.compact } : null;
-  } catch {
-    return null;
-  }
 }
 
 function renderAltAnnotationHtml(fullText: string, compactText: string, editable: boolean): string {

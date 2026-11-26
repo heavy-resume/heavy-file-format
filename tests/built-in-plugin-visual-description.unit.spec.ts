@@ -1,9 +1,8 @@
-import { afterEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
 import { dbTablePlugin } from '../src/plugins/db-table/db-table-component';
 import {
-  clearScriptingResults,
   scriptingPlugin,
   storeScriptingResult,
 } from '../src/plugins/scripting/scripting';
@@ -14,10 +13,6 @@ import { diagramPlugin } from '../src/plugins/diagram';
 import { qrCodePlugin } from '../src/plugins/qr-code/qr-code';
 import { videoPlugin } from '../src/plugins/video/video';
 import { editableTextPlugin } from '../src/plugins/editable-text/editable-text';
-
-afterEach(() => {
-  clearScriptingResults();
-});
 
 function createPluginDocument(plugin: string, text = '') {
   return deserializeDocument(`---
@@ -52,7 +47,7 @@ test('scripting visual description exposes only failed runtime output', () => {
   expect(describe({ block, rawDocument: document })).toBe('');
 
   // TOOL CALL
-  storeScriptingResult(document.sections[0]!.key, block.id, {
+  storeScriptingResult(document, document.sections[0]!.key, block.id, {
     ok: false,
     error: 'broken',
     errorDetail: 'Exception: broken at line 1',
@@ -70,7 +65,7 @@ test('scripting visual description exposes only failed runtime output', () => {
     'Details: Exception: broken at line 1',
   ].join('\n'));
 
-  storeScriptingResult(document.sections[0]!.key, block.id, {
+  storeScriptingResult(document, document.sections[0]!.key, block.id, {
     ok: true,
     stepsExecuted: 1,
     stepBudget: 100_000,
@@ -78,6 +73,25 @@ test('scripting visual description exposes only failed runtime output', () => {
     logs: ['complete'],
   }, block.text);
   expect(describe({ block, rawDocument: document })).toBe('');
+});
+
+test('scripting results stay with their document when another document has the same block ids', () => {
+  const firstDocument = createPluginDocument('hvy.scripting', 'raise Exception("broken")');
+  const secondDocument = createPluginDocument('hvy.scripting', 'raise Exception("broken")');
+  const describe = scriptingPlugin.visualDescription!.describe;
+
+  // TOOL CALL
+  storeScriptingResult(firstDocument, firstDocument.sections[0]!.key, firstDocument.sections[0]!.blocks[0]!.id, {
+    ok: false,
+    error: 'broken',
+    stepsExecuted: 1,
+    stepBudget: 100_000,
+    toolCalls: 0,
+  }, 'raise Exception("broken")');
+
+  // AFTER
+  expect(describe({ block: firstDocument.sections[0]!.blocks[0]!, rawDocument: firstDocument })).toBe('Script error: broken');
+  expect(describe({ block: secondDocument.sections[0]!.blocks[0]!, rawDocument: secondDocument })).toBe('');
 });
 
 test('built-ins backed by plugin text and config do not add visual descriptions', () => {

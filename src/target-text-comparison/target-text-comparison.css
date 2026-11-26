@@ -1,0 +1,46 @@
+.hvy-document.hvy-target-text-comparison-preview {
+  color: var(--hvy-text);
+  background: var(--hvy-bg);
+}
+
+.hvy-document.hvy-target-text-comparison-preview .hvy-target-text-comparison-surface {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.hvy-document.hvy-target-text-comparison-preview [data-hvy-comparison-disabled-link="true"] {
+  cursor: default;
+}
+
+.hvy-document.hvy-target-text-comparison-preview .reader-xref-card[data-hvy-comparison-disabled-link="true"]:hover,
+.hvy-document.hvy-target-text-comparison-preview .reader-xref-card[data-hvy-comparison-disabled-link="true"]:focus-visible {
+  border-color: var(--hvy-border);
+  background: var(--hvy-xref-card-bg);
+  box-shadow: 0 1px 2px var(--hvy-shadow);
+  transform: none;
+}
+
+.hvy-document.hvy-target-text-comparison-preview .hvy-target-text-diff-removed,
+.hvy-document.hvy-target-text-comparison-preview .hvy-target-text-diff-added {
+  border-radius: 0.18em;
+  padding: 0.04em 0.08em;
+  margin: -0.04em -0.01em;
+  text-decoration: none;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.hvy-document.hvy-target-text-comparison-preview .hvy-target-text-diff-removed {
+  color: var(--hvy-diff-removed-text);
+  background: var(--hvy-diff-removed-bg);
+  box-shadow: inset 0 -0.08em 0 color-mix(in srgb, var(--hvy-diff-removed-text) 58%, transparent);
+}
+
+.hvy-document.hvy-target-text-comparison-preview .hvy-target-text-diff-added {
+  color: var(--hvy-diff-added-text);
+  background: var(--hvy-diff-added-bg);
+  box-shadow: inset 0 -0.08em 0 color-mix(in srgb, var(--hvy-diff-added-text) 58%, transparent);
+}

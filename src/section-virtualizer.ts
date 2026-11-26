@@ -1,3 +1,5 @@
+import { medianHeightsByShape, type RenderTreeItemSize } from './render-tree-window';
+
 type SectionVirtualizerOptions = {
   root: HTMLElement;
   afterRestore?: (scope: HTMLElement) => void | Promise<void>;
@@ -21,6 +23,11 @@ const placeholderSections = new WeakMap<HTMLElement, HTMLElement>();
 const placeholderObservers = new WeakMap<HTMLElement, IntersectionObserver>();
 const placeholderMaterializers = new WeakMap<HTMLElement, NonNullable<SectionVirtualizerOptions['materializeSection']>>();
 const placeholderMeasureCallbacks = new WeakMap<HTMLElement, NonNullable<SectionVirtualizerOptions['onSectionMeasured']>>();
+const pendingMeasurements = new Map<HTMLElement, {
+  onSectionMeasured?: SectionVirtualizerOptions['onSectionMeasured'];
+  resizesSiblingPlaceholders: boolean;
+}>();
+let measurementFrame = 0;
 
 const SURFACES = [
   {
@@ -33,13 +40,13 @@ const SURFACES = [
   },
   {
     scroller: '.editor-shell .editor-tree',
-    sections: ':is(.editor-section-card > .editor-blocks, .container-inner-blocks, .grid-item-editor-shell, .reader-grid-cell.is-passive-grid-cell) > :is(.editor-block-passive, .editor-block, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor-block"], .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor-block-range"])',
+    sections: ':is(.editor-section-card > .editor-blocks, .container-inner-blocks, .reader-component-list, .expand-stub, .expand-content, .grid-item-editor-shell, .reader-grid-cell.is-passive-grid-cell) > :is(.editor-block-passive, .editor-block, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor-block"], .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor-block-range"])',
     minimumSiblingCount: 60,
     itemSelector: ':is(.editor-block-passive, .editor-block, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor-block"], .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor-block-range"])',
   },
   {
     scroller: '.viewer-shell .reader-document',
-    sections: ':is(.reader-section > .reader-section-content, .reader-container-body, .expand-stub, .expand-content, .reader-grid-cell) > :is(.reader-block, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block"], .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block-range"])',
+    sections: ':is(.reader-section > .reader-section-content, .reader-container-body, .reader-component-list, .expand-stub, .expand-content, .reader-grid-cell) > :is(.reader-block, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block"], .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block-range"])',
     minimumSiblingCount: 60,
     itemSelector: ':is(.reader-block, .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block"], .hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block-range"])',
   },
@@ -234,6 +241,7 @@ function unloadVirtualSection(
   }
   const rect = section.getBoundingClientRect();
   const height = Math.max(1, rect.height);
+  const footprint = Math.max(1, measureVirtualFootprint(section));
   const placeholder = section.ownerDocument.createElement('div');
   const style = getComputedStyle(section);
   placeholder.className = 'hvy-section-virtual-placeholder';
@@ -249,6 +257,9 @@ function unloadVirtualSection(
   if (section.dataset.parentLocked) {
     placeholder.dataset.parentLocked = section.dataset.parentLocked;
   }
+  if (section.dataset.hvyVirtualShape) {
+    placeholder.dataset.hvyVirtualShape = section.dataset.hvyVirtualShape;
+  }
   placeholder.style.minHeight = `${height}px`;
   placeholder.style.margin = style.margin;
   placeholder.setAttribute('aria-hidden', 'true');
@@ -262,7 +273,7 @@ function unloadVirtualSection(
     onSectionMeasured(
       placeholder.dataset.sectionKey,
       placeholder.dataset.hvyVirtualKind,
-      height,
+      footprint,
       placeholder.dataset.blockId
     );
   }
@@ -326,9 +337,7 @@ function reserveRestoredSectionLayout(
   const previousOverflowPriority = section.style.getPropertyPriority('overflow');
   section.style.setProperty('height', `${placeholderHeight}px`);
   section.style.setProperty('overflow', 'clip');
-  const scroller = placeholder.closest<HTMLElement>(
-    '.editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
-  );
+  const scroller = getVirtualScroller(placeholder);
   const followingContent = placeholder.nextElementSibling instanceof HTMLElement
     ? placeholder.nextElementSibling
     : null;
@@ -443,27 +452,130 @@ function restoredSectionImagesHaveLayout(section: HTMLElement): boolean {
   });
 }
 
+// A block's footprint is the distance from its top to the next block's top, which is what a margin-less
+// range placeholder has to reserve per item. When the next sibling is not a block (or a single-block
+// placeholder, which keeps the block's margins), the spacing comes from the block's own margins instead.
+// Sections keep their box height.
+function measureVirtualFootprint(element: HTMLElement): number {
+  const rect = element.getBoundingClientRect();
+  if (!element.dataset.hvyVirtualShape) {
+    return rect.height;
+  }
+  const next = element.nextElementSibling;
+  if (next instanceof HTMLElement && next.dataset.hvyVirtualShape) {
+    const nextTop = next.getBoundingClientRect().top;
+    if (nextTop >= rect.bottom - 0.5) {
+      return nextTop - rect.top;
+    }
+  }
+  const style = getComputedStyle(element);
+  const marginTop = Math.max(0, parseFloat(style.marginTop) || 0);
+  const marginBottom = Math.max(0, parseFloat(style.marginBottom) || 0);
+  const parentStyle = element.parentElement ? getComputedStyle(element.parentElement) : null;
+  const marginsCollapse = !parentStyle || !/flex|grid/.test(parentStyle.display);
+  return marginsCollapse
+    ? rect.height + Math.max(marginTop, marginBottom)
+    : rect.height + marginTop + marginBottom + Math.max(0, parseFloat(parentStyle.rowGap) || 0);
+}
+
+function getVirtualScroller(element: HTMLElement): HTMLElement | null {
+  return element.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel');
+}
+
 function measureSection(
   section: HTMLElement,
   onSectionMeasured?: SectionVirtualizerOptions['onSectionMeasured']
 ): void {
-  if (!onSectionMeasured) {
+  const resizesSiblingPlaceholders = Boolean(section.parentElement?.querySelector(':scope > [data-hvy-virtual-item-sizes]'));
+  if (!onSectionMeasured && !resizesSiblingPlaceholders) {
     return;
   }
-  window.requestAnimationFrame(() => {
-    if (!section.isConnected) {
+  pendingMeasurements.set(section, { onSectionMeasured, resizesSiblingPlaceholders });
+  if (measurementFrame) {
+    return;
+  }
+  // One frame measures every pending section and then resizes the range placeholders beside them, so the
+  // corrected layout is in place before anything (such as navigation) reads it on a later frame.
+  measurementFrame = window.requestAnimationFrame(() => {
+    measurementFrame = 0;
+    const measurements = Array.from(pendingMeasurements);
+    pendingMeasurements.clear();
+    const resizeParents = new Set<HTMLElement>();
+    measurements.forEach(([measuredSection, measurement]) => {
+      if (!measuredSection.isConnected) {
+        return;
+      }
+      if (measurement.onSectionMeasured) {
+        const height = measureVirtualFootprint(measuredSection);
+        if (height > 0) {
+          measurement.onSectionMeasured(
+            measuredSection.dataset.sectionKey ?? measuredSection.dataset.editorSection ?? '',
+            measuredSection.dataset.hvyVirtualItem ?? measuredSection.dataset.hvyVirtualSection ?? '',
+            height,
+            measuredSection.dataset.blockId
+          );
+        }
+      }
+      if (measurement.resizesSiblingPlaceholders && measuredSection.parentElement) {
+        resizeParents.add(measuredSection.parentElement);
+      }
+    });
+    resizeParents.forEach(resizeEstimatedPlaceholders);
+  });
+}
+
+// Range placeholders start out sized from per-item estimates. Once siblings of the same shape have been
+// measured, unmeasured items in the range take the measured median instead, so the scroll height settles
+// without the user having to scroll through the collection first.
+function resizeEstimatedPlaceholders(parent: HTMLElement): void {
+  if (!parent.isConnected) {
+    return;
+  }
+  const measuredSizes: RenderTreeItemSize[] = [];
+  const ranges: Array<{ placeholder: HTMLElement; sizes: RenderTreeItemSize[] }> = [];
+  for (const child of Array.from(parent.children)) {
+    if (!(child instanceof HTMLElement)) {
+      continue;
+    }
+    const itemSizes = child.dataset.hvyVirtualItemSizes;
+    if (itemSizes && child.dataset.hvyVirtualPlaceholder === 'true') {
+      const sizes = JSON.parse(itemSizes) as RenderTreeItemSize[];
+      measuredSizes.push(...sizes.filter((size) => size.measured));
+      ranges.push({ placeholder: child, sizes });
+    } else if (child.dataset.hvyVirtualShape) {
+      measuredSizes.push({
+        shapeKey: child.dataset.hvyVirtualShape,
+        height: measureVirtualFootprint(child),
+        measured: true,
+      });
+    }
+  }
+  if (ranges.length === 0) {
+    return;
+  }
+  const shapeHeights = medianHeightsByShape(measuredSizes);
+  const scroller = getVirtualScroller(parent);
+  const scrollerTop = scroller ? scroller.getBoundingClientRect().top + scroller.clientTop : 0;
+  const resizes = ranges.map(({ placeholder, sizes }) => {
+    const rect = placeholder.getBoundingClientRect();
+    const height = Math.ceil(sizes.reduce((total, size) => (
+      total + (size.measured || size.shapeKey === undefined ? size.height : shapeHeights.get(size.shapeKey) ?? size.height)
+    ), 0));
+    return { placeholder, height, delta: height - rect.height, startsAboveViewport: Boolean(scroller) && rect.top < scrollerTop };
+  });
+  let scrollDelta = 0;
+  resizes.forEach(({ placeholder, height, delta, startsAboveViewport }) => {
+    if (Math.abs(delta) < 1) {
       return;
     }
-    const height = section.getBoundingClientRect().height;
-    if (height > 0) {
-      onSectionMeasured(
-        section.dataset.sectionKey ?? section.dataset.editorSection ?? '',
-        section.dataset.hvyVirtualItem ?? section.dataset.hvyVirtualSection ?? '',
-        height,
-        section.dataset.blockId
-      );
+    placeholder.style.minHeight = `${height}px`;
+    if (startsAboveViewport) {
+      scrollDelta += delta;
     }
   });
+  if (scroller && Math.abs(scrollDelta) >= 1) {
+    scroller.scrollTop += scrollDelta;
+  }
 }
 
 function shouldKeepSectionMounted(section: HTMLElement): boolean {

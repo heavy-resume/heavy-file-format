@@ -3,7 +3,7 @@ import { expect, test } from 'vitest';
 import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { createEmptyBlock } from '../src/document-factory';
 import { resolveBaseComponentFromMeta } from '../src/component-defs';
-import { parseFormSpec } from '../src/plugins/form';
+import { parseFormSpec } from '../src/plugins/form-spec/form-spec';
 import { visitBlocks } from '../src/section-ops';
 import { state } from '../src/state';
 import { registerSerializationTestState } from './serialization-test-helpers';
@@ -139,8 +139,8 @@ section_defs:
     template:
       id: projects
       title: Projects
-      exclude_from_import: true
-      protect_from_import: true
+      excludeFromImport: true
+      protectFromImport: true
       tags: reciprocal-xref-source
       blocks:
         - text: "# Projects"
@@ -160,19 +160,19 @@ section_defs:
       children: []
 ---
 
-<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true,"protect_from_import":true}-->
+<!--hvy: {"id":"projects","templateKey":"resume-projects","excludeFromImport":true,"protectFromImport":true}-->
 #! Projects
 `;
 
   const document = deserializeDocument(input, '.hvy');
 
   expect(document.sections[0]?.templateKey).toBe('resume-projects');
-  expect(document.sections[0]?.exclude_from_import).toBe(true);
-  expect(document.sections[0]?.protect_from_import).toBe(true);
+  expect(document.sections[0]?.excludeFromImport).toBe(true);
+  expect(document.sections[0]?.protectFromImport).toBe(true);
   expect(document.meta.section_defs?.[0]?.key).toBe('resume-projects');
   expect(document.meta.section_defs?.[0]?.template.customId).toBe('projects');
-  expect(document.meta.section_defs?.[0]?.template.exclude_from_import).toBe(true);
-  expect(document.meta.section_defs?.[0]?.template.protect_from_import).toBe(true);
+  expect(document.meta.section_defs?.[0]?.template.excludeFromImport).toBe(true);
+  expect(document.meta.section_defs?.[0]?.template.protectFromImport).toBe(true);
   expect(document.meta.section_defs?.[0]?.template.blocks[0]?.text).toBe('# Projects');
   expect(document.meta.section_defs?.[1]?.repeatable).toBe(true);
   expect(document.meta.section_defs?.[1]?.templateVariables?.section_title?.label).toBe('Section title');
@@ -728,9 +728,10 @@ test('meeting minutes template uses reusable timestamped minute entries', async 
   expect(parsed.spec.submitScript).toBe('add_entry');
   expect(parsed.spec.scripts.add_entry).toContain('def note_to_markdown(value):');
   expect(parsed.spec.scripts.add_entry).toContain('output.append(line + "  ")');
-  expect(parsed.spec.scripts.add_entry).toContain('sort_id = doc.time.now_unix_ms()');
-  expect(parsed.spec.scripts.add_entry).not.toContain('sort_time = doc.time.now_iso()');
-  expect(parsed.spec.scripts.add_entry).toContain('display_time = doc.time.now_local()');
+  expect(parsed.spec.scriptLibraries).toEqual(['datetime']);
+  expect(parsed.spec.scripts.add_entry).toContain('now = datetime.now().astimezone()');
+  expect(parsed.spec.scripts.add_entry).toContain('sort_id = int(now.timestamp() * 1000)');
+  expect(parsed.spec.scripts.add_entry).toContain('display_time = now.strftime("%B %d, %Y at %H:%M %Z")');
   expect(parsed.spec.scripts.add_entry).toContain('hvy:sort-value');
   expect(parsed.spec.scripts.add_entry).toContain('\\"key\\":\\"Time\\"');
   expect(parsed.spec.scripts.add_entry).toContain('"id": "minute-entry-" + str(sort_id)');

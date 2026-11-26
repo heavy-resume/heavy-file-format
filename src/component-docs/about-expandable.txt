@@ -5,4 +5,6 @@ The stub is the always-visible summary; content is the detail shown when expande
 Each expandable must have at least one stub child and one content child.
 expandableAlwaysShowStub controls whether the stub remains visible while expanded.
 expandableExpanded stores the default expanded state.
+expandablePresentation is "inline" (default) or "modal". A modal expandable keeps the stub in the layout, opens its content in an overlay, and ignores expandableExpanded when the document loads.
+The expandable-close text placeholder is available in the content pane and closes the expandable.
 Pane-level styles belong to the stub/content slots in inline HVY and to expandableStubCss/expandableContentCss in schema form.

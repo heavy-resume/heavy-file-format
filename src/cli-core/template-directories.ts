@@ -4,7 +4,8 @@ import { getComponentDefsFromMeta, getSectionDefsFromMeta, isBuiltinComponentNam
 import { parseVisualBlock, parseVisualSection } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
 import { makeId } from '../utils';
-import type { HvyVirtualEntry } from './virtual-file-system';
+import { syncSortValuesForDocument } from '../sort-values';
+import type { HvyVirtualEntrySink } from './virtual-file-system';
 
 /** A definition's editing tree. Reads never materialize defaults in document metadata. */
 export interface TemplateDirectory {
@@ -71,9 +72,9 @@ export function getTemplateDirectories(document: VisualDocument): TemplateDirect
         }, remove,
       });
     };
-    add(definition, path, () => removeValue(document.meta.component_defs as unknown[], definition));
+    add(definition, path, () => removeDefinition(document, document.meta.component_defs as unknown[], definition));
     for (const flavor of definition.flavors ?? []) {
-      add(flavor, `${path}/flavors/${templatePathSegment(flavor.name)}`, () => removeValue(definition.flavors!, flavor));
+      add(flavor, `${path}/flavors/${templatePathSegment(flavor.name)}`, () => removeDefinition(document, definition.flavors!, flavor));
     }
   }
   for (const definition of getSectionDefsFromMeta(document.meta)) {
@@ -85,9 +86,9 @@ export function getTemplateDirectories(document: VisualDocument): TemplateDirect
         section: value.template, commit: () => {}, remove,
       });
     };
-    add(definition, path, () => removeValue(document.meta.section_defs as unknown[], definition));
+    add(definition, path, () => removeDefinition(document, document.meta.section_defs as unknown[], definition));
     for (const flavor of definition.flavors ?? []) {
-      add(flavor, `${path}/flavors/${templatePathSegment(flavor.name)}`, () => removeValue(definition.flavors!, flavor));
+      add(flavor, `${path}/flavors/${templatePathSegment(flavor.name)}`, () => removeDefinition(document, definition.flavors!, flavor));
     }
   }
   return result;
@@ -96,6 +97,12 @@ export function getTemplateDirectories(document: VisualDocument): TemplateDirect
 function removeValue(values: unknown[], value: unknown): void {
   const index = values.indexOf(value);
   if (index >= 0) values.splice(index, 1);
+}
+
+/** Removes a definition or flavor. Definitions hold the sort and group value definitions list items read, so every item is re-synced. */
+function removeDefinition(document: VisualDocument, values: unknown[], value: unknown): void {
+  removeValue(values, value);
+  syncSortValuesForDocument(document);
 }
 
 export function findTemplateDirectory(document: VisualDocument, path: string): TemplateDirectory | undefined {
@@ -107,7 +114,7 @@ export function commitTemplateDirectory(document: VisualDocument, path: string):
   findTemplateDirectory(document, path)?.commit();
 }
 
-export function addTemplateMetadataFiles(entries: Map<string, HvyVirtualEntry>, roots: TemplateDirectory[]): void {
+export function addTemplateMetadataFiles(entries: HvyVirtualEntrySink, roots: TemplateDirectory[]): void {
   for (const path of ['/templates', '/templates/components', '/templates/sections']) entries.set(path, { kind: 'dir', path });
   for (const root of roots) {
     for (const path of [root.path, ...(!root.path.includes('/flavors/') ? [`${root.path}/flavors`] : [])]) entries.set(path, { kind: 'dir', path });
@@ -192,5 +199,7 @@ export function insertTemplateDefinition(document: VisualDocument, parent: strin
   existing.splice(offset, 0, value);
   if (owner) owner.metadata.flavors = existing;
   else document.meta[field] = existing as JsonObject[];
+  // List items read their sort and group value definitions from these definitions.
+  syncSortValuesForDocument(document);
   return `${parent}/${templatePathSegment(name)}`;
 }

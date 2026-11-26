@@ -1,17 +1,23 @@
-import { syncSortValuesForDocument } from '../sort-values';
+import { syncSortValuesForDocument, syncSortValuesForListItem, syncSortValuesForSection, syncSortValuesInsideBlock } from '../sort-values';
 import { findTemplateDirectory, insertTemplateDefinition } from './template-directories';
 import type { VisualDocument } from '../types';
 import {
-  buildHvyVirtualFileSystem,
-  buildVirtualDirectoryBlockLookupWithAliases,
-  buildVirtualDirectorySectionLookupWithAliases,
+  createHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
   findSectionForVirtualDirectory,
   findBlockInsertionTargetForVirtualDirectory,
+  findVirtualDirectory,
+  findVirtualDirectoryForAncestry,
+  visitBodyBlocks,
+  type HvyBodyBlockAncestry,
   listDirectory,
+  resolveVirtualEntry,
   resolveVirtualPath,
   type HvyVirtualEntry,
+  type HvyVirtualEntrySink,
   type HvyVirtualFile,
+  type HvyVirtualFileSystem,
+  type HvyVirtualNodeFilesTarget,
   type HvyVirtualPathNamingState,
 } from './virtual-file-system';
 import { executeHvyDocumentCommand, hvyDocumentCommandHelp } from './hvy-document-commands';
@@ -24,11 +30,11 @@ import { serializeBlockFragment } from '../serialization';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
 import { cloneReusableBlockFromMeta } from '../document-factory';
 import { formatHvyComponentDescriptionHistory } from './component-description-history';
-import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSectionFragment } from '../serialization';
+import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSectionFragment, wrapHvySectionFragmentAsDocument } from '../serialization';
 import { parseAiBlockEditResponse } from '../ai-component-edit-common';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { removeTextFillInMarkers } from '../text-fill-in';
-import { measureAsyncPhase, measurePhase, recordMeasurement, isMeasurementEnabled } from '../perf-trace';
+import { measureAsyncPhase, measurePhase } from '../perf-trace';
 import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
 
 const loadDbTableRuntime = () => import('../plugins/db-table');
@@ -77,7 +83,6 @@ export interface HvyCliExecution {
   cwd: string;
   output: string;
   mutated: boolean;
-  invalidatesVirtualFileSystem?: boolean;
   mutatedPaths?: string[];
   refreshSectionPaths?: string[];
   requiresFullRefresh?: boolean;
@@ -85,7 +90,7 @@ export interface HvyCliExecution {
 
 type HvyCliCommandContext = {
   document: VisualDocument;
-  fs: ReturnType<typeof buildHvyVirtualFileSystem>;
+  fs: HvyVirtualFileSystem;
   cwd: string;
   session?: HvyCliSession;
   pathNaming?: HvyVirtualPathNamingState;
@@ -103,14 +108,10 @@ type HvyMiniShellProcess = {
   stderr: string;
   status: number;
   mutated: boolean;
-  invalidatesVirtualFileSystem?: boolean;
   mutatedPaths?: string[];
   refreshSectionPaths?: string[];
   requiresFullRefresh?: boolean;
 };
-
-const sessionVirtualFileSystems = new WeakMap<HvyCliSession, ReturnType<typeof buildHvyVirtualFileSystem>>();
-const virtualFileSystemsWithRawSessionFiles = new WeakSet<ReturnType<typeof buildHvyVirtualFileSystem>>();
 
 export function createHvyCliSession(options: HvyCliSessionOptions = {}): HvyCliSession {
   return {
@@ -120,14 +121,6 @@ export function createHvyCliSession(options: HvyCliSessionOptions = {}): HvyCliS
     virtualPathNaming: { anonymousBlockNamesById: {} },
     ...(options.readOnlyFiles ? { readOnlyFiles: { ...options.readOnlyFiles } } : {}),
   };
-}
-
-export function invalidateHvyCliSessionVirtualFileSystem(session: HvyCliSession): void {
-  sessionVirtualFileSystems.delete(session);
-}
-
-function shouldInvalidateVirtualFileSystem(result: { mutated: boolean; invalidatesVirtualFileSystem?: boolean }): boolean {
-  return result.invalidatesVirtualFileSystem ?? result.mutated;
 }
 
 function mergeMutatedPaths(...groups: Array<string[] | undefined>): string[] | undefined {
@@ -145,21 +138,8 @@ function mergeMutatedPaths(...groups: Array<string[] | undefined>): string[] | u
   return paths.length > 0 ? paths : undefined;
 }
 
-function buildSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): ReturnType<typeof buildHvyVirtualFileSystem> {
-  session.virtualPathNaming ??= { anonymousBlockNamesById: {} };
-  session.virtualPathNaming.anonymousBlockNamesById ??= {};
-  const cached = sessionVirtualFileSystems.get(session);
-  if (cached) {
-    recordMeasurement('cli.fs.session.get', 0, { cached: true, entries: cached.entries.size });
-    return cached;
-  }
-  const fs = measurePhase('cli.fs.session.get', { cached: false }, () => buildHvyVirtualFileSystem(document, session.virtualPathNaming));
-  sessionVirtualFileSystems.set(session, fs);
-  return fs;
-}
-
-export function getHvyCliSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): ReturnType<typeof buildHvyVirtualFileSystem> {
-  return buildSessionVirtualFileSystem(document, session);
+export function getHvyCliSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): HvyVirtualFileSystem {
+  return openSessionVirtualFileSystem(document, session);
 }
 
 export function writeHvyCliSessionVirtualFile(
@@ -168,18 +148,12 @@ export function writeHvyCliSessionVirtualFile(
   path: string,
   content: string
 ): HvyCliExecution {
-  const fs = buildSessionVirtualFileSystem(document, session);
-  addSessionFiles(fs, document, session);
+  const fs = openSessionVirtualFileSystem(document, session);
   const result = writeVirtualFile({ fs, cwd: session.cwd, session }, path, content, false, 'apply_hvy_patch');
-  if (shouldInvalidateVirtualFileSystem(result)) {
-    if (result.mutated) syncSortValuesForDocument(document);
-    invalidateHvyCliSessionVirtualFileSystem(session);
-  }
   return {
     cwd: session.cwd,
     output: result.output,
     mutated: result.mutated,
-    invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem,
     mutatedPaths: result.mutatedPaths,
     refreshSectionPaths: result.refreshSectionPaths,
     requiresFullRefresh: result.requiresFullRefresh,
@@ -208,33 +182,26 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
   if (heredocs) {
     const outputs: string[] = [];
     let mutated = false;
-    let invalidatesVirtualFileSystem = false;
     let mutatedPaths: string[] | undefined;
     let refreshSectionPaths: string[] | undefined;
     let requiresFullRefresh = false;
     let scratchpadTouched = false;
     for (const heredoc of heredocs) {
-      const fs = buildSessionVirtualFileSystem(document, session);
-      addSessionFiles(fs, document, session);
+      const fs = openSessionVirtualFileSystem(document, session);
       const result = writeVirtualFile({ fs, cwd: session.cwd, session }, heredoc.path, heredoc.content, false, 'cat');
       enforceScratchpadHardCap(session);
       if (result.output) {
         outputs.push(result.output);
       }
       mutated = mutated || result.mutated;
-      invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
       mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
       refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
       requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
-      if (shouldInvalidateVirtualFileSystem(result)) {
-        if (result.mutated) syncSortValuesForDocument(document);
-        invalidateHvyCliSessionVirtualFileSystem(session);
-      }
-      scratchpadTouched = scratchpadTouched || heredoc.path === 'scratchpad.txt' || heredoc.path === '/scratchpad.txt';
+          scratchpadTouched = scratchpadTouched || heredoc.path === 'scratchpad.txt' || heredoc.path === '/scratchpad.txt';
     }
     updateScratchpadCommandHistory(session, expandedInput);
     const output = truncateCliOutput(outputs.join('\n'));
-    const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
+    const result = { cwd: session.cwd, output, mutated, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
     if (scratchpadTouched && isScratchpadTooLong(session)) {
       return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '', getScratchpadLimits(session).warningChars)}` };
     }
@@ -265,7 +232,6 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
   const pipelines = parseMiniShell(args);
   let lastProcess: HvyMiniShellProcess = { cwd: session.cwd, stdout: '', stderr: '', status: 0, mutated: false };
   let mutated = false;
-  let invalidatesVirtualFileSystem = false;
   let mutatedPaths: string[] | undefined;
   let refreshSectionPaths: string[] | undefined;
   let requiresFullRefresh = false;
@@ -279,8 +245,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
       continue;
     }
 
-    const fs = buildSessionVirtualFileSystem(document, session);
-    addSessionFiles(fs, document, session);
+    const fs = openSessionVirtualFileSystem(document, session);
     enforceScratchpadHardCap(session);
     lastProcess = await measureAsyncPhase('cli.command.pipeline', { command: pipeline.tokens.join(' ') }, () =>
       executeMiniShellPipeline({ document, fs, cwd: session.cwd, session, pathNaming: session.virtualPathNaming }, pipeline.commands)
@@ -288,14 +253,9 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     enforceScratchpadHardCap(session);
     session.cwd = lastProcess.cwd;
     mutated = mutated || lastProcess.mutated;
-    invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(lastProcess);
     mutatedPaths = mergeMutatedPaths(mutatedPaths, lastProcess.mutatedPaths);
     refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, lastProcess.refreshSectionPaths);
     requiresFullRefresh = requiresFullRefresh || Boolean(lastProcess.requiresFullRefresh);
-    if (shouldInvalidateVirtualFileSystem(lastProcess)) {
-      if (lastProcess.mutated) syncSortValuesForDocument(document);
-      invalidateHvyCliSessionVirtualFileSystem(session);
-    }
     scratchpadTouched = scratchpadTouched || pipeline.tokens.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
     previousStatus = lastProcess.status;
 
@@ -317,20 +277,20 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     ? outputParts.join('\n')
     : lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout;
   const output = truncateCliOutput(rawOutput, { preserveFindWarning: true });
-  const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
+  const result = { cwd: session.cwd, output, mutated, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
     return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '', getScratchpadLimits(session).warningChars)}` };
   }
   return result;
 }
 
-export function executeHvyCliCommandSync(document: VisualDocument, input: string, cwd = '/'): HvyCliExecution {
-  const result = executeHvyCliCommandSyncImpl(document, input, cwd);
-  if (result.mutated && shouldInvalidateVirtualFileSystem(result)) syncSortValuesForDocument(document);
+export function executeHvyCliCommandSync(document: VisualDocument, input: string, session: HvyCliSession = createHvyCliSession()): HvyCliExecution {
+  const result = executeHvyCliCommandSyncImpl(document, input, session);
   return result;
 }
 
-function executeHvyCliCommandSyncImpl(document: VisualDocument, input: string, cwd: string): HvyCliExecution {
+function executeHvyCliCommandSyncImpl(document: VisualDocument, input: string, session: HvyCliSession): HvyCliExecution {
+  const cwd = session.cwd;
   const expandedInput = expandShellSubstitutions(input, new Date());
   const args = tokenizeCommand(expandedInput);
   if (args.length === 0) {
@@ -340,10 +300,7 @@ function executeHvyCliCommandSyncImpl(document: VisualDocument, input: string, c
     throw new Error('doc.cli.run supports one command at a time without pipes, command chaining, or redirection.');
   }
   const [command = '', ...rest] = args;
-  const session = createHvyCliSession();
-  session.cwd = cwd;
-  const fs = buildSessionVirtualFileSystem(document, session);
-  addSessionFiles(fs, document, session);
+  const fs = openSessionVirtualFileSystem(document, session);
   const ctx: HvyCliCommandContext = { document, fs, cwd, session };
   if (command === 'help' || command === 'man') {
     return { cwd, output: helpFor(rest.join(' ')), mutated: false };
@@ -395,15 +352,15 @@ function executeHvyCliCommandSyncImpl(document: VisualDocument, input: string, c
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, rest);
-    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'printf') {
     const result = commandPrintf(ctx, rest);
-    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'sed') {
     const result = commandSed(ctx, rest);
-    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'hvy') {
     if (rest[0] === 'lint') {
@@ -440,16 +397,13 @@ function executeHvyCliCommandSyncImpl(document: VisualDocument, input: string, c
   throw new Error(`doc.cli.run does not support command "${command}".`);
 }
 
-export function writeHvyVirtualFileSync(document: VisualDocument, path: string, content: string, cwd = '/'): HvyCliExecution {
+export function writeHvyVirtualFileSync(document: VisualDocument, path: string, content: string, session: HvyCliSession = createHvyCliSession()): HvyCliExecution {
   if (/(^|\/)raw\.hvy$/i.test(path.trim())) {
     throw new Error('doc.cli.write does not write raw.hvy files. Use structured CLI commands and writable component files instead.');
   }
-  const session = createHvyCliSession();
-  session.cwd = cwd;
-  const fs = buildSessionVirtualFileSystem(document, session);
-  addSessionFiles(fs, document, session);
-  const result = writeVirtualFile({ fs, cwd, session }, path, content, false, 'doc.cli.write');
-  return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+  const fs = openSessionVirtualFileSystem(document, session);
+  const result = writeVirtualFile({ fs, cwd: session.cwd, session }, path, content, false, 'doc.cli.write');
+  return { cwd: session.cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
 }
 
 function truncateCliOutput(output: string, options: { preserveFindWarning?: boolean } = {}): string {
@@ -535,15 +489,15 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'printf') {
     const result = commandPrintf(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'sed') {
     const result = commandSed(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'hvy') {
     if (args[0] === 'lint') {
@@ -552,6 +506,7 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
         if (fixed.length === 0) {
           return { cwd: ctx.cwd, output: 'No lint fixes applied.', mutated: false };
         }
+        syncSortValuesForDocument(ctx.document);
         return { cwd: ctx.cwd, output: ['Applied lint fixes:', ...fixed.map((line) => `- ${line}`)].join('\n'), mutated: true };
       }
       return { cwd: ctx.cwd, output: formatHvyCliLintIssues(await runHvyCliLinter(ctx.document, ctx.fs)), mutated: false };
@@ -681,18 +636,18 @@ function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: str
   }
   if (command === 'sed') {
     const result = commandSed(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'sort' || command === 'uniq' || command === 'wc' || command === 'tr') {
     return runTextCommand(ctx, command, args);
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'printf') {
     const result = commandPrintf(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, mutatedPaths: result.mutatedPaths };
   }
   throw new Error(`doc.cli.run does not support command "hvy ${command}".`);
 }
@@ -817,10 +772,14 @@ function commandLs(ctx: HvyCliCommandContext, args: string[]): string {
     return withWarnings(formatEntry(ctx.fs, entry), warnings);
   }
   if (recursive) {
-    const entries = [...ctx.fs.entries.values()]
-      .filter((candidate) => candidate.path === target || candidate.path.startsWith(target === '/' ? '/' : `${target}/`))
-      .map((candidate) => candidate.path);
-    return withWarnings(entries.join('\n'), warnings);
+    // Walk directories in listing order so the output depends on the document, not on how the entries were built.
+    const paths: string[] = [];
+    const visit = (path: string) => {
+      if (ctx.fs.entries.has(path)) paths.push(path);
+      for (const childPath of ctx.fs.entries.listChildPaths(path)) visit(childPath);
+    };
+    visit(target);
+    return withWarnings(paths.join('\n'), warnings);
   }
   const listing = [
     'type name [editable] | description | preview',
@@ -839,14 +798,14 @@ function hasGlobPattern(path: string): boolean {
   return path.includes('*') || path.includes('?');
 }
 
-function expandVirtualPathGlob(fs: ReturnType<typeof buildHvyVirtualFileSystem>, normalizedPattern: string): HvyVirtualEntry[] {
+function expandVirtualPathGlob(fs: HvyVirtualFileSystem, normalizedPattern: string): HvyVirtualEntry[] {
   const regex = globToPathRegExp(normalizedPattern);
   return [...fs.entries.values()]
     .filter((entry) => regex.test(entry.path))
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function expandVirtualPathOperands(fs: ReturnType<typeof buildHvyVirtualFileSystem>, cwd: string, args: string[]): string[] {
+function expandVirtualPathOperands(fs: HvyVirtualFileSystem, cwd: string, args: string[]): string[] {
   return args.flatMap((arg) => {
     if (!hasGlobPattern(arg)) {
       return [arg];
@@ -890,7 +849,7 @@ function formatMetadataDescription(label: string, value: Record<string, unknown>
   return [label, ...(id ? [`  id: ${id}`] : []), `  description: ${description.replace(/\s+/g, ' ')}`].join('\n');
 }
 
-function readJsonFileFromVirtualPath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): Record<string, unknown> | null {
+function readJsonFileFromVirtualPath(fs: HvyVirtualFileSystem, path: string): Record<string, unknown> | null {
   const entry = fs.entries.get(path);
   if (!entry || entry.kind !== 'file') {
     return null;
@@ -903,7 +862,7 @@ function readJsonFileFromVirtualPath(fs: ReturnType<typeof buildHvyVirtualFileSy
   }
 }
 
-function readJsonArrayFromVirtualPath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): unknown[] {
+function readJsonArrayFromVirtualPath(fs: HvyVirtualFileSystem, path: string): unknown[] {
   const entry = fs.entries.get(path);
   if (!entry || entry.kind !== 'file') {
     return [];
@@ -916,7 +875,7 @@ function readJsonArrayFromVirtualPath(fs: ReturnType<typeof buildHvyVirtualFileS
   }
 }
 
-function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+function inferComponentNameForDirectory(fs: HvyVirtualFileSystem, directoryPath: string): string {
   const componentJsonFiles = listDirectory(fs, directoryPath)
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
     .map((entry) => entry.path.split('/').pop() ?? '')
@@ -931,16 +890,25 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
   return componentJsonFiles[0]?.replace(/\.json$/i, '') ?? '';
 }
 
-function addSessionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  measurePhase('cli.sessionFiles.add', { entriesBefore: fs.entries.size }, () => {
+/**
+ * The session's view of the document: the live document tree with the session's raw HVY files attached to its
+ * nodes, plus files that exist only in the session (scratchpad, read-only files, drafts). Cheap to create, so each
+ * command opens its own; there is no copy of the document to keep in sync.
+ */
+function openSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): HvyVirtualFileSystem {
+  session.virtualPathNaming ??= { anonymousBlockNamesById: {} };
+  session.virtualPathNaming.anonymousBlockNamesById ??= {};
+  const fs = createHvyVirtualFileSystem(document, session.virtualPathNaming, (entries, node) => addRawHvyNodeFiles(entries, node, document, session));
+  measurePhase('cli.sessionFiles.add', {}, () => {
     addSessionScratchpadFile(fs, session);
     addSessionReadOnlyFiles(fs, session);
-    addSessionRawHvyFiles(fs, document, session);
+    addSessionRawWipFiles(fs, session);
     addSessionModifiedFiles(fs, session);
   });
+  return fs;
 }
 
-function addSessionReadOnlyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+function addSessionReadOnlyFiles(fs: HvyVirtualFileSystem, session: HvyCliSession): void {
   for (const [path, content] of Object.entries(session.readOnlyFiles ?? {})) {
     if (!path.startsWith('/') || path === '/') {
       continue;
@@ -949,16 +917,16 @@ function addSessionReadOnlyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem
     for (let index = 1; index < parts.length; index += 1) {
       const directoryPath = `/${parts.slice(0, index).join('/')}`;
       if (!fs.entries.has(directoryPath)) {
-        fs.entries.set(directoryPath, { kind: 'dir', path: directoryPath });
+        fs.entries.set(directoryPath, { kind: 'dir', path: directoryPath }, 'before-node-files');
       }
     }
     if (!fs.entries.has(path)) {
-      fs.entries.set(path, { kind: 'file', path, read: () => content });
+      fs.entries.set(path, { kind: 'file', path, read: () => content }, 'before-node-files');
     }
   }
 }
 
-function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+function addSessionScratchpadFile(fs: HvyVirtualFileSystem, session: HvyCliSession): void {
   session.scratchpadContent ??= defaultScratchpadContent();
   session.scratchpadCommandsSinceEdit ??= [];
   fs.entries.set('/scratchpad.txt', {
@@ -970,22 +938,10 @@ function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSyste
       session.scratchpadEdited = true;
       session.scratchpadTouchedThisCommand = true;
     },
-  });
+  }, 'before-node-files');
 }
 
-function addSessionRawHvyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  if (virtualFileSystemsWithRawSessionFiles.has(fs)) {
-    addSessionRawWipFiles(fs, session);
-    recordMeasurement('cli.sessionFiles.rawHvy.skip', 0, { reason: 'already-added', entries: fs.entries.size });
-    return;
-  }
-  addSessionRawDocumentFiles(fs, document, session);
-  addSessionRawSectionFiles(fs, document, session);
-  addSessionRawComponentFiles(fs, document, session);
-  virtualFileSystemsWithRawSessionFiles.add(fs);
-}
-
-function addSessionRawWipFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+function addSessionRawWipFiles(fs: HvyVirtualFileSystem, session: HvyCliSession): void {
   if (typeof session.rawWipContent === 'string') {
     fs.entries.set('/raw.wip.hvy', {
       kind: 'file',
@@ -1022,7 +978,7 @@ function addSessionRawWipFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>,
   }
 }
 
-function addSessionModifiedFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+function addSessionModifiedFiles(fs: HvyVirtualFileSystem, session: HvyCliSession): void {
   session.modifiedContentByPath ??= {};
   for (const path of Object.keys(session.modifiedContentByPath)) {
     fs.entries.set(path, {
@@ -1037,239 +993,174 @@ function addSessionModifiedFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem
   }
 }
 
-function addSessionRawDocumentFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  const serialized = measurePhase('cli.sessionFiles.rawDocument.serialize', {}, () => serializeDocument(document));
-  if (serialized.length < RAW_HVY_MAX_CHARS) {
-    fs.entries.set('/raw.hvy', {
-      kind: 'file',
-      path: '/raw.hvy',
-      read: () => serializeDocument(document),
-      write: (content) => {
-        const result = deserializeDocumentWithDiagnostics(content, document.extension === '.md' ? '.hvy' : document.extension);
-        const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-        if (errors.length > 0) {
-          session.rawWipContent = content;
-          throw new Error([
-            '/raw.hvy did not parse; document was not changed.',
-            '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.',
-            '',
-            ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
-          ].join('\n'));
-        }
-        const tagIssue = validateDocumentTagsForRaw(result.document);
-        if (tagIssue) {
-          session.rawWipContent = content;
-          throw new Error(['/raw.hvy did not parse; document was not changed.', '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.', '', tagIssue].join('\n'));
-        }
-        replaceDocumentContents(document, result.document);
-        session.rawWipContent = undefined;
-      },
-    });
-  } else {
-    fs.entries.set('/raw-preview.hvy.txt', {
-      kind: 'file',
-      path: '/raw-preview.hvy.txt',
-      read: () => formatRawHvyPreview(serialized),
-    });
+function isSerializedDocumentUnderRawLimit(document: VisualDocument): boolean {
+  // The serialized body contains every top-level section fragment verbatim, so their combined
+  // length is a lower bound that rules out large documents without serializing them again.
+  let sectionChars = 0;
+  for (const section of document.sections) {
+    if (section.isGhost) continue;
+    sectionChars += serializeSectionFragment(section, document.meta).replace(/^\n+|\n+$/g, '').length;
+    if (sectionChars >= RAW_HVY_MAX_CHARS) return false;
   }
+  return measurePhase('cli.sessionFiles.rawDocument.serialize', {}, () => serializeDocument(document)).length < RAW_HVY_MAX_CHARS;
+}
 
-  if (typeof session.rawWipContent === 'string') {
-    fs.entries.set('/raw.wip.hvy', {
-      kind: 'file',
-      path: '/raw.wip.hvy',
-      read: () => session.rawWipContent ?? '',
-      write: (content) => {
-        session.rawWipContent = content;
-      },
-    });
+/** Attaches each body node's raw HVY file. Whether it is raw.hvy or a preview depends on its serialized size, so that is only checked when the file is looked up or listed. */
+function addRawHvyNodeFiles(entries: HvyVirtualEntrySink, node: HvyVirtualNodeFilesTarget, document: VisualDocument, session: HvyCliSession): void {
+  if (node.kind === 'document') {
+    addRawDocumentFiles(entries, document, session);
+  } else if (node.kind === 'section') {
+    addRawSectionFiles(entries, document, session, node.path, node.section);
+  } else {
+    addRawComponentFiles(entries, document, session, node.path, node.block, node.listItem);
   }
 }
 
-function addSessionRawSectionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  measurePhase('cli.sessionFiles.rawSections.add', { entries: fs.entries.size }, () => {
-    session.rawSectionWipContentByPath ??= {};
-    const sectionsByPath = measurePhase('cli.sessionFiles.rawSections.lookupBuild', {}, () =>
-      buildVirtualDirectorySectionLookupWithAliases(document, session.virtualPathNaming)
-    );
-    let candidateCount = 0;
-    let addedCount = 0;
-    const startedAt = performance.now();
-    for (const [sectionPath, section] of sectionsByPath) {
-      const entry = fs.entries.get(sectionPath);
-      if (entry?.kind !== 'dir') {
-        continue;
+function once<T>(compute: () => T): () => T {
+  let result: { value: T } | null = null;
+  return () => {
+    result ??= { value: compute() };
+    return result.value;
+  };
+}
+
+function addRawDocumentFiles(entries: HvyVirtualEntrySink, document: VisualDocument, session: HvyCliSession): void {
+  const isUnderRawLimit = once(() => isSerializedDocumentUnderRawLimit(document));
+  entries.defer('/raw.hvy', () => !isUnderRawLimit() ? undefined : {
+    kind: 'file',
+    path: '/raw.hvy',
+    read: () => serializeDocument(document),
+    write: (content) => {
+      const result = deserializeDocumentWithDiagnostics(content, document.extension === '.md' ? '.hvy' : document.extension);
+      const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+      if (errors.length > 0) {
+        session.rawWipContent = content;
+        throw new Error([
+          '/raw.hvy did not parse; document was not changed.',
+          '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.',
+          '',
+          ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
+        ].join('\n'));
       }
-      candidateCount += 1;
-      addedCount += 1;
-      addRawSectionFilesForSection(fs, document, session, entry.path, section);
-    }
-    if (isMeasurementEnabled()) {
-      recordMeasurement('cli.sessionFiles.rawSections.counts', performance.now() - startedAt, {
-        candidateCount,
-        addedCount,
-      });
-    }
+      const tagIssue = validateDocumentTagsForRaw(result.document);
+      if (tagIssue) {
+        session.rawWipContent = content;
+        throw new Error(['/raw.hvy did not parse; document was not changed.', '/raw.wip.hvy now contains the failed draft so you can inspect or repair it.', '', tagIssue].join('\n'));
+      }
+      replaceDocumentContents(document, result.document);
+      syncSortValuesForDocument(document);
+      session.rawWipContent = undefined;
+    },
+  });
+  entries.defer('/raw-preview.hvy.txt', () => isUnderRawLimit() ? undefined : {
+    kind: 'file',
+    path: '/raw-preview.hvy.txt',
+    read: () => formatRawHvyPreview(serializeDocument(document)),
   });
 }
 
-function addRawSectionFilesForSection(
-  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+function addRawSectionFiles(
+  entries: HvyVirtualEntrySink,
   document: VisualDocument,
   session: HvyCliSession,
   sectionPath: string,
   section: VisualSection
 ): void {
-  const fragment = serializeSectionFragment(section, document.meta);
-  if (fragment.length < RAW_HVY_MAX_CHARS) {
-    fs.entries.set(`${sectionPath}/raw.hvy`, {
-      kind: 'file',
-      path: `${sectionPath}/raw.hvy`,
-      read: () => serializeSectionFragment(section, document.meta),
-      write: (content) => {
-        const directiveIssue = validateRawSectionFragmentShape(content);
-        if (directiveIssue) {
-          failRawSectionWrite(session, sectionPath, content, [directiveIssue]);
-        }
-        const result = deserializeDocumentWithDiagnostics(content, document.extension === '.md' ? '.hvy' : document.extension);
-        const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-        if (errors.length > 0 || result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1) {
-          failRawSectionWrite(
-            session,
-            sectionPath,
-            content,
-            [
-              ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
-              ...(result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1
-                ? ['error: raw section fragments must parse into exactly one section.']
-                : []),
-            ]
-          );
-        }
-        const [nextSection] = result.document.sections.filter((candidate) => !candidate.isGhost);
-        if (!nextSection) {
-          failRawSectionWrite(session, sectionPath, content, ['error: raw section fragments must parse into exactly one section.']);
-        }
-        const tagIssue = validateSectionTagsForRaw(nextSection);
-        if (tagIssue) {
-          failRawSectionWrite(session, sectionPath, content, [tagIssue]);
-        }
-        replaceSectionContents(section, nextSection);
-        delete session.rawSectionWipContentByPath?.[`${sectionPath}/raw.wip.hvy`];
-      },
-    });
-  } else {
-    fs.entries.set(`${sectionPath}/raw-preview.hvy.txt`, {
-      kind: 'file',
-      path: `${sectionPath}/raw-preview.hvy.txt`,
-      read: () => formatRawHvyPreview(fragment),
-    });
-  }
-
-  const wipPath = `${sectionPath}/raw.wip.hvy`;
-  if (typeof session.rawSectionWipContentByPath?.[wipPath] === 'string') {
-    fs.entries.set(wipPath, {
-      kind: 'file',
-      path: wipPath,
-      read: () => session.rawSectionWipContentByPath?.[wipPath] ?? '',
-      write: (content) => {
-        session.rawSectionWipContentByPath ??= {};
-        session.rawSectionWipContentByPath[wipPath] = content;
-      },
-    });
-  }
-}
-
-function addSessionRawComponentFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  measurePhase('cli.sessionFiles.rawComponents.add', { entries: fs.entries.size }, () => {
-    session.rawWipContentByPath ??= {};
-    const blocksByPath = measurePhase('cli.sessionFiles.rawComponents.lookupBuild', {}, () =>
-      buildVirtualDirectoryBlockLookupWithAliases(document, session.virtualPathNaming)
-    );
-    let candidateCount = 0;
-    let addedCount = 0;
-    let lookupMs = 0;
-    const startedAt = performance.now();
-    for (const [path, block] of blocksByPath) {
-      const entry = fs.entries.get(path);
-      if (entry?.kind !== 'dir') {
-        continue;
+  const fragment = once(() => serializeSectionFragment(section, document.meta));
+  entries.defer(`${sectionPath}/raw.hvy`, () => fragment().length >= RAW_HVY_MAX_CHARS ? undefined : {
+    kind: 'file',
+    path: `${sectionPath}/raw.hvy`,
+    read: () => serializeSectionFragment(section, document.meta),
+    write: (content, addressedPath = `${sectionPath}/raw.hvy`) => {
+      // Report and keep the draft under the path the write came through, such as an /id alias.
+      const rawDirectoryPath = addressedPath.replace(/\/raw\.hvy$/, '');
+      const directiveIssue = validateRawSectionFragmentShape(content);
+      if (directiveIssue) {
+        failRawSectionWrite(session, rawDirectoryPath, content, [directiveIssue]);
       }
-      candidateCount += 1;
-      const lookupStartedAt = performance.now();
-      const resolvedBlock = block;
-      lookupMs += performance.now() - lookupStartedAt;
-      if (!resolvedBlock) {
-        continue;
+      const result = deserializeDocumentWithDiagnostics(
+        wrapHvySectionFragmentAsDocument(content, document.meta),
+        document.extension === '.md' ? '.hvy' : document.extension
+      );
+      const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+      if (errors.length > 0 || result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1) {
+        failRawSectionWrite(
+          session,
+          sectionPath,
+          content,
+          [
+            ...errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`),
+            ...(result.document.sections.filter((candidate) => !candidate.isGhost).length !== 1
+              ? ['error: raw section fragments must parse into exactly one section.']
+              : []),
+          ]
+        );
       }
-      addedCount += 1;
-      addRawComponentFilesForBlock(fs, document, session, entry.path, resolvedBlock);
-    }
-    if (isMeasurementEnabled()) {
-      recordMeasurement('cli.sessionFiles.rawComponents.counts', performance.now() - startedAt, {
-        candidateCount,
-        addedCount,
-        lookupMs: Number(lookupMs.toFixed(2)),
-      });
-    }
+      const [nextSection] = result.document.sections.filter((candidate) => !candidate.isGhost);
+      if (!nextSection) {
+        failRawSectionWrite(session, rawDirectoryPath, content, ['error: raw section fragments must parse into exactly one section.']);
+      }
+      const tagIssue = validateSectionTagsForRaw(nextSection);
+      if (tagIssue) {
+        failRawSectionWrite(session, rawDirectoryPath, content, [tagIssue]);
+      }
+      replaceSectionContents(section, nextSection);
+      syncSortValuesForSection(document.meta, section);
+      delete session.rawSectionWipContentByPath?.[`${rawDirectoryPath}/raw.wip.hvy`];
+    },
+  });
+  entries.defer(`${sectionPath}/raw-preview.hvy.txt`, () => fragment().length < RAW_HVY_MAX_CHARS ? undefined : {
+    kind: 'file',
+    path: `${sectionPath}/raw-preview.hvy.txt`,
+    read: () => formatRawHvyPreview(fragment()),
   });
 }
 
-function addRawComponentFilesForBlock(
-  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+function addRawComponentFiles(
+  entries: HvyVirtualEntrySink,
   document: VisualDocument,
   session: HvyCliSession,
   blockPath: string,
-  block: VisualBlock
+  block: VisualBlock,
+  listItem: VisualBlock | undefined
 ): void {
-  const fragment = serializeBlockFragment(block, document.meta);
-  if (fragment.length < RAW_HVY_MAX_CHARS) {
-    fs.entries.set(`${blockPath}/raw.hvy`, {
-      kind: 'file',
-      path: `${blockPath}/raw.hvy`,
-      read: () => serializeBlockFragment(block, document.meta),
-      write: (content) => {
-        const directiveIssue = validateRawComponentFragmentShape(content);
-        if (directiveIssue) {
-          failRawComponentWrite(session, blockPath, content, [directiveIssue]);
-        }
-        const parsed = parseAiBlockEditResponse(content, document.meta);
-        if (parsed.hasErrors || !parsed.block) {
-          failRawComponentWrite(
-            session,
-            blockPath,
-            content,
-            parsed.issues.map((issue) => `${issue.severity}: ${issue.message}${issue.hint ? ` ${issue.hint}` : ''}`)
-          );
-        }
-        const tagIssue = validateBlockTagsForRaw(parsed.block);
-        if (tagIssue) {
-          failRawComponentWrite(session, blockPath, content, [tagIssue]);
-        }
-        preserveOmittedEmptyTextPlaceholders(block, parsed.block, serializeBlockFragment(block, document.meta), content);
-        replaceBlockContents(block, parsed.block);
-        delete session.rawWipContentByPath?.[`${blockPath}/raw.wip.hvy`];
-      },
-    });
-  } else {
-    fs.entries.set(`${blockPath}/raw-preview.hvy.txt`, {
-      kind: 'file',
-      path: `${blockPath}/raw-preview.hvy.txt`,
-      read: () => formatRawHvyPreview(fragment),
-    });
-  }
-
-  const wipPath = `${blockPath}/raw.wip.hvy`;
-  if (typeof session.rawWipContentByPath?.[wipPath] === 'string') {
-    fs.entries.set(wipPath, {
-      kind: 'file',
-      path: wipPath,
-      read: () => session.rawWipContentByPath?.[wipPath] ?? '',
-      write: (content) => {
-        session.rawWipContentByPath ??= {};
-        session.rawWipContentByPath[wipPath] = content;
-      },
-    });
-  }
+  const fragment = once(() => serializeBlockFragment(block, document.meta));
+  entries.defer(`${blockPath}/raw.hvy`, () => fragment().length >= RAW_HVY_MAX_CHARS ? undefined : {
+    kind: 'file',
+    path: `${blockPath}/raw.hvy`,
+    read: () => serializeBlockFragment(block, document.meta),
+    write: (content, addressedPath = `${blockPath}/raw.hvy`) => {
+      // Report and keep the draft under the path the write came through, such as an /id alias.
+      const rawDirectoryPath = addressedPath.replace(/\/raw\.hvy$/, '');
+      const directiveIssue = validateRawComponentFragmentShape(content);
+      if (directiveIssue) {
+        failRawComponentWrite(session, rawDirectoryPath, content, [directiveIssue]);
+      }
+      const parsed = parseAiBlockEditResponse(content, document.meta);
+      if (parsed.hasErrors || !parsed.block) {
+        failRawComponentWrite(
+          session,
+          blockPath,
+          content,
+          parsed.issues.map((issue) => `${issue.severity}: ${issue.message}${issue.hint ? ` ${issue.hint}` : ''}`)
+        );
+      }
+      const tagIssue = validateBlockTagsForRaw(parsed.block);
+      if (tagIssue) {
+        failRawComponentWrite(session, rawDirectoryPath, content, [tagIssue]);
+      }
+      preserveOmittedEmptyTextPlaceholders(block, parsed.block, serializeBlockFragment(block, document.meta), content);
+      replaceBlockContents(block, parsed.block);
+      if (listItem) syncSortValuesForListItem(document.meta, listItem);
+      syncSortValuesInsideBlock(document.meta, block);
+      delete session.rawWipContentByPath?.[`${rawDirectoryPath}/raw.wip.hvy`];
+    },
+  });
+  entries.defer(`${blockPath}/raw-preview.hvy.txt`, () => fragment().length < RAW_HVY_MAX_CHARS ? undefined : {
+    kind: 'file',
+    path: `${blockPath}/raw-preview.hvy.txt`,
+    read: () => formatRawHvyPreview(fragment()),
+  });
 }
 
 function validateRawComponentFragmentShape(content: string): string {
@@ -1389,12 +1280,13 @@ function replaceSectionContents(target: VisualSection, source: VisualSection): v
   target.title = source.title;
   target.expanded = source.expanded;
   target.highlight = source.highlight;
+  target.startOnNewPage = source.startOnNewPage;
   target.css = source.css;
   target.tags = source.tags;
   target.description = source.description;
   target.location = source.location;
   target.hideIfUnmodified = source.hideIfUnmodified;
-  target.exclude_from_import = source.exclude_from_import;
+  target.excludeFromImport = source.excludeFromImport;
   target.blocks = source.blocks;
   target.key = key;
 }
@@ -1577,7 +1469,7 @@ function componentDirectoryForReadableTarget(ctx: HvyCliCommandContext, path: st
   return componentName && fileName === `${componentName}.txt` ? parent : '';
 }
 
-function findComponentDirectoryAtOrAbove(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+function findComponentDirectoryAtOrAbove(fs: HvyVirtualFileSystem, path: string): string {
   let current = path;
   while (current && current !== '/' && current !== '/body' && current !== '/attachments') {
     if (fs.entries.get(current)?.kind === 'dir' && inferComponentNameForDirectory(fs, current)) {
@@ -1620,7 +1512,7 @@ function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: str
   ].join('\n');
 }
 
-function commandHeadTail(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[], command: 'head' | 'tail'): string {
+function commandHeadTail(ctx: { fs: HvyVirtualFileSystem; cwd: string }, args: string[], command: 'head' | 'tail'): string {
   const { count, paths } = parseLineCount(args, 5);
   if (paths.length === 0) {
     throw new Error(`${command}: missing file operand`);
@@ -1633,7 +1525,7 @@ function commandHeadTail(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>
     .join('\n');
 }
 
-function commandNl(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+function commandNl(ctx: { fs: HvyVirtualFileSystem; cwd: string }, args: string[]): string {
   const parsed = parseNlArgs(args);
   if (parsed.paths.length === 0) {
     throw new Error('nl: missing file operand');
@@ -1696,7 +1588,6 @@ async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<H
 
   const commandOutputs: string[] = [];
   let mutated = false;
-  let invalidatesVirtualFileSystem = false;
   let mutatedPaths: string[] | undefined;
   let refreshSectionPaths: string[] | undefined;
   let requiresFullRefresh = false;
@@ -1710,7 +1601,6 @@ async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<H
     }
     const result = await runCommand(ctx, command, commandRest);
     mutated = mutated || result.mutated;
-    invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
     mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
     refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
     requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
@@ -1719,7 +1609,7 @@ async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<H
       commandOutputs.push(result.output);
     }
   }
-  return { cwd: ctx.cwd, output: withWarnings(commandOutputs.join('\n'), warnings), mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
+  return { cwd: ctx.cwd, output: withWarnings(commandOutputs.join('\n'), warnings), mutated, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
 }
 
 function commandFindWithoutExec(ctx: HvyCliCommandContext, args: string[]): string {
@@ -1735,8 +1625,7 @@ function collectFindMatches(ctx: HvyCliCommandContext, parsed: ReturnType<typeof
   const root = resolveVirtualPath(ctx.fs, ctx.cwd, parsed.path);
   const regex = parsed.namePattern ? globToRegExp(parsed.namePattern) : null;
   const rootDepth = depthForPath(root);
-  const matches = [...ctx.fs.entries.values()]
-    .filter((entry) => entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))
+  const matches = [...ctx.fs.entries.entriesUnder(root)].map(([, entry]) => entry)
     .filter((entry) => !parsed.type || entry.kind === parsed.type)
     .filter((entry) => parsed.maxDepth === null || depthForPath(entry.path) - rootDepth <= parsed.maxDepth)
     .filter((entry) => !regex || regex.test(entry.path.split('/').pop() ?? ''))
@@ -1750,7 +1639,7 @@ function collectFindMatches(ctx: HvyCliCommandContext, parsed: ReturnType<typeof
   };
 }
 
-function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): string {
+function commandRg(ctx: { fs: HvyVirtualFileSystem; cwd: string }, args: string[]): string {
   const parsed = parseRgArgs(args);
   if (!parsed.pattern) {
     throw new Error('rg: missing search pattern');
@@ -1760,8 +1649,8 @@ function commandRg(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
   const includeRegexes = parsed.includeGlobs.map(globToRegExp);
   const lines: string[] = [];
   const matchingFiles = new Set<string>();
-  for (const entry of [...ctx.fs.entries.values()].sort((left, right) => left.path.localeCompare(right.path))) {
-    if (entry.kind !== 'file' || !(entry.path === root || entry.path.startsWith(root === '/' ? '/' : `${root}/`))) {
+  for (const [, entry] of [...ctx.fs.entries.entriesUnder(root)].sort(([left], [right]) => left.localeCompare(right))) {
+    if (entry.kind !== 'file') {
       continue;
     }
     if (!isSearchVisibleFile(entry.path, root)) {
@@ -1941,6 +1830,9 @@ function commandPruneXref(document: VisualDocument, args: string[]): string {
   }
   const removedPaths = collectXrefVirtualPaths(document, targetId);
   const removedCount = pruneXrefs(document, targetId);
+  if (removedCount > 0) {
+    syncSortValuesForDocument(document);
+  }
   return removedCount > 0
     ? [`Removed ${removedCount} xref-card${removedCount === 1 ? '' : 's'} pointing to ${targetId}.`, ...removedPaths.map((path) => `  ${path}`)].join('\n')
     : `No xref-cards point to ${targetId}.`;
@@ -1978,7 +1870,7 @@ function pruneXrefsFromBlocks(document: VisualDocument, blocks: VisualBlock[], t
     if (!block) {
       continue;
     }
-    if (resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'xref-card' && block.schema.xrefTarget === targetId) {
+    if (isXrefCardPointingAt(document, block, targetId)) {
       blocks.splice(index, 1);
       removed += 1;
       continue;
@@ -1990,20 +1882,23 @@ function pruneXrefsFromBlocks(document: VisualDocument, blocks: VisualBlock[], t
   return removed;
 }
 
+/** Directories of the xref cards pointing at `targetId`: the cards `pruneXrefs` removes. */
 function collectXrefVirtualPaths(document: VisualDocument, targetId: string): string[] {
-  const fs = buildHvyVirtualFileSystem(document);
-  return [...fs.entries.values()]
-    .filter((entry): entry is HvyVirtualFile => entry.kind === 'file' && /\/[^/]+\.json$/.test(entry.path))
-    .filter((entry) => !entry.path.startsWith('/id/'))
-    .filter((entry) => {
-      try {
-        const value = JSON.parse(entry.read()) as { xrefTarget?: unknown };
-        return value.xrefTarget === targetId;
-      } catch {
-        return false;
-      }
-    })
-    .map((entry) => entry.path.replace(/\/[^/]+\.json$/, ''));
+  // Finding the cards is a plain walk over the blocks; directories are only listed along each card's ancestors.
+  const ancestries: HvyBodyBlockAncestry[] = [];
+  visitBodyBlocks(document, (block, ancestry) => {
+    if (isXrefCardPointingAt(document, block, targetId)) {
+      ancestries.push(ancestry());
+    }
+  });
+  if (ancestries.length === 0) {
+    return [];
+  }
+  const fs = createHvyVirtualFileSystem(document);
+  return ancestries.map((ancestry) => findVirtualDirectoryForAncestry(fs, ancestry)).filter((path): path is string => path !== null);
+}
+function isXrefCardPointingAt(document: VisualDocument, block: VisualBlock, targetId: string): boolean {
+  return block.schema.xrefTarget === targetId && resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'xref-card';
 }
 
 function removeDocumentDirectory(document: VisualDocument, path: string, pathNaming?: HvyVirtualPathNamingState): void {
@@ -2015,44 +1910,54 @@ function removeDocumentBlockDirectory(document: VisualDocument, path: string, pa
   if (!block) {
     throw new Error(`mv: can only move component directories: ${path}`);
   }
-  const removed = removeDocumentDirectoryInternal(document, path, pathNaming);
+  const removed = removeDocumentDirectoryInternal(document, path, pathNaming, 'mv');
   if (removed !== block) {
     throw new Error(`mv: could not remove component directory: ${path}`);
   }
   return block;
 }
 
-function removeDocumentDirectoryInternal(document: VisualDocument, path: string, pathNaming?: HvyVirtualPathNamingState): VisualBlock | VisualSection {
+/** Removes the section or component at `path`. An `/id/...` path removes the node its alias points at. */
+function removeDocumentDirectoryInternal(
+  document: VisualDocument,
+  addressedPath: string,
+  pathNaming?: HvyVirtualPathNamingState,
+  command: 'rm' | 'mv' = 'rm'
+): VisualBlock | VisualSection {
+  const path = createHvyVirtualFileSystem(document, pathNaming).entries.resolveIdAliasSourcePath(addressedPath) ?? addressedPath;
   if (path.startsWith('/templates/')) {
     const root = findTemplateDirectory(document, path);
-    if (!root) throw new Error(`rm: refusing to remove template collection: ${path}`);
+    if (!root) throw new Error(`${command}: refusing to remove template collection: ${path}`);
     if (path === root.path) {
       root.remove();
       return (root.block ?? root.section)!;
     }
-    if (path === root.contentPath) throw new Error(`rm: remove the definition directory to delete its root: ${root.path}`);
+    if (path === root.contentPath) throw new Error(`${command}: remove the definition directory to delete its root: ${root.path}`);
     const block = findBlockForVirtualDirectory(document, path, pathNaming);
     if (block && (root.block ? removeBlockReferenceFromList([root.block], block) : removeBlockReferenceFromSections([root.section!], block))) {
       root.commit();
       return block;
     }
-    throw new Error(`rm: cannot map virtual path to template node: ${path}`);
+    throw new Error(`${command}: cannot map virtual path to template node: ${path}`);
   }
 
   if (path === '/' || path === '/body' || path === '/attachments') {
-    throw new Error(`rm: refusing to remove protected directory: ${path}`);
+    throw new Error(`${command}: refusing to remove protected directory: ${path}`);
   }
   if (!path.startsWith('/body/')) {
-    throw new Error(`rm: can only remove document body directories: ${path}`);
+    throw new Error(`${command}: can only remove document body directories: ${addressedPath}`);
   }
-  const targetBlock = findBlockForVirtualDirectory(document, path, pathNaming);
-  if (targetBlock && removeBlockReferenceFromSections(document.sections, targetBlock)) {
-    return targetBlock;
+  const target = findVirtualDirectory(document, path, pathNaming);
+  if (target?.block && removeBlockReferenceFromSections(document.sections, target.block)) {
+    if (target.listItem && target.listItem !== target.block) {
+      syncSortValuesForListItem(document.meta, target.listItem);
+    }
+    return target.block;
   }
   const parts = path.split('/').filter(Boolean).slice(1);
   const removed = removeBodyPath(document.sections, parts);
   if (!removed) {
-    throw new Error(`rm: cannot map virtual path to document node: ${path}`);
+    throw new Error(`${command}: cannot map virtual path to document node: ${addressedPath}`);
   }
   return removed;
 }
@@ -2191,7 +2096,7 @@ function pathSegmentForId(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean; mutatedPaths?: string[] } {
+function commandEcho(ctx: { fs: HvyVirtualFileSystem; cwd: string }, args: string[]): { output: string; mutated: boolean; mutatedPaths?: string[] } {
   const redirectIndex = args.findIndex((arg) => arg === '>' || arg === '>>');
   if (redirectIndex < 0) {
     return { output: args.join(' '), mutated: false };
@@ -2208,7 +2113,7 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
   return writeVirtualFile(ctx, path, text, operator === '>>', 'echo');
 }
 
-function commandPrintf(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean; mutatedPaths?: string[] } {
+function commandPrintf(ctx: { fs: HvyVirtualFileSystem; cwd: string }, args: string[]): { output: string; mutated: boolean; mutatedPaths?: string[] } {
   const redirectIndex = args.findIndex((arg) => arg === '>' || arg === '>>');
   const printArgs = redirectIndex < 0 ? args : args.slice(0, redirectIndex);
   const output = formatPrintfOutput(printArgs);
@@ -2313,12 +2218,12 @@ function decodePrintfEscapes(value: string): string {
 }
 
 function writeVirtualFile(
-  ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string; session?: HvyCliSession },
+  ctx: { fs: HvyVirtualFileSystem; cwd: string; session?: HvyCliSession },
   path: string,
   content: string,
   append: boolean,
   command: string
-): { output: string; mutated: boolean; invalidatesVirtualFileSystem: boolean; mutatedPaths?: string[]; refreshSectionPaths?: string[]; requiresFullRefresh?: boolean } {
+): { output: string; mutated: boolean; mutatedPaths?: string[]; refreshSectionPaths?: string[]; requiresFullRefresh?: boolean } {
   const file = getReadableFile(ctx, path);
   if (!file.write) {
     throw new Error(`${command}: file is read-only: ${file.path}`);
@@ -2327,23 +2232,8 @@ function writeVirtualFile(
   return {
     output: `${file.path}: ${append ? 'appended' : 'written'}`,
     mutated: true,
-    invalidatesVirtualFileSystem: virtualFileWriteInvalidatesFileSystem(file.path),
     mutatedPaths: [file.path],
   };
-}
-
-function virtualFileWriteInvalidatesFileSystem(path: string): boolean {
-  const filename = path.split('/').pop() ?? '';
-  if (path === '/scratchpad.txt' || filename.includes('.modified.')) {
-    return false;
-  }
-  if (filename === 'raw.hvy' || filename === 'children-order.json' || filename === 'section.json') {
-    return true;
-  }
-  if (/\.(?:ya?ml|json)$/i.test(filename)) {
-    return filename !== 'tableRows.json' && filename !== 'tableColumns.json' && filename !== 'tableColumnProperties.json';
-  }
-  return false;
 }
 
 function writeVirtualFileContent(
@@ -2398,7 +2288,7 @@ function modifiedSidecarPath(path: string): string {
   return path.replace(/(\.(?:json|ya?ml))$/i, '.modified$1');
 }
 
-function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string; session?: HvyCliSession }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean; mutatedPaths?: string[] } {
+function commandSed(ctx: { fs: HvyVirtualFileSystem; cwd: string; session?: HvyCliSession }, args: string[]): { output: string; mutated: boolean; mutatedPaths?: string[] } {
   const parsed = parseCliFlags(args, {
     command: 'sed',
     booleanShort: ['E', 'r', 'n'],
@@ -2416,7 +2306,6 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
     }
     return { output: withWarnings(outputs.join('\n'), parsed.warnings), mutated: false };
   }
-  let invalidatesVirtualFileSystem = false;
   const mutatedPaths: string[] = [];
   return { output: withWarnings(paths
     .map((path) => {
@@ -2427,12 +2316,11 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
       const before = file.read();
       const after = applySedEditExpression(before, expression);
       writeVirtualFileContent(ctx, file, after);
-      invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || virtualFileWriteInvalidatesFileSystem(file.path);
       mutatedPaths.push(file.path);
       const changed = before === after ? 0 : 1;
       return `${file.path}: ${changed ? 'updated' : 'no matches'}`;
     })
-    .join('\n'), parsed.warnings), mutated: true, invalidatesVirtualFileSystem, mutatedPaths: mergeMutatedPaths(mutatedPaths) };
+    .join('\n'), parsed.warnings), mutated: true, mutatedPaths: mergeMutatedPaths(mutatedPaths) };
 }
 
 function applySedEditExpression(input: string, expression: string): string {
@@ -2712,9 +2600,8 @@ function readDelimitedSegment(value: string, startIndex: number, delimiter: stri
   throw new Error('sed: unterminated expression');
 }
 
-function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, path: string): HvyVirtualFile {
-  const normalized = resolveReadablePath(ctx.fs, ctx.cwd, path);
-  const entry = ctx.fs.entries.get(normalized);
+function getReadableFile(ctx: { fs: HvyVirtualFileSystem; cwd: string }, path: string): HvyVirtualFile {
+  const { path: normalized, entry } = resolveReadableEntry(ctx.fs, ctx.cwd, path);
   if (!entry) {
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, path, `No such file: ${normalized}`, 'file'));
   }
@@ -2724,32 +2611,36 @@ function getReadableFile(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>
   return entry;
 }
 
-function resolveReadablePath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, cwd: string, path: string): string {
-  const normalized = resolveVirtualPath(fs, cwd, path);
-  const entry = fs.entries.get(normalized);
-  if (entry?.kind === 'file') {
-    return normalized;
+function resolveReadablePath(fs: HvyVirtualFileSystem, cwd: string, path: string): string {
+  return resolveReadableEntry(fs, cwd, path).path;
+}
+
+/** The file a read of `path` means (a component directory means its body file), with its entry, each path looked up once. */
+function resolveReadableEntry(fs: HvyVirtualFileSystem, cwd: string, path: string): { path: string; entry: HvyVirtualEntry | undefined } {
+  const resolved = resolveVirtualEntry(fs, cwd, path);
+  if (resolved.entry?.kind === 'file') {
+    return resolved;
   }
-  if (entry?.kind === 'dir') {
-    const componentBody = readableBodyFileForDirectory(fs, normalized);
+  if (resolved.entry?.kind === 'dir') {
+    const componentBody = readableBodyFileForDirectory(fs, resolved.path);
     if (componentBody) {
-      return componentBody;
+      return { path: componentBody, entry: fs.entries.get(componentBody) };
     }
   }
-  if (normalized.endsWith('.txt')) {
-    const withoutExtension = normalized.slice(0, -'.txt'.length);
+  if (resolved.path.endsWith('.txt')) {
+    const withoutExtension = resolved.path.slice(0, -'.txt'.length);
     const directoryEntry = fs.entries.get(withoutExtension);
     if (directoryEntry?.kind === 'dir') {
       const componentBody = readableBodyFileForDirectory(fs, withoutExtension);
       if (componentBody) {
-        return componentBody;
+        return { path: componentBody, entry: fs.entries.get(componentBody) };
       }
     }
   }
-  return normalized;
+  return resolved;
 }
 
-function readableBodyFileForDirectory(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directory: string): string | null {
+function readableBodyFileForDirectory(fs: HvyVirtualFileSystem, directory: string): string | null {
   const directFiles = listDirectory(fs, directory)
     .filter((entry): entry is HvyVirtualFile => entry.kind === 'file')
     .map((entry) => entry.path)
@@ -2869,7 +2760,7 @@ function formatDateWithPattern(date: Date, pattern: string, utc: boolean): strin
 }
 
 function formatMissingPathMessage(
-  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+  fs: HvyVirtualFileSystem,
   cwd: string,
   rawPath: string,
   message: string,
@@ -2887,7 +2778,7 @@ function formatMissingPathMessage(
 }
 
 function suggestVirtualPaths(
-  fs: ReturnType<typeof buildHvyVirtualFileSystem>,
+  fs: HvyVirtualFileSystem,
   cwd: string,
   rawPath: string,
   kind?: HvyVirtualEntry['kind']
@@ -2909,7 +2800,7 @@ function suggestVirtualPaths(
   return [...new Set(suggestions)].slice(0, 4);
 }
 
-function closestExistingParent(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+function closestExistingParent(fs: HvyVirtualFileSystem, path: string): string {
   const parts = path.split('/').filter(Boolean);
   while (parts.length > 0) {
     const candidate = `/${parts.join('/')}`;
@@ -3195,11 +3086,10 @@ function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
       const root = entry.path;
       return entry.kind === 'file'
         ? [entry]
-        : [...ctx.fs.entries.values()]
+        : [...ctx.fs.entries.entriesUnder(root)]
+          .map(([, candidate]) => candidate)
           .filter((candidate): candidate is HvyVirtualFile =>
-            candidate.kind === 'file' &&
-            (candidate.path === root || candidate.path.startsWith(root === '/' ? '/' : `${root}/`)) &&
-            isSearchVisibleFile(candidate.path, root));
+            candidate.kind === 'file' && isSearchVisibleFile(candidate.path, root));
     });
     for (const candidate of candidates.sort((left, right) => left.path.localeCompare(right.path))) {
       candidate.read().split('\n').forEach((line, index) => {
@@ -3333,7 +3223,6 @@ async function executeMiniShellPipeline(ctx: HvyCliCommandContext, commands: str
   let stdout = '';
   let stderr = '';
   let mutated = false;
-  let invalidatesVirtualFileSystem = false;
   let mutatedPaths: string[] | undefined;
   let refreshSectionPaths: string[] | undefined;
   let requiresFullRefresh = false;
@@ -3344,7 +3233,6 @@ async function executeMiniShellPipeline(ctx: HvyCliCommandContext, commands: str
     stderr = result.stderr;
     status = result.status;
     mutated = mutated || result.mutated;
-    invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
     mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
     refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
     requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
@@ -3353,7 +3241,7 @@ async function executeMiniShellPipeline(ctx: HvyCliCommandContext, commands: str
       break;
     }
   }
-  return { cwd: ctx.cwd, stdout, stderr, status, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
+  return { cwd: ctx.cwd, stdout, stderr, status, mutated, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
 }
 
 async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: string[], stdin: string | null): Promise<HvyMiniShellProcess> {
@@ -3376,8 +3264,7 @@ async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: s
         stderr: '',
         status: 0,
         mutated: result.mutated,
-        invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem,
-        mutatedPaths: result.mutatedPaths,
+            mutatedPaths: result.mutatedPaths,
         refreshSectionPaths: result.refreshSectionPaths,
         requiresFullRefresh: result.requiresFullRefresh,
       };
@@ -3395,7 +3282,6 @@ async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: s
       stderr: '',
       status: 0,
       mutated: true,
-      invalidatesVirtualFileSystem: writeResult.invalidatesVirtualFileSystem,
       mutatedPaths: writeResult.mutatedPaths,
     };
   } catch (error) {
@@ -3602,7 +3488,6 @@ async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: 
 
   const commandOutputs: string[] = [];
   let mutated = false;
-  let invalidatesVirtualFileSystem = false;
   let mutatedPaths: string[] | undefined;
   let refreshSectionPaths: string[] | undefined;
   let requiresFullRefresh = false;
@@ -3615,7 +3500,6 @@ async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: 
     const result = await runCommand(ctx, command, commandRest);
     ctx.cwd = result.cwd;
     mutated = mutated || result.mutated;
-    invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
     mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
     refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
     requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
@@ -3624,7 +3508,7 @@ async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: 
     }
   }
 
-  return { cwd: ctx.cwd, output: commandOutputs.join('\n'), mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
+  return { cwd: ctx.cwd, output: commandOutputs.join('\n'), mutated, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
 }
 
 function parseXargsArgs(args: string[]): { noRunIfEmpty: boolean; nullInput: boolean; replacement: string | null; command: string[] } {
@@ -3717,7 +3601,7 @@ function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
 
-function formatEntry(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+function formatEntry(fs: HvyVirtualFileSystem, entry: HvyVirtualEntry): string {
   const tags = formatEntryTags(fs, entry);
   const description = formatEntryDescription(fs, entry);
   const suffix = `${tags}${description ? ` | ${description}` : ''}`;
@@ -3727,14 +3611,14 @@ function formatEntry(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: Hv
   return `file ${entry.path.split('/').pop() || '/'} ${entry.write && entry.writable !== false ? '[w]' : '[ro]'}${suffix}`;
 }
 
-function formatEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+function formatEntryDescription(fs: HvyVirtualFileSystem, entry: HvyVirtualEntry): string {
   if (entry.kind === 'dir') {
     return formatDirectoryEntryDescription(fs, entry.path);
   }
   return formatFileEntryDescription(fs, entry.path);
 }
 
-function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+function formatDirectoryEntryDescription(fs: HvyVirtualFileSystem, path: string): string {
   if (path === '/body') {
     return 'document body sections and components';
   }
@@ -3768,13 +3652,13 @@ function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFi
 }
 
 
-function formatComponentDirectoryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
+function formatComponentDirectoryDescription(fs: HvyVirtualFileSystem, path: string, componentName: string): string {
   const componentLabel = componentName === 'table' ? 'static table component' : `${componentName} component`;
   const preview = formatComponentPreview(fs, path, componentName);
   return preview ? `${componentLabel} | ${preview}` : componentLabel;
 }
 
-function formatStructuralDirectoryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, label: string): string {
+function formatStructuralDirectoryDescription(fs: HvyVirtualFileSystem, path: string, label: string): string {
   const preview = listDirectory(fs, path)
     .filter((entry) => entry.kind === 'dir')
     .map((entry) => {
@@ -3785,7 +3669,7 @@ function formatStructuralDirectoryDescription(fs: ReturnType<typeof buildHvyVirt
   return preview ? `${label} | ${preview}` : label;
 }
 
-function formatTableDirectoryPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+function formatTableDirectoryPreview(fs: HvyVirtualFileSystem, path: string): string {
   const table = readJsonFileFromVirtualPath(fs, `${path}/table.json`);
   const columns = readJsonArrayFromVirtualPath(fs, `${path}/tableColumns.json`).filter((value): value is string => typeof value === 'string');
   const rows = readJsonArrayFromVirtualPath(fs, `${path}/tableRows.json`)
@@ -3806,13 +3690,13 @@ function formatTableDirectoryPreview(fs: ReturnType<typeof buildHvyVirtualFileSy
   return compactLsComponentPreview(firstNonEmptyRow.join(' '));
 }
 
-function formatComponentPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
+function formatComponentPreview(fs: HvyVirtualFileSystem, path: string, componentName: string): string {
   return componentName === 'table'
     ? formatTableDirectoryPreview(fs, path)
     : formatComponentBodyPreview(fs, path, componentName);
 }
 
-function formatComponentBodyPreview(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string, componentName: string): string {
+function formatComponentBodyPreview(fs: HvyVirtualFileSystem, path: string, componentName: string): string {
   const bodyEntry = fs.entries.get(`${path}/${componentName}.txt`);
   if (bodyEntry?.kind !== 'file') {
     return '';
@@ -3834,7 +3718,7 @@ function compactLsComponentPreview(value: string, normalizeLine: (line: string) 
   return hasMoreContent ? `${firstContentLine}...` : firstContentLine;
 }
 
-function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, path: string): string {
+function formatFileEntryDescription(fs: HvyVirtualFileSystem, path: string): string {
   const filename = path.split('/').pop() ?? '';
   const directoryPath = path.replace(/\/[^/]+$/, '') || '/';
   if (path === '/header.yaml') {
@@ -3909,7 +3793,7 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   return '';
 }
 
-function formatChildrenOrderDescription(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+function formatChildrenOrderDescription(fs: HvyVirtualFileSystem, directoryPath: string): string {
   const name = directoryPath.split('/').pop() ?? '';
   if (directoryPath === '/body') {
     return 'top-level section order';
@@ -3936,7 +3820,7 @@ function formatChildrenOrderDescription(fs: ReturnType<typeof buildHvyVirtualFil
   return 'child order';
 }
 
-function formatRawHvySubject(fs: ReturnType<typeof buildHvyVirtualFileSystem>, directoryPath: string): string {
+function formatRawHvySubject(fs: HvyVirtualFileSystem, directoryPath: string): string {
   if (directoryPath === '/') {
     return 'raw HVY for this document';
   }
@@ -3946,12 +3830,12 @@ function formatRawHvySubject(fs: ReturnType<typeof buildHvyVirtualFileSystem>, d
   return 'raw HVY for this component';
 }
 
-function formatEntryTags(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+function formatEntryTags(fs: HvyVirtualFileSystem, entry: HvyVirtualEntry): string {
   const tags = readEntryTags(fs, entry).split(',').map((tag) => tag.trim()).filter(Boolean);
   return tags.length > 0 ? ` tags=[${tags.join(', ')}]` : '';
 }
 
-function readEntryTags(fs: ReturnType<typeof buildHvyVirtualFileSystem>, entry: HvyVirtualEntry): string {
+function readEntryTags(fs: HvyVirtualFileSystem, entry: HvyVirtualEntry): string {
   if (entry.kind === 'dir') {
     const section = readJsonFileFromVirtualPath(fs, `${entry.path}/section.json`);
     if (typeof section?.tags === 'string') {
@@ -4110,3 +3994,4 @@ function helpFor(topic = ''): string {
 function formatCommandHelp(command: string, description: string): string {
   return `${command}\n  ${description}`;
 }
+

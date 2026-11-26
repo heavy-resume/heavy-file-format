@@ -1,4 +1,4 @@
-import { buildHvyVirtualFileSystem, listDirectory, resolveVirtualPath } from '../cli-core/virtual-file-system';
+import { createHvyVirtualFileSystem, listDirectory, resolveVirtualPath } from '../cli-core/virtual-file-system';
 import type { HvyCliSessionState, VisualDocument } from '../types';
 
 const CLI_COMMAND_COMPLETIONS = [
@@ -57,7 +57,7 @@ export function completeCliInput(params: {
 }
 
 function completePathToken(document: VisualDocument, session: HvyCliSessionState, token: string): string | null {
-  const fs = buildHvyVirtualFileSystem(document, session.virtualPathNaming);
+  const fs = createHvyVirtualFileSystem(document, session.virtualPathNaming);
   const slashIndex = token.lastIndexOf('/');
   const directoryToken = slashIndex >= 0 ? token.slice(0, slashIndex + 1) : '';
   const basenamePrefix = slashIndex >= 0 ? token.slice(slashIndex + 1) : token;

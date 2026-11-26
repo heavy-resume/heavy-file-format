@@ -2,7 +2,10 @@ import { expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { createHvyCliSession, executeHvyCliCommand } from '../src/cli-core/commands';
+import {
+  createHvyCliSession,
+  executeHvyCliCommand,
+} from '../src/cli-core/commands';
 import { formPluginRegistration } from '../src/plugins/form';
 import { setHostPlugins } from '../src/plugins/registry';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
@@ -167,6 +170,62 @@ test('cli exposes id aliases for sections and components', async () => {
   expect((await executeHvyCliCommand(document, session, 'cat /id/history-tools-technologies-list/tool-tech-xref-card-0/tool-tech-xref-card.json')).output).toContain(
     '"xrefTitle": "TypeScript"'
   );
+});
+
+function createAliasCliTestDocument() {
+  return deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:container {"id":"box"}-->
+
+ <!--hvy:text {"id":"first"}-->
+  First
+`, '.hvy');
+}
+
+test('expected result: an /id alias finds the same subtree as its canonical directory', async () => {
+  const document = createAliasCliTestDocument();
+  const session = createHvyCliSession();
+
+  const canonicalFind = await executeHvyCliCommand(document, session, 'find /body/notes/box');
+  const aliasFind = await executeHvyCliCommand(document, session, 'find /id/box');
+
+  expect(aliasFind.output).toBe(canonicalFind.output.replaceAll('/body/notes/box', '/id/box'));
+  expect(aliasFind.output).toContain('/id/box/container/first/text.txt');
+});
+
+test('expected result: writing and inserting through /id aliases changes the canonical components', async () => {
+  const document = createAliasCliTestDocument();
+  const session = createHvyCliSession();
+  expect((await executeHvyCliCommand(document, session, 'cat /body/notes/box/container/first/text.txt')).output).toBe('First');
+
+  await executeHvyCliCommand(document, session, 'echo "Changed" > /id/first/text.txt');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 text /id/box added');
+
+  expect((await executeHvyCliCommand(document, session, 'cat /body/notes/box/container/first/text.txt')).output).toBe('Changed\n');
+  expect((await executeHvyCliCommand(document, session, 'ls /id/box/container')).output).toContain('dir  added');
+  expect((await executeHvyCliCommand(document, session, 'find /body/notes/box -type d')).output).toBe([
+    '/body/notes/box',
+    '/body/notes/box/container',
+    '/body/notes/box/container/added',
+    '/body/notes/box/container/first',
+  ].join('\n'));
+});
+
+test('expected result: a failed raw.hvy write through an /id alias keeps the draft under that alias', async () => {
+  const document = createAliasCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(executeHvyCliCommand(document, session, 'echo "<!--hvy:nope" > /id/first/raw.hvy')).rejects.toThrow(
+    '/id/first/raw.hvy did not parse; component was not changed.\n/id/first/raw.wip.hvy now contains the failed draft'
+  );
+
+  expect((await executeHvyCliCommand(document, session, 'ls /id/first')).output).toContain('file raw.wip.hvy [w]');
+  expect((await executeHvyCliCommand(document, session, 'cat /id/first/raw.wip.hvy')).output).toBe('<!--hvy:nope\n');
 });
 
 test('about-section includes the section metadata description when present', async () => {
@@ -1290,6 +1349,67 @@ ${Array.from({ length: 500 }, (_, index) => ` Line ${index}`).join('\n')}
   );
 });
 
+test('expected result: raw-preview.hvy.txt replaces raw.hvy when only the combined document exceeds the raw limit', async () => {
+  const smallSections = Array.from({ length: 12 }, (_, index) => `<!--hvy: {"id":"part-${index}"}-->
+#! Part ${index}
+
+<!--hvy:text {"id":"part-${index}-text"}-->
+ ${'word '.repeat(70).trim()}
+`).join('\n');
+  const manySmallSections = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+${smallSections}`, '.hvy');
+  const largeHeaderOnly = deserializeDocument(`---
+hvy_version: 0.1
+description: ${'x'.repeat(4500)}
+---
+
+<!--hvy: {"id":"tiny"}-->
+#! Tiny
+`, '.hvy');
+
+  const manySmallSectionsRoot = await executeHvyCliCommand(manySmallSections, createHvyCliSession(), 'ls /');
+  const manySmallSectionsPart = await executeHvyCliCommand(manySmallSections, createHvyCliSession(), 'ls /id/part-0');
+  const largeHeaderOnlyRoot = await executeHvyCliCommand(largeHeaderOnly, createHvyCliSession(), 'ls /');
+
+  expect(manySmallSectionsRoot.output).toContain('file raw-preview.hvy.txt [ro]');
+  expect(manySmallSectionsRoot.output).not.toContain('file raw.hvy [w]');
+  expect(manySmallSectionsPart.output).toContain('file raw.hvy [w]');
+  expect(largeHeaderOnlyRoot.output).toContain('file raw-preview.hvy.txt [ro]');
+  expect(largeHeaderOnlyRoot.output).not.toContain('file raw.hvy [w]');
+});
+
+test('writing a section raw.hvy back unchanged keeps custom components and their children', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-record
+    baseType: container
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+ <!--hvy:component-list {"id":"fake-list","componentListComponent":"fake-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:fake-record {"id":"fake-item"}-->
+
+    <!--hvy:text {"id":"fake-text"}-->
+     Fake text
+`, '.hvy');
+  const session = createHvyCliSession();
+  const documentBefore = serializeDocument(document);
+  const sectionRaw = (await executeHvyCliCommand(document, session, 'cat /body/fake-section/raw.hvy')).output;
+
+  await executeHvyCliCommand(document, session, `cat > /body/fake-section/raw.hvy <<'FAKE_EOF'\n${sectionRaw}\nFAKE_EOF`);
+
+  expect(serializeDocument(document)).toBe(documentBefore);
+  expect((await executeHvyCliCommand(document, session, 'ls /body/fake-section/fake-list')).output).toContain('dir  fake-item');
+});
+
 test('cli exposes raw.hvy in component directories and applies valid component edits', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();
@@ -1882,6 +2002,84 @@ test('cli cp -r copies component directories with the destination id', async () 
   expect((await executeHvyCliCommand(document, session, 'man cp')).output).toContain('cp [-r] SOURCE DEST');
 });
 
+test('components cannot be moved, copied, or inserted directly into /body', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+  const documentBefore = serializeDocument(document);
+
+  await expect(executeHvyCliCommand(document, session, 'mv /body/summary/intro /body/moved-intro')).rejects.toThrow('mv: no writable component container: /body');
+  await expect(executeHvyCliCommand(document, session, 'cp -r /body/summary/intro /body/copied-intro')).rejects.toThrow('cp: no writable component container: /body');
+  await expect(executeHvyCliCommand(document, session, 'hvy insert -1 text /body inserted-text')).rejects.toThrow('hvy insert -1 text: no component insertion target: /body');
+
+  expect(serializeDocument(document)).toBe(documentBefore);
+});
+
+test('mv, rm, and hvy remove accept /id paths for the component they move or remove', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+<!--hvy:container {"id":"fake-box"}-->
+
+<!--hvy:text {"id":"fake-moved-text"}-->
+ Fake moved
+
+<!--hvy:text {"id":"fake-removed-text"}-->
+ Fake removed
+
+<!--hvy:text {"id":"fake-hvy-removed-text"}-->
+ Fake hvy removed
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'mv /id/fake-moved-text /id/fake-box/container');
+  await executeHvyCliCommand(document, session, 'rm -r /id/fake-removed-text');
+  await executeHvyCliCommand(document, session, 'hvy remove /id/fake-hvy-removed-text');
+
+  const expectedResult = ['fake-box'];
+  expect(document.sections[0]!.blocks.map((block) => block.schema.id)).toEqual(expectedResult);
+  expect(document.sections[0]!.blocks[0]!.schema.containerBlocks.map((block) => block.schema.id)).toEqual(['fake-moved-text']);
+});
+
+test('removal lists the nested xref cards that point at the removed component, and pruning removes exactly those', async () => {
+  const createDocument = () => deserializeDocument(`---
+hvy_version: 0.1
+---
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+<!--hvy:text {"id":"fake-target"}-->
+ Fake target
+
+<!--hvy:container {"id":"fake-box"}-->
+
+ <!--hvy:xref-card {"id":"fake-nested-card","xrefTitle":"Fake","xrefTarget":"fake-target"}-->
+
+ <!--hvy:xref-card {"id":"fake-other-card","xrefTitle":"Fake other","xrefTarget":"fake-other-target"}-->
+`, '.hvy');
+
+  const hintDocument = createDocument();
+  const hint = await executeHvyCliCommand(hintDocument, createHvyCliSession(), 'hvy remove /body/fake-section/fake-target');
+  const expectedHint = [
+    '/body/fake-section/fake-target: removed',
+    'Hint: 1 xref-card still point to fake-target. Run: hvy prune-xref fake-target',
+    '  /body/fake-section/fake-box/container/fake-nested-card',
+  ].join('\n');
+  expect(hint.output).toBe(expectedHint);
+
+  const pruneDocument = createDocument();
+  const pruned = await executeHvyCliCommand(pruneDocument, createHvyCliSession(), 'rm -r --prune-xref /body/fake-section/fake-target');
+  const expectedPrune = [
+    '/body/fake-section/fake-target: removed',
+    'Pruned 1 xref-card pointing to fake-target:',
+    '  /body/fake-section/fake-box/container/fake-nested-card',
+  ].join('\n');
+  expect(pruned.output).toBe(expectedPrune);
+  expect(pruneDocument.sections[0]!.blocks[0]!.schema.containerBlocks.map((block) => block.schema.id)).toEqual(['fake-other-card']);
+});
+
 test('cli mv moves component directories between ordered children', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -2147,7 +2345,62 @@ scripts:
 
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 
-  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" uses unsupported type "combobox". Valid types: text, textarea, number, select, checkbox, radio, date, email, tel, url, password, hidden. Use "select" for dropdowns.');
+  expect(result.output).toContain('[plugin] /body/chore-chart/assign-chore - form field "Chore" uses unsupported type "combobox". Valid types: text, textarea, number, range, select, checkbox, radio, date, email, tel, url, password, hidden, photo. Use "select" for dropdowns.');
+});
+
+test('hvy lint accepts every field key the form plugin supports', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+
+<!--hvy:plugin {"id":"fake-form","plugin":"hvy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Fake notes
+    type: textarea
+    value: Fake value
+    placeholder: Fake placeholder
+    required: true
+    rows: 4
+    triggers:
+      change: fake_script
+    meta:
+      css: "margin: 0;"
+  - label: Fake choice
+    type: select
+    options: [Fake option]
+  - label: Fake volume
+    type: range
+    min: 0
+    max: 10
+    step: 2
+`, '.hvy');
+
+  const result = await executeHvyCliCommand(document, createHvyCliSession(), 'hvy lint');
+
+  expect(result.output).not.toContain('unsupported key');
+});
+
+test('hvy lint flags a form field description because the form plugin drops it on save', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake section
+
+<!--hvy:plugin {"id":"fake-form","plugin":"hvy.form","pluginConfig":{"version":"0.1"}}-->
+fields:
+  - label: Fake notes
+    type: text
+    description: Fake description
+`, '.hvy');
+
+  const result = await executeHvyCliCommand(document, createHvyCliSession(), 'hvy lint');
+
+  expect(result.output).toContain('form field "Fake notes" has unsupported key "description".');
 });
 
 test('hvy lint points form behavior YAML keys to plugin config', async () => {
@@ -2692,7 +2945,7 @@ test('cli rejects css values that look like serialized JSON metadata', async () 
   ).rejects.toThrow('text.json css must be an inline CSS declaration string, not serialized component or section JSON.');
 
   await expect(
-    executeHvyCliCommand(document, session, 'echo \'{"id":"summary","title":"Summary","level":1,"lock":false,"editorOnly":false,"expanded":true,"highlight":false,"contained":false,"css":"{\\"id\\":\\"summary\\"}","tags":"","description":"","location":"main","hideIfUnmodified":false,"exclude_from_import":false,"templateKey":""}\' > /body/summary/section.json')
+    executeHvyCliCommand(document, session, 'echo \'{"id":"summary","title":"Summary","level":1,"lock":false,"editorOnly":false,"expanded":true,"highlight":false,"contained":false,"css":"{\\"id\\":\\"summary\\"}","tags":"","description":"","location":"main","hideIfUnmodified":false,"excludeFromImport":false,"templateKey":""}\' > /body/summary/section.json')
   ).rejects.toThrow('section.json css must be an inline CSS declaration string, not serialized component or section JSON.');
 
   await expect(executeHvyCliCommand(document, session, `cat > /header.yaml <<'YAML'
@@ -2891,7 +3144,7 @@ hvy_version: 0.1
   const session = createHvyCliSession();
 
   await expect(executeHvyCliCommand(document, session, 'hvy insert -1 plugin /quality bad-db db-table')).rejects.toThrow(
-    'hvy plugin add: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table SECTION_PATH ID" or plugin id "hvy.db-table".'
+    'hvy insert plugin: "db-table" is a CLI command alias, not a stored plugin id. Use "hvy insert INDEX plugin db-table PARENT_PATH [ID|--id ID]" or plugin id "hvy.db-table".'
   );
 
   const result = await executeHvyCliCommand(
@@ -2944,7 +3197,7 @@ test('hvy plugin db-table help shows canonical creation and operations', async (
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin db-table')).output;
 
-  expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
+  expect(help).toContain('hvy insert INDEX plugin db-table PARENT_PATH [ID|--id ID]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('hvy plugin db-table presentation COMPONENT_PATH [JSON]');
@@ -2963,8 +3216,8 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy recipe [NAME]');
   expect(help).toContain('Cheatsheets:\n- common-patterns\n- components\n- db-table\n- forms\n- header\n- reusable-component\n- scripting\n- styling');
   expect(help).toContain('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting');
-  expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH ID');
-  expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
+  expect(help).toContain('hvy insert INDEX plugin form PARENT_PATH [ID|--id ID]');
+  expect(help).toContain('hvy insert INDEX plugin db-table PARENT_PATH [ID|--id ID]');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('hvy plugin db-table tables');
@@ -3060,7 +3313,7 @@ test('hvy plugin form help explains script and submit options', async () => {
 
   const help = (await executeHvyCliCommand(document, session, 'man hvy plugin form')).output;
 
-  expect(help).toContain('hvy insert INDEX plugin form SECTION_PATH ID');
+  expect(help).toContain('hvy insert INDEX plugin form PARENT_PATH [ID|--id ID]');
   expect(help).toContain('plugin.txt\n  Stores form YAML');
   expect(help).toContain('plugin.json\n  Stores form-level behavior');
   expect(help).toContain('load.py, on_submit.py, etc.');
@@ -3113,7 +3366,7 @@ test('registered plugin help topics work without special-case command handlers',
   const manHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting')).output;
   const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting')).output;
 
-  expect(manHelp).toContain('hvy insert INDEX plugin SECTION_PATH ID hvy.scripting');
+  expect(manHelp).toContain('hvy insert INDEX plugin PARENT_PATH [ID|--id ID] hvy.scripting');
   expect(manHelp).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
   expect(manHelp).toContain('get_updated_components, get_components');

@@ -1,6 +1,7 @@
 import type { JsonObject } from '../../hvy/types';
 import type { VisualDocument } from '../../types';
 import { getHostPlugin } from '../registry';
+import { getDocumentScriptingSession } from './scripting-session';
 
 export interface ScriptingPluginsApi {
   call(pluginId: string, method: string, args?: JsonObject): unknown | Promise<unknown>;
@@ -102,6 +103,7 @@ export function createScriptingPluginsApi(
     const result = callable(normalizeArgs(args), {
       pluginId: pluginName,
       rawDocument: document,
+      session: getDocumentScriptingSession(document),
       markMutated: () => options.onMutation?.(),
     });
     if (

@@ -28,9 +28,6 @@ type TargetKey = `section:${string}` | `block:${string}`;
 
 const DEFAULT_DECISION: HvyPdfExportDecision = {
   visibility: 'include',
-  keepTogether: false,
-  keepWithNext: false,
-  allowSplit: true,
   pageBreakBefore: false,
   pageBreakAfter: false,
   pdfStyle: {},
@@ -51,9 +48,6 @@ export function createPdfExportRuleRecorder(): HvyPdfExportRuleRecorder {
     },
     expand(idOrTag) {
       rules.push({ ...toTarget(idOrTag), expand: true });
-    },
-    keep_together(idOrTag) {
-      rules.push({ ...toTarget(idOrTag), keepTogether: true });
     },
     style(idOrTag, style) {
       rules.push({ ...toTarget(idOrTag), pdfStyle: { ...(style ?? {}) } });
@@ -244,9 +238,6 @@ function applyRule(previous: HvyPdfExportDecision, rule: HvyPdfExportStrategyRul
   if (pane) next.pane = pane;
   const role = getRuleRole(rule);
   if (role) next.role = role;
-  if (typeof rule.keepTogether === 'boolean') next.keepTogether = rule.keepTogether;
-  if (typeof rule.keepWithNext === 'boolean') next.keepWithNext = rule.keepWithNext;
-  if (typeof rule.allowSplit === 'boolean') next.allowSplit = rule.allowSplit;
   if (typeof rule.pageBreakBefore === 'boolean') next.pageBreakBefore = rule.pageBreakBefore;
   if (typeof rule.pageBreakAfter === 'boolean') next.pageBreakAfter = rule.pageBreakAfter;
   if (rule.pdfStyle) next.pdfStyle = { ...next.pdfStyle, ...rule.pdfStyle };

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { readFileSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { expect, test } from 'vitest';
@@ -13,7 +14,7 @@ function listCssFiles(directory: string): string[] {
 }
 
 test('expected result: source stylesheets stay at or below 1,000 lines', () => {
-  const oversizedStylesheets = listCssFiles(new URL('../src', import.meta.url).pathname)
+  const oversizedStylesheets = listCssFiles(fileURLToPath(new URL('../src', import.meta.url)))
     .map((file) => ({
       file,
       lines: readFileSync(file, 'utf8').split(/\r?\n/).length - 1,

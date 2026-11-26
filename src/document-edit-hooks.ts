@@ -9,7 +9,7 @@ export function runDocumentEditHooksAfterCommit(
   options: { preserveActiveEditor?: boolean; callerRefreshedDocumentChange?: boolean } = {}
 ): void {
   const runtime = getActiveStateRuntime();
-  void runPluginDocumentHooks('edit').then((hookResult) => {
+  void runPluginDocumentHooks('edit', { hostRendersAfter: true }).then((hookResult) => {
     runWithStateRuntime(runtime, () => {
       if (options.callerRefreshedDocumentChange && !hookResult.documentChanged) {
         afterRender?.();

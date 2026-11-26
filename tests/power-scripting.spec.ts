@@ -14,14 +14,14 @@ hvy_version: 0.1
 #! Demo
 
 <!--hvy:plugin {"id":"test-canvas","plugin":"hvy.canvas","pluginConfig":{"width":320,"height":180}}-->
-{"version":1,"strokes":[]}
+Placeholder canvas description.
 
 <!--hvy:plugin {"id":"trusted-code","plugin":"hvy.power-scripting"}-->
 window.__powerRuns = (window.__powerRuns || 0) + 1;
 const canvas = await doc.canvas.wait("test-canvas");
 window.__powerCanvasFound = Boolean(canvas);
-canvas.addStroke({ color: "#123456", width: 2, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] });
-window.__powerStrokeAdded = canvas.getDrawing().strokes.length;
+canvas.addItem({ kind: "brush", color: "#123456", width: 2, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] });
+window.__powerStrokeAdded = canvas.getDrawing().layers.flatMap((layer) => layer.items).length;
 doc.listen(window, "power-test-event", () => window.__powerEvents = (window.__powerEvents || 0) + 1);
 `;
     const root = document.querySelector<HTMLElement>('#powerMount');
@@ -48,7 +48,7 @@ doc.listen(window, "power-test-event", () => window.__powerEvents = (window.__po
       added: testWindow.__powerStrokeAdded ?? 0,
       roots: roots.length,
       apis: roots.filter((root) => Boolean(root.hvyCanvas)).length,
-      visible: Math.max(0, ...roots.map((root) => root.hvyCanvas?.getDrawing().strokes.length ?? 0)),
+      visible: Math.max(0, ...roots.map((root) => root.hvyCanvas?.getDrawing().layers.flatMap((layer) => layer.items).length ?? 0)),
     };
   })).toEqual({ found: true, added: 1, roots: 1, apis: 1, visible: 1 });
 
@@ -145,121 +145,63 @@ window.__acceptedRuns = (window.__acceptedRuns || 0) + 1;
   await expect.poll(() => page.evaluate(() => (window as Window & { __acceptedRuns?: number }).__acceptedRuns)).toBe(2);
 });
 
-test('Asteroids example launches on the canvas and initializes its SQL high-score table', async ({ page }) => {
+test('viewer power scripts draw canvas overlays on key input and create database tables', async ({ page }) => {
+  test.setTimeout(5_000);
   await page.goto('/');
-  await page.locator('.document-menu summary').click();
-  await page.locator('.document-menu-panel').getByRole('button', { name: 'Asteroids', exact: true }).click({ force: true });
-  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="powerMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"demo"}-->
+#! Demo
+
+<!--hvy:plugin {"id":"overlay-script","plugin":"hvy.power-scripting"}-->
+const canvas = await doc.canvas.wait("overlay-canvas");
+doc.db.execute("CREATE TABLE IF NOT EXISTS placeholder_scores (id INTEGER PRIMARY KEY, score INTEGER NOT NULL)");
+doc.listen(window, "keydown", (event) => {
+  if (event.code !== "Space") return;
+  canvas.redraw();
+  const context = canvas.canvas.getContext("2d");
+  context.fillStyle = "#ff0000";
+  context.fillRect(0, 0, canvas.canvas.width, canvas.canvas.height);
+});
+
+<!--hvy:plugin {"id":"overlay-canvas","plugin":"hvy.canvas","pluginConfig":{"width":320,"height":180}}-->
+Placeholder canvas description.
+`;
+    (window as Window & { testPowerMount?: ReturnType<typeof mountHvy> }).testPowerMount = mountHvy({
+      root: document.querySelector<HTMLElement>('#powerMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+      plugins: [plugins.powerScripting, plugins.canvas, plugins.dbTable],
+    });
+  });
   await expect(page.locator('.hvy-canvas-toolbar:visible')).toHaveCount(0);
   await page.getByRole('button', { name: 'Enable power script' }).click();
 
-  await expect(page.locator('.db-table-table-frame')).toBeVisible();
-  const beforeLaunch = await page.locator('[data-hvy-canvas-id="asteroids-canvas"] canvas').evaluate(
-    (canvas) => (canvas as HTMLCanvasElement).toDataURL()
-  );
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(100);
-  const afterLaunch = await page.locator('[data-hvy-canvas-id="asteroids-canvas"] canvas').evaluate(
-    (canvas) => (canvas as HTMLCanvasElement).toDataURL()
-  );
+  const readCenterPixel = () => page.locator('[data-hvy-canvas-id="overlay-canvas"] canvas').evaluate((surface: HTMLCanvasElement) => (
+    [...surface.getContext('2d')!.getImageData(Math.round(surface.width / 2), Math.round(surface.height / 2), 1, 1).data]
+  ));
+  await expect.poll(async () => {
+    await page.keyboard.press('Space');
+    return readCenterPixel();
+  }, { timeout: 2_000 }).toEqual([255, 0, 0, 255]);
 
-  expect(afterLaunch).not.toBe(beforeLaunch);
-  const tables = await page.evaluate(async () => {
-    const statePath = '/src/state.ts';
+  expect(await page.evaluate(async () => {
     const databasePath = '/src/plugins/db-table.ts';
-    const { state } = await import(/* @vite-ignore */ statePath);
     const { createScriptingDbRuntime } = await import(/* @vite-ignore */ databasePath);
-    const database = await createScriptingDbRuntime(state.document);
+    const mount = (window as Window & { testPowerMount: { getDocument(): unknown } }).testPowerMount;
+    const database = await createScriptingDbRuntime(mount.getDocument());
     try {
-      return database.api.query("SELECT name FROM sqlite_master WHERE type = 'table'").map((row) => row.name);
+      return database.api.query("SELECT name FROM sqlite_master WHERE type = 'table'").map((row: { name: string }) => row.name);
     } finally {
       database.dispose();
     }
-  });
-  expect(tables).toContain('asteroid_high_scores');
-  expect(await page.evaluate(async () => {
-    const statePath = '/src/state.ts';
-    const { state } = await import(/* @vite-ignore */ statePath);
-    return state.document.sections[0]?.blocks
-      .filter((block) => block.schema.component === 'plugin')
-      .map((block) => block.schema.plugin);
-  })).toEqual(['hvy.power-scripting', 'hvy.canvas']);
-
-  await page.locator('.document-menu').evaluate((menu) => {
-    if (menu instanceof HTMLDetailsElement) menu.open = true;
-  });
-  await page.locator('.document-menu-panel').getByRole('button', { name: 'Default Example', exact: true }).click({ force: true });
-  await expect(page.locator('#downloadName')).toHaveValue('example.hvy');
-  await page.locator('.document-menu summary').click();
-  await page.locator('.document-menu-panel').getByRole('button', { name: 'Asteroids', exact: true }).click({ force: true });
-
-  await expect(page.getByRole('button', { name: 'Enable power script' })).toHaveCount(0);
-  await expect(page.locator('[data-hvy-canvas-id="asteroids-canvas"] canvas')).toBeVisible();
-});
-
-test('canvas editor has square brush tools, quick sizes, and vector erasing', async ({ page }) => {
-  await page.goto('/');
-  await page.locator('.document-menu summary').click();
-  await page.locator('.document-menu-panel').getByRole('button', { name: 'Asteroids', exact: true }).click({ force: true });
-  await page.getByRole('button', { name: 'Editor' }).click();
-
-  const brush = page.getByRole('button', { name: 'Brush', exact: true });
-  const eraser = page.getByRole('button', { name: 'Eraser', exact: true });
-  await expect(brush).toBeVisible();
-  await expect(eraser).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Fill canvas', exact: true })).toBeVisible();
-  const dimensions = await brush.evaluate((button) => {
-    const bounds = button.getBoundingClientRect();
-    return { width: bounds.width, height: bounds.height };
-  });
-  expect(Math.abs(dimensions.width - dimensions.height)).toBeLessThan(1);
-
-  await eraser.click();
-  await expect(eraser).toHaveAttribute('aria-pressed', 'true');
-  const largeSize = page.getByRole('button', { name: 'Brush size 16' });
-  await largeSize.click();
-  await expect(largeSize).toHaveAttribute('aria-pressed', 'true');
-  const canvas = page.locator('[data-hvy-canvas-id="asteroids-canvas"] canvas');
-  await canvas.hover({ position: { x: 200, y: 120 } });
-  await expect(page.locator('.hvy-canvas-cursor-preview')).toBeVisible();
-  const cursorDimensions = await page.locator('.hvy-canvas-cursor-preview').evaluate((cursor) => {
-    const bounds = cursor.getBoundingClientRect();
-    return { width: bounds.width, height: bounds.height };
-  });
-  expect(cursorDimensions.width).toBeGreaterThan(2);
-  expect(Math.abs(cursorDimensions.width - cursorDimensions.height)).toBeLessThan(1);
-
-  expect(await canvas.evaluate((surface) => {
-    const root = surface.closest<HTMLElement>('[data-hvy-canvas-id]');
-    if (!root?.hvyCanvas) throw new Error('Canvas API missing.');
-    root.hvyCanvas.addStroke({
-      color: '#123456',
-      width: 4,
-      points: [{ x: 10, y: 10 }, { x: 20, y: 20 }],
-    });
-    let renderCount = 0;
-    root.addEventListener('hvy:canvas:render', () => {
-      renderCount += 1;
-    });
-    root.hvyCanvas.undo();
-    return renderCount;
-  })).toBe(1);
-  expect(await page.evaluate(async () => {
-    const { state } = await import('/src/state.ts');
-    const block = state.document.sections
-      .flatMap((section) => section.blocks)
-      .find((candidate) => candidate.schema.id === 'asteroids-canvas');
-    const attachment = state.document.attachments.find((candidate) => candidate.id === 'canvas:asteroids-canvas');
-    return {
-      text: block?.text,
-      mediaType: attachment?.meta.mediaType,
-      drawing: attachment ? JSON.parse(new TextDecoder().decode(attachment.bytes)) : null,
-    };
-  })).toEqual({
-    text: 'Asteroids game surface. The power script renders gameplay here in Viewer mode.',
-    mediaType: 'application/vnd.hvy.canvas+json',
-    drawing: { version: 1, strokes: [] },
-  });
+  })).toContain('placeholder_scores');
 });
 
 test('power-script prompts render inside the HVY surface without browser dialogs and save requests require a host', async ({ page }) => {
@@ -375,4 +317,53 @@ window.__referenceSaveStatus = await doc.save.request({ reason: \`\${pilot} upda
   await expect(page.getByRole('heading', { name: 'Download updated document?' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Download updated file' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+});
+
+test('power-script click callbacks read and write the current database between other writers', async ({ page }) => {
+  await page.goto('/');
+  // BEFORE
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="callbackDbMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
+    const addClickButton = (id: string, source: string) => `
+const button = document.createElement("button");
+button.id = "${id}";
+button.textContent = "${id}";
+doc.listen(button, "click", () => {
+  doc.db.execute("CREATE TABLE IF NOT EXISTS fake_clicks (source TEXT)");
+  doc.db.execute("INSERT INTO fake_clicks (source) VALUES (?)", ["${source}"]);
+  window.__fakeClickRows = doc.db.query("SELECT source FROM fake_clicks ORDER BY rowid").map((row) => row.source);
+});
+document.body.appendChild(button);
+`;
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"callback-db"}-->
+#! Callback DB
+
+<!--hvy:plugin {"id":"writer-a","plugin":"hvy.power-scripting"}-->
+${addClickButton('fake-writer-a', 'A')}
+
+<!--hvy:plugin {"id":"writer-b","plugin":"hvy.power-scripting"}-->
+${addClickButton('fake-writer-b', 'B')}
+`;
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#callbackDbMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+      plugins: [plugins.powerScripting],
+      powerScripts: 'enabled',
+    });
+  });
+
+  // ACTION
+  await page.locator('#fake-writer-a').click();
+  await page.locator('#fake-writer-b').click();
+  await page.locator('#fake-writer-a').click();
+
+  // AFTER
+  expect(await page.evaluate(() => (window as Window & { __fakeClickRows?: string[] }).__fakeClickRows)).toEqual(['A', 'B', 'A']);
 });

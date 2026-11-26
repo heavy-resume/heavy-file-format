@@ -7,6 +7,7 @@ import type { VisualBlock, VisualSection } from '../src/editor/types';
 import { initState } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { EXPANDABLE_CHEVRON_PLACEHOLDER } from '../src/expandable-chevron';
+import { EXPANDABLE_CLOSE_PLACEHOLDER } from '../src/editor/components/expandable/expandable-modal';
 
 function makeSection(blocks: VisualBlock[]): VisualSection {
   return {
@@ -125,8 +126,8 @@ test('expandable passes generic chevron placeholder context only to its stub', (
   });
 
   expect(contexts).toEqual([
-    { ids: ['stub-test'], provided: [EXPANDABLE_CHEVRON_PLACEHOLDER.name], omitted: [] },
-    { ids: ['content-test'], provided: [], omitted: [EXPANDABLE_CHEVRON_PLACEHOLDER.name] },
+    { ids: ['stub-test'], provided: [EXPANDABLE_CHEVRON_PLACEHOLDER.name], omitted: [EXPANDABLE_CLOSE_PLACEHOLDER.name] },
+    { ids: ['content-test'], provided: [EXPANDABLE_CLOSE_PLACEHOLDER.name], omitted: [EXPANDABLE_CHEVRON_PLACEHOLDER.name] },
   ]);
 });
 
@@ -183,3 +184,14 @@ test.each([[false, false], [true, false], [false, true], [true, true]])(
     expect(html.includes('Content 2')).toBe(contentOpen);
   }
 );
+
+test('expected result: stub css lands on the element holding the stub blocks, not the toggle', () => {
+  const block = makeExpandableBlock(false);
+  block.schema.expandableStubBlocks.children = [makeTextBlock('stub-test', 'Stub content')];
+  block.schema.expandableStubCss = 'display: flex;';
+
+  const html = renderExpandableReader(makeSection([block]), block, helpers);
+
+  expect(html).toContain('<div class="expand-stub" style="display: flex;"><p>Stub content</p></div>');
+  expect(html).not.toMatch(/class="expand-stub-toggle"[^>]*style=/);
+});

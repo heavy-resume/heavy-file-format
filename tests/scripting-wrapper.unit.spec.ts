@@ -1,17 +1,10 @@
 import { expect, test, vi } from 'vitest';
 
-import {
-  buildPythonProgram,
-  buildScriptingVersionMismatchMessage,
-  cleanScriptingErrorDetail,
-  comparePluginVersions,
-  getScriptingTraceLabel,
-  instrumentPythonSource,
-  stripPythonImports,
-  summarizeScriptingError,
-  runUserScript,
-  wrapPythonSourceInFunction,
-} from '../src/plugins/scripting/wrapper';
+import { buildPythonProgram, getScriptingTraceLabel } from '../src/plugins/scripting/python-program';
+import { instrumentPythonSource, stripPythonImports, wrapPythonSourceInFunction } from '../src/plugins/scripting/python-source';
+import { cleanScriptingErrorDetail, summarizeScriptingError } from '../src/plugins/scripting/script-error-text';
+import { buildScriptingVersionMismatchMessage, comparePluginVersions } from '../src/plugins/scripting/version';
+import { runUserScript } from '../src/plugins/scripting/wrapper';
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
@@ -72,33 +65,32 @@ if (
 });
 
 test('buildPythonProgram exposes doc.tool attributes with keyword arguments', () => {
-  const expectedResult = buildPythonProgram('runtime-keyword-test');
+  const expectedResult = buildPythonProgram();
 
   expect(expectedResult).toContain('class __HvyToolProxy__:');
   expect(expectedResult).toContain('def __call__(self, name, args=None, **kwargs):');
   expect(expectedResult).toContain('def __getattr__(self, name):');
   expect(expectedResult).toContain('merged.update(kwargs)');
-  expect(expectedResult).toContain('return self.__js_doc.tool_json(name, __hvy_to_json__(merged))');
+  expect(expectedResult).toContain('result = self.__js_doc.tool_json(name, __hvy_to_json__(__hvy_call_args__("doc.tool args", args, kwargs)))');
   expect(expectedResult).toContain('self.tool = __HvyToolProxy__(js_doc)');
   expect(expectedResult).toContain("'doc': __HvyDocProxy__(__hvy_runtime__.doc)");
 });
 
 test('buildPythonProgram exposes doc sub-apis through the doc proxy', () => {
-  const expectedResult = buildPythonProgram('runtime-doc-json-test');
+  const expectedResult = buildPythonProgram();
 
   expect(expectedResult).toContain('class __HvyDocProxy__:');
   expect(expectedResult).toContain('class __HvyPluginsProxy__:');
   expect(expectedResult).toContain('class __HvyDbProxy__:');
   expect(expectedResult).toContain('def call(self, plugin_id, method, args=None, **kwargs):');
-  expect(expectedResult).toContain('def __hvy_plugin_to_json__(value, callbacks, path=\'\'):');
-  expect(expectedResult).toContain('if callable(value):');
+  expect(expectedResult).toContain('def __hvy_json_arg__(where, value, callbacks=None, path=\'\'):');
+  expect(expectedResult).toContain("if kind == 'callable' and callbacks is not None:");
   expect(expectedResult).toContain('callbacks[path] = __hvy_wrap_plugin_callback__(value)');
-  expect(expectedResult).toContain('return self.__js_doc.plugins.call_marshaled(plugin_id, method, args_json, callbacks)');
+  expect(expectedResult).toContain('args_json = __hvy_to_json__(__hvy_call_args__("doc.plugins.call args", args, kwargs, callbacks))');
   expect(expectedResult).toContain('__hvy_runtime__.doc.callback_error(');
   expect(expectedResult).toContain('self.plugins = __HvyPluginsProxy__(js_doc)');
   expect(expectedResult).toContain('self.db = __HvyDbProxy__(js_doc)');
-  expect(expectedResult).toContain('return self.__js_doc.db.execute_json(sql, __hvy_to_json__(params))');
-  expect(expectedResult).toContain('return getattr(self.__js_doc, name)');
+  expect(expectedResult).toContain('__hvy_to_json__(__hvy_sql_params_arg__("doc.db.execute params", params))');
 });
 
 test('instrumentPythonSource skips blank lines and comments while preserving nested indentation', () => {
@@ -134,17 +126,18 @@ finally:
 });
 
 test('buildPythonProgram traces user frames and falls back to instrumented source', () => {
-  const program = buildPythonProgram('r7');
+  const program = buildPythonProgram();
   expect(program).toContain("import sys as __hvy_sys__");
   expect(program).toContain("__hvy_sys__.settrace(__hvy_trace__)");
-  expect(program).toContain("if frame.f_code.co_filename != '<hvy-script>':");
+  expect(program).toContain('__hvy_trace_filename__ = __hvy_globals__.traceFilenames[__hvy_runtime_id__]');
+  expect(program).toContain('if frame.f_code.co_filename != __hvy_trace_filename__:');
   expect(program).toContain("__hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__");
   expect(program).not.toContain('NodeTransformer');
   expect(program).not.toContain('visit_Compare');
 });
 
 test('buildPythonProgram executes user code with restricted builtins', () => {
-  const program = buildPythonProgram('r7');
+  const program = buildPythonProgram();
 
   expect(program).toContain('__hvy_safe_builtins__ = {');
   expect(program).toContain("'__builtins__': __hvy_safe_builtins__");
@@ -154,8 +147,8 @@ test('buildPythonProgram executes user code with restricted builtins', () => {
   expect(program).toContain("'hasattr': __hvy_hasattr__");
   expect(program).toContain("'setattr': __hvy_setattr__");
   expect(program).toContain("'delattr': __hvy_delattr__");
-  expect(program).toContain("'__func__',");
-  expect(program).toContain("'__globals__',");
+  expect(program).toContain('if "__" in name and name not in __hvy_public_dunder_names__:');
+  expect(program).toContain('__hvy_globals__.sourcePolicyError(expression)');
   expect(program).toContain("'getattr': __hvy_getattr__,\n        'globals': __hvy_safe_globals__");
   expect(program).toContain('__hvy_runtime__.doc.log_json(__hvy_to_json__([text]))');
   expect(program).toContain('raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")');
@@ -176,24 +169,28 @@ doc.header.set("phase", "after")`
   );
 });
 
-test('buildPythonProgram uses the component id in tracebacks when available', () => {
-  expect(buildPythonProgram('r7', 'import-example-script')).toContain(
-    "__hvy_code__ = compile(__hvy_compilable_source__, '<import-example-script>', 'exec')"
-  );
+test('buildPythonProgram reads per-run values from the shared global so its text only depends on libraries', () => {
+  const program = buildPythonProgram();
+
+  expect(program).toContain('__hvy_runtime_id__ = __hvy_globals__.startingRuntimeId');
+  expect(program).toContain('for __hvy_injected_entry__ in __hvy_globals__.injectedGlobals[__hvy_runtime_id__]:');
+  expect(program).not.toContain('r7');
+  expect(buildPythonProgram()).toBe(program);
 });
 
-test('buildPythonProgram reuses a cached compiled definition while its source is unchanged', () => {
-  const program = buildPythonProgram('r7', 'cached-example-script', {}, [], 'cached-example-script');
+test('buildPythonProgram reuses compiled user code keyed by trace filename and source', () => {
+  const program = buildPythonProgram();
 
-  expect(program).toContain("__hvy_code__ = __hvy_globals__.compiledDefinitions.get(__hvy_definition_key__)");
-  expect(program).toContain("__hvy_globals__.compiledDefinitionSources.get(__hvy_definition_key__) != __hvy_compilable_source__");
-  expect(program).toContain("__hvy_globals__.compiledDefinitions.set(__hvy_definition_key__, __hvy_code__)");
+  expect(program).toContain("__hvy_code_key__ = __hvy_trace_filename__ + '\\n' + __hvy_compilable_source__");
+  expect(program).toContain('__hvy_code__ = __hvy_globals__.getCompiledCode(__hvy_code_key__)');
+  expect(program).toContain("__hvy_code__ = compile(__hvy_compilable_source__, __hvy_trace_filename__, 'exec')");
+  expect(program).toContain('__hvy_globals__.rememberCompiledCode(__hvy_code_key__, __hvy_code__)');
 });
 
 test('buildPythonProgram preloads checked libraries', () => {
-  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're', 'datetime']);
+  const program = buildPythonProgram(['random', 're', 'datetime']);
 
-  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re", "datetime"]');
+  expect(program).toContain('__hvy_allowed_libraries__ = ["random","re","datetime"]');
   expect(program).toContain("__hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)");
   expect(program).toContain('if root_name == "re":');
   expect(program).toContain('return __HvyReModule__()');
@@ -434,6 +431,8 @@ test('createScriptingRuntime exposes a supplied form API', () => {
       get_options: () => [{ label: 'Soup', value: 'soup' }],
       set_error: () => {},
       clear_error: () => {},
+      set_submit_disabled: () => {},
+      get_submit_disabled: () => false,
     },
   });
 
@@ -715,6 +714,54 @@ test('createScriptingRuntime exposes synchronous hvy cli commands', () => {
   expect(runtime.stats.toolCalls).toBe(3);
 });
 
+test('expected result: doc.cli.run sees structural edits made through other doc APIs in the same script turn', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:container {"id":"box"}-->
+
+ <!--hvy:text {"id":"first"}-->
+  First
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, renderOnMutation: false });
+  expect(runtime.doc.cli.run('ls /id/box/container')).not.toContain('added');
+
+  const [box] = runtime.doc.tool('get_components', { component: 'container' }) as Array<{
+    append_child: (component: string, config: unknown, text: string, slot: string) => unknown;
+  }>;
+  box!.append_child('text', { id: 'added' }, 'Added', 'container');
+
+  expect(runtime.doc.cli.run('ls /id/box/container')).toContain('added');
+  expect(runtime.doc.cli.run('cat /id/added/text.txt')).toBe('Added');
+});
+
+test('expected result: doc.cli.run sees host document edits after the script awaits', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, renderOnMutation: false });
+  expect(runtime.doc.cli.run('ls /body')).not.toContain('later');
+
+  document.sections.push(...deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"later"}-->
+#! Later
+`, '.hvy').sections);
+  await Promise.resolve();
+
+  expect(runtime.doc.cli.run('ls /body')).toContain('later');
+});
+
 test('createScriptingRuntime exposes safe virtual file writes', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -808,7 +855,7 @@ hvy_version: 0.1
 
  <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"tool-python"}-->
 `, '.hvy');
-  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+  const runtime = createScriptingRuntime({ document, previousComponents: { fingerprints: null, loadDocument: () => previousDocument }, changeReason: 'edit' });
 
   const updated = runtime.doc.tool('get_updated_components', { component: 'xref' }) as Array<{
     id: string;
@@ -863,7 +910,7 @@ component_defs:
   const previousDocument = deserializeDocument(source, '.hvy');
   const document = deserializeDocument(source.replace('application-one\",\"sortKeys', 'application-one\",\"tags\":\"edited\",\"sortKeys'), '.hvy');
   syncSortValuesForDocument(document);
-  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+  const runtime = createScriptingRuntime({ document, previousComponents: { fingerprints: null, loadDocument: () => previousDocument }, changeReason: 'edit' });
 
   const updated = runtime.doc.tool('get_updated_components', { component: 'application-entry' }) as Array<{ id: string }>;
 
@@ -884,7 +931,7 @@ test('createScriptingRuntime points db-table SQL callers at doc.db instead of cl
   );
 });
 
-test('scripting hooks run editor-only scripts in editor and AI views', () => {
+test('scripting hooks run editor scripts in editor, viewer scripts in viewer, and both in AI', () => {
   const targets = [
     {
       sectionKey: 'section',
@@ -908,7 +955,7 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
 
   expect(getRunnableScriptingTargetsForView(targets, 'editor').map((target) => target.blockId)).toEqual(['editor-script']);
   expect(getRunnableScriptingTargetsForView(targets, 'viewer').map((target) => target.blockId)).toEqual(['document-script']);
-  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script']);
+  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script', 'document-script']);
 });
 
 test('component handle expand applies transient reader state without changing serialized defaults', () => {
@@ -948,6 +995,6 @@ hvy_version: 0.1
   expect(getReaderSectionExpandedOverride(document.sections[0]!)).toBe(true);
   expect(block.schema.expandableExpanded).toBe(false);
   expect(serializeDocument(document)).toBe(serializedBefore);
-  expect(refreshReaderPanels).toHaveBeenCalledOnce();
+  expect(refreshReaderPanels).not.toHaveBeenCalled();
   expect(renderApp).toHaveBeenCalledOnce();
 });

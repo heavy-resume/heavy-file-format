@@ -1,3 +1,4 @@
+import { checkScriptSourcePolicy } from './script-source-policy';
 import { wrapPythonSourceInFunction } from './python-source';
 
 interface PythonCompiler {
@@ -49,6 +50,8 @@ async function loadSyntaxCompiler(): Promise<PythonCompiler> {
 
 export async function checkPythonSyntax(source: string): Promise<PythonSyntaxIssue | null> {
   if (!source.trim()) return null;
+  const policyIssue = checkScriptSourcePolicy(source);
+  if (policyIssue) return policyIssue;
   if (results.has(source)) return results.get(source)!;
   const compiler = await (compilerPromise ??= loadSyntaxCompiler());
   const filename = `${compiler.script_path}#${SYNTAX_MODULE}`;

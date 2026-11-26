@@ -1,6 +1,37 @@
 .hvy-document .hvy-form-plugin {
+  position: relative;
   display: block;
   width: 100%;
+}
+
+.hvy-document .hvy-form-run-notice {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  max-width: min(100%, 22rem);
+  padding: 0.3rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-success) 40%, var(--hvy-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-success) 8%, var(--hvy-surface));
+  box-shadow: 0 8px 20px var(--hvy-shadow-md);
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+  pointer-events: none;
+  animation-name: hvy-form-run-notice-fade;
+  animation-timing-function: ease;
+  animation-fill-mode: forwards;
+}
+
+@keyframes hvy-form-run-notice-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  70% {
+    opacity: 1;
+  }
 }
 
 .hvy-document .hvy-form-editor-section {
@@ -42,7 +73,7 @@
   font-size: 0.85rem;
 }
 
-.hvy-document .hvy-form-plugin input,
+.hvy-document .hvy-form-plugin input:not([type='checkbox']):not([type='radio']):not([type='range']),
 .hvy-document .hvy-form-plugin select,
 .hvy-document .hvy-form-plugin textarea {
   width: 100%;
@@ -55,7 +86,7 @@
   background: var(--hvy-surface);
 }
 
-.hvy-document .hvy-form-plugin input:not([type='checkbox']):not([type='radio']),
+.hvy-document .hvy-form-plugin input:not([type='checkbox']):not([type='radio']):not([type='range']),
 .hvy-document .hvy-form-plugin select {
   line-height: 1.4;
   min-height: calc(1.4em + 0.76rem + 2px);
@@ -70,10 +101,7 @@
   align-items: center;
   justify-content: end;
   gap: 0.45rem;
-}
-
-.hvy-document label.hvy-form-checkbox-label input {
-  width: auto;
+  cursor: pointer;
 }
 
 .hvy-document .hvy-form-options-editor,
@@ -125,12 +153,30 @@
 
 .hvy-document label.hvy-form-field-checkbox input {
   order: 1;
-  width: auto;
 }
 
 .hvy-document label.hvy-form-field-checkbox .hvy-form-field-error {
   order: 3;
   flex-basis: 100%;
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-field input:disabled:not([type='range']),
+.hvy-document .hvy-form-plugin .hvy-form-field select:disabled,
+.hvy-document .hvy-form-plugin .hvy-form-field textarea:disabled {
+  border-style: dashed;
+  color: var(--hvy-text-muted);
+  background: var(--hvy-surface-alt);
+  cursor: not-allowed;
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-field[data-form-field-disabled='true'] .hvy-form-field-label,
+.hvy-document .hvy-form-plugin .hvy-form-field[data-form-field-disabled='true'] .hvy-form-radio-option {
+  color: var(--hvy-text-muted);
+}
+
+.hvy-document .hvy-form-plugin .hvy-form-field[data-form-field-disabled='true'] .hvy-form-radio-option,
+.hvy-document .hvy-form-plugin label.hvy-form-field[data-form-field-disabled='true'] {
+  cursor: not-allowed;
 }
 
 .hvy-document .hvy-form-field-hidden {
@@ -167,7 +213,15 @@
 
 .hvy-document .hvy-form-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
+}
+
+.hvy-document .hvy-form-submit-reason {
+  flex-basis: 100%;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--hvy-muted);
 }
 
 .hvy-document .hvy-form-status,

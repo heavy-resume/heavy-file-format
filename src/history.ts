@@ -1,19 +1,18 @@
-import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getRenderApp } from './state';
+import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getActiveStateRuntime, getRenderApp, runWithStateRuntime, type StateRuntime } from './state';
 import { debugMeasure } from './utils';
-import type { DocumentAttachment, VisualDocument } from './types';
+import type { VisualDocument } from './types';
 import { saveSessionState } from './state-persistence';
 import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 import { markKeywordChatContextDocumentChanged } from './chat/chat-context';
-import { invalidateHvyCliSessionVirtualFileSystem } from './cli-core/commands';
-import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from './attachments';
 import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
 import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachment-store';
 import { hasTextFillInMarker } from './text-fill-in';
 import {
   adoptDatabaseHistoryVersion,
+  clearDatabaseHistory,
   enqueueDatabaseHistoryNavigation,
   getDatabaseHistoryVersion,
   hasDatabaseHistoryVersionTransition,
@@ -22,32 +21,31 @@ import {
   restoreDatabaseHistoryVersion,
 } from './database-history-controller';
 import {
+  clearAttachmentHistory,
   getAttachmentHistoryVersion,
   hasAttachmentHistoryVersionTransition,
   restoreAttachmentHistoryVersion,
 } from './attachment-history-controller';
-import { recordDatabaseTablesChanged } from './database-change-tracker';
+import {
+  clearPluginHistory,
+  getPluginHistoryVersion,
+  hasPluginHistoryVersionTransition,
+  restorePluginHistoryVersion,
+} from './plugin-history-controller';
 import { findSectionByKey } from './section-ops';
 import { navigateReusableDefinitionHistory, recordReusableDefinitionHistory } from './reusable-definition-history';
 import {
   prepareHistoryViewportTransition,
 } from './history-viewport-transition';
-
-interface HistorySnapshotOptions {
-  includeDatabaseAttachment?: boolean;
-}
-
-interface SerializedHistoryAttachment {
-  id: string;
-  meta: DocumentAttachment['meta'];
-  bytes: number[];
-}
+import { EDITOR_INPUT_IDLE_MS } from './editor-input-timing';
+import { markPluginDocumentHooksCurrent } from './plugins/hooks';
+import { closeScriptHistoryStep } from './script-history-step';
 
 interface ParsedHistorySnapshot {
   document: VisualDocument;
-  databaseAttachment?: SerializedHistoryAttachment | null;
   databaseHistoryVersion?: string | null;
   attachmentHistoryVersion?: string | null;
+  pluginHistoryVersion?: string | null;
   templateValues: Record<string, string>;
   filename: string;
   editorMode?: 'basic' | 'advanced' | 'raw' | 'cli';
@@ -83,10 +81,36 @@ interface StoredHistoryEntry {
   editorContext?: HistoryEditorContext | null;
 }
 
-let databaseAttachmentChangedSinceHistory = false;
 const editorContextBeforeInput = new WeakMap<HTMLElement, HistoryEditorContext>();
 const editorContextAfterInput = new WeakMap<VisualBlock, HistoryEditorContext>();
 const standaloneEditorContextAfterInput = new WeakMap<VisualDocument, HistoryEditorContext>();
+
+interface PendingInputHistory {
+  changeSource: ReturnType<typeof inferDocumentChangeSource>;
+  document: VisualDocument;
+  endEditorContext: HistoryEditorContext | null;
+  group: string;
+  notify: boolean;
+  startEditorContext: HistoryEditorContext | null;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const pendingInputHistories = new WeakMap<StateRuntime, PendingInputHistory>();
+
+// Entries are deltas, so rebuilding a snapshot replays the stack up to it. Edits compare
+// against the newest snapshot, and undo and hook amendments read the one before it, so the
+// newest rebuilt snapshots are kept and any other replays from the nearest kept one below
+// it. A stack only changes in place at its tail, and each such write forgets the snapshots
+// from that index on; any other change replaces the array.
+const HISTORY_SNAPSHOT_CACHE_SIZE = 3;
+
+interface CachedHistorySnapshot {
+  index: number;
+  entry: string;
+  snapshot: string;
+}
+
+const cachedHistorySnapshots = new WeakMap<string[], CachedHistorySnapshot[]>();
 
 type ActiveEditorRestoreState = Pick<AppState,
   | 'activeEditorBlock'
@@ -102,18 +126,20 @@ type ActiveEditorRestoreState = Pick<AppState,
   preferredEditorTarget: NonNullable<AppState['pendingEditorActivation']>['preferredEditorTarget'] | null;
 };
 
-export function snapshotState(options: HistorySnapshotOptions = {}): string {
+// Database and attachment bytes stay out of snapshots: a snapshot names their history
+// versions, and their controllers restore the bytes for those versions.
+export function snapshotState(): string {
   return JSON.stringify(
     {
       document: documentToHistorySnapshot(state.document),
-      ...(options.includeDatabaseAttachment
-        ? { databaseAttachment: serializeHistoryAttachment(getAttachment(state.document, DB_ATTACHMENT_ID)) }
-        : {}),
       ...(getDatabaseHistoryVersion() !== null
         ? { databaseHistoryVersion: getDatabaseHistoryVersion() }
         : {}),
       ...(getAttachmentHistoryVersion() !== null
         ? { attachmentHistoryVersion: getAttachmentHistoryVersion() }
+        : {}),
+      ...(getPluginHistoryVersion() !== null
+        ? { pluginHistoryVersion: getPluginHistoryVersion() }
         : {}),
       templateValues: state.templateValues,
       filename: state.filename,
@@ -123,14 +149,44 @@ export function snapshotState(options: HistorySnapshotOptions = {}): string {
       rawEditorError: state.rawEditorError,
       rawEditorDiagnostics: state.rawEditorDiagnostics,
       paletteOverrideId: state.paletteOverrideId,
-    },
-    null,
-    2
+    }
   );
 }
 
+export function isUndoDisabled(): boolean {
+  return Boolean(state?.undoDisabled);
+}
+
+export function disableUndo(): void {
+  if (!state || state.undoDisabled) {
+    return;
+  }
+  flushPendingInputHistory();
+  closeScriptHistoryStep();
+  state.undoDisabled = true;
+  state.history = [];
+  state.future = [];
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
+  clearDatabaseHistory();
+  clearAttachmentHistory();
+  clearPluginHistory();
+}
+
+export function enableUndo(): void {
+  if (!state || !state.undoDisabled) {
+    return;
+  }
+  state.undoDisabled = false;
+  state.history = [];
+  state.future = [];
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
+  commitHistorySnapshot();
+}
+
 export function commitHistorySnapshot(): void {
-  if (state.isRestoring) {
+  if (state.isRestoring || isUndoDisabled()) {
     return;
   }
   if (state.reusableDefinitionEditModal) {
@@ -141,13 +197,52 @@ export function commitHistorySnapshot(): void {
   const snap = debugMeasure('snapshotState:commit', { snapshotId, historyLength: state.history.length }, () => snapshotState());
   const last = getLastHistorySnapshot();
   if (last !== snap) {
+    // An open script step keeps its entry current, so a difference here is a change from
+    // outside it; the step must not fold later work into this new entry.
+    closeScriptHistoryStep();
     pushHistorySnapshot(snap);
     state.future = [];
     saveSessionState(state);
   }
 }
 
+export function snapshotStateMatchesLastHistoryEntry(): boolean {
+  return getLastHistorySnapshot() === snapshotState();
+}
+
+/** Records the current state as a new undo step when it differs from the newest entry. */
+export function recordScriptHistorySnapshot(): boolean {
+  if (isUndoDisabled()) {
+    return false;
+  }
+  ensureHistoryInitialized();
+  const snapshot = snapshotState();
+  if (getLastHistorySnapshot() === snapshot) {
+    return false;
+  }
+  pushHistorySnapshot(snapshot, { editorContext: null });
+  return true;
+}
+
+/** Moves the newest entry forward to the current state, folding changes into its undo step. */
+export function amendLastHistorySnapshot(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
+  ensureHistoryInitialized();
+  const entryIndex = state.history.length - 1;
+  const previous = entryIndex > 0 ? getHistorySnapshotAt(entryIndex - 1) : null;
+  const amended = snapshotState();
+  const editorContext = getHistoryEditorContextAt(entryIndex);
+  forgetHistorySnapshotsFrom(entryIndex);
+  state.history[entryIndex] = encodeStoredHistoryEntry(encodeHistoryEntry(previous, amended), editorContext);
+  rememberLastHistorySnapshot(amended);
+}
+
 export function ensureHistoryInitialized(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
   if (!Array.isArray(state.history)) {
     state.history = [];
   }
@@ -160,7 +255,17 @@ export function ensureHistoryInitialized(): void {
 }
 
 export function recordHistory(group?: string, options: { notify?: boolean } = {}): void {
+  flushPendingInputHistory();
   if (state.isRestoring) {
+    return;
+  }
+  if (isUndoDisabled()) {
+    if (!state.reusableDefinitionEditModal && !isQueuedDatabaseHistoryCommandActive()) {
+      markKeywordChatContextDocumentChanged(state.document);
+      const changeSource = inferDocumentChangeSource(group);
+      saveSessionState(state);
+      if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
+    }
     return;
   }
   // Keep draft checkpoints separate from the document's undo stack.
@@ -168,11 +273,11 @@ export function recordHistory(group?: string, options: { notify?: boolean } = {}
     recordReusableDefinitionHistory(group);
     return;
   }
+  closeScriptHistoryStep();
   if (isQueuedDatabaseHistoryCommandActive()) {
     return;
   }
   markKeywordChatContextDocumentChanged(state.document);
-  invalidateHvyCliSessionVirtualFileSystem(state.cliSession);
   const changeSource = inferDocumentChangeSource(group);
   const contextBeforeInput = consumeHistoryEditorContextBeforeInput();
   const contextAfterInput = captureHistoryEditorContext();
@@ -234,32 +339,100 @@ export function recordHistory(group?: string, options: { notify?: boolean } = {}
   if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
 }
 
-export function recordDatabaseAttachmentHistory(): void {
+export function recordInputHistory(group: string, options: { notify?: boolean } = {}): void {
   if (state.isRestoring) {
     return;
   }
-  if (isQueuedDatabaseHistoryCommandActive()) {
+  if (isUndoDisabled()) {
+    if (!state.reusableDefinitionEditModal && !isQueuedDatabaseHistoryCommandActive()) {
+      markKeywordChatContextDocumentChanged(state.document);
+      const changeSource = inferDocumentChangeSource(group);
+      if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
+    }
     return;
   }
-  ensureHistoryInitialized();
-  const snap = snapshotState({ includeDatabaseAttachment: true });
-  if (getLastHistorySnapshot() !== snap) {
-    pushHistorySnapshot(snap);
-    state.future = [];
-    saveSessionState(state);
+  if (state.reusableDefinitionEditModal || isQueuedDatabaseHistoryCommandActive()) {
+    recordHistory(group, options);
+    return;
   }
-  databaseAttachmentChangedSinceHistory = false;
+  closeScriptHistoryStep();
+  markKeywordChatContextDocumentChanged(state.document);
+  const changeSource = inferDocumentChangeSource(group);
+  const contextBeforeInput = consumeHistoryEditorContextBeforeInput();
+  const contextAfterInput = captureHistoryEditorContext();
+  const editorContext = contextBeforeInput ?? contextAfterInput;
+  ensureHistoryInitialized();
+
+  const runtime = getActiveStateRuntime();
+  const pending = pendingInputHistories.get(runtime);
+  const continuesBurst = pending?.document === state.document && pending.group === group;
+  if (pending && !continuesBurst) {
+    flushPendingInputHistoryForRuntime(runtime);
+  } else if (pending) {
+    clearTimeout(pending.timer);
+  }
+  if (!continuesBurst) {
+    // A typing burst is a new user action. Like recordHistory at the start of every other
+    // action, it first records the state the previous action left, so that state ends the
+    // previous undo step instead of joining this one. The keystroke is not applied yet.
+    const snapshot = snapshotState();
+    if (getLastHistorySnapshot() !== snapshot) {
+      pushHistorySnapshot(snapshot, { editorContext });
+    }
+  }
+  pendingInputHistories.set(runtime, {
+    changeSource,
+    document: state.document,
+    endEditorContext: continuesBurst ? pending.endEditorContext : editorContext,
+    group,
+    notify: options.notify !== false,
+    startEditorContext: continuesBurst ? pending.startEditorContext : editorContext,
+    timer: setTimeout(() => {
+      runWithStateRuntime(runtime, () => flushPendingInputHistoryForRuntime(runtime));
+    }, EDITOR_INPUT_IDLE_MS),
+  });
+  state.future = [];
+}
+
+export function updatePendingInputHistoryContext(): void {
+  const pending = pendingInputHistories.get(getActiveStateRuntime());
+  if (!pending || pending.document !== state.document) {
+    return;
+  }
+  pending.endEditorContext = captureHistoryEditorContext() ?? pending.endEditorContext;
+}
+
+export function flushPendingInputHistory(): void {
+  flushPendingInputHistoryForRuntime(getActiveStateRuntime());
+}
+
+function flushPendingInputHistoryForRuntime(runtime: StateRuntime): void {
+  const pending = pendingInputHistories.get(runtime);
+  if (!pending) {
+    return;
+  }
+  clearTimeout(pending.timer);
+  pendingInputHistories.delete(runtime);
+  if (state.isRestoring || pending.document !== state.document) {
+    return;
+  }
+  const snap = snapshotState();
+  if (getLastHistorySnapshot() !== snap) {
+    const endEditorContext = pending.endEditorContext ?? captureHistoryEditorContext() ?? pending.startEditorContext;
+    updateLastHistoryEditorContext(pending.startEditorContext);
+    pushHistorySnapshot(snap, { editorContext: endEditorContext });
+    rememberHistoryEditorContextAfterInput(endEditorContext);
+    state.future = [];
+  } else {
+    updateLastHistoryEditorContext(captureHistoryEditorContext() ?? pending.startEditorContext);
+  }
+  if (pending.notify) notifyDocumentMayHaveChanged(pending.group, pending.changeSource);
 }
 
 export function markDatabaseAttachmentChanged(): void {
   if (!state.isRestoring) {
-    databaseAttachmentChangedSinceHistory = true;
     invalidateDatabaseHistoryVersion();
   }
-}
-
-export function clearDatabaseAttachmentChangedForQueuedHistory(): void {
-  databaseAttachmentChangedSinceHistory = false;
 }
 
 export function captureHistoryStackState(): HistoryStackState {
@@ -274,35 +447,40 @@ export function restoreHistoryStackState(value: unknown): void {
 }
 
 export function undoState(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
+  flushPendingInputHistory();
+  closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('undo')) return;
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
   const activeEditor = captureActiveEditorRestoreState();
-  const current = snapshotState({ includeDatabaseAttachment: databaseAttachmentChangedSinceHistory });
+  const current = snapshotState();
   const currentEditorContext = getHistoryEditorContextAfterInput() ?? captureHistoryEditorContext();
   const last = getLastHistorySnapshot();
   if (last !== current) {
     pushHistorySnapshot(current, { clearFuture: false, editorContext: currentEditorContext });
   }
-  databaseAttachmentChangedSinceHistory = false;
   if (state.history.length <= 1) {
     return;
   }
-  const targetSnapshot = getHistorySnapshotAt(state.history.length - 2);
+  const target = parseHistorySnapshot(getHistorySnapshotAt(state.history.length - 2));
   const activeHistoryContext = getHistoryEditorContextAt(state.history.length - 1);
-  if (activeHistoryContext && !historySnapshotContainsActiveEditor(targetSnapshot, activeEditor)) {
+  if (activeHistoryContext && !historySnapshotContainsActiveEditor(target, activeEditor)) {
     return;
   }
   state.isRestoring = true;
   const currentSnapshot = getLastHistorySnapshot();
   const storedCurrentEditorContext = getHistoryEditorContextAt(state.history.length - 1);
   state.history.pop();
+  forgetHistorySnapshotsFrom(state.history.length);
   if (currentSnapshot) {
     state.future.push(encodeStoredHistoryEntry(currentSnapshot, storedCurrentEditorContext));
   }
-  const prev = getLastHistorySnapshot();
-  if (prev) {
-    restoreFromSnapshot(prev);
+  if (target) {
+    restoreFromParsedSnapshot(target);
+    adoptRestoredDatabaseHistoryVersion(target);
     restoreActiveEditorState(activeEditor, getHistoryEditorContextAt(state.history.length - 1));
   }
   state.lastHistoryGroup = null;
@@ -314,6 +492,11 @@ export function undoState(): void {
 }
 
 export function redoState(): void {
+  if (isUndoDisabled()) {
+    return;
+  }
+  flushPendingInputHistory();
+  closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('redo')) return;
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
@@ -327,7 +510,11 @@ export function redoState(): void {
   const nextEditorContext = storedNext?.editorContext ?? null;
   state.isRestoring = true;
   pushHistorySnapshot(next, { clearFuture: false, editorContext: nextEditorContext });
-  restoreFromSnapshot(next);
+  const parsedNext = parseHistorySnapshot(next);
+  if (parsedNext) {
+    restoreFromParsedSnapshot(parsedNext);
+    adoptRestoredDatabaseHistoryVersion(parsedNext);
+  }
   restoreActiveEditorState(activeEditor, nextEditorContext);
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
@@ -338,14 +525,19 @@ export function redoState(): void {
 }
 
 export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
+  if (isUndoDisabled()) {
+    return Promise.resolve();
+  }
+  flushPendingInputHistory();
+  closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('undo')) return Promise.resolve();
   return enqueueDatabaseHistoryNavigation('Undo database edit', async () => {
     ensureHistoryInitialized();
-    const current = snapshotState({ includeDatabaseAttachment: databaseAttachmentChangedSinceHistory });
+    const current = snapshotState();
     const last = getLastHistorySnapshot();
     const targetIndex = last !== current ? state.history.length - 1 : state.history.length - 2;
     if (targetIndex < 0) return;
-    const target = getHistorySnapshotAt(targetIndex);
+    const target = parseHistorySnapshot(getHistorySnapshotAt(targetIndex));
     const targetEditorContext = getHistoryEditorContextAt(targetIndex);
     const activeEditor = captureActiveEditorRestoreState();
     const activeHistoryContext = getHistoryEditorContextAfterInput()
@@ -354,8 +546,10 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
     await prepareHistoryViewportTransition(activeHistoryContext, root);
     const targetDatabaseVersion = getHistoryDatabaseVersion(target);
     const targetAttachmentVersion = getHistoryAttachmentVersion(target);
+    const targetPluginVersion = getHistoryPluginVersion(target);
     if (!hasDatabaseHistoryVersionTransition(targetDatabaseVersion)
-      && !hasAttachmentHistoryVersionTransition(targetAttachmentVersion)) {
+      && !hasAttachmentHistoryVersionTransition(targetAttachmentVersion)
+      && !hasPluginHistoryVersionTransition(targetPluginVersion)) {
       undoState();
       return;
     }
@@ -363,21 +557,25 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
     const currentEditorContext = getHistoryEditorContextAfterInput() ?? captureHistoryEditorContext();
     state.isRestoring = true;
     try {
-      restoreFromSnapshot(target);
+      if (target) restoreFromParsedSnapshot(target);
       await restoreDatabaseHistoryVersion(targetDatabaseVersion);
       await restoreAttachmentHistoryVersion(targetAttachmentVersion);
+      await restorePluginHistoryVersion(targetPluginVersion);
     } catch (error) {
-      restoreFromSnapshot(current);
-      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(current)).catch(() => {});
-      await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(current)).catch(() => {});
+      const parsedCurrent = parseHistorySnapshot(current);
+      if (parsedCurrent) restoreFromParsedSnapshot(parsedCurrent);
+      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(parsedCurrent)).catch(() => {});
+      await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(parsedCurrent)).catch(() => {});
+      await restorePluginHistoryVersion(getHistoryPluginVersion(parsedCurrent)).catch(() => {});
+      markPluginDocumentHooksCurrent();
       state.isRestoring = false;
       throw error;
     }
     if (last !== current) pushHistorySnapshot(current, { clearFuture: false, editorContext: currentEditorContext });
-    databaseAttachmentChangedSinceHistory = false;
     const currentSnapshot = getLastHistorySnapshot();
     const storedCurrentEditorContext = getHistoryEditorContextAt(state.history.length - 1);
     state.history.pop();
+    forgetHistorySnapshotsFrom(state.history.length);
     if (currentSnapshot) state.future.push(encodeStoredHistoryEntry(currentSnapshot, storedCurrentEditorContext));
     restoreActiveEditorState(activeEditor, targetEditorContext);
     finishHistoryNavigation('undo', modalScroll);
@@ -385,6 +583,11 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
 }
 
 export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
+  if (isUndoDisabled()) {
+    return Promise.resolve();
+  }
+  flushPendingInputHistory();
+  closeScriptHistoryStep();
   if (navigateReusableDefinitionHistory('redo')) return Promise.resolve();
   return enqueueDatabaseHistoryNavigation('Redo database edit', async () => {
     ensureHistoryInitialized();
@@ -394,10 +597,13 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
     const next = storedNext?.content ?? nextEntry;
     const nextEditorContext = storedNext?.editorContext ?? null;
     await prepareHistoryViewportTransition(nextEditorContext, root);
-    const nextDatabaseVersion = getHistoryDatabaseVersion(next);
-    const nextAttachmentVersion = getHistoryAttachmentVersion(next);
+    const parsedNext = parseHistorySnapshot(next);
+    const nextDatabaseVersion = getHistoryDatabaseVersion(parsedNext);
+    const nextAttachmentVersion = getHistoryAttachmentVersion(parsedNext);
+    const nextPluginVersion = getHistoryPluginVersion(parsedNext);
     if (!hasDatabaseHistoryVersionTransition(nextDatabaseVersion)
-      && !hasAttachmentHistoryVersionTransition(nextAttachmentVersion)) {
+      && !hasAttachmentHistoryVersionTransition(nextAttachmentVersion)
+      && !hasPluginHistoryVersionTransition(nextPluginVersion)) {
       redoState();
       return;
     }
@@ -406,13 +612,17 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
     const current = snapshotState();
     state.isRestoring = true;
     try {
-      restoreFromSnapshot(next);
+      if (parsedNext) restoreFromParsedSnapshot(parsedNext);
       await restoreDatabaseHistoryVersion(nextDatabaseVersion);
       await restoreAttachmentHistoryVersion(nextAttachmentVersion);
+      await restorePluginHistoryVersion(nextPluginVersion);
     } catch (error) {
-      restoreFromSnapshot(current);
-      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(current)).catch(() => {});
-      await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(current)).catch(() => {});
+      const parsedCurrent = parseHistorySnapshot(current);
+      if (parsedCurrent) restoreFromParsedSnapshot(parsedCurrent);
+      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(parsedCurrent)).catch(() => {});
+      await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(parsedCurrent)).catch(() => {});
+      await restorePluginHistoryVersion(getHistoryPluginVersion(parsedCurrent)).catch(() => {});
+      markPluginDocumentHooksCurrent();
       state.isRestoring = false;
       throw error;
     }
@@ -430,6 +640,9 @@ function finishHistoryNavigation(
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
   state.isRestoring = false;
+  // Database and attachment versions restore after the snapshot, so the hook
+  // baseline is taken again once the whole state is back.
+  markPluginDocumentHooksCurrent();
   getRenderApp()();
   restoreModalScroll(modalScroll);
   notifyDocumentMayHaveChanged(action, inferDocumentChangeSource(action), { authoritative: true });
@@ -440,11 +653,13 @@ function pushHistorySnapshot(
   options: { clearFuture?: boolean; editorContext?: HistoryEditorContext | null } = {}
 ): void {
   const previous = getLastHistorySnapshot();
+  forgetHistorySnapshotsFrom(state.history.length);
   state.history.push(encodeStoredHistoryEntry(
     encodeHistoryEntry(previous, snapshot),
     options.editorContext === undefined ? captureHistoryEditorContext() : options.editorContext
   ));
   compactHistoryLimit();
+  rememberLastHistorySnapshot(snapshot);
   if (options.clearFuture ?? true) {
     state.future = [];
   }
@@ -457,18 +672,50 @@ function compactHistoryLimit(): void {
   const firstKeptIndex = state.history.length - 200;
   const firstKeptSnapshot = getHistorySnapshotAt(firstKeptIndex);
   const firstKeptEditorContext = getHistoryEditorContextAt(firstKeptIndex);
+  const previousHistory = state.history;
   state.history = [encodeStoredHistoryEntry(firstKeptSnapshot, firstKeptEditorContext), ...state.history.slice(firstKeptIndex + 1)];
+  // Kept entries rebuild the same snapshots, now at lower indexes.
+  for (const cached of cachedHistorySnapshots.get(previousHistory) ?? []) {
+    if (cached.index >= firstKeptIndex) {
+      rememberHistorySnapshotAt(cached.index - firstKeptIndex, cached.snapshot);
+    }
+  }
 }
 
 function getLastHistorySnapshot(): string | null {
-  return state.history.length > 0 ? getHistorySnapshotAt(state.history.length - 1) : null;
+  return state.history.length === 0 ? null : getHistorySnapshotAt(state.history.length - 1);
+}
+
+function rememberLastHistorySnapshot(snapshot: string): void {
+  rememberHistorySnapshotAt(state.history.length - 1, snapshot);
+}
+
+function rememberHistorySnapshotAt(index: number, snapshot: string): void {
+  const cached = (cachedHistorySnapshots.get(state.history) ?? []).filter((item) => item.index !== index);
+  cached.push({ index, entry: state.history[index] ?? '', snapshot });
+  cached.sort((left, right) => right.index - left.index);
+  cachedHistorySnapshots.set(state.history, cached.slice(0, HISTORY_SNAPSHOT_CACHE_SIZE));
+}
+
+function forgetHistorySnapshotsFrom(index: number): void {
+  const cached = cachedHistorySnapshots.get(state.history);
+  if (cached) {
+    cachedHistorySnapshots.set(state.history, cached.filter((item) => item.index < index));
+  }
 }
 
 function getHistorySnapshotAt(index: number): string {
-  let snapshot = '';
-  for (let entryIndex = 0; entryIndex <= index; entryIndex += 1) {
+  const base = (cachedHistorySnapshots.get(state.history) ?? []).find((item) =>
+    item.index <= index && state.history[item.index] === item.entry
+  );
+  if (base?.index === index) {
+    return base.snapshot;
+  }
+  let snapshot = base?.snapshot ?? '';
+  for (let entryIndex = base ? base.index + 1 : 0; entryIndex <= index; entryIndex += 1) {
     snapshot = applyHistoryEntry(snapshot, state.history[entryIndex] ?? '');
   }
+  rememberHistorySnapshotAt(index, snapshot);
   return snapshot;
 }
 
@@ -502,10 +749,13 @@ function updateLastHistoryEditorContext(editorContext: HistoryEditorContext | nu
   if (state.history.length === 0) {
     return;
   }
+  const snapshot = getLastHistorySnapshot();
   const index = state.history.length - 1;
   const entry = state.history[index] ?? '';
   const stored = parseStoredHistoryEntry(entry);
+  forgetHistorySnapshotsFrom(index);
   state.history[index] = encodeStoredHistoryEntry(stored?.content ?? entry, editorContext);
+  rememberLastHistorySnapshot(snapshot ?? '');
 }
 
 function encodeHistoryEntry(previous: string | null, snapshot: string): string {
@@ -822,14 +1072,16 @@ function findSnapshotBlockByIds(sectionKey: string, blockId: string): VisualBloc
 }
 
 function historySnapshotContainsActiveEditor(
-  snapshot: string,
+  parsed: ParsedHistorySnapshot | null,
   activeEditor: ActiveEditorRestoreState | null
 ): boolean {
   if (!activeEditor?.activeEditorBlock) {
     return true;
   }
+  if (!parsed) {
+    return false;
+  }
   try {
-    const parsed = JSON.parse(snapshot) as ParsedHistorySnapshot;
     if (parsed.editorMode === 'raw' || parsed.editorMode === 'cli') {
       return false;
     }
@@ -892,17 +1144,27 @@ function restoreModalScroll(scroll: { selector: string; scrollTop: number } | nu
   }
 }
 
+function parseHistorySnapshot(snapshot: string): ParsedHistorySnapshot | null {
+  try {
+    return JSON.parse(snapshot) as ParsedHistorySnapshot;
+  } catch {
+    return null;
+  }
+}
+
 function restoreFromSnapshot(snapshot: string): void {
+  const parsed = parseHistorySnapshot(snapshot);
+  if (parsed) {
+    restoreFromParsedSnapshot(parsed);
+  }
+}
+
+// The parsed snapshot becomes the live document, so it is restored at most once.
+function restoreFromParsedSnapshot(parsed: ParsedHistorySnapshot): void {
   try {
     const liveAttachmentStore = ensureDocumentAttachmentStore(state.document);
-    const parsed = JSON.parse(snapshot) as ParsedHistorySnapshot;
     state.document = parsed.document;
     attachStoreToDocument(state.document, liveAttachmentStore);
-    if (Object.prototype.hasOwnProperty.call(parsed, 'databaseAttachment')) {
-      restoreDatabaseAttachment(parsed.databaseAttachment ?? null);
-      adoptDatabaseHistoryVersion(parsed.databaseHistoryVersion ?? null);
-      databaseAttachmentChangedSinceHistory = true;
-    }
     state.templateValues = parsed.templateValues ?? {};
     state.filename = parsed.filename ?? 'document.hvy';
     state.editorMode = parsed.editorMode ?? 'basic';
@@ -912,6 +1174,7 @@ function restoreFromSnapshot(snapshot: string): void {
     state.rawEditorDiagnostics = parsed.rawEditorDiagnostics ?? [];
     state.paletteOverrideId = parsed.paletteOverrideId ?? null;
     savePaletteOverrideId(state.paletteOverrideId);
+    markPluginDocumentHooksCurrent();
     state.componentPlacement = null;
     state.pendingEditorActivation = null;
     state.pendingHistoryFocus = null;
@@ -935,20 +1198,16 @@ function restoreFromSnapshot(snapshot: string): void {
   }
 }
 
-function getHistoryDatabaseVersion(snapshot: string): string | null {
-  try {
-    return (JSON.parse(snapshot) as ParsedHistorySnapshot).databaseHistoryVersion ?? null;
-  } catch {
-    return null;
-  }
+function getHistoryDatabaseVersion(parsed: ParsedHistorySnapshot | null): string | null {
+  return parsed?.databaseHistoryVersion ?? null;
 }
 
-function getHistoryAttachmentVersion(snapshot: string): string | null {
-  try {
-    return (JSON.parse(snapshot) as ParsedHistorySnapshot).attachmentHistoryVersion ?? null;
-  } catch {
-    return null;
-  }
+function getHistoryAttachmentVersion(parsed: ParsedHistorySnapshot | null): string | null {
+  return parsed?.attachmentHistoryVersion ?? null;
+}
+
+function getHistoryPluginVersion(parsed: ParsedHistorySnapshot | null): string | null {
+  return parsed?.pluginHistoryVersion ?? null;
 }
 
 function documentToHistorySnapshot(document: VisualDocument): VisualDocument {
@@ -960,28 +1219,11 @@ function documentToHistorySnapshot(document: VisualDocument): VisualDocument {
   };
 }
 
-function serializeHistoryAttachment(attachment: DocumentAttachment | null): SerializedHistoryAttachment | null {
-  if (!attachment) {
-    return null;
+// Undo and redo without a database transition leave the database as it is. Taking the
+// restored entry's version keeps later snapshots comparable with that entry; when the
+// versions differ, no transition could have restored the database anyway.
+function adoptRestoredDatabaseHistoryVersion(parsed: ParsedHistorySnapshot): void {
+  if (parsed.databaseHistoryVersion) {
+    adoptDatabaseHistoryVersion(parsed.databaseHistoryVersion);
   }
-  return {
-    id: attachment.id,
-    meta: attachment.meta,
-    bytes: Array.from(attachment.bytes),
-  };
-}
-
-function restoreDatabaseAttachment(attachment: SerializedHistoryAttachment | null): void {
-  if (!attachment) {
-    removeAttachment(state.document, DB_ATTACHMENT_ID);
-    recordDatabaseTablesChanged(state.document, [], false);
-    return;
-  }
-  setAttachment(
-    state.document,
-    DB_ATTACHMENT_ID,
-    attachment.meta,
-    new Uint8Array(attachment.bytes)
-  );
-  recordDatabaseTablesChanged(state.document, [], false);
 }

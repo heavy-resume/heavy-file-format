@@ -18,8 +18,13 @@ function createDocument(): VisualDocument {
   return {} as VisualDocument;
 }
 
-function mutationRender(runtime: StateRuntime, document: VisualDocument, identity: string): void {
-  const execution = beginScriptCycleExecution(runtime, document, identity);
+function mutationRender(
+  runtime: StateRuntime,
+  document: VisualDocument,
+  identity: string,
+  options: { startedByUser?: boolean; startedByPlugin?: boolean } = {}
+): void {
+  const execution = beginScriptCycleExecution(runtime, document, identity, options);
   execution.beforeMutationRender();
   execution.complete();
 }
@@ -62,6 +67,42 @@ describe('sandbox script cycle coordinator', () => {
     expect(() => mutationRender(runtime, document, 'component-b')).toThrow(/component-a -> component-b/);
   });
 
+  test('expected result: separate user-started runs and the scripts they trigger are not read as a loop', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+    mutationRender(runtime, document, 'triggered-script');
+    mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+    mutationRender(runtime, document, 'triggered-script');
+    mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+
+    expect(() => mutationRender(runtime, document, 'triggered-script')).not.toThrow();
+  });
+
+  test('expected result: the same user-started script may repeat rapidly', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    for (let index = 1; index < SCRIPT_REPEAT_LIMIT; index += 1) {
+      mutationRender(runtime, document, 'user-started-script', { startedByUser: true });
+    }
+
+    expect(() => mutationRender(runtime, document, 'user-started-script', { startedByUser: true })).not.toThrow();
+  });
+
+  test('expected result: a script loop that follows a user-started run is still detected', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    mutationRender(runtime, document, 'component-a', { startedByUser: true });
+    for (const identity of ['component-b', 'component-a', 'component-b', 'component-a']) {
+      mutationRender(runtime, document, identity);
+    }
+
+    expect(() => mutationRender(runtime, document, 'component-b')).toThrow(/component-a -> component-b/);
+  });
+
   test('expected result: an irregular causal chain stops at the render budget', () => {
     vi.useFakeTimers();
     const runtime = createRuntime();
@@ -71,6 +112,47 @@ describe('sandbox script cycle coordinator', () => {
     }
 
     expect(() => mutationRender(runtime, document, 'offending-component')).toThrow(/causal chain reached/);
+  });
+
+  test.each([
+    ['plugin-delivered', { startedByPlugin: true }],
+    ['user-started', { startedByUser: true }],
+  ])('expected result: %s runs overlapping an unfinished run do not accumulate into one chain', (_name, options) => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    const unfinished = beginScriptCycleExecution(runtime, document, 'unfinished-script');
+    unfinished.beforeMutationRender();
+
+    for (let index = 0; index < SCRIPT_CYCLE_RENDER_BUDGET * 2; index += 1) {
+      vi.setSystemTime(Date.now() + SCRIPT_WATCHDOG_WINDOW_MS / (SCRIPT_REPEAT_LIMIT - 1) + 1);
+      expect(() => mutationRender(runtime, document, 'delivered-handler', options)).not.toThrow();
+    }
+  });
+
+  test('expected result: scripts triggered by a plugin delivery still count against its chain', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    mutationRender(runtime, document, 'delivered-handler', { startedByPlugin: true });
+    for (let index = 1; index < SCRIPT_CYCLE_RENDER_BUDGET; index += 1) {
+      mutationRender(runtime, document, `triggered-${index}`);
+    }
+
+    expect(() => mutationRender(runtime, document, 'offending-component')).toThrow(/causal chain reached/);
+  });
+
+  test('expected result: a rapid loop through a plugin delivery is still stopped', () => {
+    vi.useFakeTimers();
+    const runtime = createRuntime();
+    const document = createDocument();
+    for (let index = 1; index < SCRIPT_REPEAT_LIMIT; index += 1) {
+      mutationRender(runtime, document, 'looping-handler', { startedByPlugin: true });
+    }
+
+    expect(() => mutationRender(runtime, document, 'looping-handler', { startedByPlugin: true })).toThrow(
+      new RegExp(`same script requested ${SCRIPT_REPEAT_LIMIT} mutation renders`)
+    );
   });
 
   test('expected result: rolling repetition suspicion expires after a quiet interval', () => {

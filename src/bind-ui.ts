@@ -1,3 +1,4 @@
+import { EXPANDABLE_MODAL_HOST_ID, handleExpandableModalCloseClick, keepFocusInExpandableModal, openExpandableModal } from './editor/components/expandable/expandable-modal';
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
@@ -68,6 +69,7 @@ import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types'
 import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 import { setSaveRequestHandler } from './plugins/power-scripting/power-save-request';
 import { setPowerScriptAcceptanceCallbacks } from './plugins/power-scripting/power-scripting-policy';
+import { endScriptingSession } from './plugins/scripting/scripting-session';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -136,6 +138,8 @@ function replaceLoadedDocument(
     : normalizeFilename(filename);
   state.history = [];
   state.future = [];
+  state.undoDisabled = false;
+  endScriptingSession(state);
   clearChatConversation(state.chat);
   resetTransientUiState();
   if (options.searchSnapshot) {
@@ -354,15 +358,15 @@ export function bindUi(app: HTMLElement): void {
     }
   };
 
-  const runReaderAction = (event: Event, action: () => void): void => {
+  const runReaderAction = (_event: Event, action: () => void): void => {
     clearPendingAiReaderAction();
     if (state.currentView !== 'ai') {
       runInBoundRuntime(action);
       return;
     }
-    if (event instanceof MouseEvent && event.detail > 1) {
-      return;
-    }
+    // Context-open gestures cancel this pending action through the reader event.
+    // Browser click counts can include a preceding backdrop dismissal, so they
+    // do not reliably identify double taps on the current reader target.
     pendingAiReaderAction = window.setTimeout(() => {
       runInBoundRuntime(() => {
         pendingAiReaderAction = null;
@@ -755,6 +759,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerExpandableModals = [];
     state.readerDeferredSectionBodies = {};
     state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
     saveSessionState(state);
@@ -780,6 +785,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerExpandableModals = [];
     state.readerDeferredSectionBodies = {};
     saveSessionState(state);
     getRenderApp()();
@@ -799,6 +805,7 @@ export function bindUi(app: HTMLElement): void {
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
+    endScriptingSession(state);
     clearChatConversation(state.chat);
     closeModal();
     resetTransientUiState();
@@ -902,6 +909,9 @@ export function bindUi(app: HTMLElement): void {
               ? 'reader-sidebar'
               : null,
     });
+    if (handleExpandableModalCloseClick(app, event, nearestReaderAction)) {
+      return;
+    }
     blurActiveFillInWhenClickingOutside(target);
     refreshCompletedFillInsOnReaderClick(target);
     if (target.closest('[data-action]')) {
@@ -1144,6 +1154,9 @@ export function bindUi(app: HTMLElement): void {
         });
       }
       runReaderAction(event, () => {
+        if (openExpandableModal(sectionKey, block)) {
+          return;
+        }
         const expandableStateKey = `${sectionKey}:${blockId}`;
         const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
         const actionStartedAt = nowMs();
@@ -1288,6 +1301,11 @@ export function bindUi(app: HTMLElement): void {
   aiReaderDocument?.addEventListener('change', handlePersistedAnswerChange);
   aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
   aiSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
+  const expandableModalHost = app.querySelector<HTMLElement>(`#${EXPANDABLE_MODAL_HOST_ID}`);
+  expandableModalHost?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+  expandableModalHost?.addEventListener('click', handleReaderAreaClick);
+  expandableModalHost?.addEventListener('change', handlePersistedAnswerChange);
+  expandableModalHost?.addEventListener('keydown', keepFocusInExpandableModal);
   aiReaderDocument?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
   aiSidebarSections?.addEventListener(AI_READER_CONTEXT_OPEN_EVENT, clearPendingAiReaderAction);
 

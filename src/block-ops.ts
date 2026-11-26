@@ -34,7 +34,7 @@ import {
 } from './inline-answer-groups';
 import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
-import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
@@ -154,6 +154,39 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string, seen = n
     }
   }
   return null;
+}
+
+/** Every block under `blocks` by id, resolving to the block findBlockInList would find. */
+export function indexBlocksById(blocks: VisualBlock[], index = new Map<string, VisualBlock>(), seen = new Set<VisualBlock>()): Map<string, VisualBlock> {
+  for (const block of blocks) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
+    if (!index.has(block.id)) {
+      index.set(block.id, block);
+    }
+    indexBlocksById(block.schema.containerBlocks ?? [], index, seen);
+    indexBlocksById(block.schema.componentListBlocks ?? [], index, seen);
+    indexBlocksById(block.schema.expandableStubBlocks?.children ?? [], index, seen);
+    indexBlocksById(block.schema.expandableContentBlocks?.children ?? [], index, seen);
+    if (block.schema.encryptedBlock) {
+      indexBlocksById([block.schema.encryptedBlock], index, seen);
+    }
+    for (const item of block.schema.gridItems ?? []) {
+      indexBlocksById([item.block], index, seen);
+    }
+  }
+  return index;
+}
+
+/** An id index of a document section, or null when findBlockByIds resolves that key some other way. */
+export function indexSectionBlocksByKey(sectionKey: string): Map<string, VisualBlock> | null {
+  if (state.dbTableRowComponentModal?.sectionKey === sectionKey || getReusableNameFromSectionKey(sectionKey)) {
+    return null;
+  }
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  return section ? indexBlocksById(section.blocks) : null;
 }
 
 function findBlockPathInList(blocks: VisualBlock[], blockId: string): string[] | null {
@@ -579,6 +612,17 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
       return true;
     }
     block.schema.expandableAlwaysShowStub = target.checked;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    refreshReaderPanelsOutsideActiveEditor(target);
+    return true;
+  }
+
+  if (field === 'block-expandable-modal' && target instanceof HTMLInputElement) {
+    if (state.editorMode === 'mobile-adjustment') {
+      target.checked = block.schema.expandablePresentation === 'modal';
+      return true;
+    }
+    block.schema.expandablePresentation = target.checked ? 'modal' : 'inline';
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanelsOutsideActiveEditor(target);
     return true;
@@ -1045,6 +1089,12 @@ function getEditorBlockPathIds(sectionKey: string, blockId: string): string[] | 
   return rootBlocks ? findBlockPathInList(rootBlocks, blockId) : null;
 }
 
+// The outermost block containing `blockId`. Opening or closing a block changes how
+// its ancestors render, so editor refreshes target this block rather than the leaf.
+export function getEditorTopLevelBlockId(sectionKey: string, blockId: string): string {
+  return getEditorBlockPathIds(sectionKey, blockId)?.[0] ?? blockId;
+}
+
 function createEditorBlockSnapshot(sectionKey: string, blockId: string): AppState['activeEditorBlockSnapshot'] {
   const block = findBlockByIds(sectionKey, blockId);
   return block ? { sectionKey, blockId, block: cloneVisualBlock(block) } : null;
@@ -1326,12 +1376,6 @@ export function getComponentRenderHelpers(editorRenderer: {
       .map((option) => renderOption(option, selected))
       .join('');
   };
-  const pdfComponentFilter = (componentName: string, pluginId?: string): boolean => {
-    return !isPdfDocument(state.document) || isPdfAllowedComponentInstance(componentName, state.document.meta, pluginId);
-  };
-  const pdfComponentDisabledReason = (componentName: string, pluginId?: string): string | null => {
-    return pdfComponentFilter(componentName, pluginId) ? null : 'Not supported in PHVY';
-  };
   return {
     escapeAttr,
     escapeHtml,
@@ -1357,10 +1401,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderTextFragment: editorRenderer.renderTextFragment,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions: renderAllowedComponentOptions,
-    renderAddComponentPicker: (options) => renderAddComponentPicker(
-      { ...options, ...(isPdfDocument(state.document) ? { componentFilter: pdfComponentFilter, componentDisabledReason: pdfComponentDisabledReason } : {}) },
-      { escapeAttr, escapeHtml, getComponentDefs }
-    ),
+    renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),
     renderComponentPlacementTarget: (options) => editorRenderer.renderComponentPlacementTarget(options),
     renderOption,
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
@@ -2165,7 +2206,7 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
         existing.setAttribute('href', href);
         return;
       }
-      moveCollapsedCaretOutsideInline(existing, range);
+      moveCollapsedCaretOutsideInlineKeepingFormatting(editable, existing, range, action);
       setPendingInlineAction(editable, action, false);
       setSuppressedInlineAction(editable, action, true);
       return;
@@ -2277,6 +2318,32 @@ const inlineActionTagByAction: Record<InlineRichAction, InlineRichTag> = {
   link: 'a',
   code: 'code',
 };
+
+// Inline formatting that typing at a collapsed caret can start, innermost wrapper first.
+const typingWrapInlineActions: InlineRichAction[] = ['strikethrough', 'underline', 'italic', 'bold'];
+
+/**
+ * Moves the caret out of `element` for `action` while keeping the other typing formatting
+ * the caret had: leaving `<em><u>…</u></em>` to stop italic also leaves the `<u>`, so
+ * underline is queued as pending to be applied to the next typed text.
+ */
+function moveCollapsedCaretOutsideInlineKeepingFormatting(
+  editable: HTMLElement,
+  element: HTMLElement,
+  range: Range,
+  action: InlineRichAction
+): void {
+  const formattingBefore = typingWrapInlineActions.filter((candidate) =>
+    candidate !== action && getInlineAncestor(range, editable, inlineActionTagByAction[candidate])
+  );
+  moveCollapsedCaretOutsideInline(element, range);
+  const rangeAfter = getEditableSelectionRange(editable);
+  formattingBefore.forEach((candidate) => {
+    if (!rangeAfter || !getInlineAncestor(rangeAfter, editable, inlineActionTagByAction[candidate])) {
+      setPendingInlineAction(editable, candidate, true);
+    }
+  });
+}
 
 function getPendingInlineActions(editable: HTMLElement): Set<InlineRichAction> {
   return new Set(
@@ -2777,7 +2844,8 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
     updateInlineAnswerModeSwitch(editable.closest<HTMLElement>('.text-editor-shell'), answerInput);
     return false;
   }
-  const answerRow = findInlineAnswerRowAtPointer(editable, event);
+  // A click that ends a drag past the row's text must keep the dragged selection.
+  const answerRow = window.getSelection()?.isCollapsed === false ? null : findInlineAnswerRowAtPointer(editable, event);
   if (answerRow && editable.contains(answerRow)) {
     if (event.clientX > getInlineAnswerRowContentRight(answerRow)) {
       placeCaretAtInlineAnswerRowEnd(answerRow);
@@ -2815,12 +2883,9 @@ export function handleRichEditorPointerDown(event: MouseEvent, editable: HTMLEle
     updateRichToolbarState(editable);
     return true;
   }
-  if (event.clientX <= getInlineAnswerRowContentRight(answerRow)) return false;
-  event.preventDefault();
-  editable.focus({ preventScroll: true });
-  placeCaretAtInlineAnswerRowEnd(answerRow);
-  updateRichToolbarState(editable);
-  return true;
+  // Presses right of the row's text stay native so a drag can start there; a plain
+  // click is settled at the row end by handleRichEditorClick.
+  return false;
 }
 
 function findInlineAnswerRowAtPointer(editable: HTMLElement, event: MouseEvent): HTMLElement | null {
@@ -2980,7 +3045,6 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
     textEditorShell?.querySelector<HTMLElement>('.text-use-as-button')?.setAttribute('aria-expanded', 'false');
   }
   const toolbars = [
-    editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
     editable.closest('.caption-text-modal')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
     editable.closest('.text-editor-shell')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
     editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
@@ -3700,15 +3764,16 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   for (const action of suppressedActions) {
     const existing = getInlineAncestor(range, editable, inlineActionTagByAction[action]);
     if (existing) {
-      moveCollapsedCaretOutsideInline(existing, range);
+      moveCollapsedCaretOutsideInlineKeepingFormatting(editable, existing, range, action);
     }
   }
   const insertionRange = getEditableSelectionRange(editable) ?? range;
+  const insertionActions = getPendingInlineActions(editable);
   insertionRange.deleteContents();
   const text = document.createTextNode(shouldPreserveVisibleSpace ? '\u00a0' : event.data);
   let node: Node = text;
-  for (const action of ['strikethrough', 'underline', 'italic', 'bold'] as InlineRichAction[]) {
-    if (!pendingActions.has(action) || getInlineAncestor(insertionRange, editable, inlineActionTagByAction[action])) {
+  for (const action of typingWrapInlineActions) {
+    if (!insertionActions.has(action) || getInlineAncestor(insertionRange, editable, inlineActionTagByAction[action])) {
       continue;
     }
     const wrapper = document.createElement(inlineActionTagByAction[action]);
@@ -3722,6 +3787,10 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(nextRange);
+  // The caret now sits in a text node with the requested formatting, so native typing
+  // continues it. Keeping the toggles would route every later keystroke through this
+  // path, turning each space into a separate non-breaking space that cannot wrap.
+  clearInlineTypingState(editable);
   updateRichToolbarState(editable);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
   return true;
@@ -3901,7 +3970,8 @@ export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElemen
   }
   clipboard.setData(HVY_RICH_CLIPBOARD_TYPE, html);
   clipboard.setData('text/html', html);
-  clipboard.setData('text/plain', container.textContent ?? '');
+  // The rendered selection text keeps line breaks between blocks, which textContent drops.
+  clipboard.setData('text/plain', removeEditorCaretAnchorsFromText(selection.toString()));
   event.preventDefault();
   return true;
 }
@@ -4068,7 +4138,115 @@ function insertHtmlAtEditableSelection(editable: HTMLElement, html: string): voi
     return;
   }
   range.deleteContents();
+  if (insertBlockFragmentAtEditableSelection(editable, range, fragment)) {
+    return;
+  }
   placeCaretAfterInsertedFragment(range, fragment);
+}
+
+const PASTE_SPLITTABLE_BLOCK_TAGS = /^(P|DIV|H[1-6])$/;
+const PASTE_BLOCK_TAGS = /^(P|DIV|H[1-6]|BLOCKQUOTE|PRE|UL|OL|TABLE|HR)$/;
+
+/**
+ * Pasted blocks (copied rows, external paragraphs) cannot nest inside the paragraph holding
+ * the caret. Split that paragraph at the caret the way native editors do: the first pasted
+ * paragraph joins the text before the caret, the last one takes the text after it, and the
+ * blocks between land as siblings. An empty first paragraph, as copied from the end of a
+ * line, therefore pastes as a line break.
+ */
+function insertBlockFragmentAtEditableSelection(editable: HTMLElement, range: Range, fragment: DocumentFragment): boolean {
+  const pastedNodes = Array.from(fragment.childNodes);
+  if (!pastedNodes.some((node) => node instanceof HTMLElement && PASTE_BLOCK_TAGS.test(node.tagName))) {
+    return false;
+  }
+  const host = getBlockElementContaining(editable, range.startContainer);
+  if (!host || host === editable || !PASTE_SPLITTABLE_BLOCK_TAGS.test(host.tagName)) {
+    return false;
+  }
+
+  const tailRange = document.createRange();
+  tailRange.selectNodeContents(host);
+  tailRange.setStart(range.startContainer, range.startOffset);
+  const tail = tailRange.extractContents();
+
+  // Group loose inline nodes so each entry is one line to place.
+  const lines: Node[][] = [];
+  pastedNodes.forEach((node) => {
+    if (node instanceof HTMLElement && PASTE_BLOCK_TAGS.test(node.tagName)) {
+      lines.push([node]);
+    } else if (lines.length > 0 && !isPastedBlockLine(lines[lines.length - 1]!)) {
+      lines[lines.length - 1]!.push(node);
+    } else {
+      lines.push([node]);
+    }
+  });
+
+  const [firstLine, ...restLines] = lines;
+  let previous = placeFirstPastedLine(host, firstLine!);
+  restLines.forEach((line) => {
+    const block = isPastedBlockLine(line) ? line[0] as HTMLElement : document.createElement(host.tagName.toLowerCase());
+    if (!isPastedBlockLine(line)) block.append(...line);
+    previous.after(block);
+    previous = block;
+  });
+
+  // The caret ends where the pasted content ends, ahead of the original tail.
+  const caretRange = document.createRange();
+  if (PASTE_SPLITTABLE_BLOCK_TAGS.test(previous.tagName)) {
+    caretRange.selectNodeContents(previous);
+    caretRange.collapse(false);
+    if (!hasNoPasteContent(tail)) previous.append(tail);
+    ensureEditableParagraphContent(previous);
+  } else {
+    const tailBlock = document.createElement(host.tagName.toLowerCase());
+    tailBlock.append(tail);
+    ensureEditableParagraphContent(tailBlock);
+    previous.after(tailBlock);
+    caretRange.setStart(tailBlock, 0);
+  }
+  if (host.isConnected) ensureEditableParagraphContent(host);
+  caretRange.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(caretRange);
+  return true;
+}
+
+function isPastedBlockLine(line: Node[]): boolean {
+  const [first] = line;
+  return line.length === 1 && first instanceof HTMLElement && PASTE_BLOCK_TAGS.test(first.tagName);
+}
+
+/**
+ * The first pasted line continues the paragraph the caret was in, so copying from the end
+ * of a line (an empty first paragraph) leaves that paragraph as is. Returns the last block
+ * placed so far.
+ */
+function placeFirstPastedLine(host: HTMLElement, line: Node[]): HTMLElement {
+  const [first] = line;
+  const hostIsEmpty = hasNoPasteContent(host);
+  if (!isPastedBlockLine(line)) {
+    if (hostIsEmpty) host.replaceChildren();
+    host.append(...line);
+    return host;
+  }
+  const block = first as HTMLElement;
+  if (hostIsEmpty) {
+    host.replaceWith(block);
+    return block;
+  }
+  if (PASTE_SPLITTABLE_BLOCK_TAGS.test(block.tagName)) {
+    host.append(...Array.from(block.childNodes));
+    return host;
+  }
+  host.after(block);
+  return block;
+}
+
+/** No visible text and no inline controls or images, so nothing a paste would displace. */
+function hasNoPasteContent(root: ParentNode): boolean {
+  return (root.textContent ?? '').replace(/\u200b/g, '').trim().length === 0
+    && !root.querySelector('input, img');
 }
 
 function insertListItemFragmentAtEditableListSelection(editable: HTMLElement, range: Range, fragment: DocumentFragment): boolean {
@@ -5792,7 +5970,13 @@ function insertInlineCheckboxAtSelection(editable: HTMLElement): void {
   checkbox.type = 'checkbox';
   checkbox.classList.add('hvy-inline-checkbox');
   checkbox.setAttribute('contenteditable', 'false');
-  const spacer = document.createTextNode(INLINE_CHECKBOX_CARET_ANCHOR);
+  // Rendered `[ ] text` keeps its separating space in the row; match it unless the text
+  // after the caret already supplies one. The anchor keeps that space from collapsing.
+  const followingText = normalizedRange.startContainer instanceof Text
+    ? normalizedRange.startContainer.data.slice(normalizedRange.startOffset)
+    : '';
+  const separator = /^\s/.test(followingText) ? '' : ' ';
+  const spacer = document.createTextNode(`${separator}${INLINE_CHECKBOX_CARET_ANCHOR}`);
   const fragment = document.createDocumentFragment();
   fragment.appendChild(checkbox);
   fragment.appendChild(spacer);

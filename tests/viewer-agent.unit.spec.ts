@@ -126,6 +126,101 @@ FAKE_ORBITAL_LANGUAGE
   expect(JSON.stringify(second.toolState)).toContain('/body/skills/orbital');
 });
 
+test('Viewer agent prepares a missing embedding index before the first model turn', async () => {
+  const { runViewerAgent } = await import('../src/chat/viewer-agent');
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn(async (request) =>
+    request.inputs.map((input) => ({
+      id: input.id,
+      vector: input.id === 'query' || input.text.includes('FAKE_ORBITAL_LANGUAGE') ? [1, 0] : [0, 1],
+    }))
+  );
+  const contextPreparationEvents: Array<{ phase: string; missingChunks?: number }> = [];
+  const onEmbeddingIndexPrepared = vi.fn();
+  requestProxyToolTurnMock
+    .mockResolvedValueOnce({
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{
+        id: 'search-1',
+        name: 'search_hvy_document',
+        arguments: { query: 'FAKE_ORBITAL_LANGUAGE', limit: 5, cursor: null },
+      }],
+      nativeMessages: [{ type: 'function_call', call_id: 'search-1' }],
+      toolState: openAiToolState,
+    })
+    .mockResolvedValueOnce({
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{ id: 'answer-1', name: 'answer_user', arguments: { answer: 'The document mentions FAKE_ORBITAL_LANGUAGE.' } }],
+      nativeMessages: [],
+      toolState: openAiToolState,
+    });
+
+  await runViewerAgent({
+    settings,
+    document: deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"orbital"}-->
+FAKE_ORBITAL_LANGUAGE
+`, '.hvy'),
+    messages: [{ id: 'u1', role: 'user', content: 'Where is the orbital language mentioned?' }],
+    question: 'Where is the orbital language mentioned?',
+    chatContext: { mode: 'embedding-retrieval', onEmbeddingIndexPrepared },
+    embeddingProvider,
+    onContextPreparation: (event) => {
+      contextPreparationEvents.push({
+        phase: event.phase,
+        ...(event.progress ? { missingChunks: event.progress.missingChunks } : {}),
+      });
+    },
+  });
+
+  const expectedSearchMode = 'embeddings';
+  expect(JSON.parse(requestProxyToolTurnMock.mock.calls[1]?.[0]?.toolState.input.at(-1).output).mode).toBe(expectedSearchMode);
+  expect(contextPreparationEvents[0]).toEqual({ phase: 'preparing-context', missingChunks: expect.any(Number) });
+  expect(contextPreparationEvents.at(-1)).toEqual({ phase: 'context-ready' });
+  expect(onEmbeddingIndexPrepared).toHaveBeenCalledTimes(1);
+});
+
+test('Viewer agent leaves a missing embedding index unbuilt when the host disables auto preparation', async () => {
+  const { runViewerAgent } = await import('../src/chat/viewer-agent');
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn(async (request) =>
+    request.inputs.map((input) => ({ id: input.id, vector: [1, 0] }))
+  );
+  requestProxyToolTurnMock.mockResolvedValueOnce({
+    output: 'FAKE_ANSWER',
+    reasoningSummary: '',
+    toolCalls: [],
+    nativeMessages: [],
+    toolState: openAiToolState,
+  });
+
+  await runViewerAgent({
+    settings,
+    document: deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"orbital"}-->
+FAKE_ORBITAL_LANGUAGE
+`, '.hvy'),
+    messages: [{ id: 'u1', role: 'user', content: 'Where is the orbital language mentioned?' }],
+    question: 'Where is the orbital language mentioned?',
+    chatContext: { mode: 'embedding-retrieval', autoPrepareEmbeddingIndex: false },
+    embeddingProvider,
+  });
+
+  expect(embeddingProvider).not.toHaveBeenCalled();
+});
+
 test('Viewer agent can exhaustively walk every page before answering', async () => {
   const { runViewerAgent } = await import('../src/chat/viewer-agent');
   requestProxyToolTurnMock

@@ -129,6 +129,11 @@ can answer directly, retrieve ranked candidates, exhaustively walk visible
 content with continuation cursors, inspect a known HVY path, or query attached
 SQLite data. Only full-document mode inserts document content up front;
 retrieval modes add evidence as tool results when the agent requests it.
+In embedding-retrieval mode with an `embeddingProvider`, a Viewer chat turn
+embeds missing chunks before the first model request (the user sending a
+question is user-led preparation; the agent's search tool itself never builds).
+Hosts can set `chatContext.autoPrepareEmbeddingIndex: false` to require an
+explicit build instead.
 
 Embedded hosts can apply branding without changing the mounted document by
 passing `themeOverrides`. Values are applied after the selected built-in palette
@@ -416,6 +421,8 @@ VS Code configuration is included:
   - `HVY: Open In Chrome`
 - Tasks:
   - `Install Dependencies`
+  - `Audit Fix Dependencies` (`npm audit fix`)
+  - `Audit Fix Dependencies (--force)` (`npm audit fix --force`; may apply breaking major-version upgrades)
   - `Run Reference App (Vite)`
   - `Build Reference App`
 
@@ -471,13 +478,6 @@ dist-hvy-viewer/
   attachments.json
   preview.json
   image/<encoded image filename>
-```
-
-The reusable viewer image can also mount an extracted directory at `/site`:
-
-```bash
-docker build -t hvy-hosted-viewer .
-docker run --rm -p 8080:8080 -v "$PWD/dist-hvy-viewer:/site:ro" hvy-hosted-viewer
 ```
 
 The viewer loads `document.hvy` and `attachments.json` first, then resolves
@@ -553,6 +553,22 @@ HVY.mountHvy({
 });
 ```
 
+Inside the reference client, everything that touches the attached database
+(the `with-file` source, `doc.db` in scripts and power scripts, the AI SQL tools,
+and row-attached components) shares one live sql.js connection per document,
+owned by `src/plugins/db-table/document-database.ts`. Each write commits the
+exported bytes back to the `db` attachment, so undo snapshots stay byte-based.
+sql.js exports by closing and reopening the connection, so a commit waits while
+a transaction is open and restores connection pragmas after exporting. Each save
+also records which tables changed, for `doc.db.get_updated_tables`. The record is
+built from SQLite's update hook plus a diff of `sqlite_schema`. If
+`total_changes()` shows rows the hook missed, the save reports all tables changed.
+Don't infer changed tables from SQL text.
+When anything else replaces those bytes (undo/redo, document load, host recall),
+the connection is rebuilt the next time something uses it. Do not open private
+copies of the database. Read paths must leave the connection as they found it,
+with no pragmas changed and no internal tables created.
+
 The adapter receives the authored query unchanged together with `pageSize` and
 `offset`. It must apply pagination at the source and return `hasNextPage`; it
 must not load an unbounded result and slice it in the browser. `queryLimit` is
@@ -589,6 +605,19 @@ inverse call, so dropping a column and deleting a table are not undoable and the
 editor does not pretend otherwise. `addColumn` returns the name it chose and
 `renameColumn` returns the name actually stored, so the editor can build those
 inverses.
+
+Plugins whose data lives in attachments can join app undo/redo without putting
+that data in the document text. A plugin records a user action with
+`ctx.history.record({ label, data, apply })` and supplies
+`history: { undo(ctx), redo(ctx) }` on its plugin object. The app records the
+state before the action, runs `apply`, and keeps `data` in memory only; app
+history snapshots name a plugin history version (`src/plugin-history-controller.ts`),
+the same way they name database and attachment versions. Undo/redo handlers run
+against the document's attachments, not a mounted plugin instance, because the
+instance that recorded the step may have been remounted since; mounted instances
+pick up the restored data on refresh. Record direct user actions only: the
+canvas plugin records whiteboard brush, erase, fill, and clear actions, while
+script calls through its `hvyCanvas` API save without undo steps.
 
 Editor and AI mounts resize large uploaded JPEG, PNG, and WebP image attachments
 to fit within 2048 x 2048 pixels by default. Hosts can override the bound, or
@@ -1231,7 +1260,7 @@ sections before failing; errors do not roll those changes back.
 
 Set `newSectionsOnly: true` on both calls when import should append blank
 sections or instantiate reusable section templates without replacing existing
-body sections. Individual body sections can also set `protect_from_import: true`
+body sections. Individual body sections can also set `protectFromImport: true`
 in section metadata to prevent import from modifying that section.
 
 Import calls can use different models for different pipeline stages. Any omitted

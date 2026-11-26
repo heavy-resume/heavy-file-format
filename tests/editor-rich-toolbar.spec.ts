@@ -92,7 +92,8 @@ test('expandable content does not provide the stub chevron placeholder', async (
   const nestedContent = page.locator('[data-action="activate-block"]', { hasText: 'Fake details' }).last();
   if (await nestedContent.count()) await nestedContent.click();
 
-  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar [data-rich-action="text-placeholder"]')).toHaveCount(0);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar [data-text-placeholder-name="expandable-chevron"]')).toHaveCount(0);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar [data-text-placeholder-name="expandable-close"]')).toHaveCount(1);
 });
 
 test('toolbar exposes quote and code block actions', async ({ page }) => {

@@ -1401,7 +1401,7 @@ importPreplan:
   ]);
 });
 
-test('buildImportPlanForDocument excludes sections marked exclude_from_import', async () => {
+test.each(['excludeFromImport', 'exclude_from_import'])('buildImportPlanForDocument excludes sections marked %s', async (excludeFlagName) => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"summary":{"import_selection":"has_data_include","information":"Summary facts."}}}'
   );
@@ -1416,14 +1416,14 @@ section_defs:
     template:
       id: awards
       title: Awards
-      exclude_from_import: true
+      ${excludeFlagName}: true
       blocks: []
 ---
 
 <!--hvy: {"id":"summary"}-->
 #! Summary
 
-<!--hvy: {"id":"private-notes","exclude_from_import":true}-->
+<!--hvy: {"id":"private-notes","${excludeFlagName}":true}-->
 #! Private Notes
 `, '.hvy');
 
@@ -1459,7 +1459,7 @@ importPreplan:
 <!--hvy: {"id":"summary"}-->
 #! Summary
 
-<!--hvy: {"id":"protected-notes","protect_from_import":true}-->
+<!--hvy: {"id":"protected-notes","protectFromImport":true}-->
 #! Protected Notes
 
  <!--hvy:container {"id":"protected-child","containerTitle":"Protected Child"}-->
@@ -3776,7 +3776,7 @@ test('importTextIntoDocument rejects protected body targets before mutation', as
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","protect_from_import":true}-->
+<!--hvy: {"id":"summary","protectFromImport":true}-->
 #! Summary
 
 <!--hvy:text {"id":"summary-text"}-->

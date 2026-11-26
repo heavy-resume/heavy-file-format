@@ -89,8 +89,6 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
     def.template = cloneReusableBlock(owner);
   }
   def.baseType = resolveBaseComponent(def.name);
-  def.tags = owner.schema.tags;
-  def.description = owner.schema.description;
   def.schema = cloneReusableSchema(def.template.schema, def.name);
   state.document.meta.component_defs = defs;
   cloneMs = performance.now() - stepStartedAt;
@@ -104,16 +102,87 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
   log();
 }
 
-export function applyReusableTemplateToDocument(name: string, template: VisualBlock, excludeBlockId: string | null): void {
+export function applyReusableTemplateToDocument(
+  name: string,
+  template: VisualBlock,
+  excludeBlockId: string | null,
+  options: { previousDefinition?: ComponentDefinition | null } = {}
+): void {
   const definition = getComponentDefs().find((item) => item.name === name) ?? null;
+  const previousDefinition = options.previousDefinition ?? null;
+  const previousTemplate = previousDefinition ? getReusableTemplate(previousDefinition) : null;
+  const previousBlankInstance = previousTemplate
+    ? resolveReusableTemplateTokensInBlock(cloneReusableBlock(previousTemplate), previousDefinition)
+    : null;
+  if (previousBlankInstance && previousDefinition) {
+    previousBlankInstance.schema.component = previousDefinition.name;
+  }
   visitBlocks(state.document.sections, (block) => {
     if (block.schema.component !== name || block.id === excludeBlockId) {
       return;
     }
+    // An instance that differs from the pre-edit materialized template owns data of its own.
+    // Leave it intact; template synchronization is only safe for untouched instances.
+    if (previousBlankInstance && !reusableInstanceMatchesTemplate(block, previousBlankInstance)) {
+      return;
+    }
     const next = resolveReusableTemplateTokensInBlock(cloneReusableBlock(template), definition);
+    preserveReusableInstanceIdentity(block, next);
     block.text = next.text;
     block.schema = next.schema;
     block.schema.component = name;
+  });
+}
+
+function reusableInstanceMatchesTemplate(instance: VisualBlock, template: VisualBlock): boolean {
+  return JSON.stringify(reusableBlockComparable(instance)) === JSON.stringify(reusableBlockComparable(template));
+}
+
+function reusableBlockComparable(block: VisualBlock): unknown {
+  const schema = JSON.parse(JSON.stringify(block.schema)) as VisualBlock['schema'];
+  schema.id = '';
+  normalizeReusableBlockIdentity(schema.containerBlocks ?? []);
+  normalizeReusableBlockIdentity(schema.componentListBlocks ?? []);
+  if (schema.expandableStubBlocks?.children) normalizeReusableBlockIdentity(schema.expandableStubBlocks.children);
+  if (schema.expandableContentBlocks?.children) normalizeReusableBlockIdentity(schema.expandableContentBlocks.children);
+  schema.gridItems?.forEach((item) => {
+    item.id = '';
+    delete item.idGenerated;
+    normalizeReusableBlockIdentity([item.block]);
+  });
+  return { text: block.text, schema };
+}
+
+function normalizeReusableBlockIdentity(blocks: VisualBlock[]): void {
+  blocks.forEach((block) => {
+    block.id = '';
+    delete block.idGenerated;
+    const comparable = reusableBlockComparable(block) as { text: string; schema: VisualBlock['schema'] };
+    block.text = comparable.text;
+    block.schema = comparable.schema;
+  });
+}
+
+function preserveReusableInstanceIdentity(current: VisualBlock, next: VisualBlock): void {
+  next.id = current.id;
+  next.idGenerated = current.idGenerated;
+  next.schema.id = current.schema.id;
+  preserveReusableBlockListIdentity(current.schema.containerBlocks, next.schema.containerBlocks);
+  preserveReusableBlockListIdentity(current.schema.componentListBlocks, next.schema.componentListBlocks);
+  preserveReusableBlockListIdentity(current.schema.expandableStubBlocks?.children, next.schema.expandableStubBlocks?.children);
+  preserveReusableBlockListIdentity(current.schema.expandableContentBlocks?.children, next.schema.expandableContentBlocks?.children);
+  current.schema.gridItems?.forEach((item, index) => {
+    const nextItem = next.schema.gridItems?.[index];
+    if (!nextItem) return;
+    nextItem.id = item.id;
+    nextItem.idGenerated = item.idGenerated;
+    preserveReusableInstanceIdentity(item.block, nextItem.block);
+  });
+}
+
+function preserveReusableBlockListIdentity(current: VisualBlock[] | undefined, next: VisualBlock[] | undefined): void {
+  current?.forEach((block, index) => {
+    if (next?.[index]) preserveReusableInstanceIdentity(block, next[index]);
   });
 }
 

@@ -220,7 +220,7 @@ Presentation keys in document metadata include:
 AI-facing document metadata includes:
 - `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
 - `ai-import-guidance`: optional string with import-specific guidance for mapping source facts to existing body sections, section templates, component template records, and cross references. Importers MAY include this guidance in planning and execution prompts; readers that do not use AI SHOULD preserve and ignore it.
-- `importPreplan`: optional ordered list for AI import batching. Each entry is either a section target id string or a list of section target id strings. When present, importers SHOULD use it as the authoritative initial section import order instead of asking AI to discover the initial section list. A target id resolves first to an existing body section `id`, then to `section_defs[*].key`, then to `section_defs[*].template.id`. Sections marked `exclude_from_import` MUST NOT resolve as import targets. Importers MAY group targets from one list into a single source-information extraction call and SHOULD preserve and ignore invalid targets they cannot resolve. Readers that do not use AI SHOULD preserve and ignore it.
+- `importPreplan`: optional ordered list for AI import batching. Each entry is either a section target id string or a list of section target id strings. When present, importers SHOULD use it as the authoritative initial section import order instead of asking AI to discover the initial section list. A target id resolves first to an existing body section `id`, then to `section_defs[*].key`, then to `section_defs[*].template.id`. Sections marked `excludeFromImport` MUST NOT resolve as import targets. Importers MAY group targets from one list into a single source-information extraction call and SHOULD preserve and ignore invalid targets they cannot resolve. Readers that do not use AI SHOULD preserve and ignore it.
 
 Responsive rendering SHOULD be based on the rendered document container's inline size, not only the browser viewport. Renderers that support responsive behavior SHOULD establish a named CSS query container around the document surface, for example:
 
@@ -318,7 +318,7 @@ Common block metadata fields include:
 - `css`
 
 `id` is an optional author-provided stable identifier for linking, virtual filesystem paths, and reusable component references. Authoring clients MAY generate transient block ids for editing controls or CLI addressing, but MUST NOT serialize generated ids back into block metadata when the author did not provide an id.
-`css` is an optional inline CSS style string applied to the block's principal rendered element. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks. Implementations MAY add bookkeeping or interaction wrappers around a component, but those wrappers MUST NOT intercept `css` when doing so would change the meaning of a declaration. In particular, grid block `css` applies to the element that establishes the grid layout, and image block `css` applies to the rendered image.
+`css` is an optional inline CSS style string applied to the block's principal rendered element. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks. Implementations MAY add bookkeeping or interaction wrappers around a component, but those wrappers MUST NOT intercept `css` when doing so would change the meaning of a declaration. In particular, grid block `css` applies to the element that establishes the grid layout, image block `css` applies to the rendered image, and container block `css` lays out the container's child blocks: declarations that arrange children, such as `display: flex` or `gap`, apply to the element holding the child blocks, while box declarations such as `border` and `margin` apply to the container as a whole.
 Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. A declaration MAY use a surface-responsive prefix before its property: `md:order: 2;` applies `order: 2` when the outer HVY surface is at least the `md` breakpoint, while `max-md:order: 2;` applies it below `md`. Unprefixed declarations apply at every surface size. Renderers MUST evaluate these variants against the named `hvy-surface` query container, not the browser viewport or an HVY `container` component. Responsive selectors or rules that cannot be expressed as declarations belong in fenced HVY CSS blocks.
 `hideIfYes` is an optional string on any block. Viewer-oriented renderers MUST hide the block when the trimmed, case-insensitive value is `yes`. Empty, missing, or any other value means the block is visible unless another visibility rule hides it. Editor surfaces and document AI editing mode MUST still render the block. Template authors SHOULD use this for template-time conditional hiding, for example `hideIfYes: "{% description | isempty %}"`.
 `visibleScript` is an optional Brython/Python function body on any block. Renderers that support scripting SHOULD run it with the same document component API used by button scripts and show the block only when the return value is truthy. Empty or missing `visibleScript` means the block is visible. This is intended for reusable template affordances whose visibility depends on nearby fill-ins or document state.
@@ -358,12 +358,13 @@ Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
 - `priority`
+- `startOnNewPage`
 - `lock`
 - `editorOnly`
 - `contained`
 - `hideIfUnmodified`
-- `exclude_from_import`
-- `protect_from_import`
+- `excludeFromImport`
+- `protectFromImport`
 - `css`
 - `location`
 - `templateKey`
@@ -375,8 +376,9 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default, unless overridden by `document.meta.section_defaults.contained` for newly created manual sections), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
-`exclude_from_import` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
-`protect_from_import` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `exclude_from_import` and `protect_from_import` are present, `exclude_from_import` controls target discovery.
+`excludeFromImport` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
+`protectFromImport` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `excludeFromImport` and `protectFromImport` are present, `excludeFromImport` controls target discovery.
+Readers MUST also accept the legacy spellings `exclude_from_import` and `protect_from_import` as equivalent to `excludeFromImport` and `protectFromImport` on sections and section templates. Writers MUST write only the camelCase names.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 `templateKey` is optional authoring metadata identifying the section template definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable section template definitions have already been used.
 
@@ -485,6 +487,16 @@ Text content MAY also contain a parent-provided placeholder marker:
 The placeholder name MUST begin with an ASCII letter and contain only ASCII letters, digits, `_`, or `-`. A containing component defines which named placeholders are available to its descendant text components and supplies their rendered meaning. Authoring clients SHOULD expose controls only for placeholders provided by the nearest applicable parent context. Unknown placeholders MUST remain source-preserving in editors and MUST NOT produce visible reader content. This generic mechanism allows parent components to contribute contextual inline values without adding parent-specific behavior to the text component.
 
 An expandable provides the `expandable-chevron` placeholder to text components in its stub, including text nested through layout components. It renders as a right-pointing chevron while the expandable is closed and a down-pointing chevron while it is open. The expanded-content pane does not inherit this placeholder from that expandable. A nested expandable establishes its own stub/content placeholder context.
+
+An expandable provides the `expandable-close` placeholder to text components in its content pane, including text nested through layout components. It renders as a close control that closes that expandable. The stub pane does not inherit this placeholder.
+
+`expandablePresentation` selects how an expandable reveals its content. The value MUST be `"inline"` (the default) or `"modal"`; readers MUST treat any other value as `"inline"`. With `"inline"`, content expands in the document layout. With `"modal"`, the stub stays in the layout and activating it opens the content pane in an overlay above the document:
+
+- The overlay MUST be dismissible by activating outside its content and MUST provide a close control within it.
+- `expandableExpanded` MUST NOT open the overlay when a document loads.
+- Navigating to a target inside the content pane, such as following a link or moving to a search result, SHOULD open the overlay, and navigating to a target outside it SHOULD close the overlay.
+- Reader operations that reveal many expandables at once, such as filtering a document, MAY expand the content inline instead.
+- Surfaces that cannot present an overlay, such as print output or authoring surfaces, SHOULD render the expandable as `"inline"`.
 
 Expandable blocks can be emitted with specialized directives so their stub and expanded content remain normal Markdown blocks:
 
@@ -688,12 +700,12 @@ All block schemas MAY include common document fields:
 Component-owned fields are:
 - `text`: `showCopy`
 - `code`: `codeLanguage`
-- `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
+- `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `noSave`, `containerBlocks`
 - `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupsExpanded`, `componentListGroupCollapsedPreviewRem`
 - `grid`: `gridColumns`, `gridStackWidth`, `gridItems`
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
-- `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
+- `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandablePresentation`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
 - `table`: `tableColumns`, `tableColumnProperties`, `tableShowHeader`, `tableRows`
 - `image`: `imageFile`, `imageAlt`, `caption`, `allowDocumentImageReuse`
 - `carousel`: `carouselImages`, `allowDocumentImageReuse`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
@@ -705,6 +717,8 @@ Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore f
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
 
 Container blocks MAY be collapsible in readers. `containerExpanded` stores the default expanded state and defaults to `true`. `containerCollapsedPreviewRem` stores the collapsed preview height in `rem` units and defaults to `3`. `containerTitle` is an optional label shown by readers as the collapse/expand control. Collapsed containers SHOULD render a non-editing preview of their first visible content up to the configured height.
+
+`noSave` is an optional boolean on container blocks and defaults to `false`. When `true`, the container's children are runtime content, typically written by a script or plugin from an external source, and are not part of the saved document. Writers MUST serialize a `noSave` container as an empty container: the directive and its own fields are emitted, but no child blocks or `containerBlocks`. Readers MUST still parse and render any children present in the source. Hosts that compare a document against its saved state (for example to show an unsaved indicator or compute a diff) MUST NOT treat changes inside a `noSave` container as document changes.
 
 ```json
 {
@@ -1289,6 +1303,8 @@ pdf_page:
 - `debug` is optional and defaults to `false`. Authoring clients MAY use it to show page and printable-area bounds in PHVY preview surfaces. Exporters SHOULD render diagnostic page and printable-area bounds into generated PDFs when `debug` is `true`; authors SHOULD disable it for final PDFs.
 - Explicit PDF export strategy defaults override `pdf_page` for that export operation.
 
+`.phvy` sections MAY set `startOnNewPage: true` in section metadata. PDF export renderers MUST begin such a section at the top of a new page when other rendered content precedes it on the current page. A section that already begins at the top of a page MUST NOT produce an empty page. Readers and non-PDF documents ignore `startOnNewPage`.
+
 With optional schema:
 
 ```yaml
@@ -1498,7 +1514,9 @@ sequences become arrays. Callable values MUST remain JavaScript-callable, and
 values they return later MUST pass through the same normalization. JavaScript
 plugin and host code MUST NOT need to unpack Brython runtime representations.
 Structured JavaScript arguments MAY become Python containers or JavaScript
-proxies. Supported Python coroutine results MUST become Promises for host
+proxies. In either direction and at any depth, JavaScript `null` and
+`undefined` MUST read as Python `None`, and Python `None` MUST become
+JavaScript `null`. Supported Python coroutine results MUST become Promises for host
 capabilities that permit asynchronous results. A host MUST remove
 package-specific virtual modules and resource URLs when the loaded package is
 disposed. Package Python executes with the same authority as installed
@@ -1575,7 +1593,7 @@ that requires a later version. Documents without `versionRange` may use it.
 Sections can request plugin behavior with metadata:
 
 ```markdown
-<!--hvy: {"plugin":"com.example.timeline","plugin_config":{"start":"2026-01-01"}}-->
+<!--hvy: {"plugin":"com.example.timeline","pluginConfig":{"start":"2026-01-01"}}-->
 #! Launch Timeline
 ```
 
@@ -1635,11 +1653,30 @@ plugin controls when and how often it invokes a callback, and callback return
 values MUST be returned to the plugin. Values entering or leaving a Brython
 callback MUST use the same recursive host normalization as Python package
 capabilities, so a JavaScript plugin receives ordinary JavaScript values rather
-than Brython runtime representations.
+than Brython runtime representations. The same `null` / `undefined` / `None`
+mapping applies to every value the scripting API hands a script, including
+database rows, plugin results, parsed JSON and callback arguments, so
+`value is None` holds and writing the value back stores a null rather than a
+textual representation.
+Scripting API calls MUST reject an argument whose type the parameter does not
+accept with an error that names the parameter, rather than converting it to
+text. Values a script received from the API, such as database rows and plugin
+results, MUST be accepted wherever their shape is.
 
 Delayed callbacks from sandboxed scripts MUST resume inside the originating
 scripting runtime with its step and cycle guards, flush resulting document
-mutations, and surface exceptions through the originating script UI. A host
+mutations, and surface exceptions through the originating script UI. Every
+`doc.db` call, including one made from a delayed callback, MUST act on the
+document's current attached database: it MUST see rows written since the script
+started by other components, scripts, or undo and redo, and its writes MUST NOT
+replace those rows with an earlier copy of the database. A transaction a script
+opens with `doc.db.execute("BEGIN")` MUST span later `doc.db.execute` calls
+until the script commits or rolls it back, and its changes MUST NOT be persisted
+before it commits. Because sandboxed runs and callbacks are synchronous, a
+transaction a sandboxed script leaves open when its run or callback ends MUST
+be committed if the run or callback completed without error and rolled back if
+it raised one. A power script's open transaction MUST be rolled back when the
+program stops. A host
 MUST ignore a retained callback after its document is replaced or its mount is
 destroyed. A synchronously returning plugin method MAY schedule such callbacks;
 this does not make the method asynchronous. Sandboxed `hvy.scripting` calls
@@ -1680,6 +1717,42 @@ fields such as `expandableExpanded`, `containerExpanded`, or section
 and MUST NOT affect serialized HVY output. Reloading the document therefore
 restores its authored default expansion state. Expansion alone MUST NOT scroll
 the reader, move focus, or highlight the component.
+
+Sandboxed scripting runtimes SHOULD expose a `session` global holding ephemeral
+state for the open document. A session begins when a document is opened and
+ends when a different document is loaded in its place. Every script run in the
+document during that time, including delayed callbacks, sees the same session.
+`session` provides:
+
+- `session.state`: a mapping that persists across script runs for the session.
+  It MUST accept only JSON values (`None`, booleans, finite numbers, strings,
+  lists, and string-keyed mappings, at any depth) and MUST reject any other
+  value with an error naming the key, storing nothing. A value read from it is
+  a copy; changing that copy does not change the stored value until it is
+  assigned back.
+- `session.id`: a read-only string identifying the session, random per session.
+- `session.start_time`: a read-only aware `datetime` in the viewer's local zone
+  for when the session began. It requires the checked `datetime` library.
+- `session.timezone`: the viewer's IANA time zone name.
+- `session.locale`: the viewer's BCP 47 language tag.
+
+Hosts that expose a plugin API SHOULD give plugins access to the same session
+state, with the same JSON-only and copy-on-read rules.
+
+Session state is not document content. Changing it MUST NOT mark the document
+dirty, emit a document-content change, create or amend an undo history entry,
+or affect serialized HVY output, and undo and redo MUST NOT restore or clear
+it.
+
+Scripting runtimes SHOULD expose `doc.disable_undo()` and `doc.enable_undo()`
+to control document-level undo tracking. Calling `doc.disable_undo()` when
+already disabled, or `doc.enable_undo()` when already enabled, MUST be a no-op.
+While document-level undo is disabled, document, database, attachment, and
+plugin changes are one-directional: the client MUST NOT record document undo
+entries or database/attachment checkpoints, document-level undo and redo MUST
+be no-ops, and native browser undo inside text inputs MUST remain unaffected.
+Re-enabling undo with `doc.enable_undo()` resumes document-level undo tracking
+from the current document state without allowing undo past the disabled period.
 
 A visual-description capability receives the current plugin block and document
 and returns optional plain text describing rendered output that is not otherwise
@@ -1804,10 +1877,11 @@ Tail directive fields:
 
 Rules:
 - Tail payloads are NOT part of Markdown parsing.
-- Tail payloads are valid for `.hvy` and `.thvy`. A `.thvy` template may carry
-  the same database, image, plugin, and other attachment data as an `.hvy`
-  document; the template extension is an authoring convention, not a reduced
-  storage format.
+- Tail payloads are valid for `.hvy`, `.thvy`, and `.phvy`. A `.thvy` template
+  may carry the same database, image, plugin, and other attachment data as an
+  `.hvy` document; the template extension is an authoring convention, not a
+  reduced storage format. A `.phvy` document uses the same tail for image and
+  plugin attachments that its PDF-compatible components reference.
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
 - User-file attachment names MUST be unique according to §3.1. Replacing a
   user file SHOULD preserve its `id` and `name` while updating its `filename`,
@@ -1997,6 +2071,11 @@ Plugin-specific rules:
   defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
   `false`, clients MUST omit the visible submit button while preserving the form
   and any non-submit triggers.
+  `pluginConfig.submitDisabled` defaults to `false`; when `true`, clients MUST
+  render the submit button disabled and MUST NOT run the submit action.
+  `pluginConfig.submitDisabledReason` is optional plain text; while the submit
+  button is disabled by `submitDisabled` and the reason is non-empty, clients
+  SHOULD render it beneath the button inside the submit/action wrapper.
 - Form-level presentation MAY be stored in `pluginConfig.formCss`,
   `pluginConfig.actionsCss`, and `pluginConfig.submitCss`. These optional inline
   CSS strings apply to the rendered `<form>`, submit/action wrapper, and submit
@@ -2019,14 +2098,20 @@ Plugin-specific rules:
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
 - Top-level YAML keys are `fields` and `scripts`.
 - `fields` is an ordered list. Each field supports `label`, `type`,
-  `value`, `placeholder`, `required`, `rows`, `options`, `triggers`, and
-  `meta`.
+  `value`, `placeholder`, `required`, `disabled`, `rows`, `min`, `max`, `step`,
+  `options`, `triggers`, and `meta`.
+- Field `disabled` defaults to `false`. When `true`, clients MUST render the
+  field so the user can see that its value cannot be changed, and MUST NOT
+  accept user edits to it. A disabled field's value remains part of the form:
+  it is returned by `doc.form` helpers and included in the submit action.
+  `required` has no effect while a field is disabled. `disabled` has no effect
+  on `hidden` fields.
 - Field `label` is both the visible label and the script key used with
   `doc.form` helpers.
 - Field `meta` is plugin-owned field metadata. `meta.css` is an optional
   inline CSS style string applied to that rendered field wrapper and MUST be
   sanitized like other document-supplied CSS.
-- Supported `type` values are `text`, `textarea`, `number`, `select`,
+- Supported `type` values are `text`, `textarea`, `number`, `range`, `select`,
   `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, `hidden`, and
   `photo`. General-purpose file inputs are not part of the standard form plugin
   contract.
@@ -2046,6 +2131,19 @@ Plugin-specific rules:
   has been stored successfully.
 - `rows` applies to `textarea` fields. When present, it MUST be a positive
   integer and controls the initial rendered textarea height in text rows.
+- A `range` field selects one number with a slider and SHOULD display its current
+  value beside the control. `min`, `max`, and `step` apply to `range` fields and
+  default to `0`, `100`, and `1`. `min` and `max` MUST be finite numbers, and `step`
+  MUST be a finite number greater than zero; clients MUST use the default in place
+  of an invalid value.
+- A `range` field's `value` is its optional numeric default. Clients MUST resolve
+  its effective value, including values assigned with `doc.form.set_value`, as
+  follows: when `max` is not greater than `min`, the result is `min`. Otherwise a
+  missing or non-numeric value becomes the midpoint of `min` and `max`, the value is
+  clamped to that interval, and it is rounded to the nearest `min + n * step`, with
+  ties rounding up. A result above `max` moves down one step. `doc.form` exposes the
+  result as a decimal string. `placeholder` and `required` have no effect on `range`
+  fields because they always hold a value.
 - `options` applies to `select` and `radio`. Each option MAY be a string or an
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
@@ -2053,8 +2151,13 @@ Plugin-specific rules:
   `pluginConfig.initialScript`, `pluginConfig.changeScript`,
   `pluginConfig.submitSourceScript`, `pluginConfig.submitScript`, and field
   trigger values reference keys in this map.
+- Form scripts follow the viewer-script rule of the sandboxed scripting
+  contract (section 7.14): clients MUST execute them only in the `viewer` view
+  and document AI mode, and MUST NOT execute them in the editor, including
+  editor previews of the form.
 - `pluginConfig.initialScript` runs once for the form component during the
-  current in-memory document lifecycle. DOM remounts, reader refreshes,
+  current in-memory document lifecycle, the first time the form is shown in a
+  view that executes form scripts. DOM remounts, reader refreshes,
   database-driven rerenders, and view changes MUST NOT cause it to run again.
   Loading a new document or creating a new form component starts a new
   lifecycle.
@@ -2083,7 +2186,16 @@ Plugin-specific rules:
 - Form scripts run through the installed scripting runtime. During form script
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,
-  `set_error(label, message)`, and `clear_error(label)`.
+  `set_error(label, message)`, `clear_error(label)`,
+  `set_field_disabled(label, disabled)`, `get_field_disabled(label)`,
+  `set_submit_disabled(disabled, reason)`, and `get_submit_disabled()`.
+  `set_field_disabled` overrides that field's `disabled` value for the current
+  form lifecycle. The override is not serialized and is discarded when the
+  document's `disabled` value for that field changes.
+  `set_submit_disabled` overrides `submitDisabled` and `submitDisabledReason`
+  for the current form lifecycle; `reason` is optional and is cleared when
+  `disabled` is false. The override is not serialized and is discarded when the
+  document's `submitDisabled` or `submitDisabledReason` values change.
 - `doc.db.get_tables()` returns handles for the current attached SQLite tables.
   `doc.db.get_updated_tables(table_name="")` returns handles for tables changed
   since the preceding document-change script lifecycle; each handle exposes
@@ -2128,6 +2240,23 @@ Plugin-specific rules:
 - `pluginConfig.title`, `pluginConfig.xAxisLabel`, and
   `pluginConfig.yAxisLabel` are optional strings.
 - `pluginConfig.legend` is optional and defaults to `true`.
+- `pluginConfig.seriesLayout` is optional and defaults to `"grouped"`. It
+  applies to `"bar"` and `"line"` charts and is ignored by other types.
+  Supported values:
+  - `"grouped"`: each series is drawn independently; bars for the same label
+    sit side by side.
+  - `"stacked"`: series values for the same label are stacked on top of each
+    other.
+  - `"overlapped"`: bars for the same label share one position and overlap,
+    with later columns drawn over earlier ones. For line charts this is
+    equivalent to `"grouped"`.
+- `pluginConfig.barWidth` is an optional number from `0.05` to `1` (default
+  `0.8`) giving the share of each label's slot covered by its bars. It applies
+  only to `"bar"` charts. Out-of-range values MUST be clamped.
+- `pluginConfig.barGap` is an optional number from `0` to `0.9` (default `0.1`)
+  giving the share of each grouped bar's slot left empty between neighboring
+  bars of the same label. It applies only to `"bar"` charts with a `"grouped"`
+  series layout. Out-of-range values MUST be clamped.
 - The plugin text body MUST be interpreted as CSV with the first row as column
   headers.
 - Graph renderers MUST use existing shared theme color variables for chart text,
@@ -2263,38 +2392,183 @@ plugins:
   - id: hvy.canvas
 ---
 
-<!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4}}-->
+<!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4,"drawing":"canvas-sketch"}}-->
 Sketching surface. Vector artwork is stored in the HVY tail attachment.
+```
+
+An example drawing attachment payload with a box, a curved arrow, and a label:
+
+```json
+{
+  "version": 2,
+  "layers": [
+    {
+      "id": "layer-1",
+      "name": "Layer 1",
+      "visible": true,
+      "locked": false,
+      "items": [
+        { "kind": "shape", "id": "shape-a", "shape": "rect", "from": { "x": 80, "y": 140 }, "to": { "x": 280, "y": 260 }, "color": "#1f2937", "width": 4 },
+        { "kind": "shape", "id": "shape-b", "shape": "line", "from": { "x": 280, "y": 200 }, "to": { "x": 520, "y": 200 }, "control": { "x": 400, "y": 40 }, "color": "#1f2937", "width": 4, "endHead": "arrow" },
+        { "kind": "text", "id": "text-a", "text": "Placeholder", "at": { "x": 180, "y": 200 }, "size": 24, "color": "#1f2937", "font": "sans-serif" }
+      ]
+    }
+  ]
+}
 ```
 
 Normative configuration and data:
 
 - `pluginConfig.width` and `pluginConfig.height` are optional positive integer
-  logical dimensions. Clients SHOULD default to `800` by `450`.
+  logical dimensions of the drawing area. Clients SHOULD default to `800` by
+  `450`. One logical unit is one CSS pixel when the drawing is shown at 100%,
+  so stroke widths and font sizes read like document pixels at that scale.
+  Clients MAY show the drawing scaled (for example fitted to the document
+  width) or let authors zoom and pan it.
+- `pluginConfig.gridSize` is an optional non-negative number: the spacing, in
+  logical units, of a grid authoring clients MAY draw behind the drawing while
+  editing. `0` means no grid. It is not part of the drawing or its export.
 - `pluginConfig.viewerDrawing` is an optional boolean that defaults to `false`.
   When false, viewer surfaces MUST NOT modify the authored drawing through
-  pointer interaction. Editor surfaces MAY always pre-draw.
+  pointer interaction. Editor surfaces MAY always pre-draw. In `.phvy`
+  documents, clients MUST treat `viewerDrawing` as `false` regardless of the
+  stored value, and authoring clients SHOULD show the setting as fixed.
 - `pluginConfig.strokeColor` is an optional CSS color. When absent, clients
   SHOULD derive the brush color from the shared document text theme role.
 - `pluginConfig.strokeWidth` is an optional positive number in logical canvas
   units and SHOULD default to `4`.
+- `pluginConfig.drawing` is a string naming the canvas's drawing, unique among
+  the canvases in the document. Drawing data MUST be stored in the tail
+  attachment named `canvas:<drawing>` with media type
+  `application/vnd.hvy.canvas+json`; it does not depend on the component's
+  `id`, so renaming the component keeps its drawing. Authoring clients SHOULD
+  generate a name when inserting a canvas. A canvas without `drawing` has an
+  empty drawing; a client storing drawing data for it MUST first assign a
+  unique name in `pluginConfig.drawing`.
 - The plugin text body SHOULD contain only a concise human/AI-facing
-  description. Drawing data MUST be stored in the tail attachment named
-  `canvas:<block-id>` with media type `application/vnd.hvy.canvas+json`.
+  description.
 - The attachment payload MUST be interpreted as a JSON object with `version:
-  1` and a `strokes` array. Each stroke contains a `color` string, positive `width`
-  number, and one or more `{x, y}` logical coordinate points. An optional
-  `mode` is `erase` for a vector erase path or `fill` for a full-canvas color
-  layer; absent mode means a brush path. Clients MUST preserve valid drawing
-  data across responsive resizing and MUST replay operations in array order.
+  2` and a `layers` array, ordered bottom to top. Each layer has a unique
+  string `id`, a `name`, a `visible` boolean, a `locked` boolean, and an
+  `items` array replayed in order. Clients MUST NOT render items of layers
+  whose `visible` is `false`, including in exported images, and MUST NOT
+  modify a locked layer through pointer interaction. A payload with no valid
+  layers is equivalent to one empty, visible, unlocked layer.
+- A layer MAY have a `filter` object applied to the layer's rendered pixels
+  (after its items are drawn, before it is composited): if `invert` is `true`,
+  color channels are inverted; then, if `multiply` (`{r, g, b, a}` with `r`,
+  `g`, `b` from 0 to 255 and `a` from 0 to 1) is present, each color channel
+  is multiplied by its value / 255 and the layer's alpha by `a`. Filters apply
+  in exported images too.
+- Each item has a `kind`:
+  - `brush`: an optional `id` string, `points` (one or more `{x, y}` logical
+    coordinates), `color`, positive `width`, and optional `dash`. Drawn as a
+    path with round caps and joins; a single point is a dot.
+  - `fill`: `color` and optional `cutouts`, an array of `{width, points}`
+    objects with a positive `width` and one or more `{x, y}` points. A fill
+    covers the whole canvas; each cutout removes that fill's paint within
+    `width / 2` of its polyline, with round caps and joins, and does not
+    affect any other item.
+  - `shape`: a unique string `id`, `shape` (`rect`, `ellipse`, or `line`),
+    `from` and `to` points, `color`, positive `width`, and optional `dash`.
+    `rect` and `ellipse` are outlined within the box spanned by `from` and
+    `to`. A `line` runs from `from` to `to`; an optional `control` point makes
+    it a quadratic curve. A `line` MAY set `startHead` and/or `endHead` to mark
+    that end: `arrow` draws an open chevron arrowhead oriented along the
+    line's direction at that end; `round` draws a filled dot centered on the
+    end point. End markers are drawn solid regardless of `dash`; an absent
+    value is a plain end.
+  - `text`: a unique string `id`, non-empty `text` (lines separated by
+    `\n`), `at` (the center of the text block), positive font `size` in
+    logical units, `color`, and `font` (a CSS font family). An optional
+    `sizes` array of `{start, end, size}` objects gives characters
+    `[start, end)` of `text` (UTF-16 offsets) their own positive font `size`;
+    ranges are sorted, MUST NOT overlap, and override the item `size`. Each
+    line is as tall as its largest size times the line height, its pieces share
+    one baseline, lines are centered horizontally, and the block is centered
+    vertically on `at`.
+- `dash` is `solid` (the default), `dashed`, or `dotted`.
+- Item `id` values identify items for selection and editing and MUST be unique
+  within the drawing.
+- Clients MUST preserve valid drawing data across responsive resizing and MUST
+  ignore unknown item kinds.
+- Erasing is not stored as its own item and only affects one layer. An eraser
+  with logical width `w` sweeping a path MUST remove the portion of each
+  `brush` item whose centerline lies within `w / 2` plus that item's own half
+  width of the sweep, replacing it with its remaining runs as separate `brush`
+  items in the same position. Items reduced to nothing are removed. When a
+  `brush` item with an `id` splits, clients SHOULD keep that `id` on one piece
+  and give the others new unique ids. A `shape`
+  the sweep touches is first replaced by `brush` items tracing its outline (or
+  line) and arrowheads with its `color`, `width`, and `dash`, which are then
+  cut the same way. A `text` item whose block the sweep touches is removed.
+  Each `fill` item instead gains the eraser path as a cutout of width `w`;
+  clients MAY extend the fill's last cutout when the eraser path continues
+  from its final point with the same width.
 - The plugin surface SHOULD expose a script API for retrieving and replacing
-  drawing data, adding strokes, clearing, undoing, redrawing, and exporting the
-  rendered bitmap. Script-driven mutations MUST update the drawing attachment.
+  drawing data, adding items, erasing along a path, clearing, undoing,
+  redrawing, and exporting the rendered bitmap. Script-driven mutations MUST update the drawing attachment.
 - Clients SHOULD emit lifecycle/change/render notifications so other installed
   scripts can discover the surface and draw non-persistent overlays. Document
   content itself MUST NOT be executed as script.
+- PHVY/PDF export renderers SHOULD resolve canvas plugin blocks to ordinary
+  `image` blocks backed by a rasterized PNG image attachment of the replayed
+  drawing at the configured aspect ratio, carrying over the block `css`. An
+  empty or missing drawing SHOULD export as a blank image of the configured
+  size. Script overlays are not part of the exported image. The authored plugin
+  block and drawing attachment MUST remain unchanged.
 
-### 7.14 Power scripting plugin contract
+### 7.14 Sandboxed scripting plugin contract
+
+The built-in sandboxed scripting plugin is `hvy.scripting`. The plugin text body
+is the script source, and `pluginConfig.version` declares its requested
+scripting API version (see section 7.5).
+
+```markdown
+<!--hvy:plugin {"id":"example-viewer-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
+print("runs while the document is viewed")
+
+<!--hvy:plugin {"id":"example-editor-script","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.2"}}-->
+print("runs while the document is edited")
+```
+
+A scripting block has one of two roles, selected by the block's `editorOnly`
+flag. The role decides which document views execute it:
+
+- **Viewer scripts** (`editorOnly` absent or false) are the document's
+  execution mode. They make the document behave as a finished document, for
+  example by computing derived content on load or reacting to database changes.
+  Clients MUST execute viewer scripts in viewing surfaces: the `viewer` view and
+  document AI mode. They MUST NOT execute them in the editor.
+- **Editor scripts** (`editorOnly: true`) assist with building the document,
+  for example by guiding a user who is filling in a starting template. Clients
+  MUST execute editor scripts in editing surfaces: the editor and document AI
+  mode. They MUST NOT execute them in the `viewer` view.
+
+Document AI mode is both a viewing and an editing surface. It shows the
+document as viewed while allowing corrections, so it executes both roles.
+
+In whichever views run a script, clients SHOULD run it when the document loads,
+when the view is entered, and after document changes. Clients SHOULD coalesce
+repeated runs for an unchanged document, view, and database revision.
+
+Every sandboxed script run receives a `run_context` global describing that run.
+`run_context.invoke_reason` is a string naming what prompted a scripting block
+to run, so the script can return early when the run does not affect it:
+
+- `load`: the document was just loaded.
+- `edit`: a user edited the document.
+- `ai-edit`: an AI edit changed the document.
+- `script-edit`: a script changed the document.
+- `unknown`: the client did not attribute the run, including when a view is
+  entered.
+
+Clients MAY report additional values. Because the first run in a view is not
+guaranteed to report `load`, a script SHOULD return early only for specific
+reasons it can skip, not for every reason other than `load`. In form and button
+scripts, `run_context.invoke_reason` is `None`.
+
+### 7.15 Power scripting plugin contract
 
 The built-in power scripting plugin is `hvy.power-scripting`. It contains
 unrestricted JavaScript for interactive, performance-sensitive behavior that
@@ -2330,10 +2604,11 @@ Power scripts have a deliberately different trust and lifecycle model:
   confirmations, and text prompts. These dialogs SHOULD render inside the
   mounted/emulated HVY surface and MUST NOT require support for blocking browser
   `alert`, `confirm`, or `prompt` dialogs.
-- A power script that uses the document database MAY keep its database runtime
-  open for the lifetime of the mounted program. Database mutations MUST use the
-  same attached database and persistence behavior as `doc.db` in basic
-  scripting.
+- A power script that uses the document database MAY keep `doc.db` available
+  for the lifetime of the mounted program. Every read and write MUST act on the
+  current attached database with the same persistence behavior as `doc.db` in
+  basic scripting, so event listeners, animation frames, and other callbacks
+  never operate on a copy taken when the program started.
 - Power scripts MAY request that the current document be saved after a
   meaningful mutation. Embedded hosts SHOULD be able to handle the request with
   their own persistence callback and serialize the current document, including
@@ -2350,7 +2625,7 @@ acceptance SHOULD be keyed to a collision-resistant digest of the ordered
 identities and source of all power scripts so that adding, removing, renaming,
 reordering, or editing trusted code requires a new approval.
 
-### 7.15 3D model plugin contract
+### 7.16 3D model plugin contract
 
 The built-in 3D model plugin is `hvy.model-3d`. It renders an interactive 3D
 model whose bytes are stored as an HVY tail attachment, so documents containing
@@ -2447,7 +2722,7 @@ Normative behavior:
 Document is valid HVY if:
 - It is parseable Markdown text.
 - Any `hvy:*` JSON directive is syntactically valid JSON.
-- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy` or `.thvy`.
+- If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy`, `.thvy`, or `.phvy`.
 
 Additional validity for `.thvy`:
 - If `schema` is present, it is valid against the supported subset.

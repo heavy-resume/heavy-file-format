@@ -1,6 +1,6 @@
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 import type { VisualDocument } from '../types';
-import { normalizeVirtualPath, resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
+import { listDirectory, normalizeVirtualPath, resolveVirtualPath, type HvyVirtualFileSystem } from './virtual-file-system';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -137,8 +137,8 @@ function formatListItemType(entry: ComponentContextEntry): string {
 
 function inferComponentType(fs: HvyVirtualFileSystem, path: string): string {
   const prefix = `${path}/`;
-  for (const entry of fs.entries.values()) {
-    if (entry.kind !== 'file' || !entry.path.startsWith(prefix) || entry.path.slice(prefix.length).includes('/')) {
+  for (const entry of listDirectory(fs, path)) {
+    if (entry.kind !== 'file') {
       continue;
     }
     const filename = entry.path.slice(prefix.length);

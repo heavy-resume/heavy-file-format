@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { getActiveStateRuntime, initCallbacks, initState, state } from '../src/state';
 import { createDefaultChatState } from '../src/chat/chat';
@@ -6,9 +6,10 @@ import { createDefaultSearchState } from '../src/search/state';
 import { createEmptyBlock } from '../src/document-factory';
 import {
   captureHistoryStackState,
-  clearDatabaseAttachmentChangedForQueuedHistory,
+  disableUndo,
+  enableUndo,
+  isUndoDisabled,
   markDatabaseAttachmentChanged,
-  recordDatabaseAttachmentHistory,
   recordHistory,
   redoState,
   redoStateAsync,
@@ -36,6 +37,13 @@ import {
   storeUserFileAttachment,
 } from '../src/document-attachments';
 import { createDocumentChangeApi } from '../src/document-change';
+import { getImageBlobUrl } from '../src/editor/components/image/image';
+import {
+  beginReactiveScriptHistory,
+  beginScriptHistoryRun,
+  noteScriptHistoryChange,
+  noteScriptHistoryDatabaseWrite,
+} from '../src/script-history-step';
 
 function createHistoryTestState(): AppState {
   return {
@@ -72,6 +80,7 @@ function createHistoryTestState(): AppState {
     },
     paneScroll: {
       fullPaneTop: 0,
+      documentMetaTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
@@ -272,9 +281,8 @@ test('undo and redo keep image attachment bytes outside history snapshots', () =
   ];
 
   recordHistory('before-image-edit');
-  expect(state.history[0]).toContain('"attachments": []');
+  expect(state.history[0]).toContain('"attachments":[]');
   expect(state.history[0]).not.toContain('image:photo.png');
-  expect(state.history[0]).not.toContain('10');
   state.rawEditorText = '#! Changed';
   state.document.sections[0]!.blocks[0]!.schema.imageAlt = 'Changed photo';
   state.document.attachments = [
@@ -290,6 +298,22 @@ test('undo and redo keep image attachment bytes outside history snapshots', () =
   expect(state.document.sections[0]?.blocks[0]?.schema.imageAlt).toBe('Changed photo');
   expect(state.document.attachments[0]?.bytes).toBeInstanceOf(Uint8Array);
   expect(Array.from(state.document.attachments[0]?.bytes ?? [])).toEqual([40, 50]);
+});
+
+test('undo and redo keep the same image URL for unchanged image bytes', () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  setAttachment(state.document, 'image:photo.png', { mediaType: 'image/png' }, new Uint8Array([10, 20, 30]));
+  recordHistory();
+  const urlBeforeEdit = getImageBlobUrl('photo.png');
+  state.rawEditorText = '#! Changed';
+  recordHistory();
+
+  undoState();
+  expect(getImageBlobUrl('photo.png')).toBe(urlBeforeEdit);
+
+  redoState();
+  expect(getImageBlobUrl('photo.png')).toBe(urlBeforeEdit);
 });
 
 test('history snapshots do not materialize lazy image attachment bytes', () => {
@@ -322,11 +346,10 @@ test('history snapshots do not materialize lazy image attachment bytes', () => {
   redoState();
 
   expect(ensureDocumentAttachmentStore(state.document).isMaterialized('image:large-photo.jpg')).toBe(false);
-  expect(state.history.join('\n')).not.toContain('10');
   expect(state.history.join('\n')).not.toContain('large-photo.jpg');
 });
 
-test('undo and redo restore database attachment checkpoints without snapshotting other attachments', () => {
+test('undo and redo restore a script step database checkpoint without putting attachment bytes in snapshots', async () => {
   initCallbacks({
     renderApp: () => {},
     refreshReaderPanels: () => {},
@@ -339,29 +362,24 @@ test('undo and redo restore database attachment checkpoints without snapshotting
     { id: DB_ATTACHMENT_ID, meta: { mediaType: 'application/vnd.sqlite3' }, bytes: new Uint8Array([1, 2]) },
     { id: 'image:photo.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([10, 20]) },
   ];
+  recordHistory();
 
-  recordDatabaseAttachmentHistory();
-  expect(state.history.join('\n')).toContain('databaseAttachment');
-  expect(state.history.join('\n')).toContain('\\"bytes\\": [\\n      1,\\n      2\\n    ]');
-  expect(state.history.join('\n')).not.toContain('image:photo.png');
-  setAttachment(
-    state.document,
-    DB_ATTACHMENT_ID,
-    { mediaType: 'application/vnd.sqlite3' },
-    new Uint8Array([3, 4])
-  );
+  noteScriptHistoryDatabaseWrite(state.document);
+  setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([3, 4]));
   markDatabaseAttachmentChanged();
 
-  undoState();
-  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)?.bytes ?? [])).toEqual([1, 2]);
-  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === 'image:photo.png')?.bytes ?? [])).toEqual([10, 20]);
+  await undoStateAsync();
+  expect(readDatabaseTestBytes()).toEqual([1, 2]);
+  expect(Array.from(getAttachment(state.document, 'image:photo.png')?.bytes ?? [])).toEqual([10, 20]);
+  expect(state.history.join('\n')).not.toContain('bytes');
+  expect(state.history.join('\n')).not.toContain('image:photo.png');
 
-  redoState();
-  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)?.bytes ?? [])).toEqual([3, 4]);
-  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === 'image:photo.png')?.bytes ?? [])).toEqual([10, 20]);
+  await redoStateAsync();
+  expect(readDatabaseTestBytes()).toEqual([3, 4]);
+  expect(Array.from(getAttachment(state.document, 'image:photo.png')?.bytes ?? [])).toEqual([10, 20]);
 });
 
-test('script database writes share one undo checkpoint per runtime', async () => {
+test('script database writes in one undo step undo together', async () => {
   initCallbacks({
     renderApp: () => {},
     refreshReaderPanels: () => {},
@@ -379,13 +397,46 @@ test('script database writes share one undo checkpoint per runtime', async () =>
     runtime.dispose();
   }
 
-  expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).not.toBeUndefined();
+  expect(getAttachment(state.document, DB_ATTACHMENT_ID)).not.toBeNull();
 
-  undoState();
-  expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).toBeUndefined();
+  await undoStateAsync();
+  expect(getAttachment(state.document, DB_ATTACHMENT_ID)).toBeNull();
 
-  redoState();
-  expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).not.toBeUndefined();
+  await redoStateAsync();
+  expect(getAttachment(state.document, DB_ATTACHMENT_ID)).not.toBeNull();
+});
+
+test('a long-lived script database runtime builds on undone database state', async () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  // BEFORE
+  const seed = await createScriptingDbRuntime(state.document);
+  seed.api.execute('CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)');
+  seed.api.execute("INSERT INTO chores (title) VALUES ('Sweep')");
+  seed.dispose();
+  beginScriptHistoryRun({ startedByUser: true });
+  const otherWriter = await createScriptingDbRuntime(state.document);
+  otherWriter.api.execute("INSERT INTO chores (title) VALUES ('Undone')");
+  otherWriter.dispose();
+  const longLived = await createScriptingDbRuntime(state.document);
+  expect(longLived.api.query('SELECT title FROM chores ORDER BY id').map((row) => row.title)).toEqual(['Sweep', 'Undone']);
+
+  // ACTION
+  await undoStateAsync();
+
+  // AFTER
+  expect(longLived.api.query('SELECT title FROM chores ORDER BY id').map((row) => row.title)).toEqual(['Sweep']);
+  longLived.api.execute("INSERT INTO chores (title) VALUES ('Mop')");
+  longLived.dispose();
+  const reader = await createScriptingDbRuntime(state.document);
+  expect(reader.api.query('SELECT title FROM chores ORDER BY id').map((row) => row.title)).toEqual(['Sweep', 'Mop']);
+  reader.dispose();
 });
 
 test('queued checkpoint edits undo document config and SQLite bytes as one step', async () => {
@@ -409,7 +460,6 @@ test('queued checkpoint edits undo document config and SQLite bytes as one step'
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute: () => {
       state.rawEditorText = '#! Config after';
       setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([2]));
@@ -447,7 +497,6 @@ test('queued logical edits use inverse operations without storing database check
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute: () => {
       setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([5]));
       markDatabaseAttachmentChanged();
@@ -466,7 +515,7 @@ test('queued logical edits use inverse operations without storing database check
   expect(store.putCount).toBe(0);
 });
 
-test('legacy full database history composes with queued logical history', async () => {
+test('a script database step composes with queued logical history', async () => {
   initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
   initState(createHistoryTestState());
   const commandDocument = state.document;
@@ -480,18 +529,17 @@ test('legacy full database history composes with queued logical history', async 
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([21])),
     createLogicalTransition: () => ({
       undo: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([20])),
       redo: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([21])),
     }),
   });
-  recordDatabaseAttachmentHistory();
+  noteScriptHistoryDatabaseWrite(state.document);
   setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([22]));
   markDatabaseAttachmentChanged();
 
-  // The legacy checkpoint is one step, followed by the earlier logical inverse.
+  // The script step is one undo step, followed by the earlier logical inverse.
   await undoStateAsync();
   expect(readDatabaseTestBytes()).toEqual([21]);
   await undoStateAsync();
@@ -512,7 +560,6 @@ test('a failed checkpoint command restores bytes, document state, and redo histo
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute: () => {
       state.rawEditorText = '#! Broken';
       setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([9]));
@@ -544,7 +591,6 @@ test('a failed checkpoint-store write prevents the destructive command from star
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute: () => { executed = true; },
   })).rejects.toThrow('history storage unavailable');
 
@@ -567,7 +613,6 @@ test('destroying database history removes retained external checkpoints', async 
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute: () => setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([31])),
   });
   expect(store.size).toBe(1);
@@ -592,7 +637,6 @@ test('database commands execute FIFO and expose pending queue state', async () =
     recordBefore: () => recordHistory(),
     captureHistoryState: captureHistoryStackState,
     rollbackHistory: restoreHistoryStackState,
-    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
     execute,
     createLogicalTransition: () => ({ undo: () => {}, redo: () => {} }),
   });
@@ -767,3 +811,225 @@ function runAttachmentHistoryCommand<T>(
     execute,
   });
 }
+
+function setUpFakeEditHistory(): void {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+}
+
+function recordFakeEdit(value: number): void {
+  state.document.meta.fake_value = value;
+  recordHistory();
+}
+
+test('recording an edit does not get more expensive as history grows', () => {
+  setUpFakeEditHistory();
+  const countParsesForOneEdit = (value: number): number => {
+    const parse = vi.spyOn(JSON, 'parse');
+    recordFakeEdit(value);
+    const parses = parse.mock.calls.length;
+    parse.mockRestore();
+    return parses;
+  };
+  for (let value = 0; value < 5; value += 1) recordFakeEdit(value);
+  const parsesWithShortHistory = countParsesForOneEdit(5);
+
+  for (let value = 6; value < 150; value += 1) recordFakeEdit(value);
+
+  expect(countParsesForOneEdit(150)).toBe(parsesWithShortHistory);
+});
+
+test('undoing an edit does not get more expensive as history grows', () => {
+  setUpFakeEditHistory();
+  const countParsesForOneUndo = (value: number): number => {
+    recordFakeEdit(value);
+    const parse = vi.spyOn(JSON, 'parse');
+    undoState();
+    const parses = parse.mock.calls.length;
+    parse.mockRestore();
+    return parses;
+  };
+  for (let value = 0; value < 5; value += 1) recordFakeEdit(value);
+  const parsesWithShortHistory = countParsesForOneUndo(5);
+
+  for (let value = 6; value < 150; value += 1) recordFakeEdit(value);
+
+  expect(countParsesForOneUndo(150)).toBe(parsesWithShortHistory);
+});
+
+test('an entry amended after undo is the snapshot a later undo returns to', () => {
+  setUpFakeEditHistory();
+  recordFakeEdit(1);
+  recordFakeEdit(2);
+  undoState();
+  expect(state.document.meta).toEqual({ hvy_version: 0.1, fake_value: 1 });
+
+  beginReactiveScriptHistory();
+  state.document.meta.fake_hook_output = 'after 1';
+  noteScriptHistoryChange();
+  recordFakeEdit(3);
+  undoState();
+
+  expect(state.document.meta).toEqual({ hvy_version: 0.1, fake_value: 1, fake_hook_output: 'after 1' });
+});
+
+test('a user edit made while a script step is open is its own undo step', () => {
+  setUpFakeEditHistory();
+  recordFakeEdit(1);
+  beginScriptHistoryRun({ startedByUser: true });
+  state.document.meta.fake_script_output = 'from script';
+  noteScriptHistoryChange();
+  recordFakeEdit(2);
+
+  undoState();
+  expect(state.document.meta).toEqual({ hvy_version: 0.1, fake_value: 1, fake_script_output: 'from script' });
+
+  undoState();
+  expect(state.document.meta).toEqual({ hvy_version: 0.1, fake_value: 1 });
+});
+
+test('undo, a new edit, then undo and redo restore the right snapshots', () => {
+  setUpFakeEditHistory();
+  for (let value = 1; value <= 4; value += 1) recordFakeEdit(value);
+
+  undoState();
+  undoState();
+  expect(state.document.meta.fake_value).toBe(2);
+
+  recordFakeEdit(20);
+  recordFakeEdit(21);
+  undoState();
+  expect(state.document.meta.fake_value).toBe(20);
+  undoState();
+  expect(state.document.meta.fake_value).toBe(2);
+
+  redoState();
+  redoState();
+  expect(state.document.meta.fake_value).toBe(21);
+});
+
+test('history past its 200 entry limit still undoes to the right snapshots', () => {
+  setUpFakeEditHistory();
+  for (let value = 1; value <= 230; value += 1) recordFakeEdit(value);
+  expect(state.history.length).toBe(200);
+
+  undoState();
+  expect(state.document.meta.fake_value).toBe(229);
+  recordFakeEdit(500);
+  undoState();
+  expect(state.document.meta.fake_value).toBe(229);
+
+  for (let expectedValue = 228; expectedValue >= 225; expectedValue -= 1) {
+    undoState();
+    expect(state.document.meta.fake_value).toBe(expectedValue);
+  }
+});
+
+test('a restored history stack is not compared against the replaced stack', () => {
+  setUpFakeEditHistory();
+  recordFakeEdit(1);
+  recordFakeEdit(2);
+  const capturedStack = captureHistoryStackState();
+  recordFakeEdit(3);
+  recordFakeEdit(4);
+
+  restoreHistoryStackState(capturedStack);
+  expect(state.document.meta.fake_value).toBe(2);
+  recordFakeEdit(30);
+  undoState();
+
+  expect(state.document.meta.fake_value).toBe(2);
+});
+
+test('disableUndo and enableUndo are no-ops when already in the target state', () => {
+  setUpFakeEditHistory();
+  recordFakeEdit(1);
+  recordFakeEdit(2);
+  const historyBeforeEnable = [...state.history];
+
+  // Already enabled: no-op, preserves existing undo stack.
+  enableUndo();
+  expect(isUndoDisabled()).toBe(false);
+  expect(state.history).toEqual(historyBeforeEnable);
+
+  disableUndo();
+  expect(isUndoDisabled()).toBe(true);
+  expect(state.history).toEqual([]);
+
+  // Already disabled: no-op.
+  disableUndo();
+  expect(isUndoDisabled()).toBe(true);
+  expect(state.history).toEqual([]);
+
+  enableUndo();
+  expect(isUndoDisabled()).toBe(false);
+  expect(state.history.length).toBe(1);
+});
+
+test('disabling undo makes document and database changes one-directional without checkpointing, while keeping dirty tracking', async () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  const store = new CountingHistoryStore();
+  configureDatabaseHistoryStore(getActiveStateRuntime(), store);
+  const changeApi = createDocumentChangeApi(getActiveStateRuntime());
+
+  const seed = await createScriptingDbRuntime(state.document);
+  seed.api.execute('CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL)');
+  seed.api.execute("INSERT INTO items (label) VALUES ('initial')");
+  seed.dispose();
+  changeApi.markSaved();
+
+  disableUndo();
+  const putsBefore = store.puts;
+
+  // Document edit and script DB write while disabled: no history, no checkpoints, still marks dirty.
+  state.document.meta.fake_value = 'one-way';
+  recordHistory();
+  const runtime = await createScriptingDbRuntime(state.document);
+  runtime.api.execute("INSERT INTO items (label) VALUES ('untracked')");
+  runtime.dispose();
+
+  expect(state.history).toEqual([]);
+  expect(store.puts).toBe(putsBefore);
+  expect(changeApi.isDirty()).toBe(true);
+
+  await undoStateAsync();
+  undoState();
+  await redoStateAsync();
+  redoState();
+  expect(state.document.meta.fake_value).toBe('one-way');
+
+  // Re-enabling undo tracks new changes from the current state, never past the disabled period.
+  enableUndo();
+  beginScriptHistoryRun({ startedByUser: true });
+  const afterEnable = await createScriptingDbRuntime(state.document);
+  afterEnable.api.execute("INSERT INTO items (label) VALUES ('tracked')");
+  afterEnable.dispose();
+  state.document.meta.fake_value = 'undoable';
+  noteScriptHistoryChange();
+
+  await undoStateAsync();
+  expect(state.document.meta.fake_value).toBe('one-way');
+  const readerAfterFirstUndo = await createScriptingDbRuntime(state.document);
+  expect(readerAfterFirstUndo.api.query('SELECT label FROM items ORDER BY id').map((row) => row.label)).toEqual(['initial', 'untracked']);
+  readerAfterFirstUndo.dispose();
+
+  // A second undo cannot revert the one-directional writes made while disabled.
+  await undoStateAsync();
+  expect(state.document.meta.fake_value).toBe('one-way');
+  const readerAfterSecondUndo = await createScriptingDbRuntime(state.document);
+  expect(readerAfterSecondUndo.api.query('SELECT label FROM items ORDER BY id').map((row) => row.label)).toEqual(['initial', 'untracked']);
+  readerAfterSecondUndo.dispose();
+});

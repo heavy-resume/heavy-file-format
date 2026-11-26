@@ -465,10 +465,13 @@ function readQueryColumns(
 
 async function withDatabase<T>(document: VisualDocument, action: (db: ScriptingDbApi) => T | Promise<T>): Promise<T> {
   const runtime = await createScriptingDbRuntime(document);
+  // The document database connection is shared, so leave its foreign key setting as found.
+  const foreignKeysEnabled = readNumber(runtime.api.query('PRAGMA foreign_keys')[0]?.foreign_keys) === 1;
   try {
     runtime.api.query('PRAGMA foreign_keys = ON');
     return await action(runtime.api);
   } finally {
+    runtime.api.query(`PRAGMA foreign_keys = ${foreignKeysEnabled ? 'ON' : 'OFF'}`);
     runtime.dispose();
   }
 }

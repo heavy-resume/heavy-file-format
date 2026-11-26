@@ -1,35 +1,21 @@
 import { state, REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX } from './state';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
-import type { ComponentDefinition, SectionDefinition } from './types';
+import type { SectionDefinition } from './types';
 import { areTablesEnabled } from './reference-config';
-
-export function getComponentDefs(): ComponentDefinition[] {
-  return getComponentDefsFromMeta(getDocumentMetaOrNull());
-}
-
-export function getComponentDefsFromMeta(meta: Record<string, unknown> | null | undefined): ComponentDefinition[] {
-  const defs = meta?.component_defs;
-  if (!Array.isArray(defs)) {
-    return [];
-  }
-  return defs.filter((item): item is ComponentDefinition => !!item && typeof item === 'object' && 'name' in item);
-}
-
-export function getSectionDefs(): SectionDefinition[] {
-  return getSectionDefsFromMeta(getDocumentMetaOrNull());
-}
-
-export function getSectionDefsFromMeta(meta: Record<string, unknown> | null | undefined): SectionDefinition[] {
-  const defs = meta?.section_defs;
-  if (!Array.isArray(defs)) {
-    return [];
-  }
-  return defs.filter((item): item is SectionDefinition => !!item && typeof item === 'object' && 'name' in item && 'template' in item);
-}
-
-export function getSectionTemplateKey(def: SectionDefinition): string {
-  return (def.key?.trim() || def.name.trim());
-}
+import { getComponentDefs, getSectionDefs } from './component-definition-state';
+export { getComponentDefs, getSectionDefs, resolveBaseComponent } from './component-definition-state';
+import {
+  getSectionDefsFromMeta,
+  getSectionTemplateKey,
+  isBuiltinComponentName,
+} from './component-definition-helpers';
+export {
+  getComponentDefsFromMeta,
+  getSectionDefsFromMeta,
+  getSectionTemplateKey,
+  isBuiltinComponentName,
+  resolveBaseComponentFromMeta,
+} from './component-definition-helpers';
 
 export function getReusableNameFromSectionKey(sectionKey: string): string | null {
   return sectionKey.startsWith(REUSABLE_SECTION_PREFIX) ? sectionKey.slice(REUSABLE_SECTION_PREFIX.length) : null;
@@ -61,10 +47,6 @@ export function getComponentOptions(): string[] {
 
 export function isBuiltinComponent(componentName: string): boolean {
   return isBuiltinComponentName(componentName);
-}
-
-export function isBuiltinComponentName(componentName: string): boolean {
-  return ['text', 'code', 'image', 'carousel', 'button', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card', 'location-marker', 'encrypted'].includes(componentName);
 }
 
 export function renderComponentOptions(selected: string): string {
@@ -109,28 +91,4 @@ function getUsedSectionTemplateKeys(): Set<string> {
     // No active document during isolated render tests.
   }
   return used;
-}
-
-export function resolveBaseComponent(componentName: string): string {
-  return resolveBaseComponentFromMeta(componentName, getDocumentMetaOrNull());
-}
-
-export function resolveBaseComponentFromMeta(componentName: string, meta: Record<string, unknown> | null | undefined): string {
-  if (isBuiltinComponentName(componentName)) {
-    return componentName;
-  }
-  const def = getComponentDefsFromMeta(meta).find((item) => item.name === componentName);
-  return def?.baseType || 'text';
-}
-
-function getDocumentMetaOrNull(): Record<string, unknown> | null {
-  try {
-    if (state && state.document && state.document.meta) {
-      return state.document.meta as Record<string, unknown>;
-    }
-  } catch {
-    // Fall through to a single console warning below.
-  }
-
-  return null;
 }

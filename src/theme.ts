@@ -33,6 +33,8 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-button-hover-bg',
   '--hvy-button-text',
   '--hvy-button-hover-text',
+  '--hvy-button-disabled-bg',
+  '--hvy-button-disabled-text',
   '--hvy-highlight-1',
   '--hvy-highlight-2',
   '--hvy-ai-view-hint-bg',
@@ -64,6 +66,10 @@ export const THEME_COLOR_NAMES: readonly string[] = [
   '--hvy-success',
   '--hvy-success-bg',
   '--hvy-success-border',
+  '--hvy-diff-removed-text',
+  '--hvy-diff-removed-bg',
+  '--hvy-diff-added-text',
+  '--hvy-diff-added-bg',
   '--hvy-code-bg',
   '--hvy-code-text',
   '--hvy-code-muted',
@@ -101,6 +107,8 @@ const THEME_COLOR_LABELS: Record<string, string> = {
   '--hvy-button-hover-bg': 'Primary Button Hover Background',
   '--hvy-button-text': 'Primary Button Text',
   '--hvy-button-hover-text': 'Primary Button Hover Text',
+  '--hvy-button-disabled-bg': 'Disabled Button Background',
+  '--hvy-button-disabled-text': 'Disabled Button Text',
   '--hvy-highlight-1': 'Soft Content Highlight',
   '--hvy-highlight-2': 'Strong Content Highlight',
   '--hvy-ai-view-hint-bg': 'AI Editing Hint Background',
@@ -132,6 +140,10 @@ const THEME_COLOR_LABELS: Record<string, string> = {
   '--hvy-success': 'Success Text',
   '--hvy-success-bg': 'Success Background',
   '--hvy-success-border': 'Success Border',
+  '--hvy-diff-removed-text': 'Diff Removed Text',
+  '--hvy-diff-removed-bg': 'Diff Removed Background',
+  '--hvy-diff-added-text': 'Diff Added Text',
+  '--hvy-diff-added-bg': 'Diff Added Background',
   '--hvy-code-bg': 'Code Block Background',
   '--hvy-code-text': 'Code Block Base Text',
   '--hvy-code-muted': 'Code Comment and Muted Text',
@@ -339,6 +351,14 @@ export function colorValueToPickerHex(value: string): string {
     return `#${[r, g, b].map((part) => part.toString(16).padStart(2, '0')).join('')}`;
   }
   return '#000000';
+}
+
+// The RGB inverse of a hex or rgb()/rgba() color, keeping its alpha.
+export function invertCssColor(value: string): string {
+  const hex = colorValueToPickerHex(value);
+  const inverted = `#${[1, 3, 5].map((start) => (255 - Number.parseInt(hex.slice(start, start + 2), 16)).toString(16).padStart(2, '0')).join('')}`;
+  const alpha = colorValueToAlpha(value);
+  return alpha < 1 ? mergeAlphaIntoCssColor(inverted, alpha) : inverted;
 }
 
 export function colorValueToAlpha(value: string): number {

@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { serializeDocumentBytesAsync } from '../src/document-byte-serialization';
 import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
 import { markdownToReaderHtml } from '../src/markdown';
 import { getTextLineStylesFromMeta } from '../src/text-line-styles';
@@ -189,6 +190,53 @@ hvy_version: 0.1
   expect(fragment).not.toContain('hvy_version:');
 });
 
+test('round-trips a modal expandable presentation', () => {
+  const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+ <!--hvy:expandable {"id":"fake-modal","expandablePresentation":"modal"}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Fake stub
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Fake detail
+`;
+
+  const document = deserializeDocument(source, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.schema.expandablePresentation).toBe('modal');
+  expect(serializeWithState(document)).toContain('"expandablePresentation":"modal"');
+});
+
+test('omits the default inline expandable presentation and treats unknown values as inline', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"fake-section"}-->
+#! Fake Section
+
+ <!--hvy:expandable {"id":"fake-unknown","expandablePresentation":"fake-unknown-value"}-->
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Fake detail
+`, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.schema.expandablePresentation).toBe('inline');
+  expect(serializeWithState(document)).not.toContain('expandablePresentation');
+});
+
 test('round-trips reusable section metadata and template keys', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -198,8 +246,8 @@ section_defs:
     template:
       id: projects
       title: Projects
-      exclude_from_import: true
-      protect_from_import: true
+      excludeFromImport: true
+      protectFromImport: true
       tags: reciprocal-xref-source
       blocks:
         - text: "# Projects"
@@ -216,17 +264,17 @@ section_defs:
       children: []
 ---
 
-<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true,"protect_from_import":true}-->
+<!--hvy: {"id":"projects","templateKey":"resume-projects","excludeFromImport":true,"protectFromImport":true}-->
 #! Projects
 `, '.hvy');
 
   const expectedResult = serializeWithState(document);
 
   expect(expectedResult).toContain('key: resume-projects');
-  expect(expectedResult).toContain('exclude_from_import: true');
-  expect(expectedResult).toContain('protect_from_import: true');
+  expect(expectedResult).toContain('excludeFromImport: true');
+  expect(expectedResult).toContain('protectFromImport: true');
   expect(expectedResult).toContain('repeatable: true');
-  expect(expectedResult).toContain('"exclude_from_import":true,"protect_from_import":true,"templateKey":"resume-projects"');
+  expect(expectedResult).toContain('"excludeFromImport":true,"protectFromImport":true,"templateKey":"resume-projects"');
   expect(expectedResult).not.toContain('idEditorOpen');
 });
 
@@ -343,6 +391,34 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"containerTitle":"Details"');
   expect(expectedResult).toContain('"containerExpanded":false');
   expect(expectedResult).toContain('"containerCollapsedPreviewRem":2.5');
+});
+
+test('serializes a noSave container as an empty container', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"feed"}-->
+#! Feed
+
+ <!--hvy:container {"id":"fake-feed","noSave":true}-->
+
+  <!--hvy:text {}-->
+   Fake runtime row
+
+ <!--hvy:text {}-->
+  After the feed
+`, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.schema.noSave).toBe(true);
+  expect(document.sections[0]?.blocks[0]?.schema.containerBlocks.map((block) => block.text)).toEqual(['Fake runtime row']);
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('<!--hvy:container {"id":"fake-feed","noSave":true}-->');
+  expect(expectedResult).not.toContain('Fake runtime row');
+  expect(expectedResult).toContain('After the feed');
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.blocks.map((block) => block.schema.component)).toEqual(['container', 'text']);
 });
 
 test('round-trips reusable xref-card target tag filters', () => {

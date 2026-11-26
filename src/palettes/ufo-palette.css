@@ -19,6 +19,8 @@
   --hvy-button-hover-bg: rgba(0, 255, 200, 0.6);
   --hvy-button-text: #f0f0f0;
   --hvy-button-hover-text: #ffff99;
+  --hvy-button-disabled-bg: #3f4a4c;
+  --hvy-button-disabled-text: #8a9496;
   --hvy-highlight-1: rgba(0, 255, 0, 0.1);
   --hvy-highlight-2: rgba(229, 233, 0, 0.25);
   --hvy-ai-view-hint-bg: rgba(255, 219, 88, 0.36);
@@ -50,6 +52,10 @@
   --hvy-success: #50c878;
   --hvy-success-bg: rgba(16, 245, 75, 0.2);
   --hvy-success-border: #37c871;
+  --hvy-diff-removed-text: #ffaaa2;
+  --hvy-diff-removed-bg: #4c2424;
+  --hvy-diff-added-text: #83e6a7;
+  --hvy-diff-added-bg: #20432d;
   --hvy-code-bg: #101011;
   --hvy-code-text: #e0e0e0;
   --hvy-code-muted: #b0b0b0;

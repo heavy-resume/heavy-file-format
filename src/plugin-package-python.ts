@@ -2,7 +2,7 @@ import {
   validatePluginAgainstManifest,
   type HvyPluginPackageManifest,
 } from './plugin-package';
-import { getBrython, loadBrythonPythonImports } from './plugins/scripting/brython-loader';
+import { getBrython, getBrythonWindow, loadBrythonPythonImports } from './plugins/scripting/brython-loader';
 import { normalizeBrythonHostValue } from './plugins/scripting/brython-host-values';
 import type { HvyPlugin } from './plugins/types';
 
@@ -36,13 +36,14 @@ declare global {
 let pythonPluginSequence = 0;
 
 function getPythonPluginBridge(): PythonPluginBridge {
-  window.__HVY_PLUGIN_PYTHON__ ??= {
+  const realmWindow = getBrythonWindow() as Window & { __HVY_PLUGIN_PYTHON__?: PythonPluginBridge };
+  realmWindow.__HVY_PLUGIN_PYTHON__ ??= {
     contexts: {},
     results: {},
     errors: {},
     callbacks: {},
   };
-  return window.__HVY_PLUGIN_PYTHON__;
+  return realmWindow.__HVY_PLUGIN_PYTHON__;
 }
 
 function pythonIdentifier(value: string, path: string): string {
@@ -189,7 +190,7 @@ except BaseException as __hvy_error__:
 finally:
     __hvy_bridge__.callbacks[${JSON.stringify(bridgeId)}]()
 `;
-  const scriptElement = document.createElement('script');
+  const scriptElement = getBrythonWindow().document.createElement('script');
   scriptElement.id = runnerName;
   scriptElement.textContent = source;
 

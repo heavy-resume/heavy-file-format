@@ -1,4 +1,5 @@
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
+import { clearCachedEmbeddedFileUsage } from './attachment-cleanup';
 import './default-theme.css';
 import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
@@ -56,6 +57,7 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { renderExpandableModalHost, syncExpandableModals } from './editor/components/expandable/expandable-modal';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import { createEditorBlockElement, createEditorSectionElement, insertEditorTopLevelSectionDom, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
@@ -70,7 +72,8 @@ import { decryptEncryptedComponents } from './encrypted-components';
 import { createReferenceEncryptionOptions } from './reference-encryption-keyring';
 import { registerHvyWebMcpTools } from './webmcp';
 import { notifyDocumentMayHaveChanged } from './document-change';
-import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
+import { isAdvancedEditorActive } from './component-availability';
+import { installWebMCP } from '@mcp-b/webmcp-polyfill';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -154,6 +157,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     },
     paneScroll: {
       fullPaneTop: 0,
+      documentMetaTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
@@ -202,6 +206,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     history: [],
     future: [],
     isRestoring: false,
+    undoDisabled: false,
     componentMetaModal: null,
     encryptionModal: null,
     dbTableRowComponentModal: null,
@@ -216,6 +221,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    readerExpandableModals: [],
     searchRevealedAncestors: {},
     readerContainerState: {},
     readerDeferredSectionBodies: {},
@@ -455,16 +461,7 @@ editorRenderer = createEditorRenderer(
       return state.document.sections;
     },
     get showAdvancedEditor() {
-      const rowModal = state.dbTableRowComponentModal;
-      if (rowModal && !rowModal.readOnly) {
-        if (rowModal.mode === 'advanced') {
-          return true;
-        }
-        if (rowModal.mode === 'basic' || rowModal.mode === 'raw') {
-          return false;
-        }
-      }
-      return state.showAdvancedEditor;
+      return isAdvancedEditorActive();
     },
     get addComponentBySection() {
       return state.addComponentBySection;
@@ -655,6 +652,9 @@ readerRenderer = createReaderRenderer(
     get readerExpandableState() {
       return state.readerExpandableState;
     },
+    get readerExpandableModals() {
+      return state.readerExpandableModals;
+    },
     get searchRevealedAncestors() {
       return state.searchRevealedAncestors;
     },
@@ -738,6 +738,10 @@ function renderApp(): void {
   const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
   const isDocumentMetaView = isEditorView && state.metaPanelOpen;
+  if (!isDocumentMetaView) {
+    // Other views edit blocks in place, which the Document Meta usage cache cannot detect.
+    clearCachedEmbeddedFileUsage();
+  }
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
   const pdfDocument = isPdfDocument(state.document);
   const readerToolsAvailable = !(pdfDocument && isViewerView);
@@ -850,6 +854,7 @@ function renderApp(): void {
                      scrollTop: capturedScroll.paneScroll.readerTop,
                      viewportHeight: readerViewportHeight,
                    } : undefined)}</div>
+                   ${renderExpandableModalHost(readerRenderer.renderExpandableModals())}
                    ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}
                    ${isAiView
@@ -1215,6 +1220,24 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   invalidateInlineAnswerGroupIndex();
   if (isPdfDocument(state.document) && state.currentView === 'viewer') {
     syncActivePdfPreview(app, state.document, true);
+    return;
+  }
+  if (options.surface !== 'sidebar') {
+    syncExpandableModals({
+      root: app,
+      renderModals: readerRenderer.renderExpandableModals,
+      capturePluginFocus,
+      afterRender: (host) => {
+        reconcilePluginMounts(host);
+        if (options.runVisibilityScripts !== false) {
+          void runButtonVisibilityScripts(host);
+        }
+        initializeCarouselReaders(host);
+        bindLazyImageHydration(host);
+      },
+    });
+  }
+  if (options.surface === 'expandable-modals') {
     return;
   }
   const refreshId = incrementRefreshReaderCount();
@@ -1604,7 +1627,7 @@ async function bootstrap(): Promise<void> {
   initState(applySessionState(createInitialState(await createDefaultDocument(), createReferenceEncryptionOptions()), savedSession));
   await decryptEncryptedComponents(state.document, state.encryption);
   initializeReferenceDocumentDirtyTracking();
-  initializeWebMCPPolyfill();
+  installWebMCP();
   const webMcpRegistration = registerHvyWebMcpTools({}, {
     getDocument: () => state.document,
     embeddingProvider: state.embeddingProvider,

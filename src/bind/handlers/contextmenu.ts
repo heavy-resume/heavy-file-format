@@ -7,24 +7,35 @@ import { activateTransientPopover, releaseTransientPopover } from '../../transie
 
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 const AI_LONG_PRESS_MS = 560;
-const AI_CONTEXT_CLICK_SUPPRESS_MS = 350;
 
 export const AI_READER_CONTEXT_OPEN_EVENT = 'hvy-ai-reader-context-open';
 
-let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
-let suppressNextAiContextClickUntil = 0;
-let aiLongPress: { pointerId: number; x: number; y: number; timer: number } | null = null;
-
 export function bindContextmenu(app: HTMLElement): void {
+  let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
+  let consumeAiContextClick = false;
+  let contextPointerType = 'mouse';
+  let aiLongPress: { pointerId: number; x: number; y: number; timer: number } | null = null;
+
+  const clearAiLongPress = (pointerId?: number): void => {
+    if (!aiLongPress || (pointerId !== undefined && aiLongPress.pointerId !== pointerId)) {
+      return;
+    }
+    window.clearTimeout(aiLongPress.timer);
+    aiLongPress = null;
+  };
+
+  // Consume the opening gesture's click even if the finger remains down for a
+  // long time. A new press starts a separate interaction with the menu or reader.
+  app.addEventListener('pointerdown', (event) => {
+    contextPointerType = event.pointerType;
+    consumeAiContextClick = false;
+  }, true);
+
   app.addEventListener('click', (event) => {
-    if (suppressNextAiContextClickUntil <= 0) {
+    if (!consumeAiContextClick || event.detail === 0) {
       return;
     }
-    const shouldSuppress = window.performance.now() <= suppressNextAiContextClickUntil;
-    suppressNextAiContextClickUntil = 0;
-    if (!shouldSuppress) {
-      return;
-    }
+    consumeAiContextClick = false;
     event.preventDefault();
     event.stopImmediatePropagation();
   }, true);
@@ -43,7 +54,15 @@ export function bindContextmenu(app: HTMLElement): void {
     const target = event.target as HTMLElement;
     if (target.closest('.hvy-context-popover-backdrop')) {
       event.preventDefault();
-      closeReaderContextPopover(app);
+      // Touch holds can emit contextmenu before release. Let the backdrop keep
+      // shielding the reader until its dismissal click.
+      if (contextPointerType === 'mouse') {
+        closeReaderContextPopover(app);
+      }
+      return;
+    }
+    if (target.closest('.hvy-context-popover')) {
+      event.preventDefault();
       return;
     }
     const anchor = target.closest<HTMLAnchorElement>('.rich-editor a[href]');
@@ -73,11 +92,18 @@ export function bindContextmenu(app: HTMLElement): void {
     openReaderContextPopover(app, event, filtering);
     if (state.contextMenu?.kind === 'ai') {
       dismissAiModeTip(app);
+      if (aiLongPress || contextPointerType !== 'mouse') {
+        consumeAiContextClick = true;
+        clearAiLongPress();
+        lastAiTap = null;
+      }
     }
   });
 
   app.addEventListener('dblclick', (event) => {
-    if (state.currentView !== 'ai') {
+    // Touch/pen double taps are recognized on pointerup by component identity.
+    // Native dblclick can combine a backdrop dismissal with a new reader tap.
+    if (state.currentView !== 'ai' || contextPointerType !== 'mouse') {
       return;
     }
     const target = event.target as HTMLElement;
@@ -120,7 +146,8 @@ export function bindContextmenu(app: HTMLElement): void {
         openReaderContextPopover(app, event, false);
         if (state.contextMenu?.kind === 'ai') {
           dismissAiModeTip(app);
-          suppressNextAiContextClickUntil = window.performance.now() + AI_CONTEXT_CLICK_SUPPRESS_MS;
+          consumeAiContextClick = true;
+          lastAiTap = null;
         }
       }, AI_LONG_PRESS_MS),
     };
@@ -137,11 +164,12 @@ export function bindContextmenu(app: HTMLElement): void {
 
   app.addEventListener('pointercancel', (event) => {
     clearAiLongPress(event.pointerId);
+    lastAiTap = null;
   });
 
   app.addEventListener('pointerup', (event) => {
     clearAiLongPress(event.pointerId);
-    if (state.currentView !== 'ai' || event.pointerType === 'mouse') {
+    if (consumeAiContextClick || state.currentView !== 'ai' || event.pointerType === 'mouse') {
       return;
     }
     const target = event.target as HTMLElement;
@@ -175,7 +203,7 @@ export function bindContextmenu(app: HTMLElement): void {
     openReaderContextPopover(app, event, false);
     if (state.contextMenu?.kind === 'ai') {
       dismissAiModeTip(app);
-      suppressNextAiContextClickUntil = window.performance.now() + AI_CONTEXT_CLICK_SUPPRESS_MS;
+      consumeAiContextClick = true;
     }
   });
 }
@@ -236,14 +264,6 @@ function dismissAiModeTip(app: HTMLElement): void {
   app.querySelector('.ai-view-hint')?.remove();
 }
 
-function clearAiLongPress(pointerId?: number): void {
-  if (!aiLongPress || (pointerId !== undefined && aiLongPress.pointerId !== pointerId)) {
-    return;
-  }
-  window.clearTimeout(aiLongPress.timer);
-  aiLongPress = null;
-}
-
 function isNativeContextMenuModifier(event: MouseEvent): boolean {
   return event.metaKey || event.ctrlKey;
 }
@@ -255,6 +275,7 @@ function shouldIgnoreAiContextGestureTarget(target: HTMLElement): boolean {
     return true;
   }
   return Boolean(
+    target.closest('.hvy-context-popover-backdrop') ||
     (target.closest('button, input, textarea, select, .hvy-context-popover, .ai-edit-popover') && !readerAction) ||
     (anchor && !anchor.classList.contains('reader-xref-card'))
   );
@@ -434,7 +455,7 @@ function renderContextMenuElement(app: HTMLElement): void {
     addButton('Clear filtering', 'clear-target-filtering');
   }
   root.append(...(backdrop ? [backdrop] : []), ...(clone ? [clone] : []), popover);
-  activateTransientPopover(app, popover, () => closeReaderContextPopover(app));
+  activateTransientPopover(app, popover, () => closeReaderContextPopover(app), backdrop);
   const position = placeContextMenuPopover(root, popover, menu.x, menu.y);
   menu.x = position.x;
   menu.y = position.y;

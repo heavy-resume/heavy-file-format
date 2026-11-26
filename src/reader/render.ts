@@ -5,8 +5,9 @@ import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
 import { getComponentListAddLabel, hasComponentListItems } from '../editor/components/component-list/component-list-labels';
 import { renderContainerReader } from '../editor/components/container/container';
-import { hasContainerBorderCss } from '../editor/components/container/container-css';
+import { getContainerShellCss, hasContainerBorderCss } from '../editor/components/container/container-css';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
+import { renderExpandableModal } from '../editor/components/expandable/expandable-modal';
 import { buildGridReaderLayout } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
 import { renderCarouselReader } from '../editor/components/carousel/carousel';
@@ -23,6 +24,7 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
+import type { ReaderExpandableModalEntry } from '../types';
 import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableDefinitionEditModalState, ReusableSaveModalState, SectionTemplateFlavorModalState, DbTableRowComponentModalState, VisualDocument } from '../types';
 import type { CaptionTextModalState } from '../caption';
 import { createDefaultTextCaption, normalizeTextCaption, renderTextCaptionHtml } from '../caption';
@@ -39,6 +41,7 @@ import { visitBlocksInList } from '../section-ops';
 import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getAvailableOutputGenerators, getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { isAdvancedComponentBlock, isAdvancedOnlySection, isHostHiddenPluginBlock } from '../component-availability';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { REUSABLE_SECTION_PREFIX } from '../state';
 import { extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../reusable-template-values';
@@ -59,12 +62,14 @@ import {
 } from './view-filter';
 import {
   createChildRenderTreeWindowOptions,
+  renderRenderTreeRangePlaceholderAttrs,
   createRenderTreeHeightLedger,
   type RenderTreeWindowEntry,
 } from '../render-tree-window';
 import {
   createReaderBlockRenderTreeNode,
   createReaderSectionRenderTreeNode,
+  isExpandableExpandedInline,
   READER_BLOCK_TREE_LAYOUT,
   READER_SECTION_TREE_LAYOUT,
   type ReaderRenderTreeItem,
@@ -102,6 +107,7 @@ interface ReaderRenderState {
   showAdvancedEditor: boolean;
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
+  readerExpandableModals: ReaderExpandableModalEntry[];
   readerContainerState: Record<string, boolean>;
   searchRevealedAncestors: Record<string, boolean>;
   readerDeferredSectionBodies?: Record<string, boolean>;
@@ -137,6 +143,7 @@ interface ReaderRenderDeps {
 export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
   renderReaderSections: (sections: VisualSection[], windowOptions?: ReaderRenderTreeWindowOptions) => string;
+  renderExpandableModals: () => string;
   renderSidebarSections: (sections: VisualSection[]) => string;
   renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection, windowOptions?: ReaderRenderTreeWindowOptions) => string;
@@ -159,6 +166,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   let activeReaderViewContext: ReaderViewContext | null = null;
   let activeSearchFilterContext: SearchFilterContext | null = null;
   let activeTextPlaceholders: TextPlaceholderDefinition[] = [];
+  let editingAffordancesSuppressed = false;
 
   function withTextPlaceholders<T>(options: TextPlaceholderContextOptions, render: () => T): T {
     const previous = activeTextPlaceholders;
@@ -419,7 +427,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       ? renderReaderPreviewBlocks(section, section.blocks)
       : renderReaderSectionChildren(section, windowOptions);
     const childrenHtml = '';
-    if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
+    if (
+      !blocksHtml.trim()
+      && !childrenHtml.trim()
+      && !isSectionSearchMatch(searchContext, section)
+      && !(state.currentView === 'ai' && isAiEditorHostSection(section.key))
+    ) {
       return '';
     }
     const content = `<div class="${contentClass}">${blocksHtml}${childrenHtml}${renderAiActiveSectionAddAffordance(section)}</div>`;
@@ -517,9 +530,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         if (!candidate || candidate.node.kind !== 'block' || candidate.shouldRender) break;
         chunk.push(candidate);
       }
-      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
-      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
-      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" ${renderRenderTreeRangePlaceholderAttrs(chunk, deps.escapeAttr)} aria-hidden="true"></div>`);
       index += Math.max(1, chunk.length);
     }
     return output.join('');
@@ -535,6 +546,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
+    const previous = editingAffordancesSuppressed;
+    editingAffordancesSuppressed = previous || options.suppressEditingAffordances === true;
+    try {
+      return renderReaderBlockContent(section, block, options);
+    } finally {
+      editingAffordancesSuppressed = previous;
+    }
+  }
+
+  function renderReaderBlockContent(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions): string {
     if (options.textPlaceholders || options.omitTextPlaceholderNames) {
       const { textPlaceholders, omitTextPlaceholderNames, ...remainingOptions } = options;
       return withTextPlaceholders({ textPlaceholders, omitTextPlaceholderNames }, () => (
@@ -557,10 +578,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (base === 'location-marker') {
       return '';
     }
-    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
+    if (!editingAffordancesSuppressed && !options.suppressAiEditorDelegation && state.currentView === 'ai' && isAiEditorHostBlock(section.key, block.id)) {
       return deps.renderEditorBlock(section.key, block);
     }
-    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
+    if (!editingAffordancesSuppressed && !options.suppressAiEditorDelegation && state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
       return deps.renderEditorBlock(section.key, block);
     }
     const modifiers = getReaderViewModifiers(viewContext, targetKey);
@@ -568,14 +589,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
     const forceSearchExpanded = searchContext.filtering && searchContext.filterMode === 'hide' && !searchDimmed;
     const searchRevealed = state.searchRevealedAncestors[`${section.key}:${block.id}`] === true;
+    const documentExpanded = isExpandableExpandedInline(block);
     const readerExpanded = base === 'expandable' && !options.ignoreReaderSessionState
-      ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
-      : searchRevealed || block.schema.expandableExpanded;
+      ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : documentExpanded)
+      : searchRevealed || documentExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
     const responsiveClass = getSurfaceResponsiveClass(section.key, block.id);
-    const responsiveCss = compileSurfaceResponsiveCss(block.schema.css, `.${responsiveClass}`, state.documentMeta);
+    const shellCss = base === 'container' ? getContainerShellCss(block.schema.css, state.documentMeta) : block.schema.css;
+    const responsiveCss = compileSurfaceResponsiveCss(shellCss, `.${responsiveClass}`, state.documentMeta);
     const blockClass = [
       'reader-block',
       responsiveClass,
@@ -584,7 +607,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
       state.contextMenu?.kind === 'ai' && state.contextMenu.sectionKey === section.key && state.contextMenu.blockId === block.id ? 'is-context-menu-target' : '',
-      state.currentView === 'ai' && base === 'text' && isAiEditablePlaceholderTextBlock(block) ? 'is-ai-editable-placeholder' : '',
+      !editingAffordancesSuppressed && state.currentView === 'ai' && base === 'text' && isAiEditablePlaceholderTextBlock(block) ? 'is-ai-editable-placeholder' : '',
       modifiers.has('highlight') ? 'is-highlighted' : '',
       isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
       dimmed ? 'is-reader-view-dimmed' : '',
@@ -609,7 +632,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       options.trimVerticalStartMargin ? ' data-reader-trim-vertical-start-margin="true"' : '',
       options.trimVerticalEndMargin ? ' data-reader-trim-vertical-end-margin="true"' : '',
     ].join('');
-    const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
+    const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-virtual-shape="${deps.escapeAttr(block.schema.component)}" ${visibleState === 'pending' ? 'data-hvy-dynamic-visibility="true" ' : ''}data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
     const helpers = { ...deps.getComponentRenderHelpers(), getTextPlaceholders: () => activeTextPlaceholders };
     type BlockShellPresentation = {
       beforeHtml?: string;
@@ -692,7 +715,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'component-list') {
       const listHtml = renderComponentListReader(section, block, helpers);
-      const addAffordance = renderAiActiveComponentListAddAffordance(section, block);
+      const addAffordance = editingAffordancesSuppressed ? '' : renderAiActiveComponentListAddAffordance(section, block);
       return renderNonEmptyMaybeCollapsedBlockShell(`${listHtml}${addAffordance}`);
     }
     if (base === 'grid') {
@@ -872,9 +895,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         index += 1;
         continue;
       }
-      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
-      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
-      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" ${renderRenderTreeRangePlaceholderAttrs(chunk, deps.escapeAttr)} aria-hidden="true"></div>`);
       index += chunk.length;
     }
     return output.join('');
@@ -994,36 +1015,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.currentView === 'viewer') {
       return section.editorOnly || isSectionHiddenByTemplateMarker(section);
     }
-    return state.currentView === 'ai'
-      && !state.showAdvancedEditor
-      && section.editorOnly
-      && sectionContainsAdvancedOnlyScriptingBlock(section);
-  }
-
-  function isAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
-    return block.schema.editorOnly
-      && deps.resolveBaseComponent(block.schema.component) === 'plugin'
-      && block.schema.plugin === SCRIPTING_PLUGIN_ID;
-  }
-
-  function sectionContainsAdvancedOnlyScriptingBlock(section: VisualSection): boolean {
-    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock);
-  }
-
-  function blockContainsAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
-    return isAdvancedOnlyScriptingBlock(block)
-      || (block.schema.containerBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
-      || (block.schema.componentListBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
-      || (block.schema.gridItems ?? []).some((item) => blockContainsAdvancedOnlyScriptingBlock(item.block))
-      || (block.schema.expandableStubBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
-      || (block.schema.expandableContentBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock);
+    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlySection(section, state.documentMeta);
   }
 
   function isViewerHiddenBlock(block: VisualBlock): boolean {
-    if (state.currentView === 'viewer' && (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block))) {
+    if (state.currentView === 'viewer'
+      && (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block) || isHostHiddenPluginBlock(block, state.documentMeta))) {
       return true;
     }
-    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlyScriptingBlock(block);
+    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedComponentBlock(block, state.documentMeta);
   }
 
   function isAnchoredReaderButton(section: VisualSection | null, block: VisualBlock): boolean {
@@ -1035,7 +1035,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function getReaderButtonAnchor(section: VisualSection, block: VisualBlock): { className: string; attrs: string; overlay: string } {
-    if (state.currentView !== 'ai') {
+    if (editingAffordancesSuppressed || state.currentView !== 'ai') {
       return { className: '', attrs: '', overlay: '' };
     }
     const componentId = block.schema.id.trim();
@@ -1083,6 +1083,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function getBlockDomId(block: VisualBlock): string {
     return block.schema.id.trim();
+  }
+
+  function renderExpandableModals(): string {
+    const helpers = deps.getComponentRenderHelpers();
+    return state.readerExpandableModals.map(({ sectionKey, blockId }) => {
+      const section = deps.findSectionByKey(state.documentSections, sectionKey);
+      const block = deps.findBlockByIds(sectionKey, blockId);
+      if (!section || !block) {
+        return '';
+      }
+      deps.ensureExpandableBlocks(block);
+      return renderExpandableModal(section, block, helpers);
+    }).join('');
   }
 
   function getReaderExpandableExpanded(sectionKey: string, block: VisualBlock, fallback = block.schema.expandableExpanded): boolean {
@@ -1228,6 +1241,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       '--hvy-button-hover-bg --hvy-button-hover-text --hvy-focus --hvy-shadow-md',
       'theme-demo-button-stack'
     );
+    const buttonDisabledPreview = renderDemoWrapper(
+      '<button type="button" class="secondary" disabled>Disabled</button>',
+      'disabled',
+      '--hvy-button-disabled-bg --hvy-button-disabled-text',
+      'theme-demo-button-stack'
+    );
     const fillInPreview = renderDemoSurface(
       renderTextReader(previewSection, previewFillInBlock, helpers),
       'fill-in',
@@ -1299,14 +1318,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         {
           id: 'button',
           label: 'Button',
-          detail: 'Primary button rest and hover states',
+          detail: 'Primary button rest, hover, and disabled states',
           className: 'theme-preview-button-card',
-          variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
+          variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-button-disabled-bg', '--hvy-button-disabled-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
           states: [
             { id: 'rest', label: 'Rest', variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-border-alt'] },
             { id: 'hover', label: 'Hover', variables: ['--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-focus', '--hvy-shadow-md'] },
+            { id: 'disabled', label: 'Disabled', variables: ['--hvy-button-disabled-bg', '--hvy-button-disabled-text'] },
           ],
-          html: `${buttonRestPreview}${buttonHoverPreview}`,
+          html: `${buttonRestPreview}${buttonHoverPreview}${buttonDisabledPreview}`,
         },
         {
           id: 'text',
@@ -2587,10 +2607,19 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   type="checkbox"
                   data-section-key="${deps.escapeAttr(section.key)}"
                   data-field="section-exclude-from-import"
-                  ${section.exclude_from_import ? 'checked' : ''}
+                  ${section.excludeFromImport ? 'checked' : ''}
                 />
                 Exclude From Import
               </label>
+              ${isPdfReaderDocument() ? `<label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-start-on-new-page"
+                  ${section.startOnNewPage ? 'checked' : ''}
+                />
+                Start on new page
+              </label>` : ''}
             </div>
           </div>
         </section>
@@ -2661,6 +2690,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   return {
     renderNavigation,
     renderReaderSections,
+    renderExpandableModals,
     renderSidebarSections,
     renderSidebarHelpBalloon,
     renderReaderSection,

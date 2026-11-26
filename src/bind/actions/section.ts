@@ -1,5 +1,5 @@
 import { state, getInsertEditorTopLevelSection, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
-import { isDefaultUntitledSectionTitle, getSectionId, isHiddenEditorOnlySection, moveSectionByFilteredOffset, removeSectionByKey, findSectionContainer } from '../../section-ops';
+import { isDefaultUntitledSectionTitle, getSectionId, isHiddenAdvancedOnlySection, moveSectionByFilteredOffset, removeSectionByKey, findSectionContainer } from '../../section-ops';
 import { clearOpenEditorSection, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import { createEmptySectionWithMeta, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
@@ -152,7 +152,7 @@ const moveSection = (offset: -1 | 1): ActionHandler => ({ section, sectionKey })
 };
 
 function isEditorOrderSibling(candidate: VisualSection, target: VisualSection): boolean {
-  if (candidate.isGhost || isHiddenEditorOnlySection(candidate, state.document.meta, state.showAdvancedEditor)) {
+  if (candidate.isGhost || isHiddenAdvancedOnlySection(candidate, state.document.meta, state.showAdvancedEditor)) {
     return false;
   }
   return candidate.location === target.location;

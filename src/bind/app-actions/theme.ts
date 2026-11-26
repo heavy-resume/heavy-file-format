@@ -100,6 +100,15 @@ function syncThemePreviewStateDecorations(preview: HTMLElement, stateName: strin
     allColorsButton.style.setProperty('box-shadow', 'inset 0 0 0 1px color-mix(in srgb, var(--hvy-focus) 30%, transparent), 0 8px 18px var(--hvy-shadow-md)', 'important');
     return;
   }
+  if (stateName === 'disabled') {
+    allColorsButton.style.setProperty('border-color', 'var(--hvy-button-disabled-bg)', 'important');
+    allColorsButton.style.setProperty('background', 'var(--hvy-button-disabled-bg)', 'important');
+    allColorsButton.style.setProperty('background-color', 'var(--hvy-button-disabled-bg)', 'important');
+    allColorsButton.style.setProperty('background-image', 'none', 'important');
+    allColorsButton.style.setProperty('color', 'var(--hvy-button-disabled-text)', 'important');
+    allColorsButton.style.setProperty('box-shadow', 'none', 'important');
+    return;
+  }
   allColorsButton.style.removeProperty('border-color');
   allColorsButton.style.removeProperty('background');
   allColorsButton.style.removeProperty('background-color');

@@ -2,6 +2,7 @@ import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS, buildChatDocumentContext, requestP
 import { appendProviderToolResultsToState, type ProviderToolDefinition, type ProviderToolResult } from './provider-tools';
 import { getDocumentAiContext } from '../document-ai-context';
 import { createHvyCliSession, executeHvyCliCommand } from '../cli-core/commands';
+import { prepareEmbeddingChatContext } from './embedding-context';
 import { searchHvyDocumentForAgent } from '../search/hvy-document-search';
 import { walkHvyDocument } from '../search/hvy-document-walk';
 import type {
@@ -107,6 +108,7 @@ async function buildViewerAgentContext(params: {
   question: string;
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   onContextPreparation?: HvyChatContextPreparationCallback;
   signal?: AbortSignal;
 }): Promise<string> {
@@ -127,12 +129,36 @@ async function buildViewerAgentContext(params: {
   if (mode === 'full-document') {
     return buildChatDocumentContext(params.document);
   }
+  if (mode === 'embedding-retrieval') {
+    await autoPrepareViewerEmbeddingIndex(params);
+  }
   const documentAiContext = getDocumentAiContext(params.document);
   return [
     `Viewer document access mode: ${mode}.`,
     'Document content is available through the read-only search, walk, preview, and database tools.',
     ...(documentAiContext ? ['', 'Document context:', documentAiContext] : []),
   ].join('\n');
+}
+
+async function autoPrepareViewerEmbeddingIndex(params: {
+  document: VisualDocument;
+  chatContext?: HvyChatContextOptions | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
+  onContextPreparation?: HvyChatContextPreparationCallback;
+  signal?: AbortSignal;
+}): Promise<void> {
+  if (!params.chatContext || !params.embeddingProvider || params.chatContext.autoPrepareEmbeddingIndex === false) {
+    return;
+  }
+  let embeddedMissingChunks = false;
+  await prepareEmbeddingChatContext(params.document, params.chatContext, params.embeddingProvider, params.signal, (progress) => {
+    embeddedMissingChunks = embeddedMissingChunks || progress.missingChunks > 0;
+    return params.onContextPreparation?.({ phase: 'preparing-context', cached: false, progress });
+  });
+  if (embeddedMissingChunks) {
+    await params.chatContext.onEmbeddingIndexPrepared?.();
+    await params.onContextPreparation?.({ phase: 'context-ready', cached: false });
+  }
 }
 
 function buildViewerAgentInstructions(mode: HvyChatContextOptions['mode']): string {

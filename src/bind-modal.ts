@@ -1,10 +1,11 @@
 import './modal.css';
+import './pdf-template-import-modal.css';
 import { parse as parseYaml } from 'yaml';
 import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } from './state';
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
 import { applyReusableTemplateToDocument, saveReusableFromModal } from './reusable';
-import { clearActiveEditorBlock, findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
+import { clearActiveEditorBlock, refreshReaderPanelsOutsideActiveEditor, findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 import { hasReusableDefinitionChanges } from './reusable-definition-changes';
@@ -28,6 +29,7 @@ import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
 import { changeEncryptedComponentKeyInDocument, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
 import { showTransientNotice } from './transient-notice';
+import type { ComponentDefinition } from './types';
 
 const loadDbTableRuntime = () => import('./plugins/db-table');
 
@@ -529,7 +531,7 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
     section.css = cssInput.value;
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(cssInput);
     getRefreshModalPreview()();
   });
 }
@@ -1047,10 +1049,15 @@ function saveReusableDefinitionModalAndClose(): void {
   }
   const syncDocumentInstances = modal.kind === 'component' && modal.pendingDocumentSync
     && hasReusableDefinitionChanges(state.document, modal);
+  const previousComponentDefinition = modal.kind === 'component' && modal.originalRaw
+    ? parseYaml(modal.originalRaw) as ComponentDefinition
+    : null;
   clearActiveEditorBlock();
   closeReusableDefinitionBuilder();
   if (syncDocumentInstances) {
-    applyReusableTemplateToDocument(active.definition.name, active.definition.template, null);
+    applyReusableTemplateToDocument(active.definition.name, active.definition.template, null, {
+      previousDefinition: previousComponentDefinition,
+    });
   }
   getRenderApp()();
   restoreReusableDefinitionHistory(modal);

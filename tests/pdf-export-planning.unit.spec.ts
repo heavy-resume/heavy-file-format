@@ -11,7 +11,7 @@ vi.mock('../src/plugins/scripting/wrapper', () => ({
   runUserScript: vi.fn(async (options) => {
     options.document.sections[0].blocks[0].text = 'Export clone text';
     options.exportRuleRecorder.hide('#script-plugin');
-    options.exportRuleRecorder.strategy({ tag: 'script-keep', keepTogether: true });
+    options.exportRuleRecorder.strategy({ tag: 'script-page-break', pageBreakBefore: true });
     return { ok: true, stepsExecuted: 1, stepBudget: 100_000, linesExecuted: 1, toolCalls: 0 };
   }),
 }));
@@ -40,7 +40,7 @@ function createPlanningDocument(): VisualDocument {
   summary.customId = 'summary';
   summary.title = 'Summary';
   summary.tags = 'primary';
-  summary.blocks = [createTextBlock('intro', 'Intro text', 'script-keep')];
+  summary.blocks = [createTextBlock('intro', 'Intro text', 'script-page-break')];
 
   const plugins = createEmptySection('');
   plugins.key = 'section-plugins';

@@ -3,7 +3,6 @@ import { describe, expect, test } from 'vitest';
 import { getAttachment, setAttachment } from '../src/attachments';
 import {
   decodeUserFileAttachmentTarget,
-  countUserFileAttachmentReferences,
   defaultUserFileAttachmentName,
   encodeUserFileAttachmentTarget,
   listUserFileAttachments,
@@ -15,7 +14,8 @@ import {
   storeUserFileAttachment,
   suggestUniqueUserFileAttachmentName,
 } from '../src/document-attachments';
-import { deserializeDocument, deserializeDocumentBytes, serializeDocumentBytes } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from '../src/serialization';
+import { getEmbeddedFileUsage } from '../src/attachment-cleanup';
 import { renderUserFileAttachmentLinksInHtml } from '../src/document-attachment-links';
 
 function createDocument() {
@@ -236,14 +236,16 @@ hvy_version: 0.1
       bytes: new Uint8Array([1, 2]),
     });
 
-    expect(countUserFileAttachmentReferences(document, 'Employee Handbook')).toBe(3);
+    expect(getEmbeddedFileUsage(document).referenceCounts.get('file:handbook')).toBe(3);
 
     const expectedResult = await renameUserFileAttachment(document, 'file:handbook', 'Staff Handbook');
 
     expect(expectedResult.referencesUpdated).toBe(3);
     expect(expectedResult.attachment).toMatchObject({ id: 'file:handbook', name: 'Staff Handbook' });
-    expect(countUserFileAttachmentReferences(document, 'Employee Handbook')).toBe(0);
-    expect(countUserFileAttachmentReferences(document, 'Staff Handbook')).toBe(3);
+    expect(getEmbeddedFileUsage(document).referenceCounts.get('file:handbook')).toBe(3);
+    const serialized = serializeDocument(document).toLocaleLowerCase();
+    expect(serialized).not.toContain(encodeUserFileAttachmentTarget('Employee Handbook').toLocaleLowerCase());
+    expect(serialized).toContain(encodeUserFileAttachmentTarget('Staff Handbook').toLocaleLowerCase());
     expect(getAttachment(document, 'file:handbook')?.meta.name).toBe('Staff Handbook');
   });
 
@@ -294,12 +296,14 @@ section_defs:
       bytes: new Uint8Array([1]),
     });
 
-    expect(countUserFileAttachmentReferences(document, 'Shared Guide')).toBe(4);
+    expect(getEmbeddedFileUsage(document).referenceCounts.get('file:shared-guide')).toBe(4);
     const expectedResult = await renameUserFileAttachment(document, 'file:shared-guide', 'Team Guide');
 
     expect(expectedResult.referencesUpdated).toBe(4);
-    expect(countUserFileAttachmentReferences(document, 'Shared Guide')).toBe(0);
-    expect(countUserFileAttachmentReferences(document, 'Team Guide')).toBe(4);
+    expect(getEmbeddedFileUsage(document).referenceCounts.get('file:shared-guide')).toBe(4);
+    const serialized = serializeDocument(document);
+    expect(serialized).not.toContain(encodeUserFileAttachmentTarget('Shared Guide'));
+    expect(serialized).toContain(encodeUserFileAttachmentTarget('Team Guide'));
   });
 
   test('before, remove attachment, expected result: user file bytes and descriptor are removed', async () => {

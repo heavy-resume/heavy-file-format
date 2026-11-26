@@ -5946,6 +5946,24 @@ test('reader max width keeps focus while typing', async ({ page }) => {
   await expect(readerMaxWidth).toHaveValue('60rem');
 });
 
+test('section default CSS is editable in document meta and keeps focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const sectionDefaultCss = page.getByLabel('Section Default CSS');
+  await expect(sectionDefaultCss).toHaveValue('margin: 0.5rem 0;');
+  await sectionDefaultCss.fill('');
+  await sectionDefaultCss.type('margin: 1rem;');
+
+  await expect(sectionDefaultCss).toBeFocused();
+  await expect(sectionDefaultCss).toHaveValue('margin: 1rem;');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/section_defaults:\n  css: "margin: 1rem;"/);
+});
+
 for (const preview of ['Phone 390', 'Desktop']) {
   test(`document meta scrolls in ${preview} preview`, async ({ page }) => {
     await page.goto('/');

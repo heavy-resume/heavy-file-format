@@ -10,6 +10,11 @@ import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';
 import type { HvyPdfStylePreset } from './pdf-style-presets';
 
+export interface ReaderExpandableModalEntry {
+  sectionKey: string;
+  blockId: string;
+}
+
 export interface ReusableTemplateVariableConfig {
   type?: 'text' | 'block' | 'url';
   label?: string;
@@ -152,6 +157,8 @@ export interface HvyChatContextOptions {
   embeddingBatchSize?: number;
   embeddingMinScore?: number;
   persistEmbeddingsToAttachments?: boolean;
+  /** Embed missing document chunks when a chat turn starts in embedding-retrieval mode. Defaults to true; false leaves building to explicit actions. */
+  autoPrepareEmbeddingIndex?: boolean;
   onEmbeddingIndexPrepared?: () => void | Promise<void>;
 }
 
@@ -327,6 +334,7 @@ export interface AiEditState {
 
 export interface PaneScrollState {
   fullPaneTop: number;
+  documentMetaTop: number;
   editorTop: number;
   editorSidebarTop: number;
   viewerSidebarTop: number;
@@ -609,6 +617,9 @@ export interface AppState {
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
     passiveHeight?: number;
+    // Top of the passive block's content wrapper at the click, for blocks
+    // without an editable activation target to anchor on.
+    contentTop?: number;
     preferredEditorTarget?: {
       field: string;
       fieldIndex?: number;
@@ -660,6 +671,7 @@ export interface AppState {
   history: string[];
   future: string[];
   isRestoring: boolean;
+  undoDisabled?: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   encryptionModal?: { sectionKey: string; blockId: string } | null;
   dbTableRowComponentModal: DbTableRowComponentModalState | null;
@@ -674,6 +686,7 @@ export interface AppState {
   gridAddComponentByBlock: Record<string, string>;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
+  readerExpandableModals: ReaderExpandableModalEntry[];
   readerContainerState: Record<string, boolean>;
   /**
    * Ancestors force-opened to reveal a search result. Unlike the reader*State maps this is

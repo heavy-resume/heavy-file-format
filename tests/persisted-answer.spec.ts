@@ -337,12 +337,11 @@ test('clicking past an answer label places the caret at the end of that line', a
     const row = selection?.anchorNode instanceof Element
       ? selection.anchorNode.closest('.hvy-inline-checkbox-line')
       : selection?.anchorNode?.parentElement?.closest('.hvy-inline-checkbox-line');
-    return Boolean(
-      row
-      && selection?.isCollapsed
-      && selection.anchorNode === row
-      && selection.anchorOffset === row.childNodes.length
-    );
+    if (!row || !selection?.isCollapsed) return false;
+    const rest = document.createRange();
+    rest.setStart(selection.anchorNode!, selection.anchorOffset);
+    rest.setEnd(row, row.childNodes.length);
+    return rest.toString().replace(/​/g, '').trim() === '';
   });
   expect(caretIsAtCommunicationEnd).toBe(true);
   await page.mouse.up();

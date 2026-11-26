@@ -13,6 +13,7 @@ import { renderContainerReader } from '../editor/components/container/container'
 import { renderGridReader } from '../editor/components/grid/grid';
 import { ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from '../document-factory';
 import { isXrefTargetValid } from '../xref-ops';
+import { sanitizeInlineCss } from '../css-sanitizer';
 import { getDocumentComponentDefaultCss } from '../document-component-defaults';
 import { getTextLineStylesFromMeta } from '../text-line-styles';
 import { wrapChatResponseAsDocument } from './chat-response-document';
@@ -1461,16 +1462,16 @@ function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['me
     const expanded = block.schema.expandableExpanded;
     const alwaysShowStub = block.schema.expandableAlwaysShowStub;
     const hasStubContent = stubHtml.trim().length > 0;
-    const stubPaneStyle = block.schema.expandableStubCss ? ` style="${escapeChatAttr(block.schema.expandableStubCss)}"` : '';
-    const contentPaneStyle = block.schema.expandableContentCss ? ` style="${escapeChatAttr(block.schema.expandableContentCss)}"` : '';
+    const stubPaneStyle = block.schema.expandableStubCss ? ` style="${escapeChatAttr(sanitizeInlineCss(block.schema.expandableStubCss))}"` : '';
+    const contentPaneStyle = block.schema.expandableContentCss ? ` style="${escapeChatAttr(sanitizeInlineCss(block.schema.expandableContentCss))}"` : '';
     const toggleAttrs = `data-chat-action="toggle-expandable" aria-expanded="${expanded ? 'true' : 'false'}"`;
     const stubVisible = expanded ? alwaysShowStub && hasStubContent : hasStubContent;
     const contentVisible = expanded;
     const previewVisible = !expanded && !hasStubContent;
     const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub" data-chat-expandable-pane="stub"${stubVisible ? '' : ' hidden'}>
-      <div class="expand-stub-toggle"${stubPaneStyle} ${toggleAttrs}>
+      <div class="expand-stub-toggle" ${toggleAttrs}>
         <span class="expandable-reader-cue" aria-hidden="true"></span>
-        <div class="expand-stub">${stubHtml}</div>
+        <div class="expand-stub"${stubPaneStyle}>${stubHtml}</div>
       </div>
     </div>`;
     const contentPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded" data-chat-expandable-pane="content"${contentVisible ? '' : ' hidden'}>

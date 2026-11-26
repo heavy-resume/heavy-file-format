@@ -2,14 +2,15 @@ import type { Align, BaseBlockSchema, BlockSchema, BuiltinComponentName, Carouse
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
-import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
+import { getComponentDefs, getSectionDefs, resolveBaseComponent } from './component-definition-state';
+import { getComponentDefsFromMeta, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponentFromMeta } from './component-definition-helpers';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, resolveReusableTemplateTokensInBlock, resolveReusableTemplateTokensInSchema } from './reusable-template-values';
 import { getTableColumns, normalizeTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
 import { normalizeSortValueDefs } from './sort-values';
-import { DEFAULT_PARAGRAPH_SPACING } from './document-typography';
+import { DEFAULT_PARAGRAPH_SPACING } from './document-typography-defaults';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SIDEBAR_MAX_WIDTH = '40rem';
@@ -56,6 +57,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         containerTitle: '',
         containerExpanded: true,
         containerCollapsedPreviewRem: 3,
+        noSave: false,
       } as unknown as BlockSchema;
     case 'component-list':
       return {
@@ -84,6 +86,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         expandableStubBlocks: { lock: false, children: [] },
         expandableAlwaysShowStub: true,
         expandableExpanded: false,
+        expandablePresentation: 'inline',
         expandableContentCss: '',
         expandableContentDescription: '',
         expandableContentBlocks: { lock: false, children: [] },
@@ -248,15 +251,24 @@ export function parseVisualSection(candidate: unknown, seen = new WeakSet<object
     expanded: raw.expanded === false ? false : true,
     highlight: raw.highlight === true,
     priority: raw.priority === true,
+    startOnNewPage: raw.startOnNewPage === true,
     css: typeof raw.css === 'string' ? raw.css : '',
     tags: typeof raw.tags === 'string' ? raw.tags : '',
     description: typeof raw.description === 'string' ? raw.description : '',
     location: raw.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: raw.hideIfUnmodified === true,
-    exclude_from_import: raw.exclude_from_import === true,
-    protect_from_import: raw.protect_from_import === true,
+    ...readSectionImportFlags(raw),
     templateKey: typeof raw.templateKey === 'string' ? raw.templateKey : undefined,
     blocks: Array.isArray(raw.blocks) ? raw.blocks.map((block) => parseVisualBlock(block, seen, documentMeta)) : [],
+  };
+}
+
+// Files written before the camelCase rename use `exclude_from_import` / `protect_from_import`.
+// Readers accept both spellings; writers only emit camelCase.
+export function readSectionImportFlags(raw: JsonObject): Pick<VisualSection, 'excludeFromImport' | 'protectFromImport'> {
+  return {
+    excludeFromImport: raw.excludeFromImport === true || raw.exclude_from_import === true,
+    protectFromImport: raw.protectFromImport === true || raw.protect_from_import === true,
   };
 }
 
@@ -405,6 +417,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.containerTitle = typeof candidate.containerTitle === 'string' ? candidate.containerTitle : schema.containerTitle;
     schema.containerExpanded = candidate.containerExpanded !== false;
     schema.containerCollapsedPreviewRem = parsePositiveNumber(candidate.containerCollapsedPreviewRem, schema.containerCollapsedPreviewRem);
+    schema.noSave = candidate.noSave === true;
   }
   if (schema.kind === 'component-list') {
     schema.componentListComponent =
@@ -451,6 +464,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.expandableStubBlocks = parseExpandablePart(candidate.expandableStubBlocks, seen, documentMeta);
     schema.expandableAlwaysShowStub = candidate.expandableAlwaysShowStub !== false;
     schema.expandableExpanded = candidate.expandableExpanded === true;
+    schema.expandablePresentation = candidate.expandablePresentation === 'modal' ? 'modal' : 'inline';
     schema.expandableContentCss =
       typeof candidate.expandableContentCss === 'string'
         ? candidate.expandableContentCss
@@ -686,8 +700,8 @@ export function createEmptySectionWithMeta(component = 'container', isGhost = fa
     description: '',
     location: 'main',
     hideIfUnmodified: false,
-    exclude_from_import: false,
-    protect_from_import: false,
+    excludeFromImport: false,
+    protectFromImport: false,
     templateKey: undefined,
     blocks: component ? [createEmptyBlock(component, false, documentMeta)] : [],
   };
@@ -811,13 +825,14 @@ export function cloneReusableSection(section: VisualSection, documentMeta?: Json
     lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,
+    startOnNewPage: section.startOnNewPage === true,
     css: section.css,
     tags: section.tags,
     description: section.description,
     location: section.location ?? 'main',
     hideIfUnmodified: section.hideIfUnmodified === true,
-    exclude_from_import: section.exclude_from_import === true,
-    protect_from_import: section.protect_from_import === true,
+    excludeFromImport: section.excludeFromImport === true,
+    protectFromImport: section.protectFromImport === true,
     templateKey: section.templateKey,
     blocks: section.blocks.map((block) => documentMeta ? cloneReusableBlockFromMeta(block, documentMeta) : cloneReusableBlock(block)),
   };
@@ -855,7 +870,7 @@ export function instantiateReusableBlock(componentName: string, templateValues: 
   return instance;
 }
 
-function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject, templateValues: Record<string, string> = {}): VisualBlock | null {
+export function instantiateReusableBlockFromMeta(componentName: string, documentMeta: JsonObject, templateValues: Record<string, string> = {}): VisualBlock | null {
   const def = getComponentDefsFromMeta(documentMeta).find((item) => item.name === componentName);
   if (!def) {
     return null;

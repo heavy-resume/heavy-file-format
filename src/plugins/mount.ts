@@ -1,6 +1,7 @@
 import { state, getRenderApp, getRefreshReaderPanels, getObserveLinks, getActiveStateRuntime, getCachedComponentRenderHelpers, runWithStateRuntime, type StateRuntime } from '../state';
-import { findBlockByIds } from '../block-ops';
+import { findBlockByIds, indexSectionBlocksByKey } from '../block-ops';
 import { recordHistory } from '../history';
+import { recordPluginHistoryStep } from '../plugin-history-controller';
 import { syncReusableTemplateForBlock } from '../reusable';
 import { serializeDocument } from '../serialization';
 import { getAttachment, setAttachment, removeAttachment } from '../attachments';
@@ -19,12 +20,14 @@ import type {
 } from './types';
 import type { VisualBlock } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
+import type { VisualDocument } from '../types';
 import { createPluginAuthorizationPrompt } from './authorization/plugin-authorization-prompt';
 import { getPluginAuthorizationMode } from './authorization/plugin-authorization-policy';
 import {
   loadConditionallyAllowedPlugin,
 } from './authorization/conditional-plugin';
 import { createPluginMount } from './viewport-plugin-mount';
+import { getDocumentScriptingSession } from './scripting/scripting-session';
 
 interface SavedFocus {
   element: HTMLElement;
@@ -52,6 +55,9 @@ interface MountedPlugin {
 }
 
 const MOUNT_KEY_PREFIX = 'hvy-plugin-mount';
+// Sections indexed during a synchronous refresh pass, so plugins reading ctx.block do not each
+// search their section, which grows with the square of its size. Outside a pass every read searches.
+let refreshPassBlocks: { document: VisualDocument; sections: Map<string, Map<string, VisualBlock> | null> } | null = null;
 const fallbackMounted = new Map<string, MountedPlugin>();
 const mountedByRuntime = new WeakMap<StateRuntime, Map<string, MountedPlugin>>();
 async function loadConditionalPlugin(registration: HvyPlugin): Promise<HvyPlugin> {
@@ -72,6 +78,32 @@ function getMountedPlugins(): Map<string, MountedPlugin> {
   } catch {
     return fallbackMounted;
   }
+}
+
+function runRefreshPass(run: () => void): void {
+  if (refreshPassBlocks) {
+    run();
+    return;
+  }
+  refreshPassBlocks = { document: state.document, sections: new Map() };
+  try {
+    run();
+  } finally {
+    refreshPassBlocks = null;
+  }
+}
+
+function findPluginBlock(sectionKey: string, blockId: string): VisualBlock | null {
+  if (refreshPassBlocks?.document !== state.document) {
+    return findBlockByIds(sectionKey, blockId);
+  }
+  const { sections } = refreshPassBlocks;
+  let index = sections.get(sectionKey);
+  if (index === undefined) {
+    index = indexSectionBlocksByKey(sectionKey);
+    sections.set(sectionKey, index);
+  }
+  return index?.get(blockId) ?? findBlockByIds(sectionKey, blockId);
 }
 
 function getPluginEditorDetailLevel(mode: 'editor' | 'reader'): number {
@@ -194,7 +226,7 @@ function buildContext(
     },
     sectionKey,
     get block() {
-      return findBlockByIds(sectionKey, blockId) ?? block;
+      return findPluginBlock(sectionKey, blockId) ?? block;
     },
     rawDocument: state.document,
     document: {
@@ -219,6 +251,16 @@ function buildContext(
         (state.document.meta as Record<string, unknown>)[key] = value;
       }),
     },
+    history: {
+      record: (step) => runWithStateRuntime(runtime, () => {
+        recordPluginHistoryStep(
+          { pluginId: plugin.id, sectionKey, blockId },
+          step,
+          () => recordHistory(),
+        );
+      }),
+    },
+    session: runWithStateRuntime(runtime, () => getDocumentScriptingSession(state.document)),
     setConfig,
     setText,
     setCss,
@@ -292,28 +334,51 @@ function isPluginSortValue(value: unknown): value is VisualBlock['schema']['sort
 
 export function refreshMountedPlugins(pluginId?: string, sectionKey?: string, blockId?: string): void {
   const mounted = getMountedPlugins();
-  for (const entry of mounted.values()) {
-    if (pluginId && entry.pluginId !== pluginId) {
-      continue;
+  runRefreshPass(() => {
+    for (const entry of mounted.values()) {
+      if (pluginId && entry.pluginId !== pluginId) {
+        continue;
+      }
+      if (sectionKey && entry.sectionKey !== sectionKey) {
+        continue;
+      }
+      if (blockId && entry.blockId !== blockId) {
+        continue;
+      }
+      try {
+        entry.instance.refresh?.();
+      } catch (error) {
+        console.error('[hvy:plugin] refresh threw', error);
+      }
     }
-    if (sectionKey && entry.sectionKey !== sectionKey) {
-      continue;
+  });
+}
+
+/** Refreshes the plugins on the page, as a redraw does; off-screen plugins refresh when they return to it. */
+export function refreshConnectedPlugins(): void {
+  const mounted = getMountedPlugins();
+  runRefreshPass(() => {
+    for (const entry of mounted.values()) {
+      if (!entry.instance.element.isConnected) {
+        continue;
+      }
+      try {
+        entry.instance.refresh?.();
+      } catch (error) {
+        console.error('[hvy:plugin] refresh threw', error);
+      }
     }
-    if (blockId && entry.blockId !== blockId) {
-      continue;
-    }
-    try {
-      entry.instance.refresh?.();
-    } catch (error) {
-      console.error('[hvy:plugin] refresh threw', error);
-    }
-  }
+  });
 }
 
 // Walk all plugin mount placeholders in the rendered DOM, instantiate factories
 // for any new mounts, reuse cached instances for existing ones, and reconcile
 // the cache by unmounting plugins whose placeholders are no longer present.
 export function reconcilePluginMounts(root: ParentNode, options: { prune?: boolean } = {}): void {
+  runRefreshPass(() => reconcilePluginMountsInPass(root, options));
+}
+
+function reconcilePluginMountsInPass(root: ParentNode, options: { prune?: boolean }): void {
   const mounted = getMountedPlugins();
   const seen = new Set<string>();
   const seenModes = new Set<'editor' | 'reader'>();
@@ -369,7 +434,7 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
     if (registration.authorization === 'required') {
       const authorizationMode = getPluginAuthorizationMode(state.document, registration);
       if (authorizationMode === 'hidden') {
-        placeholder.textContent = `Plugin "${pluginId}" is blocked by the host.`;
+        placeholder.textContent = `${registration.displayName} isn't available in this app.`;
         placeholder.classList.add('hvy-plugin-missing');
         return;
       }

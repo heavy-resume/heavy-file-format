@@ -40,6 +40,7 @@ export function restoreElementScrollAnchor(root: HTMLElement, anchor: ElementScr
 
 export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): PaneScrollState {
   const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
+  const documentMeta = app.querySelector<HTMLDivElement>('.document-meta-scroll');
   const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
   const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
   const viewerSidebarPanel = app.querySelector<HTMLDivElement>('.viewer-sidebar-panel');
@@ -48,6 +49,7 @@ export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): 
     app.querySelector<HTMLDivElement>('.reader-pane');
   return {
     fullPaneTop: fullPane?.scrollTop ?? previous.fullPaneTop,
+    documentMetaTop: documentMeta?.scrollTop ?? previous.documentMetaTop,
     editorTop: editorTree?.scrollTop ?? previous.editorTop,
     editorSidebarTop: editorSidebarPanel?.scrollTop ?? previous.editorSidebarTop,
     viewerSidebarTop: viewerSidebarPanel?.scrollTop ?? previous.viewerSidebarTop,
@@ -66,11 +68,15 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
     const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
     const viewerSidebarPanel = app.querySelector<HTMLDivElement>('.viewer-sidebar-panel');
     const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
+    const documentMeta = app.querySelector<HTMLDivElement>('.document-meta-scroll');
     const readerPane =
       app.querySelector<HTMLDivElement>('.viewer-shell .reader-document') ??
       app.querySelector<HTMLDivElement>('.reader-pane');
     if (fullPane) {
       fullPane.scrollTop = scroll.fullPaneTop;
+    }
+    if (documentMeta) {
+      documentMeta.scrollTop = scroll.documentMetaTop;
     }
     if (editorTree) {
       preserveEditorScrollTop(editorTree, scroll.editorTop);
@@ -430,7 +436,16 @@ function focusPendingEditorActivation(
   const scrollContainer = block.closest<HTMLElement>(
     '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
   );
-  if (typeof pending.anchorTop === 'number') {
+  // A block without an editable target (a canvas or other plugin, an image)
+  // keeps its content where it was. The text anchor recorded at the click may
+  // sit anywhere inside that content, so it can't be compared with the block edge.
+  const activeContent = anchorTarget === block ? block.querySelector<HTMLElement>('.editor-block-content') : null;
+  if (activeContent && typeof pending.contentTop === 'number') {
+    const displacement = activeContent.getBoundingClientRect().top - pending.contentTop;
+    if (scrollContainer && Math.abs(displacement) > 0.5) {
+      scrollContainer.scrollTop += displacement;
+    }
+  } else if (typeof pending.anchorTop === 'number') {
     const editableTop = anchorTarget.isContentEditable
       ? getFirstRenderedTextTop(anchorTarget) ?? anchorTarget.getBoundingClientRect().top
       : anchorTarget.getBoundingClientRect().top;

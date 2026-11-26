@@ -5,6 +5,7 @@ import type { TextComponentPayload } from '../text-component';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
 import type { ReusableTemplateVariable } from '../reusable-template-values';
+import type { ScriptingSession } from './scripting/scripting-session';
 
 // A plugin owns the DOM element it returns. The host treats it as opaque.
 // Plugins style themselves using the standard CSS theme variables; nothing is
@@ -122,6 +123,9 @@ export interface HvyPluginContext {
   document: HvyPluginDocumentApi;
   attachments: HvyPluginAttachmentsApi;
   header: HvyPluginHeaderApi;
+  history: HvyPluginHistoryApi;
+  // Ephemeral state for the open document, shared with scripts' `session`.
+  session: ScriptingSession;
   // Raw document — exposed so plugins like db-table that already integrate
   // deeply with the visual document tree can do so. Most plugins should not
   // reach for this and use the typed APIs above instead.
@@ -237,6 +241,36 @@ export interface HvyPluginPdfCapability {
   renderStatic(ctx: HvyPluginPdfStaticRenderContext): Promise<HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined> | HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined;
 }
 
+export interface HvyPluginHistoryStep {
+  // Short description of the user action, e.g. "Draw stroke".
+  label: string;
+  // Plugin-owned data handed back to the plugin's history capability on undo
+  // and redo. Kept in memory only; it never enters the document text.
+  data: unknown;
+  // Performs the change. Runs once, after the app records the state before it.
+  apply(): void;
+}
+
+export interface HvyPluginHistoryApi {
+  // Records a user action as an app undo step owned by this plugin. Use it for
+  // direct user edits only; script-driven changes should write without it.
+  record(step: HvyPluginHistoryStep): void;
+}
+
+export interface HvyPluginHistoryRestoreContext {
+  sectionKey: string;
+  blockId: string;
+  data: unknown;
+  attachments: HvyPluginAttachmentsApi;
+}
+
+export interface HvyPluginHistoryCapability {
+  // Runs during app undo/redo, independent of any mounted plugin instance. The
+  // host rerenders afterwards, so mounted instances pick changes up on refresh.
+  undo(ctx: HvyPluginHistoryRestoreContext): void | Promise<void>;
+  redo(ctx: HvyPluginHistoryRestoreContext): void | Promise<void>;
+}
+
 export interface HvyPluginVisualDescriptionContext {
   block: VisualBlock;
   rawDocument: VisualDocument;
@@ -254,6 +288,8 @@ export interface HvyPluginVisualDescriptionCapability {
 export interface HvyPluginScriptingContext {
   pluginId: string;
   rawDocument: VisualDocument;
+  // Ephemeral state for the open document, shared with scripts' `session`.
+  session: ScriptingSession;
   // Call after directly mutating rawDocument so the scripting runtime performs
   // its normal sort/group value synchronization and render refresh.
   markMutated(): void;
@@ -271,12 +307,21 @@ export interface HvyPluginScriptingCapability {
   methods: Record<string, HvyPluginScriptingMethod>;
 }
 
-export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
+export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'script-edit' | 'unknown';
 
 export interface HvyDocumentHookContext {
   document: VisualDocument;
   view: 'editor' | 'viewer' | 'ai';
   changeReason: HvyPluginHookChangeReason;
+  /**
+   * True when the caller renders once after every hook settles, so hooks
+   * should apply document edits without requesting a render of their own.
+   */
+  hostRendersAfter: boolean;
+  /** The document's text when this hook run was scheduled, for detecting changes without serializing again. */
+  serializedDocument: string;
+  /** Called with the document's text once every hook in this run has finished, if it is still the current document. */
+  onSettled(listener: (serializedDocument: string) => void): void;
   refreshPlugins(pluginId?: string): void;
   requestRerender(): void;
   isCurrentDocument(): boolean;
@@ -320,6 +365,11 @@ export interface HvyPlugin {
     strategy?: 'viewport' | 'immediate';
     placeholderHeight?: string;
   };
+  // Advanced components are shown and added only while the advanced editor is
+  // on. Basic editing surfaces hide their blocks, and the add-component picker
+  // lists them disabled with an "Advanced" badge. Hidden blocks still run their
+  // document hooks.
+  advancedComponent?: boolean;
   // Conditional registrations expose metadata without loading executable
   // plugin code. The host calls load only after per-file authorization.
   authorization?: 'required';
@@ -339,6 +389,8 @@ export interface HvyPlugin {
   // invokes this at export time and replaces the plugin block with the returned
   // PDF-compatible HVY blocks in the export clone.
   pdf?: HvyPluginPdfCapability;
+  // Optional undo/redo handlers for steps recorded through ctx.history.record.
+  history?: HvyPluginHistoryCapability;
   // Optional searchable description of what the plugin renders for this block.
   // Agent-facing consumers label it as rendered output so it is not confused
   // with literal serialized HVY text.

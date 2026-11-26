@@ -114,6 +114,11 @@ export function getHostPlugins(): HvyPlugin[] {
   return selectHostPlugins(hostPlugins, activeDocument);
 }
 
+// Resolved by id over installed plugins only; this runs per block while rendering.
+export function isAdvancedComponentPlugin(pluginId: string): boolean {
+  return getMutableHostPlugins().some((plugin) => plugin.id === pluginId && plugin.advancedComponent === true);
+}
+
 export function getRenderableHostPlugins(): HvyPlugin[] {
   const hostPlugins = getHostPlugins();
   return hostPlugins.filter((plugin) => (

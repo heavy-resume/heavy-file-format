@@ -5,19 +5,25 @@ import type { VisualDocument } from '../../types';
 import type { VisualSection } from '../../editor/types';
 import { getAttachment, removeAttachment, setAttachment } from '../../attachments';
 import { executeDocumentEditToolByName } from '../../ai-document-edit';
-import { executeHvyCliCommandSync, writeHvyVirtualFileSync } from '../../cli-core/commands';
+import { createHvyCliSession, executeHvyCliCommandSync, writeHvyVirtualFileSync, type HvyCliExecution, type HvyCliSession } from '../../cli-core/commands';
 import { resolveBaseComponentFromMeta } from '../../component-defs';
 import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
 import { serializeBlockFragment, serializeDocument } from '../../serialization';
 import { setSortValueAnnotationText, syncSortValuesForDocument } from '../../sort-values';
-import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
+import { state, getActiveStateRuntime, getRefreshAfterScriptEdit, getRenderApp, runWithStateRuntime, type StateRuntime } from '../../state';
+import { disableUndo, enableUndo, isUndoDisabled } from '../../history';
+import { beginScriptHistoryRun } from '../../script-history-step';
 import { expandBlockPathByBlockId } from '../../navigation';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
 import type { VisualBlock } from '../../editor/types';
 import type { ScriptingPluginsApi } from './plugin-apis';
 import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
+import { getTimeZoneOffsetMs } from '../../time-zone-lookup';
+import { createScriptingClock, type ScriptingClock } from './clock-bridge';
+import { getDocumentScriptingSession, type ScriptingSessionValue } from './scripting-session';
+import { getUpdatedScriptingComponentHandles, markScriptingSortValuesSynced, type PreviousScriptingComponents } from './updated-components';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -37,10 +43,30 @@ export interface ScriptingRuntimeStats {
 
 export interface ScriptingRuntime {
   doc: ScriptingDocApi;
+  /** Internal clock for the checked datetime libraries; not exposed on `doc`. */
+  clock: ScriptingClock;
+  session: ScriptingSessionApi;
   stats: ScriptingRuntimeStats;
+  runContext: { invoke_reason: HvyPluginHookChangeReason | null };
   step(): string | null;
   markMutated(): void;
+  markDatabaseMutated(): void;
   setLineBudget(maxLines: number): void;
+  /** Changes whether later mutation flushes render; see ScriptingRuntimeOptions.renderOnMutation. */
+  setRenderOnMutation(renderOnMutation: boolean): void;
+}
+
+/** Python side of the document's session; see scripting-session.ts. */
+export interface ScriptingSessionApi {
+  id: string;
+  start_time_ms: number;
+  locale(): string;
+  get(key: string): ScriptingSessionValue | undefined;
+  set_json(key: string, valueJson: string): void;
+  has(key: string): boolean;
+  remove(key: string): void;
+  keys(): string[];
+  clear(): void;
 }
 
 export interface ScriptingDocApi {
@@ -59,6 +85,8 @@ export interface ScriptingDocApi {
   cli: ScriptingCliApi;
   plugins: ScriptingPluginsApi;
   rerender: () => void;
+  disable_undo: () => void;
+  enable_undo: () => void;
 }
 
 interface ScriptingComponentApi {
@@ -94,6 +122,10 @@ export interface ScriptingFormApi {
   get_options(label: string): ScriptingFormOption[];
   set_error(label: string, message: string): void;
   clear_error(label: string): void;
+  set_field_disabled(label: string, disabled: boolean): void;
+  get_field_disabled(label: string): boolean;
+  set_submit_disabled(disabled: boolean, reason?: string): void;
+  get_submit_disabled(): boolean;
 }
 
 export interface ScriptingDbApi {
@@ -119,6 +151,10 @@ export interface ScriptingJsonApi {
   parse_object(response: string): JsonObject;
 }
 
+/**
+ * @deprecated Kept as an alias with no removal date. Scripts should use the
+ * checked `datetime`, `zoneinfo` and `tzlocal` libraries instead.
+ */
 export interface ScriptingTimeApi {
   now_iso(): string;
   now_local(): string;
@@ -135,7 +171,6 @@ export interface ScriptingExportApi {
   hide(idOrTag: string): void;
   include(idOrTag: string): void;
   expand(idOrTag: string): void;
-  keep_together(idOrTag: string): void;
   style(idOrTag: string, style: Record<string, unknown>): void;
   strategy(rule: HvyPdfExportStrategyRule | HvyPdfExportStrategyRule[]): void;
 }
@@ -143,7 +178,7 @@ export interface ScriptingExportApi {
 export interface ScriptingRuntimeOptions {
   maxLines?: number;
   document: VisualDocument;
-  previousDocument?: VisualDocument | null;
+  previousComponents?: PreviousScriptingComponents | null;
   changeReason?: HvyPluginHookChangeReason;
   renderOnMutation?: boolean;
   form?: ScriptingFormApi;
@@ -151,10 +186,18 @@ export interface ScriptingRuntimeOptions {
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   plugins?: ScriptingPluginsApi;
   now?: () => Date;
-  onMutationFlushed?: () => void;
+  /** IANA zone scripts treat as local. Defaults to the browser zone. */
+  timeZone?: string;
+  /**
+   * Called before a mutation render. A returned promise defers that render
+   * until it settles, so edits made by the hooks it runs share one render.
+   * `rendersAfter` says whether this flush renders once the promise settles.
+   */
+  onMutationFlushed?: (flush: { rendersAfter: boolean; serializedDocument?: string }) => Promise<unknown> | void;
   beforeMutationRender?: () => void;
   databaseChanges?: DatabaseChangeSnapshot;
   onCallbackError?: (error: string) => void;
+  stateRuntime?: StateRuntime | null;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -169,6 +212,10 @@ function createUnavailableFormApi(): ScriptingFormApi {
     get_options: fail,
     set_error: fail,
     clear_error: fail,
+    set_field_disabled: fail,
+    get_field_disabled: fail,
+    set_submit_disabled: fail,
+    get_submit_disabled: fail,
   };
 }
 
@@ -192,7 +239,6 @@ function createUnavailableExportApi(): ScriptingExportApi {
     hide: fail,
     include: fail,
     expand: fail,
-    keep_together: fail,
     style: fail,
     strategy: fail,
   };
@@ -203,7 +249,6 @@ function createExportApi(recorder: HvyPdfExportRuleRecorder): ScriptingExportApi
     hide: (idOrTag) => recorder.hide(String(idOrTag)),
     include: (idOrTag) => recorder.include(String(idOrTag)),
     expand: (idOrTag) => recorder.expand(String(idOrTag)),
-    keep_together: (idOrTag) => recorder.keep_together(String(idOrTag)),
     style: (idOrTag, style) => recorder.style(String(idOrTag), normalizeScriptObject(style)),
     strategy: (rule) => recorder.strategy(normalizeExportRuleInput(rule)),
   };
@@ -260,17 +305,18 @@ function createJsonApi(): ScriptingJsonApi {
   };
 }
 
-function createTimeApi(now: () => Date): ScriptingTimeApi {
+function createTimeApi(clock: ScriptingClock): ScriptingTimeApi {
   return {
-    now_iso: () => now().toISOString(),
-    now_local: () => formatLocalDateTime(now()),
-    now_unix_ms: () => now().getTime(),
-    today_iso: () => formatLocalDate(now()),
+    now_iso: () => new Date(clock.now_ms()).toISOString(),
+    now_local: () => formatLocalDateTime(new Date(clock.now_ms()), clock.local_zone()),
+    now_unix_ms: () => clock.now_ms(),
+    today_iso: () => formatLocalDate(new Date(clock.now_ms()), clock.local_zone()),
   };
 }
 
-function formatLocalDateTime(date: Date): string {
+function formatLocalDateTime(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', {
+    timeZone,
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -280,18 +326,26 @@ function formatLocalDateTime(date: Date): string {
   }).format(date);
 }
 
-function formatLocalDate(date: Date): string {
-  const year = String(date.getFullYear()).padStart(4, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+function formatLocalDate(date: Date, timeZone: string): string {
+  const local = new Date(date.getTime() + getTimeZoneOffsetMs(date, timeZone));
+  const year = String(local.getUTCFullYear()).padStart(4, '0');
+  const month = String(local.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(local.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 export function createScriptingRuntime(options: ScriptingRuntimeOptions): ScriptingRuntime {
   const stats: ScriptingRuntimeStats = { toolCalls: 0, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, logs: [] };
+  const clock = createScriptingClock({ now: options.now, timeZone: options.timeZone });
   let mutated = false;
+  let attachmentsChanged = false;
   const pendingExpansions = new Map<string, { sectionKey: string; blockId: string }>();
 
+  // doc.cli calls share one CLI session for this run. Its paths read the live document, so edits made by this
+  // runtime, the host, or other code are visible to the next call without resetting anything.
+  let cliSession: HvyCliSession | null = null;
+  const runCliWithSession = (run: (session: HvyCliSession) => HvyCliExecution): HvyCliExecution =>
+    run(cliSession ??= createHvyCliSession());
   const onMutation = () => {
     mutated = true;
   };
@@ -308,15 +362,24 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     stats.logs.push(values.map(formatScriptLogValue).join(' '));
   };
 
+  let renderOnMutation = options.renderOnMutation !== false;
+  const ownerStateRuntime = options.stateRuntime ?? getRenderStateRuntime();
   const flushIfMutated = () => {
     if (!mutated && pendingExpansions.size === 0) return;
     const documentMutated = mutated;
+    // Expansion is reader state and attachments can back any block, so neither is a contained edit.
+    const allowPartialRedraw = documentMutated && pendingExpansions.size === 0 && !attachmentsChanged;
+    attachmentsChanged = false;
     mutated = false;
     if (documentMutated) {
       syncSortValuesForDocument(options.document);
+      markScriptingSortValuesSynced(options.document);
     }
-    if (documentMutated && state?.document === options.document) {
-      state.rawEditorText = serializeDocument(options.document);
+    let serializedDocument: string | undefined;
+    // Only the raw editor shows this text, and entering it generates the text afresh.
+    if (documentMutated && state?.document === options.document && state.editorMode === 'raw') {
+      serializedDocument = serializeDocument(options.document);
+      state.rawEditorText = serializedDocument;
       state.rawEditorError = null;
       state.rawEditorDiagnostics = [];
     }
@@ -326,28 +389,25 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       }
     }
     pendingExpansions.clear();
+    // Before rendering, so document hooks claim this edit as a script edit
+    // ahead of any catch-all hook run that the render itself starts.
+    const hooksSettled = documentMutated ? options.onMutationFlushed?.({ rendersAfter: renderOnMutation, serializedDocument }) : undefined;
     let renderGuardError: unknown = null;
-    if (options.renderOnMutation !== false) {
+    if (renderOnMutation) {
+      // The cycle guard stays synchronous so a stopped cycle raises inside the script.
       try {
         options.beforeMutationRender?.();
       } catch (error) {
         renderGuardError = error;
       }
       if (!renderGuardError) {
-        try {
-          getRefreshReaderPanels()();
-        } catch {
-          // Reader panel may not be initialized yet (during pre-first-render execution).
-        }
-        try {
-          getRenderApp()();
-        } catch {
-          // renderApp may not be ready yet during the very first load.
+        if (hooksSettled) {
+          const stateRuntime = ownerStateRuntime ?? getRenderStateRuntime();
+          void hooksSettled.then(() => renderMutation(stateRuntime, allowPartialRedraw), () => renderMutation(stateRuntime, allowPartialRedraw));
+        } else {
+          renderMutation(ownerStateRuntime, allowPartialRedraw);
         }
       }
-    }
-    if (documentMutated) {
-      options.onMutationFlushed?.();
     }
     if (renderGuardError) {
       throw renderGuardError;
@@ -369,7 +429,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         }
         return getUpdatedScriptingComponentHandles(
           options.document,
-          options.previousDocument ?? null,
+          options.previousComponents ?? null,
           String(readScriptValue(args, 'component') ?? ''),
           onMutation,
           requestExpansion
@@ -407,7 +467,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         block.text = String(text ?? '');
         block.schema.fillIn = hasTextFillInMarker(block.text);
         clearHideIfUnmodifiedForSectionPath(options.document.sections, sectionKey);
-        mutated = true;
+        onMutation();
       },
       is_empty: (id) => {
         const block = findComponentBySchemaId(options.document, String(id ?? ''))?.block ?? null;
@@ -418,12 +478,12 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       get: (key) => options.document.meta[key],
       set: (key, value) => {
         (options.document.meta as Record<string, unknown>)[key] = value as never;
-        mutated = true;
+        onMutation();
       },
       remove: (key) => {
         if (key in options.document.meta) {
           delete (options.document.meta as Record<string, unknown>)[key];
-          mutated = true;
+          onMutation();
         }
       },
       keys: () => Object.keys(options.document.meta),
@@ -448,12 +508,14 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
           { ...(previous?.meta ?? {}), ...(meta ?? {}) },
           normalized
         );
-        mutated = true;
+        attachmentsChanged = true;
+        onMutation();
       },
       remove: (id) => {
         if (getAttachment(options.document, id)) {
           removeAttachment(options.document, id);
-          mutated = true;
+          attachmentsChanged = true;
+          onMutation();
         }
       },
     },
@@ -464,12 +526,12 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       execute_json: (sql, paramsJson) => database.execute(sql, JSON.parse(String(paramsJson))),
     },
     json: createJsonApi(),
-    time: createTimeApi(options.now ?? (() => new Date())),
+    time: createTimeApi(clock),
     export: options.exportRuleRecorder ? createExportApi(options.exportRuleRecorder) : createUnavailableExportApi(),
     cli: {
       run: (command) => {
         stats.toolCalls += 1;
-        const result = executeHvyCliCommandSync(options.document, command);
+        const result = runCliWithSession((session) => executeHvyCliCommandSync(options.document, command, session));
         if (result.mutated) {
           mutated = true;
         }
@@ -477,7 +539,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       },
       write: (path, content) => {
         stats.toolCalls += 1;
-        const result = writeHvyVirtualFileSync(options.document, String(path ?? ''), String(content ?? ''));
+        const result = runCliWithSession((session) => writeHvyVirtualFileSync(options.document, String(path ?? ''), String(content ?? ''), session));
         if (result.mutated) {
           mutated = true;
         }
@@ -485,6 +547,17 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       },
     },
     rerender: flushIfMutated,
+    disable_undo: () => {
+      if (state?.document === options.document) {
+        disableUndo();
+      }
+    },
+    enable_undo: () => {
+      if (state?.document === options.document && isUndoDisabled()) {
+        enableUndo();
+        beginScriptHistoryRun({ startedByUser: true });
+      }
+    },
   };
 
   // Bind only when state is initialized to avoid throwing during tests that
@@ -495,7 +568,10 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
 
   return {
     doc,
+    clock,
+    session: createSessionApi(options.document),
     stats,
+    runContext: { invoke_reason: options.changeReason ?? null },
     step: () => {
       stats.stepsExecuted += 1;
       stats.linesExecuted = stats.stepsExecuted;
@@ -505,10 +581,55 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       return null;
     },
     markMutated: onMutation,
+    markDatabaseMutated: onMutation,
+    setRenderOnMutation: (value: boolean) => {
+      renderOnMutation = value;
+    },
     setLineBudget: (maxLines: number) => {
       stats.stepBudget = Math.max(1, Math.floor(maxLines));
     },
   };
+}
+
+function createSessionApi(document: VisualDocument): ScriptingSessionApi {
+  const session = getDocumentScriptingSession(document);
+  return {
+    id: session.id,
+    start_time_ms: session.startTimeMs,
+    locale: () => navigator.language,
+    get: (key) => session.state.get(key),
+    set_json: (key, valueJson) => session.state.set(key, JSON.parse(String(valueJson))),
+    has: (key) => session.state.has(key),
+    remove: (key) => session.state.remove(key),
+    keys: () => session.state.keys(),
+    clear: () => session.state.clear(),
+  };
+}
+
+function getRenderStateRuntime(): StateRuntime | null {
+  try {
+    return getActiveStateRuntime();
+  } catch {
+    return null;
+  }
+}
+
+function renderMutation(stateRuntime: StateRuntime | null, allowPartial: boolean): void {
+  const render = () => {
+    try {
+      if (allowPartial && getRefreshAfterScriptEdit()()) {
+        return;
+      }
+      getRenderApp()();
+    } catch {
+      // renderApp may not be ready yet during the very first load.
+    }
+  };
+  if (stateRuntime) {
+    runWithStateRuntime(stateRuntime, render);
+  } else {
+    render();
+  }
 }
 
 function formatScriptLogValue(value: unknown): string {
@@ -587,7 +708,7 @@ interface ScriptingBlockLocation {
   ancestors: VisualBlock[];
 }
 
-class ScriptingComponentHandle {
+export class ScriptingComponentHandle {
   id: string;
   component: string;
   base_component: string;
@@ -752,19 +873,23 @@ class ScriptingSectionHandle {
   }
 }
 
-function getScriptingComponentHandles(
+export function matchesScriptingComponentQuery(component: string, query: string, meta: VisualDocument['meta']): boolean {
+  const trimmed = query.trim();
+  const base = resolveBaseComponentFromMeta(component, meta);
+  return !trimmed || component === trimmed || base === trimmed || (trimmed === 'xref' && base === 'xref-card');
+}
+
+export function getScriptingComponentHandles(
   document: VisualDocument,
   component: string,
   markMutated: () => void,
   removed = false,
   requestExpansion: (sectionKey: string, blockId: string) => void = () => {}
 ): ScriptingComponentHandle[] {
-  const query = component.trim();
   const matches: ScriptingComponentHandle[] = [];
   const visit = (blocks: VisualBlock[], section: VisualSection, ancestors: VisualBlock[]): void => {
     for (const block of blocks) {
-      const base = resolveBaseComponentFromMeta(block.schema.component, document.meta);
-      if (!query || block.schema.component === query || base === query || (query === 'xref' && base === 'xref-card')) {
+      if (matchesScriptingComponentQuery(block.schema.component, component, document.meta)) {
         matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated, removed, requestExpansion));
       }
       const nextAncestors = [...ancestors, block];
@@ -780,35 +905,6 @@ function getScriptingComponentHandles(
   };
   document.sections.forEach(visitSection);
   return matches;
-}
-
-function getUpdatedScriptingComponentHandles(
-  document: VisualDocument,
-  previousDocument: VisualDocument | null,
-  component: string,
-  markMutated: () => void,
-  requestExpansion: (sectionKey: string, blockId: string) => void
-): ScriptingComponentHandle[] {
-  const current = getScriptingComponentHandles(document, component, markMutated, false, requestExpansion);
-  if (!previousDocument) {
-    return current;
-  }
-  // Derived sort values are synchronized across the document during edits. Normalize
-  // the prior snapshot too so that this maintenance pass is not reported as a user
-  // update to every component in a list.
-  syncSortValuesForDocument(previousDocument);
-  const previous = getScriptingComponentHandles(previousDocument, component, () => {}, true);
-  const previousById = new Map(previous.map((handle) => [handle.id, handle]));
-  const currentIds = new Set(current.map((handle) => handle.id).filter(Boolean));
-  const updated = current.filter((handle) => {
-    if (!handle.id) {
-      return true;
-    }
-    const previousHandle = previousById.get(handle.id);
-    return !previousHandle || previousHandle.fingerprint() !== handle.fingerprint();
-  });
-  const removed = previous.filter((handle) => handle.id && !currentIds.has(handle.id));
-  return [...updated, ...removed];
 }
 
 function getChildSlot(block: VisualBlock, slot: string): VisualBlock[] {

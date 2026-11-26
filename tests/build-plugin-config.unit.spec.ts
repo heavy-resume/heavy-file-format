@@ -4,6 +4,19 @@ import { expect, test } from 'vitest';
 import { build, type Rollup } from 'vite';
 
 import { createBrythonMinimalVfsPlugin } from '../src/plugins/scripting/brython-minimal-vfs-plugin';
+import { canvasPlugin } from '../src/plugins/canvas/canvas';
+import { dbTablePlugin } from '../src/plugins/db-table/db-table-component';
+import { diagramPlugin } from '../src/plugins/diagram';
+import { editableTextPlugin } from '../src/plugins/editable-text/editable-text';
+import { formPlugin } from '../src/plugins/form';
+import { graphPlugin } from '../src/plugins/graph';
+import { model3dPlugin } from '../src/plugins/model-3d/model-3d';
+import { powerScriptingPlugin } from '../src/plugins/power-scripting/power-scripting';
+import { progressBarPlugin } from '../src/plugins/progress-bar';
+import { qrCodePlugin } from '../src/plugins/qr-code/qr-code';
+import { scriptingPlugin } from '../src/plugins/scripting/scripting';
+import type { HvyPlugin } from '../src/plugins/types';
+import { videoPlugin } from '../src/plugins/video/video';
 import { createHvyBuiltInPluginsModuleSource, createLazyHvyBuiltInPluginsModuleSource, HVY_BUILT_IN_PLUGIN_IDS, resolveBuiltInPluginIds } from '../vite-built-in-plugins';
 
 test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
@@ -98,6 +111,42 @@ test('createLazyHvyBuiltInPluginsModuleSource exposes static PDF rendering only 
   expect(expectedResult).toContain('"pdfStatic":true');
   expect(expectedResult).toContain('...(definition.pdfStatic ? { pdf: {');
   expect(expectedResult).toContain('plugin.pdf.renderStatic(ctx)');
+});
+
+test('lazy built-in plugin placeholders match real built-in plugin static metadata', () => {
+  const realBuiltInPlugins: HvyPlugin[] = [
+    dbTablePlugin,
+    formPlugin,
+    progressBarPlugin,
+    scriptingPlugin,
+    graphPlugin,
+    diagramPlugin,
+    qrCodePlugin,
+    videoPlugin,
+    editableTextPlugin,
+    canvasPlugin,
+    model3dPlugin,
+    powerScriptingPlugin,
+  ];
+  const source = createLazyHvyBuiltInPluginsModuleSource(HVY_BUILT_IN_PLUGIN_IDS);
+  const evaluateLazyModule = new Function(
+    `${source.replaceAll('export const ', 'const ')}\nreturn { builtInPlugins };`
+  ) as () => { builtInPlugins: HvyPlugin[] };
+  const lazyBuiltInPlugins = evaluateLazyModule().builtInPlugins;
+
+  const pickStaticMetadata = (plugin: HvyPlugin) => ({
+    id: plugin.id,
+    version: plugin.version,
+    hvyApiVersion: plugin.hvyApiVersion,
+    displayName: plugin.displayName,
+    advancedComponent: plugin.advancedComponent === true,
+    minimumEditorWidth: plugin.minimumEditorWidth,
+    preferredEditorWidth: plugin.preferredEditorWidth,
+    mount: plugin.mount,
+    pdfStatic: typeof plugin.pdf?.renderStatic === 'function',
+  });
+
+  expect(lazyBuiltInPlugins.map(pickStaticMetadata)).toEqual(realBuiltInPlugins.map(pickStaticMetadata));
 });
 
 test('createBrythonMinimalVfsPlugin does not bundle regex dependency modules', async () => {

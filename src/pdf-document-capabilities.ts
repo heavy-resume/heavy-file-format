@@ -1,11 +1,9 @@
 import { resolveBaseComponentFromMeta } from './component-defs';
 import { getHostPlugin } from './plugins/registry';
 import { areTablesEnabled } from './reference-config';
-import type { ComponentDefinition, VisualDocument } from './types';
-
-export function isPdfDocument(document: Pick<VisualDocument, 'extension'>): boolean {
-  return document.extension === '.phvy';
-}
+import type { ComponentDefinition } from './types';
+import { setPdfComponentInstanceValidator } from './pdf-document-rules';
+export { isPdfDocument } from './pdf-document-rules';
 
 export function isPdfAllowedBaseComponent(baseComponent: string): boolean {
   if (baseComponent === 'table') {
@@ -36,6 +34,8 @@ export function isPdfAllowedComponentInstance(
   }
   return isPdfAllowedComponent(componentName, meta);
 }
+
+setPdfComponentInstanceValidator(isPdfAllowedComponentInstance);
 
 export function filterPdfAllowedComponentDefs(
   defs: ComponentDefinition[],

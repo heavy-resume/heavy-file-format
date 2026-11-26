@@ -17,6 +17,7 @@ export function createTestState(document: VisualDocument): AppState {
     crossDocumentLinksEnabled: false,
     chat: createDefaultChatState(),
     search: createDefaultSearchState(),
+    searchRevealedAncestors: {},
     metaFilter: {
       query: '',
       mode: 'semantic',
@@ -38,6 +39,7 @@ export function createTestState(document: VisualDocument): AppState {
     },
     paneScroll: {
       fullPaneTop: 0,
+      documentMetaTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
@@ -97,6 +99,7 @@ export function createTestState(document: VisualDocument): AppState {
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    readerExpandableModals: [],
     readerContainerState: {},
     readerDeferredSectionBodies: {},
     readerView: {},

@@ -2227,7 +2227,7 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true}}-->
+<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","yAxisMin":0,"yAxisMax":25,"legend":true}}-->
 Label,Value
 Example A,10
 Example B,20
@@ -2257,6 +2257,20 @@ Plugin-specific rules:
   giving the share of each grouped bar's slot left empty between neighboring
   bars of the same label. It applies only to `"bar"` charts with a `"grouped"`
   series layout. Out-of-range values MUST be clamped.
+- `pluginConfig.yAxisMin` and `pluginConfig.yAxisMax` are optional numbers that
+  fix the lower and upper bounds of the value axis. For `"bar"`, `"line"`,
+  `"scatter"`, and `"bubble"` charts this is the y axis. For `"radar"` and
+  `"polarArea"` charts it is the radial scale, measured from the center
+  outward. `"pie"` and `"doughnut"` charts have no value axis and MUST ignore
+  them.
+- `pluginConfig.xAxisMin` and `pluginConfig.xAxisMax` are optional numbers that
+  fix the lower and upper bounds of the x axis. They apply only to `"scatter"`
+  and `"bubble"` charts, whose x values are numeric; other chart types MUST
+  ignore them.
+- An omitted axis bound MUST be fitted to the data. Either bound of a pair MAY
+  be given without the other. When both bounds of a pair are given and the
+  minimum is not less than the maximum, renderers MUST ignore both bounds of
+  that pair. Data outside the bounds SHOULD be clipped to the plot area.
 - The plugin text body MUST be interpreted as CSV with the first row as column
   headers.
 - Graph renderers MUST use existing shared theme color variables for chart text,

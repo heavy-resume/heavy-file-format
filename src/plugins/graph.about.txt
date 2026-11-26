@@ -11,6 +11,13 @@ Chart attributes live in pluginConfig:
 - barWidth: 0.05 to 1, default 0.8. Share of each label's slot covered by bars.
 - barGap: 0 to 0.9, default 0.1. Share of each grouped bar's slot left empty
   between neighboring bars. Only used by grouped bar charts.
+- yAxisMin / yAxisMax: optional numbers fixing the value axis range. This is
+  the y axis for bar, line, scatter, and bubble charts and the radial scale
+  for radar and polarArea charts. Pie and doughnut ignore them.
+- xAxisMin / xAxisMax: optional numbers fixing the x axis range. Only used by
+  scatter and bubble charts, whose x values are numeric.
+  Omit a bound to fit it to the data. A pair whose min is not below its max is
+  ignored.
 
 The plugin text body is CSV. The first row is treated as headers. For bar, line,
 radar, and polarArea charts, the first column is labels and remaining columns are

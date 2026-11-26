@@ -133,6 +133,7 @@ export interface HvyPluginContext {
   // Persist a config field. Updates block.schema.pluginConfig, refreshes this
   // plugin instance in place, and refreshes reader panels. It must not force a
   // full app re-render on ordinary typing because that drops focus/caret state.
+  // A patch key whose value is `undefined` removes that field from the config.
   setConfig(patch: JsonObject): void;
   // Persist plugin-interpreted text (block.text), refreshing this plugin
   // instance in place and reader panels without a full app re-render.

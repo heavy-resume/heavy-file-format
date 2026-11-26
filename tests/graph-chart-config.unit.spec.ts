@@ -71,6 +71,50 @@ test('bar geometry only applies to bar charts', () => {
   ]);
 });
 
+test('readGraphConfig keeps finite axis bounds and drops inverted or non-numeric ones', () => {
+  const expectedResult = readGraphConfig({ xAxisMin: 5, xAxisMax: 5, yAxisMin: -10, yAxisMax: 'high' });
+
+  expect(expectedResult).toMatchObject({ xAxisMin: null, xAxisMax: null, yAxisMin: -10, yAxisMax: null });
+});
+
+test('y axis bounds fix the value axis while categorical x axes ignore x bounds', () => {
+  const expectedResult = buildGraphChartOptions(readGraphConfig({ type: 'bar', xAxisMin: 1, xAxisMax: 3, yAxisMin: 0, yAxisMax: 50 }), theme);
+
+  expect(expectedResult.scales).toMatchObject({ y: { min: 0, max: 50 } });
+  expect(expectedResult.scales).toMatchObject({ x: expect.not.objectContaining({ min: expect.anything() }) });
+  expect(expectedResult.scales).toMatchObject({ x: expect.not.objectContaining({ max: expect.anything() }) });
+});
+
+test('scatter charts apply x axis bounds and leave an omitted bound to fit the data', () => {
+  const expectedResult = buildGraphChartOptions(readGraphConfig({ type: 'scatter', xAxisMin: -2, xAxisMax: 8, yAxisMax: 4 }), theme);
+
+  expect(expectedResult.scales).toMatchObject({ x: { min: -2, max: 8 }, y: { max: 4 } });
+  expect(expectedResult.scales).toMatchObject({ y: expect.not.objectContaining({ min: expect.anything() }) });
+});
+
+test('radar and polar area charts apply y bounds to a themed radial scale', () => {
+  const radarOptions = buildGraphChartOptions(readGraphConfig({ type: 'radar', yAxisMin: 0, yAxisMax: 30 }), theme);
+  const polarOptions = buildGraphChartOptions(readGraphConfig({ type: 'polarArea', yAxisMax: 12 }), theme);
+
+  expect(radarOptions.scales).toEqual({
+    r: {
+      min: 0,
+      max: 30,
+      grid: { color: '#222222' },
+      angleLines: { color: '#222222' },
+      pointLabels: { color: '#111111' },
+      ticks: { color: '#111111', backdropColor: '#ffffff' },
+    },
+  });
+  expect(polarOptions.scales).toMatchObject({ r: { max: 12 } });
+});
+
+test('pie and doughnut charts have no value scale to bound', () => {
+  const expectedResult = buildGraphChartOptions(readGraphConfig({ type: 'doughnut', yAxisMin: 0, yAxisMax: 30 }), theme);
+
+  expect(expectedResult.scales).toEqual({});
+});
+
 test('graphTypeSupportsAxes distinguishes cartesian and radial graph types', () => {
   expect(graphTypeSupportsAxes('bar')).toBe(true);
   expect(graphTypeSupportsAxes('line')).toBe(true);

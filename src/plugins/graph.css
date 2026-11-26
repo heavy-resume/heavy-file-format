@@ -126,6 +126,7 @@
 }
 
 .hvy-document .hvy-graph-field input[type="text"],
+.hvy-document .hvy-graph-field input[type="number"],
 .hvy-document .hvy-graph-select-shell > select {
   width: 100%;
   min-width: 0;
@@ -142,21 +143,44 @@
   transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 
-.hvy-document .hvy-graph-field input[type="text"]::placeholder {
+.hvy-document .hvy-graph-field input[type="text"]::placeholder,
+.hvy-document .hvy-graph-field input[type="number"]::placeholder {
   color: var(--hvy-text-muted);
   opacity: 0.72;
 }
 
 .hvy-document .hvy-graph-field input[type="text"]:hover,
+.hvy-document .hvy-graph-field input[type="number"]:hover,
 .hvy-document .hvy-graph-select-shell > select:hover {
   border-color: var(--hvy-focus);
 }
 
 .hvy-document .hvy-graph-field input[type="text"]:focus-visible,
+.hvy-document .hvy-graph-field input[type="number"]:focus-visible,
 .hvy-document .hvy-graph-select-shell > select:focus-visible {
   outline: none;
   border-color: var(--hvy-focus);
   box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 4px var(--hvy-focus-glow);
+}
+
+.hvy-document .hvy-graph-field input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  font-variant-numeric: tabular-nums;
+}
+
+.hvy-document .hvy-graph-field input[type="number"]::-webkit-inner-spin-button,
+.hvy-document .hvy-graph-field input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* An inverted min/max pair is ignored by the chart; flag both inputs until it is fixed. */
+.hvy-document .hvy-graph-field input[aria-invalid="true"],
+.hvy-document .hvy-graph-field input[aria-invalid="true"]:hover {
+  border-color: color-mix(in srgb, var(--hvy-danger) 65%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-danger) 6%, var(--hvy-surface));
 }
 
 .hvy-document .hvy-graph-select-shell {
@@ -200,7 +224,8 @@
   white-space: nowrap;
 }
 
-.hvy-document .hvy-graph-series-controls {
+.hvy-document .hvy-graph-series-controls,
+.hvy-document .hvy-graph-axis-bound-controls {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: var(--hvy-graph-lead-col) repeat(2, minmax(10rem, 1fr));
@@ -208,6 +233,14 @@
   align-items: start;
   padding-top: 0.75rem;
   border-top: 1px dashed color-mix(in srgb, var(--hvy-border) 70%, transparent);
+}
+
+.hvy-document .hvy-graph-axis-bound-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.hvy-document .hvy-graph-axis-bound-controls[data-graph-numeric-x="false"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .hvy-document .hvy-graph-range-slot {
@@ -340,6 +373,10 @@
 
   .hvy-document .hvy-graph-series-controls [data-graph-control="seriesLayout"] {
     grid-column: 1 / -1;
+  }
+
+  .hvy-document .hvy-graph-axis-bound-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

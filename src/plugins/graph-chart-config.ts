@@ -18,7 +18,16 @@ export interface GraphConfig {
   barWidth: number;
   /** Share of each grouped bar's slot left empty between neighboring bars. */
   barGap: number;
+  /** Optional fixed bounds for the numeric x axis; null lets the chart fit the data. */
+  xAxisMin: number | null;
+  xAxisMax: number | null;
+  /** Optional fixed bounds for the value (y) axis; null lets the chart fit the data. */
+  yAxisMin: number | null;
+  yAxisMax: number | null;
 }
+
+export const GRAPH_AXIS_BOUND_FIELDS = ['xAxisMin', 'xAxisMax', 'yAxisMin', 'yAxisMax'] as const;
+export type GraphAxisBoundField = (typeof GRAPH_AXIS_BOUND_FIELDS)[number];
 
 export interface GraphTheme {
   text: string;
@@ -41,9 +50,15 @@ export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   seriesLayout: 'grouped',
   barWidth: 0.8,
   barGap: 0.1,
+  xAxisMin: null,
+  xAxisMax: null,
+  yAxisMin: null,
+  yAxisMax: null,
 };
 
 export function readGraphConfig(raw: Record<string, unknown>): GraphConfig {
+  const [xAxisMin, xAxisMax] = readAxisBounds(raw.xAxisMin, raw.xAxisMax);
+  const [yAxisMin, yAxisMax] = readAxisBounds(raw.yAxisMin, raw.yAxisMax);
   return {
     type: readEnum(raw.type, GRAPH_TYPES, DEFAULT_GRAPH_CONFIG.type),
     title: typeof raw.title === 'string' ? raw.title : DEFAULT_GRAPH_CONFIG.title,
@@ -53,7 +68,22 @@ export function readGraphConfig(raw: Record<string, unknown>): GraphConfig {
     seriesLayout: readEnum(raw.seriesLayout, GRAPH_SERIES_LAYOUTS, DEFAULT_GRAPH_CONFIG.seriesLayout),
     barWidth: readFraction(raw.barWidth, GRAPH_BAR_WIDTH_RANGE, DEFAULT_GRAPH_CONFIG.barWidth),
     barGap: readFraction(raw.barGap, GRAPH_BAR_GAP_RANGE, DEFAULT_GRAPH_CONFIG.barGap),
+    xAxisMin,
+    xAxisMax,
+    yAxisMin,
+    yAxisMax,
   };
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** A bound pair whose min is not below its max cannot describe an axis, so both are dropped. */
+function readAxisBounds(rawMin: unknown, rawMax: unknown): [number | null, number | null] {
+  const min = readFiniteNumber(rawMin);
+  const max = readFiniteNumber(rawMax);
+  return min !== null && max !== null && min >= max ? [null, null] : [min, max];
 }
 
 function readEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -72,6 +102,21 @@ export function graphTypeSupportsSeriesLayout(type: GraphType): boolean {
 
 function isRadialGraphType(type: GraphType): boolean {
   return type === 'pie' || type === 'doughnut' || type === 'polarArea' || type === 'radar';
+}
+
+/** Scatter and bubble charts plot numeric x values; other Cartesian types use label categories. */
+export function graphTypeHasNumericXAxis(type: GraphType): boolean {
+  return type === 'scatter' || type === 'bubble';
+}
+
+/** Radar and polar area plot values on one radial scale instead of a y axis. */
+function graphTypeHasRadialValueScale(type: GraphType): boolean {
+  return type === 'radar' || type === 'polarArea';
+}
+
+/** The yAxisMin/yAxisMax bounds apply to the value axis, whether it is a Cartesian y axis or a radial scale. */
+export function graphTypeHasValueScale(type: GraphType): boolean {
+  return graphTypeSupportsAxes(type) || graphTypeHasRadialValueScale(type);
 }
 
 /** Axis labels only render on Cartesian charts; radial types omit x/y scales. */
@@ -96,24 +141,6 @@ export function formatStackedTooltipTotal(items: readonly { parsed?: { y?: unkno
 export function buildGraphChartOptions(config: GraphConfig, theme: GraphTheme, overrides: GraphChartOptionOverrides = {}): Record<string, unknown> {
   const supportsSeries = graphTypeSupportsSeriesLayout(config.type);
   const stacked = supportsSeries && config.seriesLayout === 'stacked';
-  const axisScales = isRadialGraphType(config.type)
-    ? {}
-    : {
-        x: {
-          stacked,
-          border: { color: theme.axis },
-          grid: { color: theme.grid },
-          ticks: { color: theme.text },
-          title: { color: theme.text, display: Boolean(config.xAxisLabel.trim()), text: config.xAxisLabel },
-        },
-        y: {
-          stacked,
-          border: { color: theme.axis },
-          grid: { color: theme.grid },
-          ticks: { color: theme.text },
-          title: { color: theme.text, display: Boolean(config.yAxisLabel.trim()), text: config.yAxisLabel },
-        },
-      };
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -143,7 +170,47 @@ export function buildGraphChartOptions(config: GraphConfig, theme: GraphTheme, o
         : {}),
       title: { color: theme.text, display: Boolean(config.title.trim()), text: config.title },
     },
-    scales: axisScales,
+    scales: buildGraphScales(config, theme, stacked),
+  };
+}
+
+function buildGraphScales(config: GraphConfig, theme: GraphTheme, stacked: boolean): Record<string, unknown> {
+  if (graphTypeHasRadialValueScale(config.type)) {
+    return {
+      r: {
+        ...axisBoundOptions(config.yAxisMin, config.yAxisMax),
+        grid: { color: theme.grid },
+        angleLines: { color: theme.grid },
+        pointLabels: { color: theme.text },
+        ticks: { color: theme.text, backdropColor: theme.outline },
+      },
+    };
+  }
+  if (!graphTypeSupportsAxes(config.type)) return {};
+  return {
+    x: {
+      stacked,
+      ...(graphTypeHasNumericXAxis(config.type) ? axisBoundOptions(config.xAxisMin, config.xAxisMax) : {}),
+      border: { color: theme.axis },
+      grid: { color: theme.grid },
+      ticks: { color: theme.text },
+      title: { color: theme.text, display: Boolean(config.xAxisLabel.trim()), text: config.xAxisLabel },
+    },
+    y: {
+      stacked,
+      ...axisBoundOptions(config.yAxisMin, config.yAxisMax),
+      border: { color: theme.axis },
+      grid: { color: theme.grid },
+      ticks: { color: theme.text },
+      title: { color: theme.text, display: Boolean(config.yAxisLabel.trim()), text: config.yAxisLabel },
+    },
+  };
+}
+
+function axisBoundOptions(min: number | null, max: number | null): Record<string, number> {
+  return {
+    ...(min !== null ? { min } : {}),
+    ...(max !== null ? { max } : {}),
   };
 }
 

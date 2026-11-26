@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
-import { buildGraphChartData, parseGraphCsv, shouldCollapseInlineGraphLegend } from '../src/plugins/graph';
+import { shouldCollapseInlineGraphLegend } from '../src/plugins/graph';
+import { buildGraphChartData, parseGraphCsv } from '../src/plugins/graph-csv';
 
 test('parseGraphCsv handles quoted cells and consistent rows', () => {
   const expectedResult = parseGraphCsv('Label,Value\n"Example, A",10\n"Example ""B""",20');

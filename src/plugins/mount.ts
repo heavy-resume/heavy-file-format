@@ -158,7 +158,7 @@ function buildContext(
       const current = findBlockByIds(sectionKey, blockId);
       if (!current) return;
       recordHistory(`plugin-config:${plugin.id}:${sectionKey}:${blockId}`);
-      current.schema.pluginConfig = { ...current.schema.pluginConfig, ...patch };
+      current.schema.pluginConfig = mergePluginConfigPatch(current.schema.pluginConfig, patch);
       syncReusableTemplateForBlock(sectionKey, blockId);
       if (state.currentView !== 'viewer') {
         getRefreshReaderPanels()();
@@ -655,4 +655,13 @@ export function unmountAllPlugins(): void {
     }
   }
   mounted.clear();
+}
+
+/** Shallow-merges a config patch; a patch key set to `undefined` removes that field. */
+export function mergePluginConfigPatch(config: JsonObject, patch: JsonObject): JsonObject {
+  const next: JsonObject = { ...config, ...patch };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete next[key];
+  }
+  return next;
 }

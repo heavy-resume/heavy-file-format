@@ -94,6 +94,48 @@ test('series, axis, and bar controls follow the graph type and layout', async ({
   await expect(seriesSelect).toBeHidden();
 });
 
+test('typing axis bounds updates the config without losing focus and clearing one removes it', async ({ page }) => {
+  test.setTimeout(5000);
+  await mountFakeGraph(page, 'editor');
+  await page.locator('.hvy-graph canvas').click();
+  const yMin = page.getByRole('spinbutton', { name: 'Y min' });
+  const yMax = page.getByRole('spinbutton', { name: 'Y max' });
+  await expect(page.getByRole('spinbutton', { name: 'X min' })).toBeHidden();
+
+  await yMax.click();
+  await page.keyboard.type('-12.5');
+
+  await expect(yMax).toBeFocused();
+  await expect(yMax).toHaveValue('-12.5');
+  await expect.poll(() => readSerializedGraphConfig(page)).toMatchObject({ yAxisMax: -12.5 });
+
+  await yMin.click();
+  await page.keyboard.type('40');
+
+  await expect(yMin).toHaveAttribute('aria-invalid', 'true');
+  await expect(yMax).toHaveValue('-12.5');
+
+  await yMax.fill('');
+
+  await expect(yMin).not.toHaveAttribute('aria-invalid', 'true');
+  await expect.poll(() => readSerializedGraphConfig(page)).toEqual(expect.not.objectContaining({ yAxisMax: expect.anything() }));
+  await expect.poll(() => readSerializedGraphConfig(page)).toMatchObject({ yAxisMin: 40 });
+
+  await page.getByRole('combobox', { name: 'Type' }).selectOption('scatter');
+
+  await expect(page.getByRole('spinbutton', { name: 'X min' })).toBeVisible();
+  await expect(page.getByRole('spinbutton', { name: 'X max' })).toBeVisible();
+
+  await page.getByRole('combobox', { name: 'Type' }).selectOption('radar');
+
+  await expect(page.getByRole('spinbutton', { name: 'X min' })).toBeHidden();
+  await expect(page.getByRole('spinbutton', { name: 'Min', exact: true })).toHaveValue('40');
+
+  await page.getByRole('combobox', { name: 'Type' }).selectOption('pie');
+
+  await expect(page.getByRole('spinbutton', { name: 'Min', exact: true })).toBeHidden();
+});
+
 test('dragging the bar width slider updates the config without remounting the slider', async ({ page }) => {
   test.setTimeout(5000);
   await mountFakeGraph(page, 'editor');
